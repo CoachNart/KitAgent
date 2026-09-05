@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth';
 
 // Firebase Web App config for KitAgent.
 // VITE_* values can override these public identifiers in each environment.
@@ -18,4 +18,9 @@ if(missing.length)throw new Error(`KitAgent Firebase is not configured. Missing:
 
 const app=getApps().length?getApp():initializeApp(config);
 export const auth=getAuth(app);
+
+// Keep the signed-in session across refreshes and make auth initialization
+// deterministic before the application starts gating the UI on auth state.
+export const authPersistenceReady=setPersistence(auth,browserLocalPersistence).catch(()=>null);
+
 export default app;
