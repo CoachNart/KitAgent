@@ -1,26 +1,23 @@
 # KitAgent
 
-**Onchain Intent Engine** — a dark, agent-first Web3 interface for expressing what you want done instead of manually navigating protocols.
+KitAgent is a non-custodial EVM onchain command center. It turns natural-language intent into explicit transaction plans and gates execution through **UNDERSTAND → VERIFY → SIMULATE → APPROVE → CONFIRM**.
 
-### Product direction
-- Plain-English transaction intents
-- Non-custodial wallet connection
-- Understand → Verify → Simulate → Execute flow
-- Protocol-aware execution map
-- Safety layer before approval
-- Designed around the floating-card / agent-orb visual language
+## Included
+- Robinhood Chain mainnet + testnet
+- Native ETH and ERC-20 transfers, approvals, balances and allowance reads
+- ERC-721 / ERC-1155 transfers and operator approvals
+- Real LI.FI route discovery for supported swaps/bridges, with exact returned transaction data passed through simulation before signing
+- Universal EVM contract executor
+- Batch planner (never pretends separate calls are atomic)
+- Gas estimation, balance sufficiency, RPC chain validation and receipt polling
+- Explorer-backed portfolio/activity intelligence
+- Configurable EVM testnet gas station and official faucet links
+- Adapter configuration hooks for Uniswap, Morpho and LayerZero
+- Capability-aware ERC-4337 sponsorship state; no false sponsorship claims
+- Wallet event handling and network switching
 
-The current build is a polished frontend prototype with demo execution states and browser wallet connection when `window.ethereum` is available.
+## Environment hooks
+Optional protocol addresses: `VITE_UNISWAP_ROUTER`, `VITE_MORPHO_ROUTER`, `VITE_LAYERZERO_ROUTER`.
+Optional account-abstraction infrastructure: `VITE_BUNDLER_URL`, `VITE_PAYMASTER_URL`.
 
-## Run
-
-```bash
-npm install
-npm run dev
-```
-
-## Build
-
-```bash
-npm run build
-```
+KitAgent intentionally refuses to invent contract addresses, token mappings, faucet endpoints, bridge destinations or sponsorship availability.

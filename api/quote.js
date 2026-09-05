@@ -1,19 +1,5 @@
-export default async function handler(req, res) {
-  try {
-    const params = new URL(req.url, 'http://localhost').searchParams;
-    const allowed = ['fromChain','toChain','fromToken','toToken','fromAmount','fromAddress','toAddress'];
-    const query = new URLSearchParams();
-    for (const key of allowed) {
-      const value = params.get(key);
-      if (value) query.set(key, value);
-    }
-    if (!query.get('fromChain') || !query.get('toChain') || !query.get('fromToken') || !query.get('toToken') || !query.get('fromAmount')) {
-      return res.status(400).json({ error: 'Missing route parameters' });
-    }
-    const upstream = await fetch(`https://li.quest/v1/quote?${query.toString()}`, { headers: { accept: 'application/json' } });
-    const text = await upstream.text();
-    res.status(upstream.status).setHeader('content-type', upstream.headers.get('content-type') || 'application/json').send(text);
-  } catch (error) {
-    res.status(502).json({ error: error?.message || 'Route provider unavailable' });
-  }
-}
+const ADDRESS=/^0x[a-fA-F0-9]{40}$/;
+const HEX=/^0x[0-9a-fA-F]+$/;
+const CHAINS=new Set(['4663','46630']);
+const ZERO='0x0000000000000000000000000000000000000000';
+export default async function handler(req,res){res.setHeader('cache-control','no-store');try{if(req.method!=='GET')return res.status(405).json({error:'GET only'});const p=new URL(req.url,'http://localhost').searchParams;const fromChain=p.get('fromChain'),toChain=p.get('toChain'),fromToken=p.get('fromToken'),toToken=p.get('toToken'),fromAmount=p.get('fromAmount'),fromAddress=p.get('fromAddress'),toAddress=p.get('toAddress');if(!CHAINS.has(String(fromChain))||!CHAINS.has(String(toChain)))return res.status(400).json({error:'Unsupported KitAgent chain'});if(!ADDRESS.test(fromToken)||!ADDRESS.test(toToken))return res.status(400).json({error:'Invalid token address'});if(fromToken.toLowerCase()===ZERO&&toToken.toLowerCase()===ZERO)return res.status(400).json({error:'Route needs two different assets'});if(!/^[1-9]\d*$/.test(String(fromAmount||'')))return res.status(400).json({error:'Invalid base-unit amount'});if(fromAddress&&!ADDRESS.test(fromAddress))return res.status(400).json({error:'Invalid fromAddress'});if(toAddress&&!ADDRESS.test(toAddress))return res.status(400).json({error:'Invalid toAddress'});const q=new URLSearchParams({fromChain,toChain,fromToken,toToken,fromAmount});if(fromAddress)q.set('fromAddress',fromAddress);if(toAddress)q.set('toAddress',toAddress);const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),10000);const upstream=await fetch(`https://li.quest/v1/quote?${q}`,{headers:{accept:'application/json'},signal:controller.signal});clearTimeout(timer);const data=await upstream.json().catch(()=>({error:'Invalid route provider response'}));if(!upstream.ok)return res.status(upstream.status).json({error:data.message||data.error||'Route provider rejected request'});if(!data.transactionRequest?.to)return res.status(502).json({error:'Route provider returned no executable transaction'});return res.status(200).json(data)}catch(e){return res.status(502).json({error:e.name==='AbortError'?'Route provider timed out':e.message||'Route provider unavailable'})}}
