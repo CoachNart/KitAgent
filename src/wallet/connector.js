@@ -6,14 +6,23 @@ let wcInitPromise=null;
 let wcBound=false;
 const watchers=new Set();
 
-const localProjectId='b56e18d47c72ab683b10814fe9495694';
-const projectId=import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || (typeof window!=='undefined' && ['localhost','127.0.0.1'].includes(window.location.hostname) ? localProjectId : '');
+// WalletConnect project IDs are public client identifiers, so keep the supplied
+// ID as a fallback while still allowing Vercel/local environments to override it.
+const projectId=import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '48604c2cbc72b01702c382d69018e325';
 
 export function hasWallet(){return typeof window!=='undefined'&&(!!window.ethereum||!!wcProvider)}
 
+function bindWalletConnectEvents(provider){
+  if(wcBound)return;
+  wcBound=true;
+  provider.on('accountsChanged',accountsChanged=>watchers.forEach(w=>w.onAccount?.(accountsChanged?.[0]||'')));
+  provider.on('chainChanged',chainId=>watchers.forEach(w=>w.onChain?.(Number(BigInt(chainId)))));
+  provider.on('disconnect',()=>watchers.forEach(w=>w.onAccount?.('')));
+}
+
 async function getWalletConnectProvider(chain){
-  if(wcProvider)return wcProvider;
-  if(!projectId)throw new Error('WalletConnect is not configured. Add VITE_WALLETCONNECT_PROJECT_ID in Vercel/local environment.');
+  if(wcProvider){bindWalletConnectEvents(wcProvider);return wcProvider;}
+  if(!projectId)throw new Error('WalletConnect is not configured.');
   if(!chain?.id||!chain?.rpc)throw new Error('Invalid EVM chain configuration');
   if(!wcInitPromise){
     const all=Object.values(CHAINS).filter(c=>c?.id&&c?.rpc);
@@ -33,12 +42,7 @@ async function getWalletConnectProvider(chain){
     });
   }
   wcProvider=await wcInitPromise;
-  if(!wcBound){
-    wcBound=true;
-    wcProvider.on('accountsChanged',accountsChanged=>watchers.forEach(w=>w.onAccount?.(accountsChanged?.[0]||'')));
-    wcProvider.on('chainChanged',chainId=>watchers.forEach(w=>w.onChain?.(Number(BigInt(chainId)))));
-    wcProvider.on('disconnect',()=>watchers.forEach(w=>w.onAccount?.('')));
-  }
+  bindWalletConnectEvents(wcProvider);
   return wcProvider;
 }
 
@@ -57,7 +61,7 @@ export async function connect(chain=CHAINS.robinhood){
 export async function connectWalletConnect(chain=CHAINS.robinhood){
   const provider=await getWalletConnectProvider(chain);
   await provider.connect();
-  return provider.request({method:'eth_requestAccounts'});
+  return provider.request({method:'eth_accounts'});
 }
 
 export async function ensureChain(chain){
@@ -79,12 +83,7 @@ export function watchWallet(onAccount,onChain){
   const a=x=>onAccount?.(x?.[0]||'');
   const c=x=>onChain?.(Number(BigInt(x)));
   if(injected){injected.on('accountsChanged',a);injected.on('chainChanged',c)}
-  if(wcProvider&&!wcBound){
-    wcBound=true;
-    wcProvider.on('accountsChanged',x=>watchers.forEach(w=>w.onAccount?.(x?.[0]||'')));
-    wcProvider.on('chainChanged',x=>watchers.forEach(w=>w.onChain?.(Number(BigInt(x)))));
-    wcProvider.on('disconnect',()=>watchers.forEach(w=>w.onAccount?.('')));
-  }
+  if(wcProvider)bindWalletConnectEvents(wcProvider);
   return()=>{
     watchers.delete(watcher);
     if(injected){injected.removeListener('accountsChanged',a);injected.removeListener('chainChanged',c)}
