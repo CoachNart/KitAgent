@@ -17,6 +17,11 @@ function bindWalletConnectEvents(provider){
   provider.on('disconnect',()=>watchers.forEach(w=>w.onAccount?.('')));
 }
 
+export async function prepareWalletConnect(chain=CHAINS.robinhood){
+  await getWalletConnectProvider(chain);
+  return true;
+}
+
 async function getWalletConnectProvider(chain){
   if(wcProvider){bindWalletConnectEvents(wcProvider);return wcProvider;}
   if(!projectId)throw new Error('WalletConnect is not configured.');
@@ -53,22 +58,27 @@ export async function accounts(){
 }
 
 export async function connect(chain=CHAINS.robinhood){
-  // On mobile browsers, do not blindly call an injected provider. Many mobile
-  // wallet shims expose window.ethereum but cannot launch the wallet UI from
-  // the browser. WalletConnect provides the wallet picker/deep-link flow.
-  if(!isMobile()&&typeof window!=='undefined'&&window.ethereum){
+  // Use an injected wallet whenever the browser exposes one, including mobile
+  // wallet in-app browsers. This preserves the wallet's native request UI.
+  if(typeof window!=='undefined'&&window.ethereum){
     return window.ethereum.request({method:'eth_requestAccounts'});
   }
+  // On a normal mobile browser, use WalletConnect. The provider is pre-warmed
+  // on app load so the actual connect() call stays inside the tap gesture.
   return connectWalletConnect(chain);
 }
 
 export async function connectWalletConnect(chain=CHAINS.robinhood){
-  const provider=await getWalletConnectProvider(chain);
+  const provider=wcProvider || await getWalletConnectProvider(chain);
   try{
     const existing=await provider.request({method:'eth_accounts'});
     if(existing?.length)return existing;
   }catch{}
-  await provider.connect();
+  // Do not await provider initialization here when it has already been warmed.
+  // Calling connect() directly from the click handler is important on mobile
+  // browsers because the OS may otherwise block the wallet deep-link.
+  const connection=provider.connect();
+  await connection;
   const connected=await provider.request({method:'eth_accounts'});
   if(!connected?.length)throw new Error('Wallet connection was cancelled or no account was returned.');
   return connected;
