@@ -23,4 +23,35 @@
 .profile-page{padding:52px 3% 30px!important;max-width:1160px!important;margin:0 auto}
 @media(min-width:1250px){.hero-row{padding-left:7%!important;padding-right:7%!important}.action-strip{gap:10px!important}}
 @media(max-width:1050px){.main-shell{padding-right:24px!important}.command-grid{grid-template-columns:1fr!important}.agent-core{display:none!important}.action-strip{grid-template-columns:repeat(4,1fr)!important}.profile-footer{flex-direction:column}}
-@media(max-width:650px){.rail{width:100%!important;height:66px!important;top:auto!important;bottom:0!important}.main-shell{margin-left:0!important;padding:0 13px 82px!important}.topbar{height:72px!important}.top-status{display:none!important}.top-controls{width:100%;justify-content:space-between}.chain-picker{max-width:160px}.wallet-button{min-width:0!important}.hero-row{padding:34px 3% 26px!important;min-height:0!important}.hero-row h1{font-size:45px!important}.hero-row p{font-size:11px!important}.command-grid{gap:12px!important}.command-panel,.agent-panel,.workbench,.data-page{padding:18px!important}.action-strip{grid-template-columns:repeat(2,1fr)!important;gap:8px!important;margin:16px 0!important}.action-strip button{min-height:64px!important}.profile-page{padding:28px 0!important}}
+@media(max-width:650px){
+  .rail{
+    position:fixed!important;left:10px!important;right:10px!important;top:auto!important;bottom:10px!important;width:auto!important;height:64px!important;
+    border:1px solid rgba(255,255,255,.09)!important;border-radius:22px!important;
+    background:rgba(9,11,10,.88)!important;backdrop-filter:blur(24px) saturate(1.15)!important;
+    -webkit-backdrop-filter:blur(24px) saturate(1.15)!important;box-shadow:0 18px 50px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.035)!important;
+    flex-direction:row!important;justify-content:center!important;gap:3px!important;padding:6px!important;overflow:visible!important;
+  }
+  .brand-mini{display:none!important}
+  .rail nav{display:flex!important;flex:1!important;flex-direction:row!important;justify-content:space-around!important;align-items:center!important;gap:2px!important;padding:0!important;height:100%!important}
+  .rail-bottom{margin:0!important;padding:0!important;display:flex!important;flex-direction:row!important;gap:2px!important;align-items:center!important}
+  .rail-bottom button:last-child{display:none!important}
+  .rail button{width:48px!important;height:48px!important;border-radius:16px!important;color:#5f665f!important}
+  .rail button:hover{background:transparent!important;box-shadow:none!important}
+  .rail button.active{color:#eef3ed!important;background:rgba(220,226,219,.09)!important;box-shadow:inset 0 0 0 1px rgba(220,226,219,.07),0 0 24px rgba(170,205,179,.08)!important}
+  .rail nav button span:last-child{display:none!important}
+  .rail-bottom .icon-glyph{font-size:17px!important}
+  .main-shell{margin-left:0!important;padding:0 13px 92px!important}
+  .topbar{height:72px!important}
+  .top-status{display:none!important}
+  .top-controls{width:100%;justify-content:space-between;gap:7px!important}
+  .chain-picker{max-width:160px!important;flex:1!important;min-width:0!important}
+  .wallet-button{min-width:0!important;flex:1!important;max-width:190px!important}
+  .hero-row{padding:34px 3% 26px!important;min-height:0!important}
+  .hero-row h1{font-size:45px!important}
+  .hero-row p{font-size:11px!important}
+  .command-grid{gap:12px!important}
+  .command-panel,.agent-panel,.workbench,.data-page{padding:18px!important}
+  .action-strip{grid-template-columns:repeat(2,1fr)!important;gap:8px!important;margin:16px 0!important}
+  .action-strip button{min-height:64px!important}
+  .profile-page{padding:28px 0!important}
+}
