@@ -1,1 +1,17 @@
-{"name":"kitagent","private":true,"version":"1.0.2","type":"module","scripts":{"dev":"vite","build":"node scripts/expand-multichain.mjs && vite build","preview":"vite preview"},"dependencies":{"@vitejs/plugin-react":"latest","vite":"latest","react":"latest","react-dom":"latest","@walletconnect/ethereum-provider":"latest","@walletconnect/modal":"latest"},"devDependencies":{}}
+{
+  "name":"kitagent",
+  "private":true,
+  "version":"1.0.3",
+  "type":"module",
+  "scripts":{"dev":"vite","build":"node scripts/expand-multichain.mjs && vite build","preview":"vite preview"},
+  "dependencies":{
+    "@vitejs/plugin-react":"latest",
+    "vite":"latest",
+    "react":"latest",
+    "react-dom":"latest",
+    "@walletconnect/ethereum-provider":"latest",
+    "@walletconnect/modal":"latest",
+    "@solana/web3.js":"latest"
+  },
+  "devDependencies":{}
+}
