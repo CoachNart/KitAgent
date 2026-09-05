@@ -10,6 +10,9 @@ const config={
   appId:import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+const missing=Object.entries(config).filter(([,value])=>!value).map(([key])=>key);
+if(missing.length)throw new Error(`KitAgent Firebase is not configured. Missing: ${missing.join(', ')}`);
+
 const app=getApps().length?getApp():initializeApp(config);
 export const auth=getAuth(app);
 export default app;
