@@ -1,5 +1,6 @@
 import React,{useMemo,useState} from 'react';
-import {PLANS,feeLabel,usage,plan,setPlan,revenueProjection} from './model.js';
+import './revenue.css';
+import {PLANS,feeLabel,usage,plan,revenueProjection} from './model.js';
 
 export default function RevenuePanel(){
  const [selected,setSelected]=useState(plan());
