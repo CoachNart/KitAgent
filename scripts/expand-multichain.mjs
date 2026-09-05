@@ -1,15 +1,40 @@
 import fs from 'node:fs';
 const path='src/main.jsx';
 let s=fs.readFileSync(path,'utf8');
-if(!s.includes("chainList")) s=s.replace("import {CHAINS,getToken} from './chains/registry.js';","import {CHAINS,getToken,chainList,isEvmChain} from './chains/registry.js';");
-const old='<option value="robinhood">Robinhood Chain</option><option value="robinhoodTestnet">Robinhood Testnet</option><option value="custom">Custom EVM Testnet</option>';
-const replacement='{chainList().map(c=><option key={c.key} value={c.key}>{c.name}{c.testnet?\' · TESTNET\':\'\'}</option>)}<option value="custom">Custom EVM Testnet</option>';
-if(s.includes(old)) s=s.replace(old,replacement);
+if(!s.includes("./multichain/adapters.js")) s=s.replace("import {CHAINS,getToken} from './chains/registry.js';","import {CHAINS,getToken,chainList,isEvmChain} from './chains/registry.js';\nimport {adapterFor,adapterStatus,connectNative,nativeBalance,sendNative as sendNativeChain} from './multichain/adapters.js';");
+if(!s.includes("chainList().map")){
+ const old='<option value="robinhood">Robinhood Chain</option><option value="robinhoodTestnet">Robinhood Testnet</option><option value="custom">Custom EVM Testnet</option>';
+ const replacement='{chainList().map(c=><option key={c.key} value={c.key}>{c.name}{c.testnet?\' · TESTNET\':\'\'}</option>)}<option value="custom">Custom EVM Testnet</option>';
+ if(s.includes(old)) s=s.replace(old,replacement);
+}
 const oldChain="const[chainKey,setChainKey]=useState('robinhood');const[custom,setCustom]=useState({name:'Custom EVM Testnet',id:'',rpc:'',faucet:'',explorer:''});const chain=chainKey==='custom'?{name:custom.name,id:Number(custom.id),rpc:custom.rpc,explorer:custom.explorer,faucet:custom.faucet,symbol:'ETH'}:CHAINS[chainKey];";
 const newChain="const[chainKey,setChainKey]=useState('robinhood');const[custom,setCustom]=useState({name:'Custom EVM Testnet',id:'',rpc:'',faucet:'',explorer:''});const chain=chainKey==='custom'?{name:custom.name,id:Number(custom.id),rpc:custom.rpc,explorer:custom.explorer,faucet:custom.faucet,symbol:'ETH',kind:'evm'}:CHAINS[chainKey];";
-if(s.includes(oldChain)) s=s.replace(oldChain,newChain);
-const oldConnect="async function connectWallet(){try{const a=await connect();if(a?.[0]){setAccount(a[0]);await ensureChain(chain);setNotice('Wallet connected and network checked.')}}catch(e){setNotice(e.message||'Wallet connection failed')}}";
-const newConnect="async function connectWallet(){try{if(!isEvmChain(chain)){setNotice(`${chain?.name||'This network'} is in the multichain registry. Its native wallet adapter is not enabled in this EVM-only execution session yet.`);return}const a=await connect(chain);if(a?.[0]){setAccount(a[0]);await ensureChain(chain);setNotice('Wallet connected and network checked.')}}catch(e){setNotice(e.message||'Wallet connection failed')}}";
-if(s.includes(oldConnect)) s=s.replace(oldConnect,newConnect);
+if(s.includes(oldChain))s=s.replace(oldChain,newChain);
+const oldRefresh="async function refresh(a=account){if(!a||!chain?.rpc)return;try{const b=await rpc(chain,'eth_getBalance',[a,'latest']);setNative(fromBase(BigInt(b),18));const d=await explorerAddress(chain,a);setActivity(d.transactions||[]);setTokens(d.tokens||[]);setSummary(summarizeActivity(d.transactions||[]))}catch(e){setNotice(`Indexer unavailable: ${e.message}`)}}";
+const newRefresh="async function refresh(a=account){if(!a)return;try{if(!isEvmChain(chain)){setNative(await nativeBalance(chain,a));setActivity([]);setTokens([]);setSummary(null);return}if(!chain?.rpc)return;const b=await rpc(chain,'eth_getBalance',[a,'latest']);setNative(fromBase(BigInt(b),18));const d=await explorerAddress(chain,a);setActivity(d.transactions||[]);setTokens(d.tokens||[]);setSummary(summarizeActivity(d.transactions||[]))}catch(e){setNotice(`Network data unavailable: ${e.message}`)}}";
+if(s.includes(oldRefresh))s=s.replace(oldRefresh,newRefresh);
+const oldConnect="async function connectWallet(){try{if(!isEvmChain(chain)){setNotice(`${chain?.name||'This network'} is in the multichain registry. Its native wallet adapter is not enabled in this EVM-only execution session yet.`);return}const a=await connect(chain);if(a?.[0]){setAccount(a[0]);await ensureChain(chain);setNotice('Wallet connected and network checked.')}}catch(e){setNotice(e.message||'Wallet connection failed')}}";
+const newConnect="async function connectWallet(){try{if(!isEvmChain(chain)){const a=await connectNative(chain);if(a){setAccount(a);await refresh(a);setNotice(`${chain.name} wallet connected.`)}return}const a=await connect(chain);if(a?.[0]){setAccount(a[0]);await ensureChain(chain);setNotice('Wallet connected and network checked.');await refresh(a[0])}}catch(e){setNotice(e.message||'Wallet connection failed')}}";
+if(s.includes(oldConnect))s=s.replace(oldConnect,newConnect);
+const oldSend="async function sendNative(){if(!ADDRESS_RE.test(sendTo)||!sendAmount)return setNotice('Enter a valid recipient and ETH amount');await executeTx({from:account,to:sendTo,value:toHex(sendAmount)},'ETH transfer')}";
+const newSend="async function sendNative(){if(!sendTo||!sendAmount)return setNotice(`Enter a valid ${chain?.symbol||'native asset'} recipient and amount`);if(!isEvmChain(chain)){try{setLoading(true);const h=await sendNativeChain(chain,sendTo,sendAmount);setLoading(false);setNotice(`${chain.name} transfer submitted · ${typeof h==='string'?shorten(h,12,8):'wallet returned a transaction result'}`);return}catch(e){setLoading(false);setNotice(e.message);return}}if(!ADDRESS_RE.test(sendTo))return setNotice('Enter a valid EVM recipient address');await executeTx({from:account,to:sendTo,value:toHex(sendAmount)},`${chain.symbol||'ETH'} transfer`)}";
+if(s.includes(oldSend))s=s.replace(oldSend,newSend);
+const oldHealth="async function checkHealth(){try{const h=await networkHealth(chain);setHealth(h);setNotice(`RPC healthy · block ${h.block} · gas ${fmt(h.gasPrice)}`)}catch(e){setHealth(null);setNotice(`RPC health failed: ${e.message}`)}}";
+const newHealth="async function checkHealth(){try{if(!isEvmChain(chain)){const a=adapterStatus(chain);setHealth(a);setNotice(a.available?`${chain.name} adapter detected · ${a.label}`:`${chain.name} wallet adapter not detected`);return}const h=await networkHealth(chain);setHealth(h);setNotice(`RPC healthy · block ${h.block} · gas ${fmt(h.gasPrice)}`)}catch(e){setHealth(null);setNotice(`Network health failed: ${e.message}`)}}";
+if(s.includes(oldHealth))s=s.replace(oldHealth,newHealth);
+const marker='function Icon({name}){';
+if(!s.includes('function NativeWorkbench')){
+ const idx=s.indexOf(marker);
+ const end=s.indexOf('\nfunction App()',idx);
+ const component="\nfunction NativeWorkbench({chain,account,sendTo,setSendTo,sendAmount,setSendAmount,connectWallet,sendNative,loading}){const a=adapterStatus(chain);return <div className=\"native-workbench\"><div className=\"native-adapter-head\"><div><div className=\"eyebrow\">NATIVE CHAIN ADAPTER</div><h3>{chain.name}</h3><p>{a.label} · namespace <b>{chain.namespace}</b></p></div><span className={a.available?'adapter-online':'adapter-offline'}>{a.available?'WALLET DETECTED':'WALLET NOT DETECTED'}</span></div><div className=\"native-adapter-grid\"><div><span>NETWORK</span><b>{chain.name}</b><small>{chain.testnet?'TESTNET':'MAINNET'} · {chain.symbol||chain.native}</small></div><div><span>ACCOUNT</span><b>{account?shorten(account,10,8):'Not connected'}</b><small>{a.namespace}</small></div><div><span>FEATURES</span><b>CONNECT · BALANCE · SEND</b><small>Non-custodial wallet signing</small></div></div><div className=\"form-grid native-send-grid\"><label>RECIPIENT<input value={sendTo} onChange={e=>setSendTo(e.target.value)} placeholder={chain.namespace==='bip122'?'bc1…':'Native address'}/></label><label>AMOUNT ({chain.symbol||chain.native})<input value={sendAmount} onChange={e=>setSendAmount(e.target.value)} placeholder=\"0.01\"/></label><div className=\"button-row form-span\"><button onClick={connectWallet}>CONNECT {chain.name.toUpperCase()} WALLET</button><button className=\"primary\" disabled={loading||!account} onClick={sendNative}>SEND {chain.symbol||chain.native} ↗</button></div></div>{!a.available&&<div className=\"faucet-note\"><Icon name=\"shield\"/><div><b>WALLET REQUIRED</b><br/>KitAgent will never ask for a seed phrase or private key. Install a compatible wallet for this network, then reconnect.</div></div>}</div>}\n";
+ s=s.slice(0,end)+component+s.slice(end);
+}
+const workbenchStart='<section className="glow-card workbench"><div className="workbench-head">';
+const wrappedStart='<section className="glow-card workbench">{!isEvmChain(chain)?<NativeWorkbench chain={chain} account={account} sendTo={sendTo} setSendTo={setSendTo} sendAmount={sendAmount} setSendAmount={setSendAmount} connectWallet={connectWallet} sendNative={sendNative} loading={loading}/>:<><div className="workbench-head">';
+if(s.includes(workbenchStart)&&!s.includes('NativeWorkbench chain={chain}'))s=s.replace(workbenchStart,wrappedStart);
+const close='</section>}\n {plan&&<section className="glow-card data-page">';
+const wrappedClose='</>}</section>}\n {plan&&<section className="glow-card data-page">';
+if(s.includes(close)&&s.includes('NativeWorkbench chain={chain}'))s=s.replace(close,wrappedClose);
+// Make native network mode skip EVM-only refresh effects without changing the EVM engine.
 fs.writeFileSync(path,s);
-console.log('KitAgent multichain build transform applied');
+console.log('KitAgent native multichain adapter transform applied');
