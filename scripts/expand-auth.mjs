@@ -3,7 +3,7 @@ const path='src/main.jsx';
 let s=fs.readFileSync(path,'utf8');
 
 if(!s.includes("from './AuthPage.jsx'")){
-  const imports="import AuthPage from './AuthPage.jsx';\nimport {auth} from './lib/firebase.js';";
+  const imports="import AuthPage from './AuthPage.jsx';\nimport {auth,authPersistenceReady} from './lib/firebase.js';";
   const firstImport=s.indexOf('import ');
   if(firstImport>=0)s=s.slice(0,firstImport)+imports+'\n'+s.slice(firstImport);
 }
@@ -16,7 +16,7 @@ if(!s.includes('const[authUser,setAuthUser]')){
 
 if(!s.includes('onAuthStateChanged(auth')){
   const marker="useEffect(()=>{const t=setTimeout(()=>setBoot(false),900);accounts().then(a=>a?.[0]&&setAccount(a[0])).catch(()=>{});return()=>clearTimeout(t)},[]);";
-  const injected=marker+"\n useEffect(()=>{const off=auth.onAuthStateChanged(async u=>{setAuthUser(u);setAuthReady(true);if(!u){setAccess({hasAccess:false,status:'LOCKED',expiresAt:null,plan:'free'});return}try{const token=await u.getIdToken(true);const h={Authorization:`Bearer ${token}`,'Cache-Control':'no-store'};const r=await fetch('/api/account',{headers:h});const d=await r.json().catch(()=>({}));if(r.ok&&d.data?.access){setAccess(d.data.access);return}const security=await (await import('./lib/device-security.js')).securityHeaders(token);const rr=await fetch('/api/security/register',{method:'POST',headers:security,body:JSON.stringify({email:u.email||''})});const rd=await rr.json().catch(()=>({}));if(!rr.ok)throw new Error(rd.error||'Account security registration failed');const ar=await fetch('/api/account',{headers:h});const ad=await ar.json().catch(()=>({}));if(ar.ok&&ad.data?.access)setAccess(ad.data.access)}catch(e){setNotice(e.message||'Account access check failed')}});return()=>off()},[]);";
+  const injected=marker+"\n useEffect(()=>{let cancelled=false;let off=()=>{};(async()=>{try{await authPersistenceReady}catch{}if(cancelled)return;off=auth.onAuthStateChanged(async u=>{setAuthUser(u);setAuthReady(true);if(!u){setAccess({hasAccess:false,status:'LOCKED',expiresAt:null,plan:'free'});return}try{const token=await u.getIdToken(true);const h={Authorization:`Bearer ${token}`,'Cache-Control':'no-store'};const r=await fetch('/api/account',{headers:h});const d=await r.json().catch(()=>({}));if(r.ok&&d.data?.access){setAccess(d.data.access);return}const security=await (await import('./lib/device-security.js')).securityHeaders(token);const rr=await fetch('/api/security/register',{method:'POST',headers:security,body:JSON.stringify({email:u.email||''})});const rd=await rr.json().catch(()=>({}));if(!rr.ok)throw new Error(rd.error||'Account security registration failed');const ar=await fetch('/api/account',{headers:h});const ad=await ar.json().catch(()=>({}));if(ar.ok&&ad.data?.access)setAccess(ad.data.access)}catch(e){setNotice(e.message||'Account access check failed')}})})();return()=>{cancelled=true;off()}},[]);";
   if(s.includes(marker))s=s.replace(marker,injected);
 }
 
