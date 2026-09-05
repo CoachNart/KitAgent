@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 const path='src/main.jsx';
 let s=fs.readFileSync(path,'utf8');
+if(!s.includes("import './profile.css';"))s="import './profile.css';\n"+s;
 const start="{mode==='profile'&&<section className=\"profile-page premium-profile\">";
 const i=s.indexOf(start);
 if(i>=0){
