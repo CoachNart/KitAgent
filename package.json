@@ -1,9 +1,9 @@
 {
   "name":"kitagent",
   "private":true,
-  "version":"1.0.9",
+  "version":"1.0.10",
   "type":"module",
-  "scripts":{"dev":"vite","build":"node scripts/expand-multichain.mjs && node scripts/expand-trading.mjs && node scripts/expand-premium-ui.mjs && node scripts/expand-terminal-menu.mjs && node scripts/expand-auth.mjs && node scripts/expand-profile.mjs && vite build","preview":"vite preview"},
+  "scripts":{"dev":"vite","build":"node scripts/expand-multichain.mjs && node scripts/expand-trading.mjs && node scripts/expand-premium-ui.mjs && node scripts/expand-terminal-menu.mjs && node scripts/expand-auth.mjs && node scripts/expand-profile.mjs && node scripts/expand-billing.mjs && vite build","preview":"vite preview"},
   "dependencies":{
     "@vitejs/plugin-react":"latest",
     "vite":"latest",
