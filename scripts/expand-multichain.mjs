@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+const path='src/main.jsx';
+let s=fs.readFileSync(path,'utf8');
+if(!s.includes("chainList")) s=s.replace("import {CHAINS,getToken} from './chains/registry.js';","import {CHAINS,getToken,chainList,isEvmChain} from './chains/registry.js';");
+const old='<option value="robinhood">Robinhood Chain</option><option value="robinhoodTestnet">Robinhood Testnet</option><option value="custom">Custom EVM Testnet</option>';
+const replacement='{chainList().map(c=><option key={c.key} value={c.key}>{c.name}{c.testnet?\' · TESTNET\':\'\'}</option>)}<option value="custom">Custom EVM Testnet</option>';
+if(s.includes(old)) s=s.replace(old,replacement);
+const oldChain="const[chainKey,setChainKey]=useState('robinhood');const[custom,setCustom]=useState({name:'Custom EVM Testnet',id:'',rpc:'',faucet:'',explorer:''});const chain=chainKey==='custom'?{name:custom.name,id:Number(custom.id),rpc:custom.rpc,explorer:custom.explorer,faucet:custom.faucet,symbol:'ETH'}:CHAINS[chainKey];";
+const newChain="const[chainKey,setChainKey]=useState('robinhood');const[custom,setCustom]=useState({name:'Custom EVM Testnet',id:'',rpc:'',faucet:'',explorer:''});const chain=chainKey==='custom'?{name:custom.name,id:Number(custom.id),rpc:custom.rpc,explorer:custom.explorer,faucet:custom.faucet,symbol:'ETH',kind:'evm'}:CHAINS[chainKey];";
+if(s.includes(oldChain)) s=s.replace(oldChain,newChain);
+const oldConnect="async function connectWallet(){try{const a=await connect();if(a?.[0]){setAccount(a[0]);await ensureChain(chain);setNotice('Wallet connected and network checked.')}}catch(e){setNotice(e.message||'Wallet connection failed')}}";
+const newConnect="async function connectWallet(){try{if(!isEvmChain(chain)){setNotice(`${chain?.name||'This network'} is in the multichain registry. Its native wallet adapter is not enabled in this EVM-only execution session yet.`);return}const a=await connect(chain);if(a?.[0]){setAccount(a[0]);await ensureChain(chain);setNotice('Wallet connected and network checked.')}}catch(e){setNotice(e.message||'Wallet connection failed')}}";
+if(s.includes(oldConnect)) s=s.replace(oldConnect,newConnect);
+fs.writeFileSync(path,s);
+console.log('KitAgent multichain build transform applied');
