@@ -5,9 +5,6 @@ let wcProvider=null;
 let wcInitPromise=null;
 let wcBound=false;
 const watchers=new Set();
-
-// WalletConnect project IDs are public client identifiers, so keep the supplied
-// ID as a fallback while still allowing Vercel/local environments to override it.
 const projectId=import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '48604c2cbc72b01702c382d69018e325';
 
 export function hasWallet(){return typeof window!=='undefined'&&(!!window.ethereum||!!wcProvider)}
@@ -46,6 +43,8 @@ async function getWalletConnectProvider(chain){
   return wcProvider;
 }
 
+function isMobile(){return typeof navigator!=='undefined'&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)}
+
 export async function accounts(){
   if(wcProvider){
     try{return await wcProvider.request({method:'eth_accounts'})}catch{}
@@ -54,14 +53,25 @@ export async function accounts(){
 }
 
 export async function connect(chain=CHAINS.robinhood){
-  if(typeof window!=='undefined'&&window.ethereum)return window.ethereum.request({method:'eth_requestAccounts'});
+  // On mobile browsers, do not blindly call an injected provider. Many mobile
+  // wallet shims expose window.ethereum but cannot launch the wallet UI from
+  // the browser. WalletConnect provides the wallet picker/deep-link flow.
+  if(!isMobile()&&typeof window!=='undefined'&&window.ethereum){
+    return window.ethereum.request({method:'eth_requestAccounts'});
+  }
   return connectWalletConnect(chain);
 }
 
 export async function connectWalletConnect(chain=CHAINS.robinhood){
   const provider=await getWalletConnectProvider(chain);
+  try{
+    const existing=await provider.request({method:'eth_accounts'});
+    if(existing?.length)return existing;
+  }catch{}
   await provider.connect();
-  return provider.request({method:'eth_accounts'});
+  const connected=await provider.request({method:'eth_accounts'});
+  if(!connected?.length)throw new Error('Wallet connection was cancelled or no account was returned.');
+  return connected;
 }
 
 export async function ensureChain(chain){
