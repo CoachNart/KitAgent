@@ -1,0 +1,26 @@
+/* Final KitAgent terminal hierarchy pass */
+.main-shell{max-width:1520px!important;padding:0 42px 52px!important}
+.topbar{height:88px!important}
+.top-controls{gap:10px!important}
+.chain-picker,.wallet-button{height:42px!important;padding:0 15px!important;border-radius:10px!important}
+.wallet-button{font-weight:700!important;min-width:145px!important}
+.hero-row{min-height:245px!important;padding:58px 6% 42px!important}
+.hero-row h1{font-size:clamp(46px,5.5vw,70px)!important;margin:15px 0 18px!important}
+.hero-row p{max-width:610px!important;line-height:1.9!important}
+.command-grid{grid-template-columns:minmax(0,1.7fr) minmax(300px,.66fr)!important;gap:20px!important}
+.command-panel,.agent-panel{padding:28px!important;min-height:315px!important;box-shadow:0 20px 55px rgba(0,0,0,.22)!important}
+.command-panel:before{opacity:.36!important}
+.command-panel textarea{height:148px!important;margin-top:28px!important;font-size:14px!important}
+.quick-row{max-height:36px!important;overflow:hidden!important}
+.quick-row button{font-size:7px!important;opacity:.78}
+.execute-intent{min-width:124px!important;height:42px!important}
+.action-strip{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:9px!important;margin:22px 0!important}
+.action-strip button{min-height:72px!important;padding:14px!important;border-radius:12px!important;box-shadow:none!important}
+.action-strip button.selected{box-shadow:inset 0 -2px 0 #9eafa0!important}
+.workbench{padding:28px!important;min-height:245px!important}
+.data-page{margin-top:20px!important;padding:30px!important}
+.bottom-console{position:sticky!important;bottom:12px!important;z-index:5;backdrop-filter:blur(14px);background:rgba(9,11,9,.88)!important}
+.profile-page{padding:52px 3% 30px!important;max-width:1160px!important;margin:0 auto}
+@media(min-width:1250px){.hero-row{padding-left:7%!important;padding-right:7%!important}.action-strip{gap:10px!important}}
+@media(max-width:1050px){.main-shell{padding-right:24px!important}.command-grid{grid-template-columns:1fr!important}.agent-core{display:none!important}.action-strip{grid-template-columns:repeat(4,1fr)!important}.profile-footer{flex-direction:column}}
+@media(max-width:650px){.rail{width:100%!important;height:66px!important;top:auto!important;bottom:0!important}.main-shell{margin-left:0!important;padding:0 13px 82px!important}.topbar{height:72px!important}.top-status{display:none!important}.top-controls{width:100%;justify-content:space-between}.chain-picker{max-width:160px}.wallet-button{min-width:0!important}.hero-row{padding:34px 3% 26px!important;min-height:0!important}.hero-row h1{font-size:45px!important}.hero-row p{font-size:11px!important}.command-grid{gap:12px!important}.command-panel,.agent-panel,.workbench,.data-page{padding:18px!important}.action-strip{grid-template-columns:repeat(2,1fr)!important;gap:8px!important;margin:16px 0!important}.action-strip button{min-height:64px!important}.profile-page{padding:28px 0!important}}
