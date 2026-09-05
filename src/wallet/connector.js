@@ -6,6 +6,7 @@ let wcInitPromise=null;
 let wcBound=false;
 const watchers=new Set();
 const projectId=import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '48604c2cbc72b01702c382d69018e325';
+const MOBILE_RE=/Android|iPhone|iPad|iPod/i;
 
 export function hasWallet(){return typeof window!=='undefined'&&(!!window.ethereum||!!wcProvider)}
 
@@ -27,11 +28,14 @@ async function getWalletConnectProvider(chain){
   if(!projectId)throw new Error('WalletConnect is not configured.');
   if(!chain?.id||!chain?.rpc)throw new Error('Invalid EVM chain configuration');
   if(!wcInitPromise){
-    const all=Object.values(CHAINS).filter(c=>c?.id&&c?.rpc);
+    const all=Object.values(CHAINS).filter(c=>c?.kind==='evm'&&c?.id&&c?.rpc);
+    // Always establish the WalletConnect session on Ethereum first. Some mobile
+    // wallets reject a session whose required chain is a newer/custom chain.
+    // The selected chain is switched to immediately after connection.
     wcInitPromise=EthereumProvider.init({
       projectId,
-      chains:[chain.id],
-      optionalChains:all.map(c=>c.id).filter(id=>id!==chain.id),
+      chains:[1],
+      optionalChains:all.map(c=>c.id).filter(id=>id!==1),
       rpcMap:Object.fromEntries(all.map(c=>[c.id,c.rpc])),
       showQrModal:true,
       qrModalOptions:{themeMode:'dark'},
@@ -48,26 +52,42 @@ async function getWalletConnectProvider(chain){
   return wcProvider;
 }
 
-// Warm the WalletConnect provider before the user taps Connect. Mobile browsers
-// can block a wallet deep-link when provider initialization happens after an
-// asynchronous await inside the click handler.
+// Warm the WalletConnect client without opening a modal. The actual connect()
+// call is still made synchronously from the user's tap.
 if(typeof window!=='undefined'){
-  getWalletConnectProvider(CHAINS.robinhood).catch(()=>{});
+  getWalletConnectProvider(CHAINS.ethereum).catch(()=>{});
+}
+
+async function timedRequest(provider,method,params=[],ms=1800){
+  return Promise.race([
+    provider.request({method,params}),
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Injected wallet did not respond.')),ms))
+  ]);
 }
 
 export async function accounts(){
   if(wcProvider){
     try{return await wcProvider.request({method:'eth_accounts'})}catch{}
   }
-  return typeof window!=='undefined'&&window.ethereum?window.ethereum.request({method:'eth_accounts'}):[];
+  if(typeof window!=='undefined'&&window.ethereum){
+    try{return await timedRequest(window.ethereum,'eth_accounts',[],1000)}catch{}
+  }
+  return [];
 }
 
 export async function connect(chain=CHAINS.robinhood){
-  // Prefer an injected provider whenever the browser exposes one, including
-  // MetaMask/Coinbase/other wallet in-app browsers.
-  if(typeof window!=='undefined'&&window.ethereum){
-    return window.ethereum.request({method:'eth_requestAccounts'});
+  const injected=typeof window!=='undefined'?window.ethereum:null;
+
+  // In a wallet's own mobile browser, injected is the fastest/most reliable path.
+  // In normal mobile Chrome, a stale injected object can exist without being able
+  // to open a wallet. Give it a short timeout, then fall back to WalletConnect.
+  if(injected){
+    try{
+      const result=await timedRequest(injected,'eth_requestAccounts',[],MOBILE_RE.test(navigator.userAgent)?1800:3500);
+      if(result?.length)return result;
+    }catch{}
   }
+
   return connectWalletConnect(chain);
 }
 
@@ -77,12 +97,17 @@ export async function connectWalletConnect(chain=CHAINS.robinhood){
     const existing=await provider.request({method:'eth_accounts'});
     if(existing?.length)return existing;
   }catch{}
-  // provider is pre-warmed, so this call happens immediately from the tap.
-  const connection=provider.connect();
-  await connection;
-  const connected=await provider.request({method:'eth_accounts'});
-  if(!connected?.length)throw new Error('Wallet connection was cancelled or no account was returned.');
-  return connected;
+
+  let connectionError=null;
+  try{
+    // This must stay directly in the user-initiated connect path so WalletConnect
+    // can create/open its mobile wallet handoff while the browser gesture is live.
+    await provider.connect();
+    const connected=await provider.request({method:'eth_accounts'});
+    if(connected?.length)return connected;
+  }catch(e){connectionError=e}
+
+  throw new Error(connectionError?.message||'Unable to connect wallet. Please open your wallet app and try again.');
 }
 
 export async function ensureChain(chain){
