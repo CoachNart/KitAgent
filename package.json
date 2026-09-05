@@ -1,14 +1,16 @@
 {
   "name":"kitagent",
   "private":true,
-  "version":"1.0.6",
+  "version":"1.0.7",
   "type":"module",
-  "scripts":{"dev":"vite","build":"node scripts/expand-multichain.mjs && node scripts/expand-trading.mjs && node scripts/expand-premium-ui.mjs && node scripts/expand-terminal-menu.mjs && vite build","preview":"vite preview"},
+  "scripts":{"dev":"vite","build":"node scripts/expand-multichain.mjs && node scripts/expand-trading.mjs && node scripts/expand-premium-ui.mjs && node scripts/expand-terminal-menu.mjs && node scripts/expand-auth.mjs && vite build","preview":"vite preview"},
   "dependencies":{
     "@vitejs/plugin-react":"latest",
     "vite":"latest",
     "react":"latest",
     "react-dom":"latest",
+    "firebase":"latest",
+    "firebase-admin":"latest",
     "@walletconnect/ethereum-provider":"latest",
     "@walletconnect/modal":"latest",
     "@solana/web3.js":"latest"
