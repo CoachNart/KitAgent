@@ -48,7 +48,12 @@ async function getWalletConnectProvider(chain){
   return wcProvider;
 }
 
-function isMobile(){return typeof navigator!=='undefined'&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)}
+// Warm the WalletConnect provider before the user taps Connect. Mobile browsers
+// can block a wallet deep-link when provider initialization happens after an
+// asynchronous await inside the click handler.
+if(typeof window!=='undefined'){
+  getWalletConnectProvider(CHAINS.robinhood).catch(()=>{});
+}
 
 export async function accounts(){
   if(wcProvider){
@@ -58,13 +63,11 @@ export async function accounts(){
 }
 
 export async function connect(chain=CHAINS.robinhood){
-  // Use an injected wallet whenever the browser exposes one, including mobile
-  // wallet in-app browsers. This preserves the wallet's native request UI.
+  // Prefer an injected provider whenever the browser exposes one, including
+  // MetaMask/Coinbase/other wallet in-app browsers.
   if(typeof window!=='undefined'&&window.ethereum){
     return window.ethereum.request({method:'eth_requestAccounts'});
   }
-  // On a normal mobile browser, use WalletConnect. The provider is pre-warmed
-  // on app load so the actual connect() call stays inside the tap gesture.
   return connectWalletConnect(chain);
 }
 
@@ -74,9 +77,7 @@ export async function connectWalletConnect(chain=CHAINS.robinhood){
     const existing=await provider.request({method:'eth_accounts'});
     if(existing?.length)return existing;
   }catch{}
-  // Do not await provider initialization here when it has already been warmed.
-  // Calling connect() directly from the click handler is important on mobile
-  // browsers because the OS may otherwise block the wallet deep-link.
+  // provider is pre-warmed, so this call happens immediately from the tap.
   const connection=provider.connect();
   await connection;
   const connected=await provider.request({method:'eth_accounts'});
