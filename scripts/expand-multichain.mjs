@@ -9,6 +9,9 @@ if (!s.includes("./multichain/adapters.js")) {
     "import {CHAINS,getToken,chainList,isEvmChain} from './chains/registry.js';\nimport {adapterStatus,connectNative,nativeBalance,sendNative as sendNativeChain} from './multichain/adapters.js';"
   );
 }
+if (!s.includes("./revenue/RevenuePanel.jsx")) {
+  s = s.replace("import {adapterStatus,connectNative,nativeBalance,sendNative as sendNativeChain} from './multichain/adapters.js';", "import {adapterStatus,connectNative,nativeBalance,sendNative as sendNativeChain} from './multichain/adapters.js';\nimport RevenuePanel from './revenue/RevenuePanel.jsx';\nimport {recordUsage,serviceFee,feeLabel} from './revenue/model.js';")
+}
 
 const oldPicker = '<option value="robinhood">Robinhood Chain</option><option value="robinhoodTestnet">Robinhood Testnet</option><option value="custom">Custom EVM Testnet</option>';
 const newPicker = '{chainList().map(c=><option key={c.key} value={c.key}>{c.name}{c.testnet?\' · TESTNET\':\'\'}</option>)}<option value="custom">Custom EVM Testnet</option>';
@@ -35,11 +38,21 @@ const newHealth = "async function checkHealth(){try{if(!isEvmChain(chain)){const
 if (s.includes(oldHealth)) s = s.replace(oldHealth, newHealth);
 
 const oldBuild = "function buildPlan(){try{if(currentIntent==='portfolio'){setMode('portfolio');return}if(currentIntent==='faucet'){setMode('faucet');return}if(currentIntent==='gas'){setAction('contract');setNotice('Gas mode: use Contract or Send and KitAgent will simulate the exact transaction fee.');return}if(currentIntent==='send'){const p=parseSend(command);if(!p.address)throw new Error('I need a valid 0x recipient address');setSendTo(p.address);setSendAmount(p.amount||'0.01');if((p.asset||'ETH').toUpperCase()==='ETH')setAction('send');else setAction('send');return}if(['swap','bridge','defi','nft','contract','batch'].includes(currentIntent)){setAction(currentIntent);return}setAction('contract')}catch(e){setNotice(e.message)}}";
-const newBuild = "function buildPlan(){try{if(currentIntent==='portfolio'){setMode('portfolio');return}if(currentIntent==='faucet'){setMode('faucet');return}if(currentIntent==='gas'){setAction('contract');setNotice(isEvmChain(chain)?'Gas mode: KitAgent will simulate the exact EVM transaction fee.':`${chain.name} fee mode: use the native wallet adapter for network-specific fees.`);return}if(currentIntent==='send'){const p=parseSend(command);if(p.chain){const target=Object.entries(CHAINS).find(([k,c])=>(c.kind==='evm'?String(c.id):k)===String(p.chain));if(target)setChainKey(target[0])}if(!p.address)throw new Error('I need a valid recipient address');setSendTo(p.address);setSendAmount(p.amount||'0.01');setAction('send');return}if(['swap','bridge','defi','nft','contract','batch'].includes(currentIntent)){setAction(currentIntent);return}setAction('contract')}catch(e){setNotice(e.message)}}";
+const newBuild = "function buildPlan(){try{if(currentIntent==='portfolio'){setMode('portfolio');return}if(currentIntent==='faucet'){setMode('faucet');return}if(currentIntent==='gas'){setAction('contract');setNotice(isEvmChain(chain)?'Gas mode: KitAgent will simulate the exact EVM transaction fee.':`${chain.name} fee mode: use the native wallet adapter for network-specific fees.`);return}if(currentIntent==='send'){const p=parseSend(command);if(p.chain){const target=Object.entries(CHAINS).find(([k,c])=>(c.kind==='evm'?String(c.id):k)===String(p.chain));if(target)setChainKey(target[0])}if(!p.address)throw new Error('I need a valid recipient address');setSendTo(p.address);setSendAmount(p.amount||'0.01');setAction('send');return}if(['swap','bridge','defi','nft','contract','batch'].includes(currentIntent)){setAction(currentIntent);return}if(currentIntent==='revenue'){setMode('revenue');return}setAction('contract')}catch(e){setNotice(e.message)}}";
 if (s.includes(oldBuild)) s = s.replace(oldBuild, newBuild);
+
+const oldRouteExec = "async function executeRoute(){if(!route)return;await executeTx(routeTx(route,account),`Route · ${route.toolDetails?.name||route.tool||'aggregator'}`)}";
+const newRouteExec = "async function executeRoute(){if(!route)return;const volume=Number(route.action?.fromAmount||route.fromAmount||0)/1e18;const fee=serviceFee(volume);const receipt=await executeTx(routeTx(route,account),`Route · ${route.toolDetails?.name||route.tool||'aggregator'}`);if(receipt)recordUsage({type:'routes',volume,fee})}";
+if (s.includes(oldRouteExec)) s = s.replace(oldRouteExec, newRouteExec);
 
 s = s.replace('<strong>{native} <small>ETH</small></strong>', '<strong>{native} <small>{chain?.symbol||chain?.native||\'NATIVE\'}</small></strong>');
 s = s.replace('<b>{native} ETH</b>', '<b>{native} {chain?.symbol||chain?.native||\'NATIVE\'}</b>');
 
+const oldNav = "{[['command','command','Command'],['portfolio','wallet','Portfolio'],['activity','activity','Activity'],['faucet','faucet','Gas Station']].map(([m,i,l])=><button key={m} className={mode===m?'active':''} onClick={()=>setMode(m)}><Icon name={i}/><span>{l}</span></button>)}";
+const newNav = "{[['command','command','Command'],['portfolio','wallet','Portfolio'],['activity','activity','Activity'],['faucet','faucet','Gas Station'],['revenue','activity','Revenue']].map(([m,i,l])=><button key={m} className={mode===m?'active':''} onClick={()=>setMode(m)}><Icon name={i}/><span>{l}</span></button>)}";
+if (s.includes(oldNav)) s=s.replace(oldNav,newNav);
+const marker="{mode==='command'&&<><section className=\"hero-row\">";
+if(s.includes(marker)&&!s.includes("mode==='revenue'&&<RevenuePanel"))s=s.replace(marker,"{mode==='revenue'&&<RevenuePanel/>}"+marker);
+
 fs.writeFileSync(path, s);
-console.log('KitAgent multichain build transform applied');
+console.log('KitAgent multichain + revenue build transform applied');
