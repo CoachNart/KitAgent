@@ -1,0 +1,11 @@
+import {registerProtocol} from './registry.js';
+export const MULTICALL3='0xcA11bde05977b3631167028862bE2a173976CA11';
+export const PERMIT2='0x000000000022D473030F116dDEE9F6B43aC78BA3';
+export const LIGHTER='0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d';
+export const UNISWAP_V3_FACTORY='0x1f7d7550B1b028f7571E69A784071F0205FD2EfA';
+export const UNISWAP_V3_POSITION_MANAGER='0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3';
+registerProtocol({name:'Multicall3',chainIds:[4663],contracts:[MULTICALL3],capabilities:['atomic-batch','aggregate3']});
+registerProtocol({name:'Permit2',chainIds:[4663],contracts:[PERMIT2],capabilities:['signature-approval']});
+registerProtocol({name:'Lighter',chainIds:[4663],contracts:[LIGHTER],capabilities:['perpetuals']});
+registerProtocol({name:'Uniswap V3 Factory',chainIds:[4663],contracts:[UNISWAP_V3_FACTORY],capabilities:['pool-discovery']});
+registerProtocol({name:'Uniswap V3 Position Manager',chainIds:[4663],contracts:[UNISWAP_V3_POSITION_MANAGER],capabilities:['liquidity','positions']});
