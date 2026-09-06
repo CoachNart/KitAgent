@@ -1,21 +1,9 @@
 {
-  "name":"kitagent",
-  "private":true,
-  "version":"1.0.13",
-  "type":"module",
-  "engines":{"node":">=22"},
-  "scripts":{"dev":"vite","build":"node scripts/expand-multichain.mjs && node scripts/expand-trading.mjs && node scripts/expand-premium-ui.mjs && node scripts/expand-terminal-menu.mjs && node scripts/expand-auth.mjs && node scripts/expand-profile.mjs && node scripts/final-profile.mjs && node scripts/expand-billing.mjs && node scripts/final-product-polish.mjs && node scripts/final-visual-polish.mjs && node scripts/terminal-agent-transform.mjs && vite build","preview":"vite preview"},
-  "dependencies":{
-    "@vitejs/plugin-react":"latest",
-    "vite":"latest",
-    "react":"latest",
-    "react-dom":"latest",
-    "firebase":"latest",
-    "firebase-admin":"latest",
-    "stripe":"latest",
-    "@walletconnect/ethereum-provider":"latest",
-    "@walletconnect/modal":"latest",
-    "@solana/web3.js":"latest"
-  },
-  "devDependencies":{}
+  "name": "kitagent",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {"dev":"vite","build":"vite build","preview":"vite preview"},
+  "dependencies": {"@vitejs/plugin-react":"latest","vite":"latest","react":"latest","react-dom":"latest"},
+  "devDependencies": {}
 }

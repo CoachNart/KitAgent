@@ -1,5 +1,0 @@
-import {routeLifecyclePlan,validateRouteStep} from './lifecycle.js';
-export function normalizeRouteSteps(route={}){const steps=[];for(const s of route.includedSteps||[]){const tx=s.transactionRequest||s.transaction||null;if(tx){validateRouteStep(tx);steps.push({...tx,label:s.toolDetails?.name||s.tool||s.type||'Route step',kind:s.type||'swap',requiresApproval:false})}}if(route.transactionRequest){validateRouteStep(route.transactionRequest);steps.push({...route.transactionRequest,label:'Route transaction',kind:'route',requiresApproval:false})}return routeLifecyclePlan(steps)}
-export function routeRequiresApproval(route={}){return (route.steps||route.includedSteps||[]).some(s=>Boolean(s.requiresApproval||s.type==='approval'))}
-export function executionGraph(route={}){const steps=normalizeRouteSteps(route);return{count:steps.length,steps,atomic:false,policy:'Each transaction is independently validated, simulated and approved; no false atomicity claim.'}}
-export function nextExecutableStep(graph,index=0){return graph.steps.find(s=>s.index>=index&&s.status!=='confirmed')||null}
