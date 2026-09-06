@@ -49,9 +49,9 @@ async function initializeAccount(user) {
     securitySettings: { ...(existing.securitySettings || {}), deviceBindingId },
     status: existing.status || ACCOUNT_DEFAULTS.status,
     plan: existing.plan || ACCOUNT_DEFAULTS.plan,
-    monthlyUsage: existing.monthlyUsage || ACCOUNT_DEFAULTS.monthlyUsage,
-    subscription: existing.subscription || ACCOUNT_DEFAULTS.subscription,
-    api: existing.api || ACCOUNT_DEFAULTS.api,
+    monthlyUsage: { ...ACCOUNT_DEFAULTS.monthlyUsage, ...(existing.monthlyUsage || {}) },
+    subscription: { ...ACCOUNT_DEFAULTS.subscription, ...(existing.subscription || {}) },
+    api: { ...ACCOUNT_DEFAULTS.api, ...(existing.api || {}) },
     updatedAt: serverTimestamp()
   };
   if (!snapshot.exists()) {
