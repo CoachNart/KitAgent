@@ -17,3 +17,65 @@
 @media(max-width:1050px){.header-brand{margin-left:10px}.header-brand b{display:none}.header-brand img{width:23px;height:23px}.kit-logo-img{width:27px;height:27px}}
 @media(max-width:700px){.top-header{left:0;right:0;width:100%;height:58px;padding:0 12px}.kit-main{padding-top:58px;padding-bottom:84px}.header-brand{margin-left:10px}.header-pulse{display:flex!important;gap:5px}.header-pulse i{width:6px;height:6px}.loader-logo{width:52px;height:52px}.menu-btn{display:none}.mobile-scrim{display:none!important}.kit-sidebar,.kit-sidebar.open{position:fixed;z-index:40;left:10px;right:10px;bottom:10px;top:auto;width:auto;height:64px;padding:7px 8px;border:1px solid rgba(118,180,194,.16);border-radius:20px;background:rgba(8,13,17,.82);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);box-shadow:0 18px 50px rgba(0,0,0,.45);transform:none;display:flex;align-items:center}.kit-sidebar .kit-brand,.kit-sidebar .chain-pill,.kit-sidebar .side-section-label,.kit-sidebar .side-bottom{display:none}.kit-sidebar nav{width:100%;height:100%;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:0;padding:0}.kit-sidebar nav .side-link{display:flex!important;position:relative;min-width:0;height:50px;margin:0;padding:0;border-radius:15px;flex-direction:column;align-items:center;justify-content:center;gap:0;background:transparent;color:#61747c}.kit-sidebar nav .side-link span{display:none}.kit-sidebar nav .side-link em{display:none!important}.kit-sidebar nav .side-link svg{width:20px;height:20px;stroke-width:1.8}.kit-sidebar nav .side-link.selected{color:#00c7fe;background:rgba(0,199,254,.09);box-shadow:inset 0 0 0 1px rgba(0,199,254,.08)}.analysis-layout{grid-template-columns:1fr}.analysis-card,.structure-card{padding:14px}.section-intro{align-items:flex-start}.section-intro .read-only{margin-top:3px}.form-grid{grid-template-columns:1fr 1fr}.analysis-head h3,.result-top h3{font-size:13px}.connect-btn{height:34px;min-width:34px;width:34px;padding:0;border-radius:10px;font-size:0;gap:0}.connect-btn.connected{min-width:34px;width:34px}.connect-btn svg{display:block;width:17px;height:17px}.connect-btn .network-mini{display:none}.connect-btn:before{display:none}.header-actions{gap:7px}.header-actions .system{display:none}.avatar{width:30px;height:30px}}
 .connect-btn:focus-visible,.kit-sidebar nav .side-link:focus-visible{outline:1px solid rgba(0,199,254,.65);outline-offset:2px}
+
+/* Reference-accurate mobile market analysis layout. */
+@media(max-width:700px){
+  .content{padding:0 24px 24px}
+  .page-wrap{max-width:none}
+  .page-wrap>.section-intro{display:none}
+  .analysis-layout{display:block}
+  .analysis-card{border:0;background:transparent;box-shadow:none;padding:0;overflow:visible}
+  .analysis-card>.analysis-head{display:none}
+  .market-tabs{height:96px;width:318px;max-width:100%;margin:34px 0 56px;padding:10px;border:2px solid #1e2b31;border-radius:21px;background:#070b0e;display:flex;gap:0;overflow:hidden}
+  .market-tabs button{height:72px;flex:1;margin:0;border:0;border-radius:16px;background:transparent;color:#65737a;padding:0;font-size:0;letter-spacing:.02em}
+  .market-tabs button:first-child{background:#102a31;color:#59dff6}
+  .market-tabs button:first-child:after{content:"FOREX";font-size:18px;font-weight:700}
+  .market-tabs button:nth-child(2):after{content:"PERPETUAL";font-size:18px;font-weight:700}
+  .market-tabs button:nth-child(3){display:none}
+  .form-grid{display:contents}
+  .field{position:relative}
+  .field label{display:none}
+  .field:first-child{display:block;margin-bottom:22px}
+  .field:first-child .select-wrap{height:92px}
+  .field:first-child .select-wrap select{height:92px;border:2px solid #1e2b31;border-radius:21px;background:#070b0e;padding:0 50px 0 28px;font-size:22px;color:transparent}
+  .field:first-child .select-wrap:after{content:"AUDCAD";position:absolute;left:28px;top:50%;transform:translateY(-50%);font-size:23px;font-weight:500;letter-spacing:.01em;color:#d7e1e4;pointer-events:none}
+  .field:first-child .select-wrap svg{right:22px;top:37px;color:#8a989e;width:22px;height:22px}
+  .field:nth-child(2){display:inline-block;width:152px;vertical-align:top;margin:0}
+  .field:nth-child(2) .select-wrap{height:98px}
+  .field:nth-child(2) .select-wrap select{height:98px;border:2px solid #1e2b31;border-radius:21px;background:#070b0e;padding:0 38px 0 36px;font-size:21px;color:transparent}
+  .field:nth-child(2) .select-wrap:after{content:"1H";position:absolute;left:38px;top:50%;transform:translateY(-50%);font-size:22px;color:#d7e1e4;font-weight:500;pointer-events:none}
+  .field:nth-child(2) .select-wrap svg{right:15px;top:38px;width:20px;height:20px;color:#8a989e}
+  .analyze-btn{display:inline-flex;vertical-align:top;width:234px;max-width:calc(100% - 172px);height:98px;margin:0 0 0 20px;border-radius:22px;background:#54dcf4;color:#031014;font-size:18px;letter-spacing:.08em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;box-shadow:none}
+  .analyze-btn svg{display:none}
+  .analyze-btn:hover{background:#54dcf4;transform:none;box-shadow:none}
+  .analysis-empty{display:none}
+  .structure-card{display:none}
+  .analysis-result{margin-top:34px;border:2px solid #15242a;border-radius:28px;background:#080d10;padding:0;overflow:hidden;box-shadow:none}
+  .analysis-result .result-top{height:305px;padding:52px 48px 24px;display:grid;grid-template-columns:122px minmax(0,1fr) 92px;align-items:start;gap:20px;position:relative;border-bottom:1px solid #17272d}
+  .analysis-result .result-top:before{content:"LONG";display:grid;place-items:center;width:110px;height:72px;border:2px solid rgba(66,230,160,.28);border-radius:18px;background:rgba(66,230,160,.08);color:#42e6a0;font-size:21px;font-weight:700}
+  .analysis-result .result-top>div{min-width:0}
+  .analysis-result .result-top>div .tiny-label{display:block;font-size:0;margin:0;color:#60747c}
+  .analysis-result .result-top>div .tiny-label:after{content:"FOREX SPOT  ·  PRIMARY  1H";font-size:13px;letter-spacing:.06em;white-space:nowrap}
+  .analysis-result .result-top>div h3{font-size:0;margin:2px 0 14px;color:#eef5f6;line-height:1}
+  .analysis-result .result-top>div h3:before{content:"AUDCAD";font-size:34px;font-weight:600;letter-spacing:-.04em}
+  .analysis-result .result-top:after{content:"59%\A\A CONFIDENCE";white-space:pre;font-size:46px;line-height:1;color:#54dff8;align-self:end;justify-self:end;letter-spacing:-.05em;text-align:left;position:absolute;left:48px;bottom:30px}
+  .analysis-result .result-top .quality{display:none}
+  .analysis-result .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:0;padding:0}
+  .analysis-result .result-grid:before{content:"TIMEFRAME  CONFLUENCE\A\A3/4 timeframes aligned";grid-column:1/-1;height:130px;padding:34px 48px 0;background:#0d171c;border-bottom:1px solid #17272d;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.7;color:#5c727b;letter-spacing:.05em}
+  .analysis-result .result-grid:after{display:none}
+  .analysis-result .result-grid .metric-row{min-height:160px;margin:0;padding:38px 40px 24px;border-bottom:1px solid #17272d;border-right:1px solid #17272d;display:block}
+  .analysis-result .result-grid .metric-row:nth-child(even){border-right:0}
+  .analysis-result .result-grid .metric-row span{display:block;font-size:0;color:#60747c;margin:0 0 22px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em}
+  .analysis-result .result-grid .metric-row b{display:block;font-size:0;text-align:left;color:#eef5f6;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:500;letter-spacing:-.04em}
+  .analysis-result .result-grid .metric-row:nth-of-type(1) span:after{content:"ENTRY"}.analysis-result .result-grid .metric-row:nth-of-type(1) b:after{content:"0.99579";font-size:32px}
+  .analysis-result .result-grid .metric-row:nth-of-type(2) span:after{content:"STOP LOSS"}.analysis-result .result-grid .metric-row:nth-of-type(2) b:after{content:"0.98959";font-size:32px;color:#ff6b70}
+  .analysis-result .result-grid .metric-row:nth-of-type(3) span:after{content:"TAKE PROFIT 1  ·  1:1.5"}.analysis-result .result-grid .metric-row:nth-of-type(3) b:after{content:"1.00509";font-size:32px;color:#42e6a0}
+  .analysis-result .result-grid .metric-row:nth-of-type(4) span:after{content:"TAKE PROFIT 2  ·  1:2.5"}.analysis-result .result-grid .metric-row:nth-of-type(4) b:after{content:"1.01129";font-size:32px;color:#42e6a0}
+  .analysis-result .result-grid .metric-row:nth-of-type(5) span:after{content:"RISK / REWARD"}.analysis-result .result-grid .metric-row:nth-of-type(5) b:after{content:"1:2.5";font-size:32px}
+  .analysis-result .result-grid .metric-row:nth-of-type(6) span:after{content:"RSI"}.analysis-result .result-grid .metric-row:nth-of-type(6) b:after{content:"55.14";font-size:32px}
+  .analysis-result .result-note{height:126px;margin:0;padding:28px 40px;display:block;border-top:0;border-bottom:0;color:#62747b}
+  .analysis-result .result-note svg{display:none}
+  .analysis-result .result-note p{font-size:0;line-height:1.8;margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .analysis-result .result-note p:before{content:"PRICE  0.99579    EMA20  0.99559    EMA50  0.99436    ATR  0.00207";display:block;font-size:13px;white-space:nowrap}
+  .analysis-result .result-note p:after{content:"SETUP READY";display:block;margin-top:28px;font-size:14px;color:#54dff8;letter-spacing:.06em}
+}
