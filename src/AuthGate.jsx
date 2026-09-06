@@ -1,8 +1,39 @@
 import { useEffect, useState } from 'react';
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ShieldCheck, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
-import { auth, firebaseConfigured, initializeAccount } from './firebase.js';
+import { auth, db, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
+
+async function initializeAccount(user) {
+  if (!db) throw new Error('KitAgent database is not configured.');
+  const ref = doc(db, 'users', user.uid);
+  const snapshot = await getDoc(ref);
+  const deviceBindingId = await getDeviceBindingId();
+
+  if (!snapshot.exists()) {
+    await setDoc(ref, {
+      email: user.email || '',
+      walletAddress: '',
+      maxRiskPercent: 1.5,
+      maxTradeSize: 0,
+      tradingPreferences: { targetRiskReward: 2.5 },
+      apiKeyMetadata: {},
+      securitySettings: { deviceBindingId },
+      status: 'active',
+      trialStartedAt: serverTimestamp(),
+      trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    await setDoc(ref, {
+      email: user.email || snapshot.data()?.email || '',
+      securitySettings: { ...(snapshot.data()?.securitySettings || {}), deviceBindingId },
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  }
+}
 
 export default function AuthGate({ children }) {
   const [user, setUser] = useState(null);
@@ -14,38 +45,31 @@ export default function AuthGate({ children }) {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    if (!auth) { setReady(true); return undefined; }
+    if (!auth || !db) { setReady(true); return undefined; }
     return onAuthStateChanged(auth, async (nextUser) => {
       if (!nextUser) { setUser(null); setReady(true); return; }
       try {
-        const deviceBindingId = await getDeviceBindingId();
-        if (!initializeAccount) throw new Error('KitAgent account service is not configured.');
-        await initializeAccount({ deviceBindingId });
+        await initializeAccount(nextUser);
         setUser(nextUser);
         setMessage('');
       } catch (error) {
         await signOut(auth).catch(() => {});
         const code = error?.code || '';
         if (code.includes('permission-denied')) {
-          setMessage(error.message || 'This device is already linked to another KitAgent account.');
+          setMessage('KitAgent could not save your account. Check Firestore rules and try again.');
         } else if (code.includes('unauthenticated')) {
           setMessage('Your session expired. Please sign in again.');
-        } else if (code.includes('internal')) {
-          setMessage('KitAgent could not complete account verification. Please try again in a moment.');
-          console.error('KitAgent account verification failed:', error);
         } else {
-          setMessage(error?.message || 'We could not verify this account. Please try again.');
-          console.error('KitAgent account verification failed:', error);
+          setMessage(error?.message || 'We could not finish account setup. Please try again.');
+          console.error('KitAgent account setup failed:', error);
         }
-      } finally {
-        setReady(true);
-      }
+      } finally { setReady(true); }
     });
   }, []);
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!auth || !initializeAccount) return;
+    if (!auth || !db) return;
     setBusy(true); setMessage('');
     try {
       if (mode === 'signup') await createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -73,7 +97,7 @@ function AuthScreen({ mode='signin', setMode, email='', setEmail, password='', s
   const interactive = Boolean(onSubmit);
   return <div style={{minHeight:'100vh',background:'#070b0e',color:'#edf5f5',display:'grid',placeItems:'center',padding:20,fontFamily:'Inter,ui-sans-serif,system-ui,sans-serif'}}>
     <div style={{width:'100%',maxWidth:430,border:'1px solid #1b2a30',background:'#0b1115',borderRadius:14,padding:28,boxShadow:'0 25px 80px rgba(0,0,0,.35)'}}>
-      <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:28}}><div style={{width:38,height:38,borderRadius:9,background:'#00c7fe',color:'#071012',display:'grid',placeItems:'center',fontWeight:800,fontSize:19}}>K</div><div><b style={{fontSize:15,display:'block'}}>KitAgent</b><span style={{fontSize:9,color:'#627179'}}>Web3 trading terminal</span></div></div>
+      <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:28}}><div style={{width:38,height:38,borderRadius:9,background:'#00c7fe',color:'#071012',display:'grid',placeItems:'center',fontWeight:800,fontSize:19}}>K</div><div><b style={{fontSize:15,display:'block'}}>KitAgent</b><small style={{fontSize:9,color:'#627179'}}>Web3 trading terminal</small></div></div>
       <div style={{display:'flex',alignItems:'center',gap:8,color:'#00c7fe',fontSize:9,fontWeight:700,letterSpacing:'.14em'}}><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div>
       <h1 style={{fontSize:28,letterSpacing:'-.045em',margin:'12px 0 7px'}}>{title}</h1>
       {interactive && <p style={{fontSize:11,color:'#687980',lineHeight:1.6,margin:'0 0 22px'}}>{mode === 'signin' ? 'Sign in to continue to your trading terminal.' : 'Create your account and start your 3-day free trial.'}</p>}
@@ -84,7 +108,7 @@ function AuthScreen({ mode='signin', setMode, email='', setEmail, password='', s
         <button disabled={busy} type="submit" style={{...buttonStyle,opacity:busy?.7:1}}>{busy ? <LoaderCircle size={16}/> : mode==='signin' ? <LogIn size={16}/> : <UserPlus size={16}/>} {busy ? 'Verifying account…' : mode==='signin' ? 'Sign in' : 'Create account'}</button>
         <button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('');}} style={switchStyle}>{mode==='signin' ? 'New to KitAgent? Create an account' : 'Already have an account? Sign in'}</button>
       </form> : <div style={errorStyle}>{message}</div>}
-      <div style={{marginTop:20,paddingTop:15,borderTop:'1px solid #18262c',fontSize:9,color:'#52636a',lineHeight:1.5}}>Your account is checked against a server-side device binding after authentication. Signing out does not release the device.</div>
+      <div style={{marginTop:20,paddingTop:15,borderTop:'1px solid #18262c',fontSize:9,color:'#52636a',lineHeight:1.5}}>Your account is secured by Firebase Authentication. Your device identifier is stored with your account for application-level device awareness.</div>
     </div>
   </div>;
 }
