@@ -8,14 +8,13 @@ service cloud.firestore {
       allow read: if owns(uid);
       allow create: if owns(uid)
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.status == 'active';
+        && request.resource.data.status == 'active'
+        && request.resource.data.plan == 'free';
       allow delete: if false;
       allow update: if owns(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'email', 'displayName', 'photoURL', 'walletAddress', 'maxRiskPercent', 'maxTradeSize',
-          'tradingPreferences', 'apiKeyMetadata', 'securitySettings', 'status', 'plan',
-          'monthlyUsage', 'subscription', 'api', 'trialStartedAt', 'trialEndsAt',
-          'createdAt', 'updatedAt'
+          'tradingPreferences', 'apiKeyMetadata', 'securitySettings', 'updatedAt'
         ]);
 
       match /transactions/{transactionId} {
@@ -33,7 +32,10 @@ service cloud.firestore {
           && request.resource.data.status == 'pending'
           && request.resource.data.transactionHash is string
           && request.resource.data.transactionHash.size() >= 8
-          && request.resource.data.transactionHash.size() <= 200;
+          && request.resource.data.transactionHash.size() <= 200
+          && request.resource.data.asset is string
+          && request.resource.data.network is string
+          && request.resource.data.amount is number;
         allow update, delete: if false;
       }
     }
