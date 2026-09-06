@@ -5,8 +5,6 @@ import { ShieldCheck, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { auth, db, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
 
-const ACCOUNT_DEFAULTS={status:'active',plan:'free',monthlyUsage:{used:0,limit:0},subscription:{name:'Premium',price:30,currency:'USD',billingPeriod:'month',accessDays:30,features:['Unlimited setups','Live intelligence'],paymentAsset:'USDT',paymentNetwork:'BNB Chain',paymentAddress:'0x1c35bf9d920e1b5d7e7e37ce1d15a1b9500f8474'},api:{status:'coming_soon'}};
-
 async function registerDevice(user){
   const deviceId=await getDeviceBindingId();
   const token=await user.getIdToken();
@@ -18,10 +16,26 @@ async function registerDevice(user){
 
 async function initializeAccount(user){
   if(!db) throw new Error('KitAgent database is not configured.');
-  const ref=doc(db,'users',user.uid); const snapshot=await getDoc(ref); const existing=snapshot.exists()?snapshot.data():{};
+  // Account creation and trial creation are server-authoritative. The API creates
+  // the first profile atomically with the device binding, so the client never
+  // attempts a first-time Firestore create.
   const deviceBindingId=await registerDevice(user);
-  const identity={email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},securitySettings:{...(existing.securitySettings||{}),deviceBindingId},updatedAt:serverTimestamp()};
-  if(!snapshot.exists()){await setDoc(ref,{...identity,...ACCOUNT_DEFAULTS,trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000),createdAt:serverTimestamp()});return;}
+  const ref=doc(db,'users',user.uid);
+  const snapshot=await getDoc(ref);
+  if(!snapshot.exists()) throw new Error('ACCOUNT_PROFILE_NOT_READY');
+  const existing=snapshot.data()||{};
+  const identity={
+    email:user.email||existing.email||'',
+    displayName:user.displayName||existing.displayName||'',
+    photoURL:user.photoURL||existing.photoURL||'',
+    walletAddress:existing.walletAddress||'',
+    maxRiskPercent:existing.maxRiskPercent??1.5,
+    maxTradeSize:existing.maxTradeSize??0,
+    tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},
+    apiKeyMetadata:existing.apiKeyMetadata||{},
+    securitySettings:{...(existing.securitySettings||{}),deviceBindingId},
+    updatedAt:serverTimestamp()
+  };
   await setDoc(ref,identity,{merge:true});
 }
 
