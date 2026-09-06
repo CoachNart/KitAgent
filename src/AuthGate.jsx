@@ -30,8 +30,12 @@ export default function AuthGate({ children }) {
           setMessage(error.message || 'This device is already linked to another KitAgent account.');
         } else if (code.includes('unauthenticated')) {
           setMessage('Your session expired. Please sign in again.');
+        } else if (code.includes('internal')) {
+          setMessage('KitAgent could not complete account verification. Please try again in a moment.');
+          console.error('KitAgent account verification failed:', error);
         } else {
           setMessage(error?.message || 'We could not verify this account. Please try again.');
+          console.error('KitAgent account verification failed:', error);
         }
       } finally {
         setReady(true);
@@ -46,7 +50,6 @@ export default function AuthGate({ children }) {
     try {
       if (mode === 'signup') await createUserWithEmailAndPassword(auth, email.trim(), password);
       else await signInWithEmailAndPassword(auth, email.trim(), password);
-      // The auth-state listener performs the single server-side account/device check.
     } catch (error) {
       await signOut(auth).catch(() => {});
       const code = error?.code || '';
@@ -70,8 +73,8 @@ function AuthScreen({ mode='signin', setMode, email='', setEmail, password='', s
   const interactive = Boolean(onSubmit);
   return <div style={{minHeight:'100vh',background:'#070b0e',color:'#edf5f5',display:'grid',placeItems:'center',padding:20,fontFamily:'Inter,ui-sans-serif,system-ui,sans-serif'}}>
     <div style={{width:'100%',maxWidth:430,border:'1px solid #1b2a30',background:'#0b1115',borderRadius:14,padding:28,boxShadow:'0 25px 80px rgba(0,0,0,.35)'}}>
-      <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:28}}><div style={{width:38,height:38,borderRadius:9,background:'#b7fff8',color:'#071012',display:'grid',placeItems:'center',fontWeight:800,fontSize:19}}>K</div><div><b style={{fontSize:15,display:'block'}}>KitAgent</b><span style={{fontSize:9,color:'#627179'}}>Web3 trading terminal</span></div></div>
-      <div style={{display:'flex',alignItems:'center',gap:8,color:'#7be9e2',fontSize:9,fontWeight:700,letterSpacing:'.14em'}}><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div>
+      <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:28}}><div style={{width:38,height:38,borderRadius:9,background:'#00c7fe',color:'#071012',display:'grid',placeItems:'center',fontWeight:800,fontSize:19}}>K</div><div><b style={{fontSize:15,display:'block'}}>KitAgent</b><span style={{fontSize:9,color:'#627179'}}>Web3 trading terminal</span></div></div>
+      <div style={{display:'flex',alignItems:'center',gap:8,color:'#00c7fe',fontSize:9,fontWeight:700,letterSpacing:'.14em'}}><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div>
       <h1 style={{fontSize:28,letterSpacing:'-.045em',margin:'12px 0 7px'}}>{title}</h1>
       {interactive && <p style={{fontSize:11,color:'#687980',lineHeight:1.6,margin:'0 0 22px'}}>{mode === 'signin' ? 'Sign in to continue to your trading terminal.' : 'Create your account and start your 3-day free trial.'}</p>}
       {interactive ? <form onSubmit={onSubmit}>
@@ -88,6 +91,6 @@ function AuthScreen({ mode='signin', setMode, email='', setEmail, password='', s
 
 const labelStyle={display:'block',fontSize:8,color:'#617178',letterSpacing:'.12em',fontWeight:700,marginBottom:14};
 const inputStyle={display:'block',width:'100%',height:42,marginTop:7,border:'1px solid #25343b',borderRadius:7,background:'#080e12',color:'#e7f1f2',outline:'none',padding:'0 11px',fontSize:11};
-const buttonStyle={width:'100%',height:42,border:0,borderRadius:7,background:'#b6fff7',color:'#071011',fontWeight:700,fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',gap:7,cursor:'pointer'};
-const switchStyle={width:'100%',marginTop:12,border:0,background:'transparent',color:'#79dfd8',fontSize:9,cursor:'pointer'};
+const buttonStyle={width:'100%',height:42,border:0,borderRadius:7,background:'#00c7fe',color:'#071011',fontWeight:700,fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',gap:7,cursor:'pointer'};
+const switchStyle={width:'100%',marginTop:12,border:0,background:'transparent',color:'#00c7fe',fontSize:9,cursor:'pointer'};
 const errorStyle={border:'1px solid #4a302c',background:'#1a1110',color:'#d8a59d',borderRadius:7,padding:'10px 11px',fontSize:9,lineHeight:1.5,marginBottom:12};
