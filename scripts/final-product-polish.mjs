@@ -6,6 +6,7 @@ let s=fs.readFileSync(mainPath,'utf8');
 if(!s.includes("import './product-polish.css';"))s="import './product-polish.css';\n"+s;
 if(!s.includes("import './nav-redesign.css';"))s="import './nav-redesign.css';\n"+s;
 if(!s.includes("import './terminal-contrast.css';"))s="import './terminal-contrast.css';\n"+s;
+if(!s.includes("import './terminal-quick-dropdown.css';"))s="import './terminal-quick-dropdown.css';\n"+s;
 
 if(!s.includes('function ChainCategories')){
   const marker='function App(){';
