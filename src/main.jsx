@@ -7,6 +7,6 @@ import './brand.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AuthGate><App /></AuthGate>
+    <AuthGate>{user => <App user={user} />}</AuthGate>
   </React.StrictMode>
 );
