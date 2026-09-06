@@ -4,7 +4,11 @@ const TIMEFRAME_MAP={
 const CONFLUENCE=['1H','4H','1D'];
 const allowedIntervals=new Set(['1m','5m','15m','30m','4H','1H','1D','1W']);
 
-function json(res,status,payload){res.status(status).setHeader('Content-Type','application/json');res.end(JSON.stringify(payload));}
+function json(res,status,payload){
+  res.statusCode=status;
+  res.setHeader('Content-Type','application/json; charset=utf-8');
+  res.end(JSON.stringify(payload));
+}
 function sma(values,n){if(values.length<n)return null;return values.slice(-n).reduce((a,b)=>a+b,0)/n;}
 function ema(values,n){if(values.length<n)return null;let e=sma(values.slice(0,n),n),k=2/(n+1);for(let i=n;i<values.length;i++)e=values[i]*k+e*(1-k);return e;}
 function rsi(values,n=14){if(values.length<n+1)return 50;let gain=0,loss=0;for(let i=1;i<=n;i++){const d=values[i]-values[i-1];gain+=Math.max(d,0);loss+=Math.max(-d,0)}let avgGain=gain/n,avgLoss=loss/n;for(let i=n+1;i<values.length;i++){const d=values[i]-values[i-1];avgGain=(avgGain*(n-1)+Math.max(d,0))/n;avgLoss=(avgLoss*(n-1)+Math.max(-d,0))/n}if(avgLoss===0)return 100;return 100-(100/(1+avgGain/avgLoss));}
@@ -41,7 +45,7 @@ const risk=Math.abs(entry-stop);const confidence=Math.min(92,Math.max(42,Math.ro
 export default async function handler(req,res){
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
   try{
-    const market=String(req.query.market||'forex').toLowerCase();const symbol=String(req.query.symbol||'').trim().toUpperCase();const timeframe=String(req.query.timeframe||'1H');
+    const market=String(req.query?.market||'forex').toLowerCase();const symbol=String(req.query?.symbol||'').trim().toUpperCase();const timeframe=String(req.query?.timeframe||'1H');
     if(!['forex','crypto','perpetual'].includes(market))return json(res,400,{error:'Unsupported market'});
     if(!symbol)return json(res,400,{error:'Missing symbol'});
     if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});
