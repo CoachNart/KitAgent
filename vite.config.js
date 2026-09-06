@@ -1,16 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import marketHandler from './api/market.js';
+import perpetualHandler from './api/perpetual.js';
 
 const localMarketApi = () => ({
   name: 'kitagent-local-market-api',
   configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
-      if (!req.url?.startsWith('/api/market')) return next();
+      if (!req.url?.startsWith('/api/market') && !req.url?.startsWith('/api/perpetual')) return next();
       try {
         const url = new URL(req.url, 'http://localhost');
         req.query = Object.fromEntries(url.searchParams.entries());
-        await marketHandler(req, res);
+        const handler = req.url.startsWith('/api/perpetual') ? perpetualHandler : marketHandler;
+        await handler(req, res);
       } catch (error) {
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
@@ -20,11 +22,12 @@ const localMarketApi = () => ({
   },
   configurePreviewServer(server) {
     server.middlewares.use(async (req, res, next) => {
-      if (!req.url?.startsWith('/api/market')) return next();
+      if (!req.url?.startsWith('/api/market') && !req.url?.startsWith('/api/perpetual')) return next();
       try {
         const url = new URL(req.url, 'http://localhost');
         req.query = Object.fromEntries(url.searchParams.entries());
-        await marketHandler(req, res);
+        const handler = req.url.startsWith('/api/perpetual') ? perpetualHandler : marketHandler;
+        await handler(req, res);
       } catch (error) {
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
