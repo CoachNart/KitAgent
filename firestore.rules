@@ -6,25 +6,30 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if owns(uid);
-      allow create: if owns(uid)
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.status == 'active'
-        && request.resource.data.plan == 'free';
+      // Account creation and security-owned fields are server-authoritative.
+      allow create: if false;
       allow delete: if false;
       allow update: if owns(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'email', 'displayName', 'photoURL', 'walletAddress', 'maxRiskPercent', 'maxTradeSize',
           'tradingPreferences', 'apiKeyMetadata', 'securitySettings', 'updatedAt'
-        ]);
+        ])
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.plan == resource.data.plan
+        && request.resource.data.monthlyUsage == resource.data.monthlyUsage
+        && request.resource.data.subscription == resource.data.subscription
+        && request.resource.data.api == resource.data.api
+        && request.resource.data.trialStartedAt == resource.data.trialStartedAt
+        && request.resource.data.trialEndsAt == resource.data.trialEndsAt
+        && request.resource.data.subscriptionEndsAt == resource.data.subscriptionEndsAt
+        && request.resource.data.securitySettings.deviceBindingId == resource.data.securitySettings.deviceBindingId;
 
       match /transactions/{transactionId} {
         allow read, create, update, delete: if owns(uid);
       }
-
       match /trades/{tradeId} {
         allow read, create, update, delete: if owns(uid);
       }
-
       match /paymentVerifications/{verificationId} {
         allow read: if owns(uid);
         allow create: if owns(uid)
