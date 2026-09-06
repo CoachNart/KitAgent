@@ -1,1 +1,10 @@
 .terminal-topbar{display:none!important}
+/* Chart Terminal is a distinct workspace action, not a duplicate of Market Analysis. */
+.kit-sidebar nav .side-link:nth-child(3){margin-top:6px;border:1px solid rgba(0,199,254,.18);background:linear-gradient(90deg,rgba(0,199,254,.09),rgba(0,199,254,.025));color:#dceef3;box-shadow:inset 3px 0 0 #00c7fe}
+.kit-sidebar nav .side-link:nth-child(3) svg{color:#00c7fe}
+.kit-sidebar nav .side-link:nth-child(2){background:transparent;box-shadow:none;border-color:transparent}
+/* Keep the embedded chart unobstructed so TradingView's drawing toolbar remains directly usable. */
+.terminal-chart-wrap .tradingview-widget-container,.terminal-chart-wrap .tradingview-widget-container__widget{position:relative;z-index:1}
+.chart-actions,.chart-corner,.chart-attribution{pointer-events:none}
+.chart-actions button{pointer-events:auto}
+.terminal-metric.entry b{color:#54dcf4!important}.terminal-metric.danger b{color:#ff5f73!important}.terminal-metric.tp1 b{color:#42e6a0!important}.terminal-metric.tp2 b{color:#b48cff!important}.terminal-metric.rr b{color:#f6c36b!important}.terminal-metric.long b{color:#42e6a0!important}.terminal-metric.short b{color:#ff7180!important}.terminal-metric.wait b{color:#f6c36b!important}
