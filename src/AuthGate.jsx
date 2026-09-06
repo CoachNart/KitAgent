@@ -24,7 +24,7 @@ export default function AuthGate({ children }) {
         setUser(nextUser);
         setMessage('');
       } catch (error) {
-        await signOut(auth);
+        await signOut(auth).catch(() => {});
         const code = error?.code || '';
         if (code.includes('permission-denied')) {
           setMessage(error.message || 'This device is already linked to another KitAgent account.');
@@ -44,15 +44,9 @@ export default function AuthGate({ children }) {
     if (!auth || !initializeAccount) return;
     setBusy(true); setMessage('');
     try {
-      let credential;
-      if (mode === 'signup') {
-        credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      } else {
-        credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      }
-      const deviceBindingId = await getDeviceBindingId();
-      await initializeAccount({ deviceBindingId });
-      setUser(credential.user);
+      if (mode === 'signup') await createUserWithEmailAndPassword(auth, email.trim(), password);
+      else await signInWithEmailAndPassword(auth, email.trim(), password);
+      // The auth-state listener performs the single server-side account/device check.
     } catch (error) {
       await signOut(auth).catch(() => {});
       const code = error?.code || '';
@@ -64,19 +58,11 @@ export default function AuthGate({ children }) {
         'auth/network-request-failed': 'Network error. Check your connection and try again.',
       };
       setMessage(friendly[code] || error?.message || 'Authentication failed.');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
-  if (!firebaseConfigured) {
-    return <AuthScreen title="KitAgent setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy." />;
-  }
-
-  if (!ready || (auth && !user)) {
-    return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit} />;
-  }
-
+  if (!firebaseConfigured) return <AuthScreen title="KitAgent setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy." />;
+  if (!ready || (auth && !user)) return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit} />;
   return children;
 }
 
@@ -84,10 +70,7 @@ function AuthScreen({ mode='signin', setMode, email='', setEmail, password='', s
   const interactive = Boolean(onSubmit);
   return <div style={{minHeight:'100vh',background:'#070b0e',color:'#edf5f5',display:'grid',placeItems:'center',padding:20,fontFamily:'Inter,ui-sans-serif,system-ui,sans-serif'}}>
     <div style={{width:'100%',maxWidth:430,border:'1px solid #1b2a30',background:'#0b1115',borderRadius:14,padding:28,boxShadow:'0 25px 80px rgba(0,0,0,.35)'}}>
-      <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:28}}>
-        <div style={{width:38,height:38,borderRadius:9,background:'#b7fff8',color:'#071012',display:'grid',placeItems:'center',fontWeight:800,fontSize:19}}>K</div>
-        <div><b style={{fontSize:15,display:'block'}}>KitAgent</b><span style={{fontSize:9,color:'#627179'}}>Web3 trading terminal</span></div>
-      </div>
+      <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:28}}><div style={{width:38,height:38,borderRadius:9,background:'#b7fff8',color:'#071012',display:'grid',placeItems:'center',fontWeight:800,fontSize:19}}>K</div><div><b style={{fontSize:15,display:'block'}}>KitAgent</b><span style={{fontSize:9,color:'#627179'}}>Web3 trading terminal</span></div></div>
       <div style={{display:'flex',alignItems:'center',gap:8,color:'#7be9e2',fontSize:9,fontWeight:700,letterSpacing:'.14em'}}><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div>
       <h1 style={{fontSize:28,letterSpacing:'-.045em',margin:'12px 0 7px'}}>{title}</h1>
       {interactive && <p style={{fontSize:11,color:'#687980',lineHeight:1.6,margin:'0 0 22px'}}>{mode === 'signin' ? 'Sign in to continue to your trading terminal.' : 'Create your account and start your 3-day free trial.'}</p>}
@@ -95,8 +78,8 @@ function AuthScreen({ mode='signin', setMode, email='', setEmail, password='', s
         <label style={labelStyle}>EMAIL<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" style={inputStyle}/></label>
         <label style={labelStyle}>PASSWORD<input required minLength={6} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" style={inputStyle}/></label>
         {message && <div style={errorStyle}>{message}</div>}
-        <button disabled={busy} type="submit" style={buttonStyle}>{busy ? <LoaderCircle size={16} style={{animation:'spin 1s linear infinite'}}/> : mode==='signin' ? <LogIn size={16}/> : <UserPlus size={16}/>} {busy ? 'Verifying account…' : mode==='signin' ? 'Sign in' : 'Create account'}</button>
-        <button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');}} style={switchStyle}>{mode==='signin' ? 'New to KitAgent? Create an account' : 'Already have an account? Sign in'}</button>
+        <button disabled={busy} type="submit" style={{...buttonStyle,opacity:busy?.7:1}}>{busy ? <LoaderCircle size={16}/> : mode==='signin' ? <LogIn size={16}/> : <UserPlus size={16}/>} {busy ? 'Verifying account…' : mode==='signin' ? 'Sign in' : 'Create account'}</button>
+        <button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('');}} style={switchStyle}>{mode==='signin' ? 'New to KitAgent? Create an account' : 'Already have an account? Sign in'}</button>
       </form> : <div style={errorStyle}>{message}</div>}
       <div style={{marginTop:20,paddingTop:15,borderTop:'1px solid #18262c',fontSize:9,color:'#52636a',lineHeight:1.5}}>Your account is checked against a server-side device binding after authentication. Signing out does not release the device.</div>
     </div>
