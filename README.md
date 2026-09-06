@@ -9,7 +9,7 @@ KitAgent turns natural-language intent into explicit EVM execution plans. It is 
 - Modern cyan terminal navigation and responsive chain-category picker
 - KitSetups-matched account/profile presentation
 - Trading is always reachable; free/trial users see blurred signal data with a Premium CTA
-- Multiple Firebase accounts can be registered on the same device/browser
+- One KitAgent account per device/browser fingerprint; existing account sign-in remains supported
 - Terminal faucet intent resolves verified public testnet faucets from the chain registry
 - 41 EVM networks exposed through the Chain Categories control, plus the non-EVM catalog
 - Robinhood Chain mainnet + testnet
