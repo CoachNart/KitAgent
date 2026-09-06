@@ -6,12 +6,15 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if owns(uid);
-      allow create: if false;
+      allow create: if owns(uid)
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.status == 'active';
       allow delete: if false;
       allow update: if owns(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'email', 'walletAddress', 'maxRiskPercent', 'maxTradeSize',
-          'tradingPreferences', 'apiKeyMetadata', 'securitySettings', 'updatedAt'
+          'tradingPreferences', 'apiKeyMetadata', 'securitySettings',
+          'status', 'trialStartedAt', 'trialEndsAt', 'updatedAt'
         ]);
 
       match /transactions/{transactionId} {
@@ -23,7 +26,6 @@ service cloud.firestore {
       }
     }
 
-    // Device ownership is server-managed only. Clients must never read or write it.
     match /deviceBindings/{deviceBindingId} {
       allow read, write: if false;
     }
