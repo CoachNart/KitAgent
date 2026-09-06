@@ -2,18 +2,5 @@ import { useEffect, useState } from 'react';
 import { Clock3, LockKeyhole, Sparkles } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase.js';
-
-export default function AccessGate({ user, children }) {
-  const [profile, setProfile] = useState(null);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { if (!db || !user?.uid) return; return onSnapshot(doc(db,'users',user.uid), s => setProfile(s.exists()?s.data():null)); }, [user?.uid]);
-  useEffect(() => { const id=setInterval(()=>setNow(Date.now()),1000); return ()=>clearInterval(id); },[]);
-  const plan=String(profile?.plan||'free').toLowerCase();
-  const trialEnd=toMs(profile?.trialEndsAt);
-  const subscriptionEnd=toMs(profile?.subscriptionEndsAt);
-  const premiumActive=plan==='premium' && (!subscriptionEnd || subscriptionEnd>now);
-  const trialActive=plan!=='premium' && trialEnd>now;
-  if (premiumActive || trialActive || !profile) return children;
-  return <div className="access-locked"><div className="access-locked-card"><div className="access-lock-icon"><LockKeyhole size={18}/></div><span className="access-kicker"><Sparkles size={11}/> PREMIUM ACCESS</span><h2>Your free access has ended</h2><p>Subscribe to Premium to continue using Market Analysis and Chart Terminal.</p><div className="access-lock-meta"><span><Clock3 size={12}/> Access expired</span><b>Premium · $30 / 30D</b></div><button type="button" className="access-subscribe" onClick={()=>window.dispatchEvent(new CustomEvent('kitagent-open-profile'))}>View Premium plan</button><small>Your account and wallet remain safe. No transaction is executed from this notice.</small></div></div>;
-}
-function toMs(value){if(!value)return 0;if(typeof value.toMillis==='function')return value.toMillis();if(typeof value.toDate==='function')return value.toDate().getTime();const n=new Date(value).getTime();return Number.isFinite(n)?n:0;}
+export default function AccessGate({user,children}){const [profile,setProfile]=useState(null),[loaded,setLoaded]=useState(false),[now,setNow]=useState(Date.now());useEffect(()=>{if(!db||!user?.uid){setLoaded(true);return undefined}return onSnapshot(doc(db,'users',user.uid),s=>{setProfile(s.exists()?s.data():null);setLoaded(true)},()=>setLoaded(true))},[user?.uid]);useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);if(!loaded)return <div className="access-locked"><div className="access-locked-card"><span className="access-kicker"><Sparkles size={11}/> VERIFYING ACCESS</span><h2>Checking your KitAgent access</h2><p>Confirming your live trial or Premium subscription.</p></div></div>;const plan=String(profile?.plan||'free').toLowerCase(),trialEnd=toMs(profile?.trialEndsAt),subscriptionEnd=toMs(profile?.subscriptionEndsAt),premiumActive=plan==='premium'&&subscriptionEnd>now,trialActive=plan!=='premium'&&trialEnd>now;if(premiumActive||trialActive)return children;return <div className="access-locked"><div className="access-locked-card"><div className="access-lock-icon"><LockKeyhole size={18}/></div><span className="access-kicker"><Sparkles size={11}/> PREMIUM ACCESS</span><h2>Your free access has ended</h2><p>Subscribe to Premium to continue using Market Analysis and Chart Terminal.</p><div className="access-lock-meta"><span><Clock3 size={12}/> Access expired</span><b>Premium · $30 / 30D</b></div><button type="button" className="access-subscribe" onClick={()=>window.dispatchEvent(new CustomEvent('kitagent-open-profile'))}>View Premium plan</button><small>Your account and wallet remain safe. No transaction is executed from this notice.</small></div></div>}
+function toMs(value){if(!value)return 0;if(typeof value.toMillis==='function')return value.toMillis();if(typeof value.toDate==='function')return value.toDate().getTime();const n=new Date(value).getTime();return Number.isFinite(n)?n:0}
