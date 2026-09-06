@@ -1,8 +1,27 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import marketHandler from './api/market.js';
 import perpetualHandler from './api/perpetual.js';
 import registerDeviceHandler from './api/register-device.js';
+
+function loadLocalFirebaseAdminEnv(mode) {
+  const env = loadEnv(mode, process.cwd(), '');
+  if (env.FIREBASE_SERVICE_ACCOUNT_JSON) process.env.FIREBASE_SERVICE_ACCOUNT_JSON = env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    const candidates = [
+      path.join(process.cwd(), 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),
+      path.join(os.homedir(), 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),
+      path.join(os.homedir(), 'storage', 'downloads', 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),
+      path.join(os.homedir(), 'downloads', 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),
+    ];
+    const found = candidates.find((file) => fs.existsSync(file));
+    if (found) process.env.GOOGLE_APPLICATION_CREDENTIALS = found;
+  }
+}
 
 const localApi = () => ({
   name: 'kitagent-local-api',
@@ -13,8 +32,7 @@ const localApi = () => ({
         const url = new URL(req.url, 'http://localhost');
         req.query = Object.fromEntries(url.searchParams.entries());
         if (req.url.startsWith('/api/register-device')) {
-          const env = loadEnv('development', process.cwd(), '');
-          if (env.FIREBASE_SERVICE_ACCOUNT_JSON) process.env.FIREBASE_SERVICE_ACCOUNT_JSON = env.FIREBASE_SERVICE_ACCOUNT_JSON;
+          loadLocalFirebaseAdminEnv('development');
           const chunks = [];
           for await (const chunk of req) chunks.push(chunk);
           req.body = Buffer.concat(chunks).toString('utf8');
@@ -35,8 +53,7 @@ const localApi = () => ({
         const url = new URL(req.url, 'http://localhost');
         req.query = Object.fromEntries(url.searchParams.entries());
         if (req.url.startsWith('/api/register-device')) {
-          const env = loadEnv('production', process.cwd(), '');
-          if (env.FIREBASE_SERVICE_ACCOUNT_JSON) process.env.FIREBASE_SERVICE_ACCOUNT_JSON = env.FIREBASE_SERVICE_ACCOUNT_JSON;
+          loadLocalFirebaseAdminEnv('production');
           const chunks = [];
           for await (const chunk of req) chunks.push(chunk);
           req.body = Buffer.concat(chunks).toString('utf8');
