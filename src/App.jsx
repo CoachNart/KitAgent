@@ -1,48 +1,59 @@
-import { useState } from 'react';
-import { Activity, BarChart3, History, Terminal, UserRound, ShieldCheck } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Activity, ArrowDownToLine, ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, Clock3, Command, History, LayoutDashboard, Menu, Search, Settings2, ShieldCheck, Sparkles, Terminal, UserRound, Wallet, X, Zap } from 'lucide-react';
 
 const nav = [
-  ['terminal', 'Terminal', Terminal],
-  ['trading', 'Trading', BarChart3],
-  ['history', 'Transactions', History],
-  ['track', 'Track Record', Activity],
-  ['profile', 'Profile', UserRound],
+  ['terminal', 'Terminal', Terminal], ['trading', 'Market analysis', BarChart3], ['history', 'Transactions', History],
+  ['track', 'Track record', Activity], ['profile', 'Profile', UserRound],
+];
+const pairs = ['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','MATIC/USDT'];
+const timeframes = ['1m','5m','15m','30m','1H','4H','1D','1W'];
+const txs = [
+  ['Swap','ETH → USDC','0.42 ETH','$1,341.28','Completed','12 min ago'],['Buy','BTC','0.018 BTC','$1,972.40','Completed','2h ago'],['Bridge','ETH → Base','0.50 ETH','$1,596.12','Completed','Yesterday'],['Send','USDC','850 USDC','$850.00','Pending','Yesterday']
 ];
 
-function App() {
-  const [page, setPage] = useState('terminal');
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">K</span><div><strong>KitAgent</strong><small>Web3 Trading Terminal</small></div></div>
-        <nav>{nav.map(([id, label, Icon]) => <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(id)}><Icon size={18}/><span>{label}</span></button>)}</nav>
-        <div className="sidebar-foot"><ShieldCheck size={16}/><span>Non-custodial</span></div>
-      </aside>
-
-      <main className="main">
-        <header className="topbar"><div><span className="eyebrow">KITAGENT</span><h1>{nav.find(x => x[0] === page)?.[1]}</h1></div><div className="status"><i/>System operational</div></header>
-        <section className="workspace">
-          {page === 'terminal' && <TerminalHome onNavigate={setPage}/>} 
-          {page !== 'terminal' && <ComingSoon title={nav.find(x => x[0] === page)?.[1]} />}
-        </section>
-      </main>
-    </div>
-  );
+function App(){
+  const [page,setPage]=useState('terminal'); const [mobile,setMobile]=useState(false); const [query,setQuery]=useState(''); const [pair,setPair]=useState('BTC/USDT'); const [tf,setTf]=useState('4H'); const [analyzed,setAnalyzed]=useState(false); const [command,setCommand]=useState('');
+  const title=nav.find(n=>n[0]===page)?.[1];
+  const filtered=useMemo(()=>pairs.filter(p=>p.toLowerCase().includes(query.toLowerCase())),[query]);
+  const go=p=>{setPage(p);setMobile(false)};
+  return <div className="kit-shell">
+    <aside className={mobile?'kit-sidebar open':'kit-sidebar'}>
+      <div className="kit-brand"><div className="kit-logo">K</div><div><b>KitAgent</b><small>Web3 trading terminal</small></div><button className="icon-btn mobile-close" onClick={()=>setMobile(false)}><X size={18}/></button></div>
+      <div className="side-section-label">WORKSPACE</div>
+      <nav>{nav.map(([id,label,Icon])=><button key={id} onClick={()=>go(id)} className={page===id?'side-link selected':'side-link'}><Icon size={17}/><span>{label}</span></button>)}</nav>
+      <div className="side-bottom"><div className="trial-mini"><div><span>TRIAL</span><b>2 days left</b></div><div className="mini-bar"><i/></div><small>Upgrade for unlimited analysis</small></div><button className="side-link"><Settings2 size={17}/><span>Settings</span></button><div className="security-line"><ShieldCheck size={15}/> Non-custodial</div></div>
+    </aside>
+    {mobile&&<div className="mobile-scrim" onClick={()=>setMobile(false)}/>} 
+    <main className="kit-main">
+      <header className="top-header"><button className="icon-btn menu-btn" onClick={()=>setMobile(true)}><Menu size={20}/></button><div className="page-heading"><span>KITAGENT</span><h1>{title}</h1></div><div className="header-actions"><div className="system"><i/> All systems operational</div><button className="connect-btn"><Wallet size={15}/> Connect wallet</button><div className="avatar">T</div></div></header>
+      <div className="content">{page==='terminal'&&<TerminalView command={command} setCommand={setCommand} go={go}/>} {page==='trading'&&<TradingView pair={pair} setPair={setPair} tf={tf} setTf={setTf} query={query} setQuery={setQuery} filtered={filtered} analyzed={analyzed} setAnalyzed={setAnalyzed}/>} {page==='history'&&<HistoryView/>} {page==='track'&&<TrackView/>} {page==='profile'&&<ProfileView/>}</div>
+    </main>
+  </div>
 }
 
-function TerminalHome({ onNavigate }) {
-  const [input, setInput] = useState('');
-  const examples = ['Swap 0.1 ETH to USDC', 'Show my portfolio', 'Analyze BTC/USDT on 4H', 'Bridge ETH to Base'];
-  return <div className="terminal-grid">
-    <section className="hero-panel"><div className="hero-copy"><span className="pill">AI TRADING TERMINAL</span><h2>Trade smarter.<br/><em>Understand every move.</em></h2><p>Use natural language to interact with Web3, inspect markets and execute only when the conditions make sense.</p></div>
-      <div className="command-box"><div className="command-label"><span>COMMAND</span><span>Natural language enabled</span></div><textarea value={input} onChange={e => setInput(e.target.value)} placeholder="What do you want to do?"/><button className="primary" onClick={() => setInput('')}>Run command <span>↵</span></button></div>
-      <div className="examples"><span>Try an example</span>{examples.map(x => <button key={x} onClick={() => setInput(x)}>{x}</button>)}</div>
-    </section>
-    <aside className="side-panel"><div className="panel-head"><div><span className="eyebrow">OVERVIEW</span><h3>Terminal status</h3></div><span className="live">LIVE</span></div><div className="metric"><span>Wallet</span><strong>Not connected</strong></div><div className="metric"><span>Network</span><strong>Ethereum</strong></div><div className="metric"><span>Risk limit</span><strong>1.5% / trade</strong></div><div className="metric"><span>Target R:R</span><strong>2.5 : 1+</strong></div><div className="notice"><ShieldCheck size={17}/><p>KitAgent never stores private keys. Sensitive actions require confirmation before execution.</p></div><button className="secondary" onClick={() => onNavigate('trading')}>Open market analysis <span>→</span></button></aside>
-  </div>;
-}
+function TerminalView({command,setCommand,go}){const examples=['Swap 0.1 ETH to USDC','Analyze BTC/USDT on 4H','Show my portfolio','Bridge ETH to Base'];return <div className="terminal-page">
+  <div className="terminal-main">
+    <div className="hero-kicker"><Sparkles size={14}/> AI-POWERED WEB3 TERMINAL</div><h2>One terminal.<br/><span>Every Web3 move.</span></h2><p className="hero-sub">Talk to KitAgent in plain language. Analyze markets, manage assets and execute only after you understand the action.</p>
+    <div className="command-card"><div className="command-top"><div><span className="tiny-label">COMMAND</span><span className="online-label"><i/> Natural language</span></div><kbd>⌘ K</kbd></div><div className="command-input"><Command size={19}/><textarea value={command} onChange={e=>setCommand(e.target.value)} placeholder="What would you like to do?" onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter')setCommand('')}}/><button className="run-btn" onClick={()=>setCommand('')}><Zap size={15}/> Run</button></div><div className="suggestions">{examples.map(x=><button key={x} onClick={()=>setCommand(x)}>{x}</button>)}</div></div>
+    <div className="quick-grid"><Quick icon={<BarChart3/>} title="Market analysis" text="Structure, liquidity & risk" onClick={()=>go('trading')}/><Quick icon={<History/>} title="Transaction history" text="Every action, tracked" onClick={()=>go('history')}/><Quick icon={<Activity/>} title="Track record" text="Measure your performance" onClick={()=>go('track')}/></div>
+  </div>
+  <aside className="terminal-side"><div className="side-card-head"><div><span className="tiny-label">ACCOUNT</span><h3>Terminal overview</h3></div><span className="live-dot"><i/> LIVE</span></div><Metric label="Wallet" value="Not connected"/><Metric label="Network" value="Ethereum"/><Metric label="Trial" value="2 days left" accent/><Metric label="Risk per trade" value="Max 1.5%"/><div className="rule-card"><ShieldCheck size={18}/><div><b>Risk-aware by default</b><p>Minimum 2:1 R:R. Target 2.5:1+. No forced setups.</p></div></div><button className="outline-btn" onClick={()=>go('trading')}>Analyze a market <ArrowUpRight size={15}/></button></aside>
+</div>}
+function Quick({icon,title,text,onClick}){return <button className="quick-card" onClick={onClick}>{<span className="quick-icon">{icon}</span>}<span><b>{title}</b><small>{text}</small></span><ArrowUpRight size={15}/></button>}
+function Metric({label,value,accent}){return <div className="metric-row"><span>{label}</span><b className={accent?'accent':''}>{value}</b></div>}
 
-function ComingSoon({ title }) { return <div className="empty-panel"><span className="pill">CLEAN BUILD</span><h2>{title}</h2><p>This module is being rebuilt from the KitAgent product brief. No legacy UI is being carried forward.</p></div>; }
+function TradingView({pair,setPair,tf,setTf,query,setQuery,filtered,analyzed,setAnalyzed}){return <div className="page-wrap"><div className="section-intro"><div><span className="tiny-label">MARKET INTELLIGENCE</span><h2>Market analysis</h2><p>Choose a pair and timeframe. KitAgent only presents a trade when the structure supports it.</p></div><div className="risk-chip"><ShieldCheck size={15}/> Max risk <b>1.5%</b></div></div>
+ <div className="analysis-layout"><section className="analysis-card"><div className="form-grid"><div className="field"><label>MARKET</label><div className="search-select"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search pair"/><ChevronDown size={15}/></div>{query&&<div className="pair-menu">{filtered.map(p=><button key={p} onClick={()=>{setPair(p);setQuery('')}}>{p}<span>USDT</span></button>)}</div>}<div className="selected-pair"><span className="coin-dot"/><b>{pair}</b><span>Spot</span></div></div><div className="field"><label>TIMEFRAME</label><div className="tf-row">{timeframes.map(x=><button key={x} className={tf===x?'tf active':''} onClick={()=>setTf(x)}>{x}</button>)}</div></div></div>
+ <button className="analyze-btn" onClick={()=>setAnalyzed(true)}><BarChart3 size={17}/> Analyze {pair} <span>→</span></button>
+ {analyzed?<AnalysisResult pair={pair} tf={tf}/>:<div className="analysis-empty"><div className="empty-icon"><BarChart3 size={20}/></div><b>Ready to analyze</b><span>No signal is generated until you select a market and run analysis.</span></div>}
+ </section><aside className="structure-card"><span className="tiny-label">METHOD</span><h3>Market structure</h3><p>Analysis is built around liquidity, BOS, CHoCH and state of delivery.</p><div className="method-row"><b>Liquidity</b><span>Major + internal</span></div><div className="method-row"><b>Structure</b><span>BOS / CHoCH</span></div><div className="method-row"><b>Delivery</b><span>Impulse / correction</span></div><div className="method-row"><b>R:R target</b><span className="good">2.5 : 1+</span></div></aside></div>
+ </div>}
+function AnalysisResult({pair,tf}){return <div className="analysis-result"><div className="result-top"><div><span className="tiny-label">{pair} · {tf}</span><h3>NO TRADE</h3></div><span className="quality neutral">WAIT FOR SETUP</span></div><div className="result-grid"><Metric label="Bias" value="Neutral"/><Metric label="Structure" value="Range-bound"/><Metric label="Liquidity" value="Unconfirmed"/><Metric label="BOS / CHoCH" value="No valid break"/><Metric label="State of delivery" value="Mixed"/><Metric label="Risk" value="1.5% max"/></div><div className="result-note"><ShieldCheck size={16}/><p>KitAgent will not manufacture an entry. Wait for a confirmed structural break, liquidity interaction and a realistic 2:1+ setup.</p></div></div>}
+
+function HistoryView(){return <div className="page-wrap"><div className="section-intro"><div><span className="tiny-label">ACTIVITY</span><h2>Transactions</h2><p>Searchable record of swaps, buys, sends and bridges.</p></div><button className="outline-btn"><ArrowDownToLine size={15}/> Export CSV</button></div><div className="stats-strip"><Metric label="Total volume" value="$18,426.80"/><Metric label="Gas paid" value="$42.18"/><Metric label="Completed" value="38"/><Metric label="Pending" value="1"/></div><div className="table-card"><div className="table-tools"><div className="table-search"><Search size={15}/><input placeholder="Search transactions"/></div><button className="filter-btn">All activity <ChevronDown size={14}/></button></div><div className="tx-table"><div className="tx-head"><span>TYPE</span><span>ASSET</span><span>VALUE</span><span>STATUS</span><span>TIME</span></div>{txs.map(t=><div className="tx-row" key={t[0]+t[1]}><span className="tx-type"><span className="tx-icon"><CircleDollarSign size={14}/></span>{t[0]}</span><b>{t[1]}</b><span>{t[3]}</span><span className={t[4]==='Pending'?'status pending':'status complete'}>{t[4]}</span><span className="muted">{t[5]}</span></div>)}</div></div></div>}
+
+function TrackView(){return <div className="page-wrap"><div className="section-intro"><div><span className="tiny-label">PERFORMANCE</span><h2>Track record</h2><p>Understand how your executed setups perform over time.</p></div><div className="period">Last 90 days <ChevronDown size={14}/></div></div><div className="performance-grid"><div className="performance-hero"><span className="tiny-label">NET PERFORMANCE</span><strong>+$2,841.60</strong><span className="positive">+18.42% <small>vs. starting balance</small></span><div className="fake-chart"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div></div><div className="metric-card"><span>WIN RATE</span><b>68.4%</b><small>26 wins · 12 losses</small></div><div className="metric-card"><span>PROFIT FACTOR</span><b>2.18</b><small>Gross profit / gross loss</small></div><div className="metric-card"><span>AVG R:R</span><b>2.74 : 1</b><small>Across settled trades</small></div><div className="metric-card"><span>TP vs SL</span><b>26 / 12</b><small>68.4% hit rate</small></div></div><div className="insight-card"><Sparkles size={17}/><div><b>Performance insight</b><p>Your strongest results come from setups with confirmed external liquidity + BOS. Avoiding low-quality ranges is improving consistency.</p></div></div></div>}
+
+function ProfileView(){return <div className="page-wrap profile-page"><div className="section-intro"><div><span className="tiny-label">ACCOUNT</span><h2>Profile</h2><p>Account, subscription and security.</p></div><span className="secure-badge"><ShieldCheck size={14}/> Secure account</span></div><div className="profile-grid"><section className="profile-card identity"><div className="big-avatar">T</div><div><h3>Trader</h3><span>Member since today</span></div><button className="outline-btn">Edit profile</button></section><section className="profile-card"><span className="tiny-label">SUBSCRIPTION</span><div className="subscription-line"><div><h3>Free trial</h3><p>2 days remaining</p></div><button className="upgrade-btn">Upgrade · $20 / 30 days</button></div><div className="trial-progress"><i/></div></section><section className="profile-card"><span className="tiny-label">SECURITY</span><div className="security-item"><ShieldCheck size={17}/><div><b>Device binding</b><span>One account per registered device</span></div><em>Protected</em></div><div className="security-item"><Wallet size={17}/><div><b>Wallet connection</b><span>Private keys never stored</span></div><em>Non-custodial</em></div></section><section className="profile-card"><span className="tiny-label">TRADING PREFERENCES</span><div className="pref-row"><span>Max risk per trade</span><b>1.5%</b></div><div className="pref-row"><span>Target risk / reward</span><b>2.5 : 1+</b></div><div className="pref-row"><span>Max position</span><b>$1,000</b></div></section></div></div>}
 
 export default App;
