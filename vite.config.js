@@ -1,5 +1,38 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import marketHandler from './api/market.js';
+
+const localMarketApi = () => ({
+  name: 'kitagent-local-market-api',
+  configureServer(server) {
+    server.middlewares.use(async (req, res, next) => {
+      if (!req.url?.startsWith('/api/market')) return next();
+      try {
+        const url = new URL(req.url, 'http://localhost');
+        req.query = Object.fromEntries(url.searchParams.entries());
+        await marketHandler(req, res);
+      } catch (error) {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: error?.message || 'Local market API failed' }));
+      }
+    });
+  },
+  configurePreviewServer(server) {
+    server.middlewares.use(async (req, res, next) => {
+      if (!req.url?.startsWith('/api/market')) return next();
+      try {
+        const url = new URL(req.url, 'http://localhost');
+        req.query = Object.fromEntries(url.searchParams.entries());
+        await marketHandler(req, res);
+      } catch (error) {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: error?.message || 'Preview market API failed' }));
+      }
+    });
+  },
+});
 
 const kitAgentSourceFix = () => ({
   name: 'kitagent-source-fix',
@@ -33,7 +66,7 @@ const kitAgentSourceFix = () => ({
 });
 
 export default defineConfig({
-  plugins: [kitAgentSourceFix(), react()],
+  plugins: [localMarketApi(), kitAgentSourceFix(), react()],
   server: { port: 3000, open: true, strictPort: false },
   build: { target: 'es2020', outDir: 'dist', sourcemap: false },
   preview: { port: 4173 },
