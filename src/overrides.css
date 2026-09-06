@@ -79,3 +79,5 @@
   .analysis-result .result-note p:before{content:"PRICE  0.99579    EMA20  0.99559    EMA50  0.99436    ATR  0.00207";display:block;font-size:13px;white-space:nowrap}
   .analysis-result .result-note p:after{content:"SETUP READY";display:block;margin-top:28px;font-size:14px;color:#54dff8;letter-spacing:.06em}
 }
+
+/* Keep the latest wallet provider hardening deployment-coupled. */
