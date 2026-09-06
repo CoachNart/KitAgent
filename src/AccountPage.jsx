@@ -1,202 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { addDoc, collection, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { Check, CircleUserRound, Copy, KeyRound, LoaderCircle, LogOut, ShieldCheck, Wallet, Zap } from 'lucide-react';
+import { Check, Copy, KeyRound, LoaderCircle, LogOut, ShieldCheck, Wallet, Zap } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth, db } from './firebase.js';
 
-export default function AccountPage({ user, wallet, connectWallet }) {
-  const [profile, setProfile] = useState(null);
-  const [profileError, setProfileError] = useState('');
-  const [verification, setVerification] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const [transactionHash, setTransactionHash] = useState('');
-  const [verificationState, setVerificationState] = useState('');
-  const [verifying, setVerifying] = useState(false);
-
-  useEffect(() => {
-    if (!db || !user?.uid) return undefined;
-    const unsubscribe = onSnapshot(
-      doc(db, 'users', user.uid),
-      snapshot => {
-        setProfile(snapshot.exists() ? snapshot.data() : null);
-        setProfileError('');
-      },
-      error => setProfileError(error?.message || 'Profile sync is temporarily unavailable.')
-    );
-    return unsubscribe;
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!db || !user?.uid) return undefined;
-    const unsubscribe = onSnapshot(
-      collection(db, 'users', user.uid, 'paymentVerifications'),
-      snapshot => {
-        const items = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-        items.sort((a, b) => timestampValue(b.createdAt) - timestampValue(a.createdAt));
-        setVerification(items[0] || null);
-      },
-      error => setVerificationState(error?.message || 'Verification status is temporarily unavailable.')
-    );
-    return unsubscribe;
-  }, [user?.uid]);
-
-  const data = profile || {};
-  const subscription = data.subscription || {};
-  const usage = data.monthlyUsage || {};
-  const api = data.api || {};
-  const name = data.displayName || user?.displayName || 'KitAgent member';
-  const email = data.email || user?.email || 'Firebase account';
-  const photo = data.photoURL || user?.photoURL || '';
-  const plan = String(data.plan || 'free').toLowerCase();
-  const used = Number(usage.used) || 0;
-  const limit = Number(usage.limit) || 0;
-  const usagePercent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  const trialEndsAt = toDate(data.trialEndsAt);
-  const trialActive = trialEndsAt ? trialEndsAt.getTime() > Date.now() : false;
-  const trialLabel = trialActive ? `${Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000))}D LEFT` : 'TRIAL ENDED';
-  const walletAddress = wallet || data.walletAddress || '';
-  const paymentAddress = subscription.paymentAddress || '';
-  const submitted = verification?.status === 'pending' || verificationState === 'submitted';
-
-  const copyAddress = async () => {
-    if (!paymentAddress) return;
-    try {
-      await navigator.clipboard?.writeText(paymentAddress);
-      setCopied(true);
-      setVerificationState('');
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setVerificationState('Copy is unavailable in this browser.');
-    }
-  };
-
-  const submitVerification = async () => {
-    const hash = transactionHash.trim();
-    if (!db || !user?.uid) return;
-    if (hash.length < 8) {
-      setVerificationState('Enter a valid transaction hash first.');
-      return;
-    }
-    setVerifying(true);
-    setVerificationState('');
-    try {
-      await addDoc(collection(db, 'users', user.uid, 'paymentVerifications'), {
-        uid: user.uid,
-        transactionHash: hash,
-        asset: String(subscription.paymentAsset || ''),
-        network: String(subscription.paymentNetwork || ''),
-        amount: Number(subscription.price) || 0,
-        currency: String(subscription.currency || 'USD'),
-        status: 'pending',
-        createdAt: serverTimestamp()
-      });
-      setTransactionHash('');
-      setVerificationState('submitted');
-    } catch (error) {
-      setVerificationState(error?.message || 'Verification request could not be submitted.');
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const logout = async () => {
-    if (!auth) return;
-    try { await signOut(auth); }
-    catch (error) { setVerificationState(error?.message || 'Unable to sign out right now.'); }
-  };
-
-  return (
-    <div className="account-page">
-      <header className="account-heading">
-        <div className="account-title">
-          <span className="account-kicker"><CircleUserRound size={12} /> ACCOUNT</span>
-          <h1>Profile</h1>
-          <p>Account, plan and access</p>
-        </div>
-        <span className={`account-status ${data.status === 'active' ? 'is-active' : ''}`}><i /> {String(data.status || 'unknown').toUpperCase()}</span>
-      </header>
-
-      <section className="account-identity">
-        <div className="account-avatar">
-          {photo ? <img src={photo} alt="" /> : <span>{initials(name)}</span>}
-        </div>
-        <div className="account-name-block">
-          <div className="account-name-row"><h2>{name}</h2><span className="account-active">ACTIVE</span></div>
-          <p>{email}</p>
-        </div>
-      </section>
-
-      <div className="account-section-label">CURRENT PLAN</div>
-      <section className="subscription-card free-plan">
-        <div className="subscription-topline">
-          <div><span className="subscription-label">PLAN</span><div className="plan-name-row"><h2>{plan || 'free'}</h2><span>{plan === 'free' ? 'CURRENT' : 'AVAILABLE'}</span></div></div>
-          <div className="remaining-block"><span className="subscription-label">STATUS</span><strong>{trialActive || data.trialEndsAt ? trialLabel : String(data.status || 'ACTIVE').toUpperCase()}</strong></div>
-        </div>
-        <div className="free-meta"><span>Monthly usage</span><b>{limit > 0 ? `${used} / ${limit}` : 'NOT SET'}</b></div>
-        <div className="usage-track"><i style={{ width: `${usagePercent}%` }} /></div>
-      </section>
-
-      <section className={`subscription-card premium-plan ${plan === 'premium' ? 'is-current' : ''}`}>
-        <div className="premium-header">
-          <div className="premium-mark"><Zap size={16} /></div>
-          <div className="premium-copy"><h2>{subscription.name || 'Premium'}</h2><p>{Array.isArray(subscription.features) ? subscription.features.join(' · ') : 'Plan features'}</p></div>
-          <div className="premium-price"><strong>{formatMoney(subscription.price, subscription.currency)}</strong><span>/ {String(subscription.billingPeriod || 'month').toUpperCase()}</span></div>
-        </div>
-        <div className="premium-stats">
-          <div><strong>{subscription.features?.[0] ? '∞' : '—'}</strong><span>SETUPS</span></div>
-          <div><strong>{subscription.features?.[1] ? 'LIVE' : '—'}</strong><span>INTELLIGENCE</span></div>
-          <div><strong>{subscription.accessDays ? `${subscription.accessDays}D` : '—'}</strong><span>ACCESS</span></div>
-        </div>
-
-        <div className="payment-panel">
-          <div className="payment-heading"><span>PAY WITH {String(subscription.paymentAsset || '—').toUpperCase()}</span><b>{String(subscription.paymentNetwork || '—').toUpperCase()}</b></div>
-          <div className={`payment-address ${paymentAddress ? '' : 'is-empty'}`} onClick={copyAddress} role={paymentAddress ? 'button' : undefined} tabIndex={paymentAddress ? 0 : -1} onKeyDown={e => e.key === 'Enter' && copyAddress()}>
-            <span>{paymentAddress || 'Payment address not configured'}</span>
-            {paymentAddress && <button type="button" onClick={e => { e.stopPropagation(); copyAddress(); }} aria-label="Copy payment address"><Copy size={13} /></button>}
-          </div>
-          <div className="payment-input-wrap"><span>TRANSACTION HASH</span><input value={transactionHash} onChange={e => { setTransactionHash(e.target.value); setVerificationState(''); }} aria-label="Transaction hash" placeholder="Paste transaction hash" /></div>
-          <button className="verify-payment-btn" type="button" onClick={submitVerification} disabled={verifying || submitted || !paymentAddress}>
-            {verifying ? <LoaderCircle className="spin" size={14} /> : <ShieldCheck size={14} />}
-            {verifying ? 'Submitting…' : submitted ? 'Verification pending' : 'Payment verification'}
-          </button>
-          {(copied || verificationState || verification) && <div className={`payment-feedback ${verification?.status === 'approved' ? 'is-success' : ''}`}>
-            <Check size={12} /> {copied ? 'Payment address copied' : verificationState === 'submitted' ? 'Transaction submitted for review.' : verification?.status === 'approved' ? 'Payment approved.' : verification?.status === 'pending' ? 'Transaction is pending review.' : verification?.status ? `Verification: ${verification.status}.` : verificationState}
-          </div>}
-        </div>
-      </section>
-
-      <div className="account-section-label">ACCOUNT SERVICES</div>
-      <section className="account-tools">
-        <div className="tool-card api-card"><div className="tool-icon"><KeyRound size={16} /></div><div><span className="tool-kicker">DEVELOPER ACCESS</span><h3>API</h3><p>{api.status === 'active' ? 'API access is enabled.' : 'Programmatic access is being prepared.'}</p></div><span className="coming-soon">{api.status === 'active' ? 'ACTIVE' : 'COMING SOON'}</span></div>
-        <div className="tool-card wallet-card"><div className="tool-icon"><Wallet size={16} /></div><div><span className="tool-kicker">CONNECTED WALLET</span><h3>{walletAddress ? shortAddress(walletAddress) : 'No wallet connected'}</h3><p>Non-custodial wallet connection.</p></div><button type="button" className="wallet-action" onClick={connectWallet}>{walletAddress ? 'Connected' : 'Connect'}</button></div>
-      </section>
-
-      {profileError && <div className="account-sync-note"><span>Profile sync</span>{profileError}</div>}
-      <button className="account-logout" type="button" onClick={logout}><LogOut size={14} /> Log out</button>
-    </div>
-  );
+const DAY=86400000;
+export default function AccountPage({user,wallet,connectWallet}){
+ const [profile,setProfile]=useState(null),[verification,setVerification]=useState(null),[message,setMessage]=useState(''),[hash,setHash]=useState(''),[copied,setCopied]=useState(false),[busy,setBusy]=useState(false),[now,setNow]=useState(Date.now());
+ useEffect(()=>{if(!db||!user?.uid)return;return onSnapshot(doc(db,'users',user.uid),s=>setProfile(s.exists()?s.data():null),e=>setMessage(e?.message||'Profile sync is temporarily unavailable.'));},[user?.uid]);
+ useEffect(()=>{if(!db||!user?.uid)return;return onSnapshot(collection(db,'users',user.uid,'paymentVerifications'),s=>{const a=s.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>timestampValue(b.createdAt)-timestampValue(a.createdAt));setVerification(a[0]||null);});},[user?.uid]);
+ useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
+ const d=profile||{},sub=d.subscription||{},usage=d.monthlyUsage||{},api=d.api||{},name=d.displayName||user?.displayName||'KitAgent member',email=d.email||user?.email||'Firebase account',photo=d.photoURL||user?.photoURL||'',plan=String(d.plan||'free').toLowerCase();
+ const trialStart=toMs(d.trialStartedAt),trialEnd=toMs(d.trialEndsAt),subscriptionEnd=toMs(d.subscriptionEndsAt);const trialTotal=Math.max(DAY*3,trialEnd-trialStart||DAY*3),trialRemaining=Math.max(0,trialEnd-now),trialActive=plan!=='premium'&&trialEnd>now,trialProgress=trialStart&&trialEnd?Math.min(100,Math.max(0,((now-trialStart)/trialTotal)*100)):0;const premiumActive=plan==='premium'&&(!subscriptionEnd||subscriptionEnd>now),premiumRemaining=Math.max(0,subscriptionEnd-now),premiumProgress=subscriptionEnd?Math.min(100,Math.max(0,1-premiumRemaining/(Number(sub.accessDays)||30)*DAY)):100;const walletAddress=wallet||d.walletAddress||'',paymentAddress=sub.paymentAddress||'';
+ const copy=async()=>{try{await navigator.clipboard?.writeText(paymentAddress);setCopied(true);setTimeout(()=>setCopied(false),1400)}catch{setMessage('Copy is unavailable in this browser.')}};
+ const verify=async()=>{if(!db||!user?.uid||hash.trim().length<8)return setMessage('Enter a valid transaction hash first.');setBusy(true);setMessage('');try{await addDoc(collection(db,'users',user.uid,'paymentVerifications'),{uid:user.uid,transactionHash:hash.trim(),asset:String(sub.paymentAsset||''),network:String(sub.paymentNetwork||''),amount:Number(sub.price)||0,currency:String(sub.currency||'USD'),status:'pending',createdAt:serverTimestamp()});setHash('');setMessage('Transaction submitted for review.')}catch(e){setMessage(e?.message||'Verification request could not be submitted.')}finally{setBusy(false)}};
+ const logout=async()=>{try{await signOut(auth)}catch(e){setMessage(e?.message||'Unable to sign out right now.')}};
+ return <div className="account-page">
+  <section className="account-identity"><div className="account-avatar">{photo?<img src={photo} alt=""/>:<span>{initials(name)}</span>}</div><div className="account-name-block"><div className="account-name-row"><h2>{name}</h2><span className="account-active">{premiumActive?'PREMIUM':'ACTIVE'}</span></div><p>{email}</p></div><div className="account-live-state"><i/>{premiumActive?'PREMIUM ACTIVE':trialActive?'TRIAL ACTIVE':'ACCESS EXPIRED'}</div></section>
+  <div className="account-section-label">ACCESS</div>
+  <section className={`subscription-card free-plan ${trialActive?'trial-live':'trial-ended'}`}><div className="subscription-topline"><div><span className="subscription-label">FREE ACCESS</span><div className="plan-name-row"><h2>3 day trial</h2><span>{trialActive?'RUNNING':'ENDED'}</span></div></div><div className="remaining-block"><span className="subscription-label">REMAINING</span><strong>{trialActive?formatDuration(trialRemaining):'0D 00:00:00'}</strong></div></div><div className="trial-progress-meta"><span>Trial progress</span><b>{trialActive?`${Math.round(trialProgress)}% used`:'100% used'}</b></div><div className="usage-track trial-track"><i style={{width:`${trialProgress}%`}}/></div><div className="trial-dates"><span>{formatDate(trialStart)}</span><span>{formatDate(trialEnd)}</span></div></section>
+  <section className={`subscription-card premium-plan ${premiumActive?'is-current':''}`}><div className="premium-header"><div className="premium-mark"><Zap size={16}/></div><div className="premium-copy"><h2>{sub.name||'Premium'}</h2><p>{Array.isArray(sub.features)?sub.features.join(' · '):'Unlimited setups · Live intelligence'}</p></div><div className="premium-price"><strong>{formatMoney(sub.price,sub.currency)||'$30'}</strong><span>/ 30 DAYS</span></div></div><div className="premium-stats"><div><strong>∞</strong><span>SETUPS</span></div><div><strong>LIVE</strong><span>INTELLIGENCE</span></div><div><strong>{sub.accessDays||30}D</strong><span>ACCESS</span></div></div>{premiumActive&&subscriptionEnd?<div className="subscription-live"><div><span>SUBSCRIPTION ACTIVE</span><b>{formatDuration(premiumRemaining)} remaining</b></div><div className="usage-track"><i style={{width:`${premiumProgress*100}%`}}/></div></div>:<div className="payment-panel"><div className="payment-heading"><span>PAY WITH {String(sub.paymentAsset||'USDT').toUpperCase()}</span><b>{String(sub.paymentNetwork||'BNB CHAIN').toUpperCase()}</b></div><div className={`payment-address ${paymentAddress?'':'is-empty'}`} onClick={paymentAddress?copy:undefined}><span>{paymentAddress||'Payment address not configured'}</span>{paymentAddress&&<button type="button" onClick={e=>{e.stopPropagation();copy()}}><Copy size={13}/></button>}</div><div className="payment-input-wrap"><span>TRANSACTION HASH</span><input value={hash} onChange={e=>{setHash(e.target.value);setMessage('')}} placeholder="Paste transaction hash"/></div><button className="verify-payment-btn" type="button" onClick={verify} disabled={busy||!paymentAddress||verification?.status==='pending'}>{busy?<LoaderCircle className="spin" size={14}/>:<ShieldCheck size={14}/>} {busy?'Submitting…':verification?.status==='pending'?'Verification pending':'Payment verification'}</button>{(copied||message||verification)&&<div className="payment-feedback"><Check size={12}/>{copied?'Payment address copied':message||`Verification: ${verification.status}.`}</div>}</div>}</section>
+  <div className="account-section-label">ACCOUNT SERVICES</div><section className="account-tools"><div className="tool-card"><div className="tool-icon"><KeyRound size={16}/></div><div><span className="tool-kicker">DEVELOPER ACCESS</span><h3>API</h3><p>{api.status==='active'?'API access is enabled.':'Programmatic access is being prepared.'}</p></div><span className="coming-soon">{api.status==='active'?'ACTIVE':'COMING SOON'}</span></div><div className="tool-card"><div className="tool-icon"><Wallet size={16}/></div><div><span className="tool-kicker">CONNECTED WALLET</span><h3>{walletAddress?shortAddress(walletAddress):'No wallet connected'}</h3><p>Non-custodial wallet connection.</p></div><button className="wallet-action" type="button" onClick={connectWallet}>{walletAddress?'Connected':'Connect'}</button></div></section>
+  <button className="account-logout" type="button" onClick={logout}><LogOut size={14}/> Log out</button>
+ </div>;
 }
-
-function timestampValue(value) {
-  if (!value) return 0;
-  if (typeof value.toMillis === 'function') return value.toMillis();
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value.toDate === 'function') return value.toDate();
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function formatMoney(value, currency = 'USD') {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return '—';
-  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount); }
-  catch { return `${currency || ''} ${amount}`.trim(); }
-}
-
-function initials(value) { return String(value || 'K').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'K'; }
-function shortAddress(value) { return value ? `${value.slice(0, 6)}…${value.slice(-4)}` : 'Not connected'; }
+function timestampValue(v){if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();return new Date(v).getTime()||0}function toMs(v){if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(typeof v.toDate==='function')return v.toDate().getTime();return new Date(v).getTime()||0}function formatDuration(ms){const s=Math.max(0,Math.floor(ms/1000)),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;return `${d}D ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`}function formatDate(ms){return ms?new Date(ms).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—'}function formatMoney(v,c='USD'){const n=Number(v);if(!Number.isFinite(n))return '';try{return new Intl.NumberFormat('en-US',{style:'currency',currency:c,maximumFractionDigits:2}).format(n)}catch{return `${c} ${n}`}}function initials(v){return String(v||'K').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'K'}function shortAddress(v){return v?`${v.slice(0,6)}…${v.slice(-4)}`:'Not connected'}
