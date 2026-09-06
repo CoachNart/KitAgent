@@ -25,62 +25,84 @@ exports.initializeKitAgentAccount = onCall({ region: 'us-central1', enforceAppCh
 
   const userRef = db.doc(`users/${uid}`);
   const deviceRef = db.doc(`deviceBindings/${deviceBindingId}`);
-  const existing = await userRef.get();
-  const device = await deviceRef.get();
+  const requestIp = getRequestIp(request);
 
-  if (device.exists && device.data().uid !== uid) {
-    throw new HttpsError('permission-denied', 'This device is already linked to another KitAgent account.');
-  }
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      const [userSnapshot, deviceSnapshot] = await Promise.all([
+        transaction.get(userRef),
+        transaction.get(deviceRef),
+      ]);
 
-  if (existing.exists) {
-    const profile = existing.data();
-    if (profile.deviceBindingId && profile.deviceBindingId !== deviceBindingId) {
-      throw new HttpsError('permission-denied', 'This KitAgent account is linked to another device. Account recovery is required.');
-    }
+      if (deviceSnapshot.exists && deviceSnapshot.data().uid !== uid) {
+        throw new HttpsError('permission-denied', 'This device is already linked to another KitAgent account.');
+      }
 
-    await userRef.set({
-      lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastSeenIp: getRequestIp(request),
-    }, { merge: true });
+      if (userSnapshot.exists) {
+        const profile = userSnapshot.data();
+        if (profile.deviceBindingId && profile.deviceBindingId !== deviceBindingId) {
+          throw new HttpsError('permission-denied', 'This KitAgent account is linked to another device. Account recovery is required.');
+        }
 
-    if (!device.exists) {
-      await deviceRef.create({
+        transaction.set(userRef, {
+          lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastSeenIp: requestIp,
+        }, { merge: true });
+
+        if (!deviceSnapshot.exists) {
+          transaction.create(deviceRef, {
+            uid,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastSeenIp: requestIp,
+          });
+        } else {
+          transaction.set(deviceRef, {
+            lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastSeenIp: requestIp,
+          }, { merge: true });
+        }
+
+        return { ok: true, created: false };
+      }
+
+      const now = admin.firestore.Timestamp.now();
+      const trialEndsAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + THREE_DAYS_MS);
+      const profile = {
+        email: request.auth.token.email || '',
+        createdAt: now,
+        trialStartedAt: now,
+        trialEndsAt,
+        premiumUntil: null,
+        walletAddress: null,
+        maxRiskPercent: 1.5,
+        maxTradeSize: 1000,
+        deviceBindingId,
+        status: 'active',
+        lastSeenAt: now,
+        lastSeenIp: requestIp,
+      };
+
+      transaction.create(userRef, profile);
+      transaction.create(deviceRef, {
         uid,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastSeenIp: getRequestIp(request),
+        createdAt: now,
+        lastSeenAt: now,
+        lastSeenIp: requestIp,
       });
-    }
-    return { ok: true, created: false };
+      return { ok: true, created: true };
+    });
+
+    return result;
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error('initializeKitAgentAccount failed', {
+      code: error?.code,
+      message: error?.message,
+      uid,
+    });
+    throw new HttpsError('internal', 'KitAgent could not finish account verification. Please try again.');
   }
-
-  const now = admin.firestore.Timestamp.now();
-  const trialEndsAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + THREE_DAYS_MS);
-  const profile = {
-    email: request.auth.token.email || '',
-    createdAt: now,
-    trialStartedAt: now,
-    trialEndsAt,
-    premiumUntil: null,
-    walletAddress: null,
-    maxRiskPercent: 1.5,
-    maxTradeSize: 1000,
-    deviceBindingId,
-    status: 'active',
-    lastSeenAt: now,
-    lastSeenIp: getRequestIp(request),
-  };
-
-  const batch = db.batch();
-  batch.create(userRef, profile);
-  batch.create(deviceRef, {
-    uid,
-    createdAt: now,
-    lastSeenAt: now,
-    lastSeenIp: getRequestIp(request),
-  });
-  await batch.commit();
-  return { ok: true, created: true };
 });
 
 exports.onUserCreated = onDocumentCreated('users/{uid}', async (event) => {
