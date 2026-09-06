@@ -6,7 +6,6 @@ import './styles.css';
 import './brand.css';
 import './overrides.css';
 import './command-center-overrides.css';
-import './mobile-wallet.js';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
