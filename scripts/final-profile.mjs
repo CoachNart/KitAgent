@@ -40,6 +40,12 @@ if (i >= 0) {
   }
 
   if (end > 0) {
+    // The original profile expression closes with a JSX `}` immediately
+    // after its outer section. Consume that brace too; otherwise the
+    // replacement leaves an extra `}` in the generated main.jsx.
+    while (/\s/.test(s[end] || '')) end++;
+    if (s[end] === '}') end++;
+
     const profile = fs.readFileSync('src/profile-template.jsx', 'utf8').trim();
     s = s.slice(0, i) + profile + s.slice(end);
   }
