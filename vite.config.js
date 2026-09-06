@@ -48,7 +48,7 @@ const kitAgentSourceFix = () => ({
         "const getWalletProvider=()=>window.ethereum?.providers?.find(p=>p?.isMetaMask)||window.ethereum;const connectWallet=async()=>{"
       );
       code = code.replaceAll('window.ethereum.request', 'getWalletProvider()?.request');
-      code = `import LiveMarketPage from './LiveMarketPage.jsx';\nimport ChartTerminal from './ChartTerminal.jsx';\nimport AccountPage from './AccountPage.jsx';\nimport './account-page.css';\n${code}`;
+      code = `import LiveMarketPage from './LiveMarketPage.jsx';\nimport ChartTerminal from './ChartTerminal.jsx';\nimport AccountPage from './AccountPage.jsx';\nimport './account-page.css';\nimport './permission-modal.css';\n${code}`;
       code = code.replace(
         '<MarketPage pair={pair} setPair={setPair} tf={tf} setTf={setTf} analyzed={analyzed} setAnalyzed={setAnalyzed}/>',
         '<LiveMarketPage/>'
