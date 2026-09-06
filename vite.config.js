@@ -12,15 +12,21 @@ const kitAgentSourceFix = () => ({
         "const getWalletProvider=()=>window.ethereum?.providers?.find(p=>p?.isMetaMask)||window.ethereum;const connectWallet=async()=>{"
       );
       code = code.replaceAll('window.ethereum.request', 'getWalletProvider()?.request');
-      code = `import LiveMarketPage from './LiveMarketPage.jsx';\n${code}`;
+      code = `import LiveMarketPage from './LiveMarketPage.jsx';\nimport ChartTerminal from './ChartTerminal.jsx';\n${code}`;
       code = code.replace(
         '<MarketPage pair={pair} setPair={setPair} tf={tf} setTf={setTf} analyzed={analyzed} setAnalyzed={setAnalyzed}/>',
         '<LiveMarketPage/>'
       );
+      code = code.replace("['defi','DeFi & actions',Layers3]", "['defi','Chart terminal',BarChart3]");
+      code = code.replace("<DeFiPage prepare={prepare}/>", "<ChartTerminal/>");
+      code = code.replace('<b>DeFi</b><small>Swap, bridge, stake, lend and borrow.</small>', '<b>Chart terminal</b><small>Confirm market setups with live technical charts.</small>');
       return { code, map: null };
     }
     if (id.endsWith('/src/LiveMarketPage.jsx')) {
       return { code: `import './live-market-final.css';\n${source}`, map: null };
+    }
+    if (id.endsWith('/src/ChartTerminal.jsx')) {
+      return { code: `import './chart-terminal.css';\n${source}`, map: null };
     }
     return null;
   },
