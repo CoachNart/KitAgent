@@ -1,8 +1,8 @@
 {
   "name": "kitagent",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
-  "description": "KitAgent — Your Web3 Trading Terminal",
+  "description": "KitAgent — AI-powered crypto command center with permission-gated on-chain actions",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
+    "postcss": "^10.4.20",
     "tailwindcss": "^3.4.16",
     "vite": "^5.4.11"
   }
