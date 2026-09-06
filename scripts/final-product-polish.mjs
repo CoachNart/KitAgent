@@ -6,7 +6,6 @@ let s=fs.readFileSync(mainPath,'utf8');
 if(!s.includes("import './product-polish.css';"))s="import './product-polish.css';\n"+s;
 if(!s.includes("import './nav-redesign.css';"))s="import './nav-redesign.css';\n"+s;
 if(!s.includes("import './terminal-contrast.css';"))s="import './terminal-contrast.css';\n"+s;
-if(!s.includes("import './terminal-quick-dropdown.css';"))s="import './terminal-quick-dropdown.css';\n"+s;
 
 if(!s.includes('function ChainCategories')){
   const marker='function App(){';
@@ -25,12 +24,6 @@ if(!s.includes('async function requestTestTokens')){
 }
 s=s.replace("if(currentIntent==='faucet'){setMode('faucet');return}","if(currentIntent==='faucet'){requestTestTokens();return}");
 s=s.replace("<TradingPanel initialCommand={command}/>","<TradingPanel initialCommand={command} access={access}/>");
-
-// Collapse the long terminal example list into one compact, breathing dropdown.
-if(!s.includes('className="quick-dropdown"')){
-  const quick=/\<div className="quick-row"\>([\s\S]*?)<\/div>/;
-  s=s.replace(quick,`<details className="quick-dropdown"><summary>Quick actions · 10 commands</summary><div className="quick-dropdown-menu">$1</div></details>`);
-}
 
 fs.writeFileSync(mainPath,s);
 console.log('KitAgent final product polish applied');
