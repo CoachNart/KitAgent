@@ -13,6 +13,24 @@ import { ShieldCheck, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { auth, db, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
 
+const ACCOUNT_DEFAULTS = {
+  status: 'active',
+  plan: 'free',
+  monthlyUsage: { used: 0, limit: 0 },
+  subscription: {
+    name: 'Premium',
+    price: 30,
+    currency: 'USD',
+    billingPeriod: 'month',
+    accessDays: 30,
+    features: ['Unlimited setups', 'Live intelligence'],
+    paymentAsset: 'USDT',
+    paymentNetwork: 'BNB Chain',
+    paymentAddress: '0x1c35bf9d920e1b5d7e7e37ce1d15a1b9500f8474'
+  },
+  api: { status: 'coming_soon' }
+};
+
 async function initializeAccount(user) {
   if (!db) throw new Error('KitAgent database is not configured.');
   const ref = doc(db, 'users', user.uid);
@@ -29,7 +47,11 @@ async function initializeAccount(user) {
     tradingPreferences: existing.tradingPreferences || { targetRiskReward: 2.5 },
     apiKeyMetadata: existing.apiKeyMetadata || {},
     securitySettings: { ...(existing.securitySettings || {}), deviceBindingId },
-    status: existing.status || 'active',
+    status: existing.status || ACCOUNT_DEFAULTS.status,
+    plan: existing.plan || ACCOUNT_DEFAULTS.plan,
+    monthlyUsage: existing.monthlyUsage || ACCOUNT_DEFAULTS.monthlyUsage,
+    subscription: existing.subscription || ACCOUNT_DEFAULTS.subscription,
+    api: existing.api || ACCOUNT_DEFAULTS.api,
     updatedAt: serverTimestamp()
   };
   if (!snapshot.exists()) {
