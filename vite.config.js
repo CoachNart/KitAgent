@@ -19,6 +19,9 @@ const kitAgentSourceFix = () => ({
       );
       return { code, map: null };
     }
+    if (id.endsWith('/src/LiveMarketPage.jsx')) {
+      return { code: `import './live-market-final.css';\n${source}`, map: null };
+    }
     return null;
   },
 });
