@@ -1,21 +1,23 @@
 import { useMemo, useState } from 'react';
-import { Activity, ArrowDownToLine, ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, Clock3, Command, History, LayoutDashboard, Menu, Search, Settings2, ShieldCheck, Sparkles, Terminal, UserRound, Wallet, X, Zap } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, Command, History, Menu, Search, Settings2, ShieldCheck, Sparkles, Terminal, UserRound, Wallet, X, Zap } from 'lucide-react';
 
 const nav = [
   ['terminal', 'Terminal', Terminal], ['trading', 'Market analysis', BarChart3], ['history', 'Transactions', History],
   ['track', 'Track record', Activity], ['profile', 'Profile', UserRound],
 ];
-const pairs = ['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','MATIC/USDT'];
+const cryptoPairs = ['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','MATIC/USDT','DOT/USDT','TRX/USDT','LTC/USDT','BCH/USDT','ATOM/USDT','UNI/USDT','NEAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','PEPE/USDT','AAVE/USDT','FIL/USDT','ETC/USDT','INJ/USDT','SEI/USDT','TIA/USDT','ICP/USDT','HBAR/USDT'];
+const forexPairs = ['EUR/USD','GBP/USD','USD/JPY','USD/CHF','AUD/USD','USD/CAD','NZD/USD','EUR/GBP','EUR/JPY','EUR/CHF','GBP/JPY','GBP/CHF','AUD/JPY','AUD/NZD','NZD/JPY','CAD/JPY','CHF/JPY','EUR/AUD','EUR/CAD','GBP/AUD','GBP/CAD','USD/SGD','USD/HKD','USD/NOK','USD/SEK','USD/ZAR','USD/MXN','USD/TRY'];
 const timeframes = ['1m','5m','15m','30m','1H','4H','1D','1W'];
 const txs = [
   ['Swap','ETH → USDC','0.42 ETH','$1,341.28','Completed','12 min ago'],['Buy','BTC','0.018 BTC','$1,972.40','Completed','2h ago'],['Bridge','ETH → Base','0.50 ETH','$1,596.12','Completed','Yesterday'],['Send','USDC','850 USDC','$850.00','Pending','Yesterday']
 ];
 
 function App(){
-  const [page,setPage]=useState('terminal'); const [mobile,setMobile]=useState(false); const [query,setQuery]=useState(''); const [pair,setPair]=useState('BTC/USDT'); const [tf,setTf]=useState('4H'); const [analyzed,setAnalyzed]=useState(false); const [command,setCommand]=useState('');
+  const [page,setPage]=useState('terminal'); const [mobile,setMobile]=useState(false); const [pair,setPair]=useState('BTC/USDT'); const [market,setMarket]=useState('crypto'); const [tf,setTf]=useState('4H'); const [analyzed,setAnalyzed]=useState(false); const [command,setCommand]=useState('');
   const title=nav.find(n=>n[0]===page)?.[1];
-  const filtered=useMemo(()=>pairs.filter(p=>p.toLowerCase().includes(query.toLowerCase())),[query]);
+  const pairs=market==='crypto'?cryptoPairs:forexPairs;
   const go=p=>{setPage(p);setMobile(false)};
+  const changeMarket=(type)=>{setMarket(type);setPair(type==='crypto'?cryptoPairs[0]:forexPairs[0]);setAnalyzed(false)};
   return <div className="kit-shell">
     <aside className={mobile?'kit-sidebar open':'kit-sidebar'}>
       <div className="kit-brand"><div className="kit-logo">K</div><div><b>KitAgent</b><small>Web3 trading terminal</small></div><button className="icon-btn mobile-close" onClick={()=>setMobile(false)}><X size={18}/></button></div>
@@ -26,7 +28,7 @@ function App(){
     {mobile&&<div className="mobile-scrim" onClick={()=>setMobile(false)}/>} 
     <main className="kit-main">
       <header className="top-header"><button className="icon-btn menu-btn" onClick={()=>setMobile(true)}><Menu size={20}/></button><div className="page-heading"><span>KITAGENT</span><h1>{title}</h1></div><div className="header-actions"><div className="system"><i/> All systems operational</div><button className="connect-btn"><Wallet size={15}/> Connect wallet</button><div className="avatar">T</div></div></header>
-      <div className="content">{page==='terminal'&&<TerminalView command={command} setCommand={setCommand} go={go}/>} {page==='trading'&&<TradingView pair={pair} setPair={setPair} tf={tf} setTf={setTf} query={query} setQuery={setQuery} filtered={filtered} analyzed={analyzed} setAnalyzed={setAnalyzed}/>} {page==='history'&&<HistoryView/>} {page==='track'&&<TrackView/>} {page==='profile'&&<ProfileView/>}</div>
+      <div className="content">{page==='terminal'&&<TerminalView command={command} setCommand={setCommand} go={go}/>} {page==='trading'&&<TradingView market={market} setMarket={changeMarket} pair={pair} setPair={setPair} pairs={pairs} tf={tf} setTf={setTf} analyzed={analyzed} setAnalyzed={setAnalyzed}/>} {page==='history'&&<HistoryView/>} {page==='track'&&<TrackView/>} {page==='profile'&&<ProfileView/>}</div>
     </main>
   </div>
 }
@@ -39,14 +41,14 @@ function TerminalView({command,setCommand,go}){const examples=['Swap 0.1 ETH to 
   </div>
   <aside className="terminal-side"><div className="side-card-head"><div><span className="tiny-label">ACCOUNT</span><h3>Terminal overview</h3></div><span className="live-dot"><i/> LIVE</span></div><Metric label="Wallet" value="Not connected"/><Metric label="Network" value="Ethereum"/><Metric label="Trial" value="2 days left" accent/><Metric label="Risk per trade" value="Max 1.5%"/><div className="rule-card"><ShieldCheck size={18}/><div><b>Risk-aware by default</b><p>Minimum 2:1 R:R. Target 2.5:1+. No forced setups.</p></div></div><button className="outline-btn" onClick={()=>go('trading')}>Analyze a market <ArrowUpRight size={15}/></button></aside>
 </div>}
-function Quick({icon,title,text,onClick}){return <button className="quick-card" onClick={onClick}>{<span className="quick-icon">{icon}</span>}<span><b>{title}</b><small>{text}</small></span><ArrowUpRight size={15}/></button>}
+function Quick({icon,title,text,onClick}){return <button className="quick-card" onClick={onClick}><span className="quick-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><ArrowUpRight size={15}/></button>}
 function Metric({label,value,accent}){return <div className="metric-row"><span>{label}</span><b className={accent?'accent':''}>{value}</b></div>}
 
-function TradingView({pair,setPair,tf,setTf,query,setQuery,filtered,analyzed,setAnalyzed}){return <div className="page-wrap"><div className="section-intro"><div><span className="tiny-label">MARKET INTELLIGENCE</span><h2>Market analysis</h2><p>Choose a pair and timeframe. KitAgent only presents a trade when the structure supports it.</p></div><div className="risk-chip"><ShieldCheck size={15}/> Max risk <b>1.5%</b></div></div>
- <div className="analysis-layout"><section className="analysis-card"><div className="form-grid"><div className="field"><label>MARKET</label><div className="search-select"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search pair"/><ChevronDown size={15}/></div>{query&&<div className="pair-menu">{filtered.map(p=><button key={p} onClick={()=>{setPair(p);setQuery('')}}>{p}<span>USDT</span></button>)}</div>}<div className="selected-pair"><span className="coin-dot"/><b>{pair}</b><span>Spot</span></div></div><div className="field"><label>TIMEFRAME</label><div className="tf-row">{timeframes.map(x=><button key={x} className={tf===x?'tf active':''} onClick={()=>setTf(x)}>{x}</button>)}</div></div></div>
+function TradingView({market,setMarket,pair,setPair,pairs,tf,setTf,analyzed,setAnalyzed}){return <div className="page-wrap"><div className="section-intro"><div><span className="tiny-label">MARKET INTELLIGENCE</span><h2>Market analysis</h2><p>Choose an asset class, pair and timeframe. KitAgent only presents a trade when the structure supports it.</p></div><div className="risk-chip"><ShieldCheck size={15}/> Max risk <b>1.5%</b></div></div>
+ <div className="analysis-layout"><section className="analysis-card"><div className="market-switch" role="tablist" aria-label="Market type"><button className={market==='crypto'?'active':''} onClick={()=>setMarket('crypto')}>Crypto</button><button className={market==='forex'?'active':''} onClick={()=>setMarket('forex')}>Forex</button></div><div className="form-grid"><div className="field"><label>TRADING PAIR</label><div className="select-wrap"><select value={pair} onChange={e=>{setPair(e.target.value);setAnalyzed(false)}}>{pairs.map(p=><option key={p} value={p}>{p}</option>)}</select><ChevronDown size={15}/></div><div className="selected-pair"><span className="coin-dot"/><b>{pair}</b><span>{market==='crypto'?'Spot':'FX'}</span></div></div><div className="field"><label>TIMEFRAME</label><div className="select-wrap"><select value={tf} onChange={e=>{setTf(e.target.value);setAnalyzed(false)}}>{timeframes.map(x=><option key={x} value={x}>{x}</option>)}</select><ChevronDown size={15}/></div><div className="timeframe-note">Select from 1 minute to 1 week</div></div></div>
  <button className="analyze-btn" onClick={()=>setAnalyzed(true)}><BarChart3 size={17}/> Analyze {pair} <span>→</span></button>
  {analyzed?<AnalysisResult pair={pair} tf={tf}/>:<div className="analysis-empty"><div className="empty-icon"><BarChart3 size={20}/></div><b>Ready to analyze</b><span>No signal is generated until you select a market and run analysis.</span></div>}
- </section><aside className="structure-card"><span className="tiny-label">METHOD</span><h3>Market structure</h3><p>Analysis is built around liquidity, BOS, CHoCH and state of delivery.</p><div className="method-row"><b>Liquidity</b><span>Major + internal</span></div><div className="method-row"><b>Structure</b><span>BOS / CHoCH</span></div><div className="method-row"><b>Delivery</b><span>Impulse / correction</span></div><div className="method-row"><b>R:R target</b><span className="good">2.5 : 1+</span></div></aside></div>
+ </section><aside className="structure-card"><span className="tiny-label">MARKETS</span><h3>{market==='crypto'?'Crypto pairs':'Forex pairs'}</h3><p>{market==='crypto'?'Major and liquid spot crypto pairs available for analysis.':'Major, minor and cross currency pairs available for FX analysis.'}</p><div className="market-count"><b>{pairs.length}</b><span>available pairs</span></div><div className="method-row"><b>Structure</b><span>BOS / CHoCH</span></div><div className="method-row"><b>Liquidity</b><span>Major + internal</span></div><div className="method-row"><b>R:R target</b><span className="good">2.5 : 1+</span></div></aside></div>
  </div>}
 function AnalysisResult({pair,tf}){return <div className="analysis-result"><div className="result-top"><div><span className="tiny-label">{pair} · {tf}</span><h3>NO TRADE</h3></div><span className="quality neutral">WAIT FOR SETUP</span></div><div className="result-grid"><Metric label="Bias" value="Neutral"/><Metric label="Structure" value="Range-bound"/><Metric label="Liquidity" value="Unconfirmed"/><Metric label="BOS / CHoCH" value="No valid break"/><Metric label="State of delivery" value="Mixed"/><Metric label="Risk" value="1.5% max"/></div><div className="result-note"><ShieldCheck size={16}/><p>KitAgent will not manufacture an entry. Wait for a confirmed structural break, liquidity interaction and a realistic 2:1+ setup.</p></div></div>}
 
