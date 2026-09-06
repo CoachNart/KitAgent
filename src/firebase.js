@@ -1,6 +1,6 @@
 import { getApps, getApp, initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFirestore } from 'firebase/firestore';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,5 +14,4 @@ const config = {
 export const firebaseConfigured = Object.values(config).every(Boolean);
 const app = firebaseConfigured ? (getApps().length ? getApp() : initializeApp(config)) : null;
 export const auth = app ? getAuth(app) : null;
-export const functions = app ? getFunctions(app, 'us-central1') : null;
-export const initializeAccount = functions ? httpsCallable(functions, 'initializeKitAgentAccount') : null;
+export const db = app ? getFirestore(app) : null;
