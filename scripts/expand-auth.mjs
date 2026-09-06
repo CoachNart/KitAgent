@@ -20,9 +20,10 @@ if(!s.includes('onAuthStateChanged(auth')){
   if(s.includes(marker))s=s.replace(marker,injected);
 }
 
+// Navigation never blocks the Trading destination. Premium entitlement is enforced by TradingPanel's data presentation.
 if(!s.includes('function openMode(')){
   const marker=' async function connectWallet()';
-  const fn=" function openMode(next){if(next==='trading'&&!access.hasAccess){setMode('profile');setNotice(access.status==='EXPIRED'?'Your 3-day Trading trial has ended. Premium is $20 for 30 days.':'Trading is available with a 3-day free trial, then Premium is $20 for 30 days.');return}setMode(next)}\n";
+  const fn=" function openMode(next){setMode(next)}\n";
   if(s.includes(marker))s=s.replace(marker,fn+marker);
 }
 
