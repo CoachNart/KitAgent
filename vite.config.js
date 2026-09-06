@@ -54,6 +54,7 @@ const kitAgentSourceFix = () => ({
       code = code.replace("<DeFiPage prepare={prepare}/>", "<ChartTerminal/>");
       code = code.replace('<b>DeFi</b><small>Swap, bridge, stake, lend and borrow.</small>', '<b>Chart terminal</b><small>Confirm market setups with live technical charts.</small>');
       code = code.replace("['drops','Airdrops & faucets',Rocket]", "['drops','Profile',UserRound]");
+      code = code.replace("['profile','Profile',UserRound]", '');
       code = code.replace(
         '<DropsPage prepare={prepare} wallet={wallet}/>',
         '<AccountPage user={user} wallet={wallet} connectWallet={connectWallet}/>'
