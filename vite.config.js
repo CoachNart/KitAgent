@@ -59,7 +59,7 @@ const kitAgentSourceFix = () => ({
       return { code: `import './live-market-final.css';\n${source}`, map: null };
     }
     if (id.endsWith('/src/ChartTerminal.jsx')) {
-      return { code: `import './chart-terminal.css';\n${source}`, map: null };
+      return { code: `import './chart-terminal.css';\nimport './chart-terminal-overrides.css';\n${source}`, map: null };
     }
     return null;
   },
