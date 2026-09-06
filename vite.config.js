@@ -6,7 +6,13 @@ const kitAgentSourceFix = () => ({
   enforce: 'pre',
   transform(source, id) {
     if (id.endsWith('/src/App.jsx')) {
-      return { code: source.replaceAll('<Clipboard/>', '<Copy/>'), map: null };
+      let code = source.replaceAll('<Clipboard/>', '<Copy/>');
+      code = code.replace(
+        "const connectWallet=async()=>{",
+        "const getWalletProvider=()=>window.ethereum?.providers?.find(p=>p?.isMetaMask)||window.ethereum;const connectWallet=async()=>{"
+      );
+      code = code.replaceAll('window.ethereum.request', 'getWalletProvider()?.request');
+      return { code, map: null };
     }
     return null;
   },
