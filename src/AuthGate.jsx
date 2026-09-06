@@ -37,7 +37,7 @@ async function initializeAccount(user) {
   const snapshot = await getDoc(ref);
   const existing = snapshot.exists() ? snapshot.data() : {};
   const deviceBindingId = await getDeviceBindingId();
-  const profile = {
+  const identity = {
     email: user.email || existing.email || '',
     displayName: user.displayName || existing.displayName || '',
     photoURL: user.photoURL || existing.photoURL || '',
@@ -47,19 +47,23 @@ async function initializeAccount(user) {
     tradingPreferences: existing.tradingPreferences || { targetRiskReward: 2.5 },
     apiKeyMetadata: existing.apiKeyMetadata || {},
     securitySettings: { ...(existing.securitySettings || {}), deviceBindingId },
-    status: existing.status || ACCOUNT_DEFAULTS.status,
-    plan: existing.plan || ACCOUNT_DEFAULTS.plan,
-    monthlyUsage: { ...ACCOUNT_DEFAULTS.monthlyUsage, ...(existing.monthlyUsage || {}) },
-    subscription: { ...ACCOUNT_DEFAULTS.subscription, ...(existing.subscription || {}) },
-    api: { ...ACCOUNT_DEFAULTS.api, ...(existing.api || {}) },
     updatedAt: serverTimestamp()
   };
+
   if (!snapshot.exists()) {
-    profile.trialStartedAt = serverTimestamp();
-    profile.trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    profile.createdAt = serverTimestamp();
+    await setDoc(ref, {
+      ...identity,
+      ...ACCOUNT_DEFAULTS,
+      trialStartedAt: serverTimestamp(),
+      trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      createdAt: serverTimestamp()
+    });
+    return;
   }
-  await setDoc(ref, profile, { merge: true });
+
+  // Plan, subscription, usage and API state are backend-owned. A signed-in client
+  // may refresh identity/security fields but cannot promote its own account.
+  await setDoc(ref, identity, { merge: true });
 }
 
 export default function AuthGate({ children }) {
