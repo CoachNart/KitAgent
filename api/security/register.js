@@ -29,8 +29,8 @@ export default async function handler(req,res){
       // Membership is keyed by UID instead of treating the device fingerprint as a singleton owner.
       tx.set(deviceAccountRef,{uid:user.uid,email:user.email||'',lastSeenAt:now,registeredAt:accountSnap.exists?accountSnap.data()?.createdAt||now:now},{merge:true});
       tx.set(fingerprintAccountRef,{uid:user.uid,lastSeenAt:now},{merge:true});
-      tx.set(deviceRef,{accountCountIncrement:1,lastSeenAt:now},{merge:true});
-      tx.set(fpRef,{accountCountIncrement:1,lastSeenAt:now},{merge:true});
+      tx.set(deviceRef,{lastSeenAt:now},{merge:true});
+      tx.set(fpRef,{lastSeenAt:now},{merge:true});
     });
     return json(res,200,{ok:true,deviceLinked:true,multiAccount:true});
   }catch(error){
