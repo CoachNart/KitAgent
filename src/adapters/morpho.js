@@ -15,9 +15,9 @@ export const morphoAdapter = createAdapter({
   name: 'Morpho lending and borrowing on Robinhood Chain',
   capabilities: ['morpho-vault-deposit', 'morpho-vault-withdraw', 'morpho-blue-supply', 'morpho-blue-supply-collateral', 'morpho-blue-borrow', 'morpho-blue-repay', 'morpho-blue-withdraw-collateral'],
   chains: [CHAIN_ID],
-  prepare: async ({ from, provider, operation, vault, amount, market, borrowAmount, withdrawAmount, positionData }) => {
+  prepare: async ({ from, provider, operation, vault, amount, market, borrowAmount, withdrawAmount, positionData, signRequirements = false }) => {
     requireAddress(from, 'Wallet');
-    if (!provider?.request) throw new Error('A connected wallet provider is required for Morpho signature requirements.');
+    if (!provider?.request) throw new Error('A connected wallet provider is required for Morpho.');
     const client = createWalletClient({ account: from, chain: robinhood, transport: custom(provider) }).extend(morphoViemExtension({ supportSignature: true }));
     let output;
     if (operation === 'vault-deposit' || operation === 'vault-withdraw') {
@@ -35,18 +35,38 @@ export const morphoAdapter = createAdapter({
       else if (operation === 'blue-withdraw-collateral') output = entity.withdrawCollateral({ amount: BigInt(withdrawAmount ?? amount), userAddress: from, positionData: livePosition });
       else throw new Error(`Unsupported Morpho operation: ${operation}`);
     }
+
     const requirements = output.getRequirements ? await output.getRequirements() : [];
     const signatures = [];
     const prerequisiteTransactions = [];
+    let signatureRequirements = 0;
+
     for (const requirement of requirements) {
-      if (isRequirementSignature(requirement)) signatures.push(await requirement.sign(client, from));
-      else {
+      if (isRequirementSignature(requirement)) {
+        signatureRequirements += 1;
+        if (signRequirements) signatures.push(await requirement.sign(client, from));
+      } else {
         if (!requirement?.to) throw new Error('Morpho returned an unsupported prerequisite. Nothing was submitted.');
         prerequisiteTransactions.push(txOf(requirement));
       }
     }
+
+    if (!signRequirements && signatureRequirements > 0) {
+      return createPlan({
+        adapter: 'morpho',
+        title: `Review Morpho ${operation}`,
+        from,
+        transactions: prerequisiteTransactions,
+        expectedChanges: [`Prepare ${operation} on Morpho`, `Wallet authorization required: ${signatureRequirements} signature requirement${signatureRequirements === 1 ? '' : 's'}`],
+        risk: ['Morpho actions can move assets or change borrowing positions.', 'No Morpho signature was requested during preparation.', 'A final wallet approval is required before any authorization signature or transaction is submitted.'],
+        metadata: { operation, vault: vault || null, market: market || null, requirements: requirements.length, signatureRequirements, signatures: 0, positionData: positionData || null, amount: amount ?? null, borrowAmount: borrowAmount ?? null, withdrawAmount: withdrawAmount ?? null, requiresMorphoSignatures: true },
+        state: 'awaiting-approval',
+        requiresPermission: true
+      });
+    }
+
     const finalTx = output.buildTx(signatures);
     const transactions = [...prerequisiteTransactions, txOf(finalTx)];
-    return createPlan({ adapter: 'morpho', title: `Morpho ${operation}`, from, transactions, expectedChanges: [`Execute ${operation} on Morpho`], risk: ['Morpho actions can move assets or change borrowing positions.', 'EIP-712 Permit, Permit2 or Morpho authorization signatures may be requested by the connected wallet.', 'Review every prerequisite approval and the final transaction before signing.'], metadata: { operation, vault: vault || null, market: market || null, requirements: requirements.length, signatures: signatures.length } });
+    return createPlan({ adapter: 'morpho', title: `Morpho ${operation}`, from, transactions, expectedChanges: [`Execute ${operation} on Morpho`], risk: ['Morpho actions can move assets or change borrowing positions.', 'EIP-712 Permit, Permit2 or Morpho authorization signatures may be requested by the connected wallet.', 'Review every prerequisite approval and the final transaction before signing.'], metadata: { operation, vault: vault || null, market: market || null, requirements: requirements.length, signatures: signatures.length }, state: 'prepared', requiresPermission: true });
   },
 });
