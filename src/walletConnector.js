@@ -4,6 +4,7 @@ import { getAccount, watchAccount } from '@wagmi/core';
 import { defineChain } from '@reown/appkit/networks';
 
 const PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || '94314a4ef9da3dd09a3b858adef7819e';
+const ROBINHOOD_RPC = 'https://rpc.mainnet.chain.robinhood.com';
 
 export const ROBINHOOD_CHAIN = defineChain({
   id: 4663,
@@ -12,8 +13,8 @@ export const ROBINHOOD_CHAIN = defineChain({
   name: 'Robinhood Chain',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   rpcUrls: {
-    default: { http: ['https://rpc.mainnet.chain.robinhood.com'] },
-    public: { http: ['https://rpc.mainnet.chain.robinhood.com'] }
+    default: { http: [ROBINHOOD_RPC] },
+    public: { http: [ROBINHOOD_RPC] }
   },
   blockExplorers: {
     default: { name: 'Robinhood Chain Explorer', url: 'https://robinhoodchain.blockscout.com' }
@@ -28,7 +29,16 @@ const metadata = {
 };
 
 const networks = [ROBINHOOD_CHAIN];
-const wagmiAdapter = new WagmiAdapter({ networks, projectId: PROJECT_ID, ssr: false });
+const customRpcUrls = { 'eip155:4663': [{ url: ROBINHOOD_RPC }] };
+
+// Keep the same RPC configuration in both AppKit and Wagmi. This is important
+// for custom EVM networks so the wallet adapter and modal share one chain config.
+const wagmiAdapter = new WagmiAdapter({
+  networks,
+  projectId: PROJECT_ID,
+  ssr: false,
+  customRpcUrls
+});
 const wagmiConfig = wagmiAdapter.wagmiConfig;
 
 export const appKit = createAppKit({
@@ -37,7 +47,15 @@ export const appKit = createAppKit({
   defaultNetwork: ROBINHOOD_CHAIN,
   projectId: PROJECT_ID,
   metadata,
-  customRpcUrls: { 'eip155:4663': [{ url: 'https://rpc.mainnet.chain.robinhood.com' }] },
+  customRpcUrls,
+  // Prefer universal links on mobile when the selected wallet supports them.
+  // AppKit 1.8.23 includes a fix for persisting this deeplink choice.
+  experimental_preferUniversalLinks: true,
+  allWallets: 'ONLY_MOBILE',
+  enableWallets: true,
+  enableReconnect: true,
+  enableNetworkSwitch: true,
+  enableMobileFullScreen: true,
   features: { analytics: true, email: false, socials: [] },
   themeMode: 'dark',
   themeVariables: {
@@ -92,7 +110,7 @@ function waitForConnection(timeoutMs = 120000) {
 export async function connectWallet() {
   try {
     const current = accountState();
-    if (!current.isConnected) await appKit.open({ view: 'Connect' });
+    if (!current.isConnected) await appKit.open({ view: 'Connect', namespace: 'eip155' });
     const result = await waitForConnection();
     try {
       if (typeof appKit.switchNetwork === 'function') await appKit.switchNetwork(ROBINHOOD_CHAIN);
