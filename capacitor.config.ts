@@ -8,7 +8,8 @@ const config: CapacitorConfig = {
     backgroundColor: '#07090c'
   },
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    url: 'https://www.kit-agent.xyz'
   }
 };
 
