@@ -1,104 +1,35 @@
+import { adapterRegistry } from './adapters/index.js';
+
 const RPC_URL='https://rpc.mainnet.chain.robinhood.com';
 const EXPLORER_API='https://robinhoodchain.blockscout.com/api/v2';
-
+const ADDRESS=/^0x[0-9a-fA-F]{40}$/;
 const short=(a)=>a?`${a.slice(0,6)}…${a.slice(-4)}`:'';
 const weiToEth=(v)=>Number(BigInt(v||'0'))/1e18;
-const ADDRESS=/^0x[0-9a-fA-F]{40}$/;
 const workflowStages=['Discover','Prepare','Review','Ask for approval','Execute','Verify'];
 
-async function rpc(method,params=[]){
-  const r=await fetch(RPC_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method,params})});
-  if(!r.ok) throw new Error(`Robinhood RPC returned ${r.status}`);
-  const j=await r.json();
-  if(j.error) throw new Error(j.error.message||'RPC request failed');
-  return j.result;
-}
-
-async function explorer(path){
-  const r=await fetch(`${EXPLORER_API}${path}`);
-  if(!r.ok) throw new Error(`Explorer returned ${r.status}`);
-  return r.json();
-}
-
-async function walletSnapshot(address){
-  const [balance,txs,tokens,nfts]=await Promise.allSettled([
-    rpc('eth_getBalance',[address,'latest']),
-    explorer(`/addresses/${address}/transactions?items_count=5`),
-    explorer(`/addresses/${address}/tokens?type=ERC-20&items_count=20`),
-    explorer(`/addresses/${address}/nft/collections?items_count=10`)
-  ]);
-  return {
-    address,
-    balance:balance.status==='fulfilled'?weiToEth(balance.value):null,
-    transactions:txs.status==='fulfilled'?(txs.value.items||[]).length:null,
-    tokens:tokens.status==='fulfilled'?(tokens.value.items||[]).filter(x=>x.token?.type==='ERC-20').length:null,
-    nftCollections:nfts.status==='fulfilled'?(nfts.value.items||[]).length:null
-  };
-}
-
-async function marketSnapshot(symbol='BTC/USDT',timeframe='4H'){
-  const q=new URLSearchParams({symbol,timeframe});
-  const r=await fetch(`/api/market?${q}`);
-  if(!r.ok) throw new Error(`Market adapter returned ${r.status}`);
-  return r.json();
-}
-
-async function perpetualSnapshot(symbol='BTC/USDT',timeframe='4H'){
-  const q=new URLSearchParams({symbol,timeframe});
-  const r=await fetch(`/api/perpetual?${q}`);
-  if(!r.ok) throw new Error(`Perpetual adapter returned ${r.status}`);
-  return r.json();
-}
-
+async function rpc(method,params=[]){const r=await fetch(RPC_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method,params})});if(!r.ok)throw new Error(`Robinhood RPC returned ${r.status}`);const j=await r.json();if(j.error)throw new Error(j.error.message||'RPC request failed');return j.result;}
+async function explorer(path){const r=await fetch(`${EXPLORER_API}${path}`);if(!r.ok)throw new Error(`Explorer returned ${r.status}`);return r.json();}
+async function walletSnapshot(address){const [balance,txs,tokens,nfts]=await Promise.allSettled([rpc('eth_getBalance',[address,'latest']),explorer(`/addresses/${address}/transactions?items_count=5`),explorer(`/addresses/${address}/tokens?type=ERC-20&items_count=20`),explorer(`/addresses/${address}/nft/collections?items_count=10`)]);return{address,balance:balance.status==='fulfilled'?weiToEth(balance.value):null,transactions:txs.status==='fulfilled'?(txs.value.items||[]).length:null,tokens:tokens.status==='fulfilled'?(tokens.value.items||[]).filter(x=>x.token?.type==='ERC-20').length:null,nftCollections:nfts.status==='fulfilled'?(nfts.value.items||[]).length:null};}
+async function marketSnapshot(symbol='BTC/USDT',timeframe='4H'){const r=await fetch(`/api/market?${new URLSearchParams({symbol,timeframe})}`);if(!r.ok)throw new Error(`Market adapter returned ${r.status}`);return r.json();}
+async function perpetualSnapshot(symbol='BTC/USDT',timeframe='4H'){const r=await fetch(`/api/perpetual?${new URLSearchParams({symbol,timeframe})}`);if(!r.ok)throw new Error(`Perpetual adapter returned ${r.status}`);return r.json();}
+const discovery=(message,data,stages=['Discover','Review'])=>({kind:'discovery',message,data,stages});
 const workflow=(action,message,execution='adapter-required')=>({kind:'prepare',action:{...action,execution},message,stages:workflowStages});
 
 export async function executeAgent(text,{wallet='',pair='BTC/USDT',timeframe='4H'}={}){
-  const input=text.trim();
-  const lower=input.toLowerCase();
-  if(!input) return {kind:'empty',message:'Tell me the outcome you want. I will inspect the live context, prepare the exact action, show the details, ask for approval, then execute and verify it.',stages:workflowStages};
-
-  if(/\b(what can you do|help|capabilit|how do you work|what are you)\b/.test(lower)){
-    return {kind:'help',message:'Tell me what you want done in plain language. I can inspect live wallet state and markets, find airdrops and faucets, analyze spot and perpetual markets, and prepare swaps, bridges, staking, lending, borrowing, liquidity, NFT actions, transfers and approvals. For consequential actions I show the exact transaction, assets, fees and risk first, ask for your approval, execute through your wallet only after approval when a live adapter exists, then verify the result on-chain.',stages:workflowStages};
-  }
-
-  if(/\b(balance|portfolio|wallet|holdings|tokens|assets|positions|approvals|transactions|recent activity)\b/.test(lower)){
-    if(!wallet) return {kind:'wallet',message:'Connect a wallet and I can inspect its live Robinhood Chain balance, recent transactions, token holdings, NFT collections and supported on-chain state. Nothing is signed or moved by inspection.',stages:['Connect wallet','Inspect live state','Display results']};
-    const s=await walletSnapshot(wallet);
-    return {kind:'wallet',data:s,message:`Live wallet state for ${short(wallet)} on Robinhood Chain: ${s.balance==null?'balance unavailable':`${s.balance.toFixed(5)} ETH`}, ${s.tokens??'token data unavailable'} token holdings, ${s.nftCollections??'NFT'} NFT collections, and ${s.transactions??'transaction'} recent transactions indexed. This inspection is read-only.`,stages:['Inspect live wallet','Display results','Ready for next action']};
-  }
-
-  if(/\b(analy[sz]e|price|market|btc|eth|sol|xrp|bnb|doge|ada|avax|link|dot|trx|uni|aave|arb|op|sui|pepe|signal|setup|technical)\b/.test(lower)){
-    const symbol=(input.match(/\b(BTC|ETH|SOL|XRP|BNB|DOGE|ADA|AVAX|LINK|DOT|TRX|UNI|AAVE|ARB|OP|SUI|PEPE)\s*\/?\s*USDT\b/i)?.[1]||pair.split('/')[0]).toUpperCase()+'/USDT';
-    const tf=input.match(/\b(15m|30m|1h|4h|1d|1w)\b/i)?.[1]||timeframe;
-    const data=await marketSnapshot(symbol,tf);
-    return {kind:'market',data,message:`Live ${symbol} ${tf} market analysis is ready. I will display the current structure, indicators, bias, confidence and setup levels in the terminal. Analysis is read-only unless you explicitly ask me to prepare an action.`,stages:['Fetch live market','Analyze structure','Display thesis']};
-  }
-
-  if(/\b(perpetual|perp|futures)\b/.test(lower)){
-    const symbol=(input.match(/\b(BTC|ETH|SOL|XRP|BNB|DOGE|ADA|AVAX|LINK|DOT|TRX|UNI|AAVE|ARB|OP|SUI|PEPE)\s*\/?\s*USDT\b/i)?.[1]||'BTC').toUpperCase()+'/USDT';
-    const tf=input.match(/\b(15m|30m|1h|4h|1d|1w)\b/i)?.[1]||timeframe;
-    const data=await perpetualSnapshot(symbol,tf);
-    return {kind:'perpetual',data,message:`Live perpetual data for ${symbol} ${tf} is ready. I will show the market thesis and risk context before any order workflow. No order is submitted without your explicit approval.`,stages:['Fetch live perpetual','Analyze setup','Display thesis','Await action request']};
-  }
-
-  const transferMatch=input.match(/\b(?:send|transfer|pay)\s+(\d+(?:\.\d+)?)\s*(?:eth)?\s+(?:to\s+)?(0x[0-9a-fA-F]{40})\b/i);
-  if(transferMatch){
-    const amount=transferMatch[1];
-    const to=transferMatch[2];
-    return workflow({kind:'native-send',title:'Send ETH',summary:`Send ${amount} ETH to ${short(to)} on Robinhood Chain.`,amount,to,risk:'Native asset leaves the connected wallet only after explicit approval.'},`I found the transfer amount and destination. I will validate the address, simulate and estimate gas, show the exact transaction, ask for approval, then send and verify it on-chain.`, 'native-transfer');
-  }
-
-  const tokenApprove=input.match(/\b(?:approve|allow)\b.*?\b(0x[0-9a-fA-F]{40})\b(?:.*?\bfor\b\s*)?(0x[0-9a-fA-F]{40})\b.*?\b(\d+)\b/i);
-  if(tokenApprove){
-    return workflow({kind:'token-approve',title:'Approve ERC-20 spending',summary:'Prepare an ERC-20 approval transaction with the exact token, spender and base-unit amount.',token:tokenApprove[1],spender:tokenApprove[2],amount:tokenApprove[3],risk:'Token approval can authorize another contract or address to spend tokens.'},'I found the token contract, spender and amount. I will simulate and estimate the approval, show the exact calldata and risk, then ask before the wallet signs.','token-approve');
-  }
-
-  if(/\b(airdrop|claim|eligib)\b/.test(lower)) return workflow({kind:'airdrop-claim',title:'Prepare airdrop claim',summary:'Scan supported eligibility sources, verify the claim target and prepare the wallet action.',amount:'Eligibility-dependent',risk:'Verify eligibility, contract, amount and gas before signing.'},'I will discover supported claims, verify the eligibility context, show the claim details and gas, then ask you to approve before anything is signed.');
-  if(/\b(faucet|gas)\b/.test(lower)) return workflow({kind:'faucet',title:'Prepare faucet request',summary:'Find a supported faucet and prepare the request for the connected wallet.',amount:'Faucet-defined',risk:'External faucet request; review destination and limits.'},'I will find a supported faucet, show the destination and limits, and ask before submitting the request.');
-  if(/\b(swap|trade|exchange)\b/.test(lower)) return workflow({kind:'swap',title:'Prepare token swap',summary:'Build the swap workflow and show quote, expected output, slippage, approvals and fees.',amount:'User-defined',risk:'DEX transaction; approval and slippage may be required.'},'I will build the swap, surface the live quote when an adapter is available, show expected output, slippage, fees and approvals, then ask for approval before the wallet signs.');
-  if(/\b(bridge|move.*chain|cross.?chain)\b/.test(lower)) return workflow({kind:'bridge',title:'Prepare bridge transfer',summary:'Prepare the cross-chain transfer and show source, destination, amount, bridge, fees and estimated output.',amount:'User-defined',risk:'Bridge transaction; destination and bridge risk require review.'},'I will prepare the bridge route, display the exact transfer details and fees, ask for approval, then verify the resulting transaction.');
-  if(/\b(stake|staking|lend|lending|borrow|borrowing|defi|liquidity|yield)\b/.test(lower)) return workflow({kind:'defi',title:'Prepare DeFi action',summary:'Prepare the requested DeFi workflow and surface protocol, asset, fee, approval and risk details.',amount:'User-defined',risk:'Protocol interaction; review smart-contract and asset risk.'},'I will inspect the requested DeFi workflow, show the protocol, assets, approvals, fees and expected result, then stop for your explicit approval.');
-  if(/\b(nft|collectible|collection|list|sell.*nft|buy.*nft|transfer.*nft)\b/.test(lower)) return workflow({kind:'nft',title:'Prepare NFT action',summary:'Inspect the NFT context and prepare a buy, sell, list or transfer workflow with the relevant marketplace details.',amount:'Marketplace quote required',risk:'NFT movement or sale requires explicit approval.'},'I will inspect the NFT and marketplace context, display the asset, price or proceeds, fees and destination, then ask before listing, selling, buying or transferring it.');
-
-  return {kind:'help',message:'I understand natural-language requests. Tell me the outcome you want, for example: “show my wallet”, “analyze ETH/USDT”, “find airdrops I qualify for”, “prepare a swap”, “sell my NFT”, or “send 0.1 ETH to this address”. I will inspect first, show the result, ask before consequential execution, execute only through a real adapter, and verify the result on-chain.',stages:['Understand request','Discover context','Prepare when needed','Ask before execution','Execute','Verify']};
+  const input=text.trim();const lower=input.toLowerCase();if(!input)return{kind:'empty',message:'Tell me the outcome you want. I will inspect live context, prepare the exact action, ask before execution, then verify it.',stages:workflowStages};
+  if(/\b(what can you do|help|capabilit|how do you work|what are you)\b/.test(lower))return{kind:'help',message:'I can inspect live wallet state and markets, discover faucets, airdrops, bridges, NFT venues and DeFi protocols, and execute supported on-chain actions through real adapters. Consequential actions always stop for your approval before the wallet signs.',stages:workflowStages};
+  if(/\b(find active faucets|faucets?|get me faucet gas|testnet gas)\b/.test(lower)){const data=await adapterRegistry.get('discovery').discover({kind:'faucet'});return discovery('I found the official Robinhood Chain testnet faucet. Mainnet gas is not dispensed by a faucet; the faucet is for testnet ETH. Nothing was submitted.',data,['Discover faucet','Show destination','No execution']);}
+  if(/\b(find airdrops|airdrop|claim.*airdrop|eligible.*airdrop)\b/.test(lower)){const data=await adapterRegistry.get('discovery').discover({kind:'airdrop'});return discovery('I can discover supported airdrop sources, but I will not invent eligibility or fabricate a claim transaction. I will show the source first, then prepare a real claim only when a verified claim contract is available.',data,['Discover sources','Check eligibility','Review before claim']);}
+  if(/\b(sell.*nft|list.*nft|buy.*nft|nft marketplace|nft market)\b/.test(lower)){const data=await adapterRegistry.get('discovery').discover({kind:'nft-marketplace'});return discovery('I found live NFT venues on Robinhood Chain. I will not pretend a listing is executable until the marketplace order contract and signed order data are available. Choose a venue or give me the NFT contract and token ID.',data,['Discover NFT venues','Review marketplace','Await NFT details']);}
+  if(/\b(bridge|move.*chain|cross.?chain)\b/.test(lower)){const data=await adapterRegistry.get('discovery').discover({kind:'bridge'});return discovery('I found the official Robinhood Chain bridge documentation. Bridge execution is protocol-specific, so I will only submit a real bridge transaction after the route and calldata are available.',data,['Discover bridge routes','Review route','Await executable route']);}
+  if(/\b(stake|staking|lend|lending|borrow|borrowing|defi|liquidity|yield)\b/.test(lower)){const data=await adapterRegistry.get('discovery').discover({kind:'defi'});return discovery('I found live DeFi protocol surfaces on Robinhood Chain. I will not claim a DeFi action is executable until its protocol adapter can quote, simulate and build the exact calldata.',data,['Discover protocol','Review risk','Await executable adapter']);}
+  if(/\b(balance|portfolio|wallet|holdings|tokens|assets|positions|approvals|transactions|recent activity)\b/.test(lower)){if(!wallet)return{kind:'wallet',message:'Connect a wallet and I can inspect its live Robinhood Chain state. Inspection is read-only.',stages:['Connect wallet','Inspect live state','Display results']};const s=await walletSnapshot(wallet);return{kind:'wallet',data:s,message:`Live wallet state for ${short(wallet)}: ${s.balance==null?'balance unavailable':`${s.balance.toFixed(5)} ETH`}, ${s.tokens??'token data unavailable'} token holdings, ${s.nftCollections??'NFT'} NFT collections and ${s.transactions??'transaction'} recent transactions. Read-only.`,stages:['Inspect live wallet','Display results','Ready for next action']};}
+  if(/\b(analy[sz]e|price|market|btc|eth|sol|xrp|bnb|doge|ada|avax|link|dot|trx|uni|aave|arb|op|sui|pepe|signal|setup|technical)\b/.test(lower)){const symbol=(input.match(/\b(BTC|ETH|SOL|XRP|BNB|DOGE|ADA|AVAX|LINK|DOT|TRX|UNI|AAVE|ARB|OP|SUI|PEPE)\s*\/?\s*USDT\b/i)?.[1]||pair.split('/')[0]).toUpperCase()+'/USDT';const tf=input.match(/\b(15m|30m|1h|4h|1d|1w)\b/i)?.[1]||timeframe;const data=await marketSnapshot(symbol,tf);return{kind:'market',data,message:`Live ${symbol} ${tf} market analysis is ready. Analysis is read-only.`,stages:['Fetch live market','Analyze structure','Display thesis']};}
+  if(/\b(perpetual|perp|futures)\b/.test(lower)){const symbol=(input.match(/\b(BTC|ETH|SOL|XRP|BNB|DOGE|ADA|AVAX|LINK|DOT|TRX|UNI|AAVE|ARB|OP|SUI|PEPE)\s*\/?\s*USDT\b/i)?.[1]||'BTC').toUpperCase()+'/USDT';const tf=input.match(/\b(15m|30m|1h|4h|1d|1w)\b/i)?.[1]||timeframe;const data=await perpetualSnapshot(symbol,tf);return{kind:'perpetual',data,message:`Live perpetual data for ${symbol} ${tf} is ready. No order is submitted without a real order adapter and your approval.`,stages:['Fetch live perpetual','Analyze setup','Display thesis']};}
+  const transferMatch=input.match(/\b(?:send|transfer|pay)\s+(\d+(?:\.\d+)?)\s*(?:eth)?\s+(?:to\s+)?(0x[0-9a-fA-F]{40})\b/i);if(transferMatch)return workflow({kind:'native-send',title:'Send ETH',summary:`Send ${transferMatch[1]} ETH to ${short(transferMatch[2])} on Robinhood Chain.`,amount:transferMatch[1],to:transferMatch[2],risk:'Native asset leaves the connected wallet only after approval.'},'I found the amount and destination. I will simulate, estimate gas, ask for approval, then send and verify.','native-transfer');
+  const tokenApprove=input.match(/\b(?:approve|allow)\b.*?\b(0x[0-9a-fA-F]{40})\b(?:.*?\bfor\b\s*)?(0x[0-9a-fA-F]{40})\b.*?\b(\d+)\b/i);if(tokenApprove)return workflow({kind:'token-approve',title:'Approve ERC-20 spending',summary:'Prepare an exact token approval.',token:tokenApprove[1],spender:tokenApprove[2],amount:tokenApprove[3],risk:'Token approval can authorize spending.'},'I found the token, spender and base-unit amount. I will simulate and ask before signing.','token-approve');
+  const nativeSwap=input.match(/\b(?:swap|exchange|trade)\s+(\d+(?:\.\d+)?)\s*ETH\s+(?:to|for)\s+(0x[0-9a-fA-F]{40})\b/i);if(nativeSwap)return workflow({kind:'swap',title:'Swap ETH on Uniswap',summary:`Swap ${nativeSwap[1]} ETH for ${short(nativeSwap[2])} using the live Robinhood Chain Uniswap V2 adapter.`,nativeIn:true,nativeOut:false,amountIn:nativeSwap[1],tokenOut:nativeSwap[2],slippageBps:50,risk:'Live DEX swap; review quote, slippage, route and gas.'},'I can now build a real Uniswap V2 transaction on Robinhood Chain. I will quote it, prepare calldata, simulate it, show the output and slippage, then ask for wallet approval.','uniswap-v2');
+  const tokenSwap=input.match(/\b(?:swap|exchange|trade)\s+(\d+)\s+(0x[0-9a-fA-F]{40})\s+(?:to|for)\s+(0x[0-9a-fA-F]{40})\b/i);if(tokenSwap)return workflow({kind:'swap',title:'Swap tokens on Uniswap',summary:`Swap token ${short(tokenSwap[2])} for ${short(tokenSwap[3])}.`,nativeIn:false,nativeOut:false,amountIn:tokenSwap[1],tokenIn:tokenSwap[2],tokenOut:tokenSwap[3],slippageBps:50,risk:'Live DEX swap; an approval may be required first.'},'I found both token contracts and the base-unit amount. I will quote and prepare a real Uniswap transaction, simulate it, then ask for approval.','uniswap-v2');
+  const nftTransfer=input.match(/\btransfer\s+nft\s+(0x[0-9a-fA-F]{40})\s+#?(\d+)\s+to\s+(0x[0-9a-fA-F]{40})\b/i);if(nftTransfer)return workflow({kind:'nft-transfer',title:'Transfer NFT',summary:`Transfer NFT ${short(nftTransfer[1])} #${nftTransfer[2]} to ${short(nftTransfer[3])}.`,token:nftTransfer[1],tokenId:nftTransfer[2],to:nftTransfer[3],risk:'NFT transfer is irreversible after confirmation.'},'I found the NFT contract, token ID and recipient. I will prepare the ERC-721 transaction, simulate it, then ask before signing.','erc721');
+  return{kind:'help',message:'I understand natural-language requests, but I will not fake an adapter. Try “find active faucets”, “swap 0.01 ETH to 0x…”, “transfer NFT 0x… #1 to 0x…”, “send 0.1 ETH to 0x…”, or a market analysis. For swaps and supported wallet actions I now use real transaction adapters; discovery actions do not open a fake approval flow.',stages:['Understand request','Discover context','Prepare when supported','Ask before execution','Execute','Verify']};
 }
