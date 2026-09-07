@@ -43,26 +43,18 @@ async function rpc(method, params) {
   return data.result;
 }
 
-function normalizeAddress(topic) {
-  return `0x${String(topic || '').slice(-40)}`.toLowerCase();
-}
-
-function parseAmount(data) {
-  try { return BigInt(data); } catch { return 0n; }
-}
+function normalizeAddress(topic) { return `0x${String(topic || '').slice(-40)}`.toLowerCase(); }
+function parseAmount(data) { try { return BigInt(data); } catch { return 0n; } }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed.' });
-
   try {
     const a = getAdmin();
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     if (!token) return json(res, 401, { error: 'Authentication required.' });
-
     let decoded;
-    try { decoded = await a.auth().verifyIdToken(token); }
-    catch { return json(res, 401, { error: 'Authentication token could not be verified.' }); }
+    try { decoded = await a.auth().verifyIdToken(token); } catch { return json(res, 401, { error: 'Authentication token could not be verified.' }); }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const hash = String(body.transactionHash || '').trim();
@@ -77,7 +69,7 @@ export default async function handler(req, res) {
 
     const tx = await rpc('eth_getTransactionByHash', [hash]);
     if (!tx) return json(res, 422, { error: 'Transaction not found on BNB Smart Chain. Wait for it to appear, then try again.' });
-    if (String(tx.chainId || '0x38').toLowerCase() !== '0x38') return json(res, 422, { error: 'This transaction is not on BNB Smart Chain.' });
+    if (String(tx.chainId || '').toLowerCase() !== '0x38') return json(res, 422, { error: 'This transaction is not on BNB Smart Chain.' });
     if (String(tx.from || '').toLowerCase() !== wallet) return json(res, 422, { error: 'The payment sender does not match the connected wallet.' });
 
     const receipt = await rpc('eth_getTransactionReceipt', [hash]);
@@ -91,10 +83,10 @@ export default async function handler(req, res) {
         && normalizeAddress(topics[2]) === PAYMENT_ADDRESS
         && parseAmount(log.data) >= PRICE_USDT;
     });
-
     if (!matching) return json(res, 422, { error: 'No valid payment of at least 20 USDT to the KitAgent payment address was found in this transaction.' });
 
     const amount = parseAmount(matching.data);
+    const amountUsdt = Number(amount) / 1e18;
     const verificationRef = userRef.collection('paymentVerifications').doc();
     await db.runTransaction(async transaction => {
       const userSnap = await transaction.get(userRef);
@@ -103,40 +95,17 @@ export default async function handler(req, res) {
       const currentEnd = user.subscriptionEndsAt?.toDate ? user.subscriptionEndsAt.toDate() : (user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null);
       const start = currentPlan === 'premium' && currentEnd && currentEnd.getTime() > Date.now() ? currentEnd : new Date();
       const end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
-      transaction.set(verificationRef, {
-        uid: decoded.uid,
-        transactionHash: hash.toLowerCase(),
-        asset: 'USDT',
-        network: 'BNB Chain',
-        amount: Number(amount) / 1e18,
-        currency: 'USD',
-        status: 'verified',
-        verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        chainId: 56,
-        tokenContract: USDT_BSC,
-        paymentAddress: PAYMENT_ADDRESS,
-        from: wallet,
-      });
+      const verification = { status: 'verified', transactionHash: hash.toLowerCase(), amount: amountUsdt, asset: 'USDT', network: 'BNB Chain', chainId: 56, tokenContract: USDT_BSC, paymentAddress: PAYMENT_ADDRESS, from: wallet };
+      transaction.set(verificationRef, { uid: decoded.uid, ...verification, verifiedAt: admin.firestore.FieldValue.serverTimestamp(), createdAt: admin.firestore.FieldValue.serverTimestamp() });
       transaction.update(userRef, {
         plan: 'premium',
         subscriptionEndsAt: end,
-        subscription: {
-          ...(user.subscription || {}),
-          name: 'Premium',
-          price: 20,
-          currency: 'USD',
-          billingPeriod: 'month',
-          accessDays: 30,
-          paymentAsset: 'USDT',
-          paymentNetwork: 'BNB Chain',
-          paymentAddress: PAYMENT_ADDRESS,
-        },
+        latestPaymentVerification: verification,
+        subscription: { ...(user.subscription || {}), name: 'Premium', price: 20, currency: 'USD', billingPeriod: 'month', accessDays: 30, features: ['Unlimited setups', 'Live intelligence'], paymentAsset: 'USDT', paymentNetwork: 'BNB Chain', paymentAddress: PAYMENT_ADDRESS },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
-
-    return json(res, 200, { verified: true, status: 'verified', amount: Number(amount) / 1e18, accessDays: 30 });
+    return json(res, 200, { verified: true, status: 'verified', amount: amountUsdt, accessDays: 30 });
   } catch (error) {
     if (error?.code === 'FIREBASE_ADMIN_CREDENTIALS_MISSING') return json(res, 500, { error: 'Firebase Admin credentials are missing.' });
     console.error('verify-payment failed', error);
