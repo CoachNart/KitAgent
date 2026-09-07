@@ -6,7 +6,6 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if owns(uid);
-      // Account creation and security-owned fields are server-authoritative.
       allow create: if false;
       allow delete: if false;
       allow update: if owns(uid)
@@ -22,6 +21,7 @@ service cloud.firestore {
         && request.resource.data.trialStartedAt == resource.data.trialStartedAt
         && request.resource.data.trialEndsAt == resource.data.trialEndsAt
         && request.resource.data.subscriptionEndsAt == resource.data.subscriptionEndsAt
+        && request.resource.data.latestPaymentVerification == resource.data.latestPaymentVerification
         && request.resource.data.securitySettings.deviceBindingId == resource.data.securitySettings.deviceBindingId;
 
       match /transactions/{transactionId} {
@@ -32,16 +32,8 @@ service cloud.firestore {
       }
       match /paymentVerifications/{verificationId} {
         allow read: if owns(uid);
-        allow create: if owns(uid)
-          && request.resource.data.uid == uid
-          && request.resource.data.status == 'pending'
-          && request.resource.data.transactionHash is string
-          && request.resource.data.transactionHash.size() >= 8
-          && request.resource.data.transactionHash.size() <= 200
-          && request.resource.data.asset is string
-          && request.resource.data.network is string
-          && request.resource.data.amount is number;
-        allow update, delete: if false;
+        // Payment verification is server-authoritative. Clients cannot create, edit, or delete verification records.
+        allow create, update, delete: if false;
       }
     }
 
