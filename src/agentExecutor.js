@@ -25,6 +25,27 @@ async function executePlan(plan,{wallet,provider}){
   return{hash:last.hash,hashes:submittedHashes,plan,receipt:last.receipt,explorerUrl:`${ROBINHOOD_CHAIN.explorer}/tx/${last.hash}`,gasEstimate:submittedHashes.map(x=>x.gasEstimate).join(', '),status:'verified'};
 }
 
+async function executeMorphoAction(execution,{wallet,provider}){
+  const adapter=adapterRegistry.get('morpho');
+  let plan=execution;
+  if(execution?.metadata?.requiresMorphoSignatures){
+    const meta=execution.metadata;
+    plan=await adapter.prepare({
+      provider,
+      from:wallet,
+      operation:meta.operation,
+      vault:meta.vault || undefined,
+      amount:meta.amount ?? undefined,
+      market:meta.market || undefined,
+      borrowAmount:meta.borrowAmount ?? undefined,
+      withdrawAmount:meta.withdrawAmount ?? undefined,
+      positionData:meta.positionData || undefined,
+      signRequirements:true
+    });
+  }
+  return executePlan(plan,{wallet,provider});
+}
+
 export async function executePreparedAction(action,{wallet,provider}){
   requireWallet(wallet);requireProvider(provider);
   const chainId=Number(BigInt(await provider.request({method:'eth_chainId'})));
@@ -36,6 +57,7 @@ export async function executePreparedAction(action,{wallet,provider}){
       const result=await adapter.execute(action.executionPlan,{from:wallet,provider});
       return{...result,protocol:'lighter',status:result.status||'verified'};
     }
+    if(action.executionPlan.adapter==='morpho')return executeMorphoAction(action.executionPlan,{wallet,provider});
     return executePlan(action.executionPlan,{wallet,provider});
   }
 
