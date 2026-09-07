@@ -13,6 +13,15 @@ const actionResult=(execution,intent)=>({kind:'prepare',action:{kind:intent,titl
 async function routeDirect(command,wallet){
   const input=clean(command),lower=input.toLowerCase(),from=wallet||getConnectedAddress(),found=addresses(input),qty=amount(input);
 
+  if(/\bmorpho\b/.test(lower)&&/\b(deposit|withdraw)\b/.test(lower)&&/\bvault\b/.test(lower)){
+    if(!from)return{kind:'clarify',message:'Connect your wallet first. Morpho vault actions require wallet approval.',stages:['Understand','Connect wallet']};
+    const vault=found[0],operation=/\bdeposit\b/.test(lower)?'vault-deposit':'vault-withdraw';
+    if(!vault||!qty)return{kind:'clarify',message:'Morpho vault actions need the vault address and amount in the vault token’s base units. Example: “deposit 1000000 into Morpho vault 0xVAULT”.',stages:['Understand','Missing vault or amount']};
+    if(!/^\d+$/.test(qty))return{kind:'clarify',message:'For a Morpho vault action, enter the amount in base units as a whole number so KitAgent does not guess token decimals.',stages:['Understand','Invalid base-unit amount']};
+    const execution=await adapterRegistry.get('morpho').prepare({provider:getActiveProvider(),from,operation,vault,amount:qty});
+    return actionResult(execution,'morpho');
+  }
+
   if(/\b(transfer|send)\b/.test(lower)&&/\b(nft|erc721)\b/.test(lower)){
     if(!from)return{kind:'clarify',message:'Connect your wallet first.',stages:['Understand','Connect wallet']};
     const id=input.match(/(?:token\s*id|#)\s*(\d+)/i)?.[1]||input.match(/\b(\d+)\b/)?.[1];
