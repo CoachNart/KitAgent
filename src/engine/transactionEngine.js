@@ -1,4 +1,4 @@
-import { ROBINHOOD_CHAIN, rpc } from './robinhood.js';
+import { ROBINHOOD_CHAIN, rpc } from '../chain/robinhood.js';
 import { validatePlan, ACTION_STATES } from './transactionPlan.js';
 
 const hex = (value) => `0x${BigInt(value).toString(16)}`;
@@ -19,7 +19,6 @@ export const estimateTransaction = async (tx) => {
 };
 
 export const simulateTransaction = async (tx) => {
-  // eth_call proves the calldata can execute at the current state without broadcasting it.
   const result = await rpc('eth_call', [{ ...tx, value: tx.value ? hex(tx.value) : undefined }, 'latest']);
   return { ok: true, result };
 };
