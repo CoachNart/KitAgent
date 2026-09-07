@@ -9,68 +9,46 @@ const toWei = (value) => {
   const [whole, fraction = ''] = text.split('.');
   return BigInt(whole) * 1000000000000000000n + BigInt((fraction + '000000000000000000').slice(0, 18));
 };
-
-const requireWallet = (wallet) => {
-  if (!ADDRESS.test(wallet || '')) throw new Error('Connect a valid EVM wallet before execution.');
-};
-
-const requireProvider = (provider) => {
-  if (!provider?.request) throw new Error('The connected wallet provider is unavailable. Reconnect the wallet and try again.');
-};
+const requireWallet = (wallet) => { if (!ADDRESS.test(wallet || '')) throw new Error('Connect a valid EVM wallet before execution.'); };
+const requireProvider = (provider) => { if (!provider?.request) throw new Error('The connected wallet provider is unavailable. Reconnect the wallet and try again.'); };
 
 export async function executePreparedAction(action, { wallet, provider }) {
-  requireWallet(wallet);
-  requireProvider(provider);
-
+  requireWallet(wallet); requireProvider(provider);
   const chainId = Number(BigInt(await provider.request({ method: 'eth_chainId' })));
-  if (chainId !== ROBINHOOD_CHAIN.chainId) {
-    throw new Error('Your wallet is not on Robinhood Chain. Switch to Robinhood Chain and approve again.');
-  }
+  if (chainId !== ROBINHOOD_CHAIN.chainId) throw new Error('Your wallet is not on Robinhood Chain. Switch to Robinhood Chain and approve again.');
 
   let plan;
   if (action.kind === 'native-send') {
     if (!ADDRESS.test(action.to || '')) throw new Error('The recipient address is missing or invalid.');
-    const amountWei = toWei(action.amount);
-    plan = await adapterRegistry.get('native-eth').prepare({ from: wallet, to: action.to, amountWei });
+    plan = await adapterRegistry.get('native-eth').prepare({ from: wallet, to: action.to, amountWei: toWei(action.amount) });
   } else if (action.kind === 'token-transfer' || action.kind === 'token-approve') {
-    if (!ADDRESS.test(action.token || '')) throw new Error('The ERC-20 contract address is missing or invalid.');
-    if (!ADDRESS.test(action.spender || action.to || '')) throw new Error('The token destination or spender address is missing or invalid.');
+    if (!ADDRESS.test(action.token || '') || !ADDRESS.test(action.spender || action.to || '')) throw new Error('Valid token and destination/spender addresses are required.');
     if (action.amount === undefined || action.amount === null || !/^\d+$/.test(String(action.amount))) throw new Error('ERC-20 amount must be provided in base units.');
-    plan = await adapterRegistry.get('erc20').prepare({
-      from: wallet,
-      token: action.token,
-      to: action.spender || action.to,
-      amount: String(action.amount),
-      mode: action.kind === 'token-approve' ? 'approve' : 'transfer',
-    });
+    plan = await adapterRegistry.get('erc20').prepare({ from: wallet, token: action.token, to: action.spender || action.to, amount: String(action.amount), mode: action.kind === 'token-approve' ? 'approve' : 'transfer' });
+  } else if (action.kind === 'swap') {
+    plan = await adapterRegistry.get('uniswap-v2').prepare({ from: wallet, tokenIn: action.tokenIn, tokenOut: action.tokenOut, amountIn: action.amountIn, slippageBps: action.slippageBps ?? 50, nativeIn: action.nativeIn, nativeOut: action.nativeOut });
+  } else if (action.kind === 'nft-transfer') {
+    plan = await adapterRegistry.get('erc721').prepare({ from: wallet, token: action.token, to: action.to, tokenId: action.tokenId });
   } else {
     throw new Error(`No live execution adapter is enabled for ${action.kind}. I did not submit anything.`);
   }
 
-  const tx = plan.transactions[0];
-  const estimate = await estimateTransaction({ from: wallet, to: tx.to, data: tx.data || '0x', value: tx.value || 0n });
-  const simulation = await simulateTransaction({ from: wallet, to: tx.to, data: tx.data || '0x', value: tx.value || 0n });
-  if (!simulation.ok) throw new Error('Transaction simulation failed. Nothing was submitted.');
+  const submittedHashes = [];
+  for (const tx of plan.transactions) {
+    const estimate = await estimateTransaction({ from: wallet, to: tx.to, data: tx.data || '0x', value: tx.value || 0n });
+    const simulation = await simulateTransaction({ from: wallet, to: tx.to, data: tx.data || '0x', value: tx.value || 0n });
+    if (!simulation.ok) throw new Error('Transaction simulation failed. Nothing was submitted.');
+    const submitted = await submitPlan({ ...plan, transactions: [{ ...tx, gas: estimate }] }, provider);
+    const hash = submitted.hashes[0];
+    const receipt = await waitForReceipt(hash);
+    const verified = receipt?.status === '0x1' || receipt?.status === 1 || receipt?.status === '1';
+    if (!verified) throw new Error(`Transaction ${hash} was mined but did not succeed.`);
+    submittedHashes.push({ hash, receipt, gasEstimate: estimate.toString() });
+  }
 
-  const submitted = await submitPlan({ ...plan, transactions: [{ ...tx, gas: estimate }] }, provider);
-  const hash = submitted.hashes[0];
-  const receipt = await waitForReceipt(hash);
-  const verified = receipt?.status === '0x1' || receipt?.status === 1 || receipt?.status === '1';
-  if (!verified) throw new Error(`Transaction ${hash} was mined but did not succeed.`);
-
-  return {
-    hash,
-    plan: submitted,
-    receipt,
-    explorerUrl: `${ROBINHOOD_CHAIN.explorer}/tx/${hash}`,
-    gasEstimate: estimate.toString(),
-    status: 'verified',
-  };
+  const last = submittedHashes.at(-1);
+  return { hash: last.hash, hashes: submittedHashes, plan, receipt: last.receipt, explorerUrl: `${ROBINHOOD_CHAIN.explorer}/tx/${last.hash}`, gasEstimate: submittedHashes.map(x => x.gasEstimate).join(', '), status: 'verified' };
 }
 
-export const supportedExecutionKinds = ['native-send', 'token-transfer', 'token-approve'];
-
-export const inspectChain = async () => ({
-  chainId: Number(BigInt(await rpc('eth_chainId'))),
-  blockNumber: Number(BigInt(await rpc('eth_blockNumber'))),
-});
+export const supportedExecutionKinds = ['native-send', 'token-transfer', 'token-approve', 'swap', 'nft-transfer'];
+export const inspectChain = async () => ({ chainId: Number(BigInt(await rpc('eth_chainId'))), blockNumber: Number(BigInt(await rpc('eth_blockNumber'))) });
