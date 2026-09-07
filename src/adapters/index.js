@@ -1,6 +1,6 @@
-import { AdapterRegistry } from './adapterRegistry.js';
-import { nativeTransferAdapter } from '../adapters/nativeEth.js';
-import { tokenAdapter } from '../adapters/erc20.js';
+import { AdapterRegistry } from '../engine/adapterRegistry.js';
+import { nativeTransferAdapter } from './nativeEth.js';
+import { tokenAdapter } from './erc20.js';
 
 export const adapterRegistry = new AdapterRegistry([
   nativeTransferAdapter,
