@@ -1,5 +1,6 @@
 import { createAppKit } from '@reown/appkit';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
+import { getAccount, watchAccount } from '@wagmi/core';
 import { defineChain } from '@reown/appkit/networks';
 
 const PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || '94314a4ef9da3dd09a3b858adef7819e';
@@ -28,6 +29,7 @@ const metadata = {
 
 const networks = [ROBINHOOD_CHAIN];
 const wagmiAdapter = new WagmiAdapter({ networks, projectId: PROJECT_ID, ssr: false });
+const wagmiConfig = wagmiAdapter.wagmiConfig;
 
 export const appKit = createAppKit({
   adapters: [wagmiAdapter],
@@ -35,9 +37,7 @@ export const appKit = createAppKit({
   defaultNetwork: ROBINHOOD_CHAIN,
   projectId: PROJECT_ID,
   metadata,
-  customRpcUrls: {
-    'eip155:4663': [{ url: 'https://rpc.mainnet.chain.robinhood.com' }]
-  },
+  customRpcUrls: { 'eip155:4663': [{ url: 'https://rpc.mainnet.chain.robinhood.com' }] },
   features: { analytics: true, email: false, socials: [] },
   themeMode: 'dark',
   themeVariables: {
@@ -49,11 +49,17 @@ export const appKit = createAppKit({
 
 if (typeof window !== 'undefined') window.__kitagentAppKit = appKit;
 
+function accountState() {
+  const account = getAccount(wagmiConfig);
+  return { isConnected: Boolean(account.isConnected && account.address), address: account.address || '' };
+}
+
 let providerPromise = null;
 
 function waitForConnection(timeoutMs = 120000) {
-  if (appKit.getIsConnected() && appKit.getAddress()) {
-    return Promise.resolve({ address: appKit.getAddress(), provider: appKit.getWalletProvider() });
+  const current = accountState();
+  if (current.isConnected) {
+    return Promise.resolve({ address: current.address, provider: appKit.getWalletProvider?.() || null });
   }
   if (providerPromise) return providerPromise;
 
@@ -67,13 +73,15 @@ function waitForConnection(timeoutMs = 120000) {
       if (error) reject(error); else resolve(result);
     };
     try {
-      unsubscribe = appKit.subscribeProvider(state => {
-        if (state?.isConnected && state?.address) {
-          finish({ address: state.address, provider: state.provider || appKit.getWalletProvider() });
+      unsubscribe = watchAccount(wagmiConfig, {
+        onChange(account) {
+          if (account.isConnected && account.address) {
+            finish({ address: account.address, provider: appKit.getWalletProvider?.() || null });
+          }
         }
       });
-    } catch (e) {
-      finish(null, e);
+    } catch (error) {
+      finish(null, error);
       return;
     }
     timer = setTimeout(() => finish(null, new Error('Wallet connection timed out. Please choose a wallet and try again.')), timeoutMs);
@@ -83,24 +91,37 @@ function waitForConnection(timeoutMs = 120000) {
 
 export async function connectWallet() {
   try {
-    if (!appKit.getIsConnected()) appKit.open({ view: 'Connect' });
+    const current = accountState();
+    if (!current.isConnected) await appKit.open({ view: 'Connect' });
     const result = await waitForConnection();
-    if (appKit.getChainId() !== 4663) {
-      try { await appKit.switchNetwork(ROBINHOOD_CHAIN); } catch (_) {}
-    }
-    return { address: result.address, provider: appKit.getWalletProvider() || result.provider };
-  } catch (e) {
+    try {
+      if (typeof appKit.switchNetwork === 'function') await appKit.switchNetwork(ROBINHOOD_CHAIN);
+    } catch (_) {}
+    return { address: result.address, provider: appKit.getWalletProvider?.() || result.provider || null };
+  } catch (error) {
     providerPromise = null;
-    throw e;
+    throw error;
   }
 }
 
 export async function resumePendingWalletConnection() {
-  if (!appKit.getIsConnected() || !appKit.getAddress()) return null;
-  return { address: appKit.getAddress(), provider: appKit.getWalletProvider() };
+  const current = accountState();
+  if (!current.isConnected) return null;
+  return { address: current.address, provider: appKit.getWalletProvider?.() || null };
 }
 
-export function getActiveProvider() { return appKit.getWalletProvider(); }
-export function getConnectedAddress() { return appKit.getAddress() || ''; }
-export function isWalletConnected() { return Boolean(appKit.getIsConnected() && appKit.getAddress()); }
-export async function disconnectWallet() { await appKit.disconnect(); }
+export function getActiveProvider() {
+  return appKit.getWalletProvider?.() || null;
+}
+
+export function getConnectedAddress() {
+  return accountState().address;
+}
+
+export function isWalletConnected() {
+  return accountState().isConnected;
+}
+
+export async function disconnectWallet() {
+  if (typeof appKit.disconnect === 'function') await appKit.disconnect();
+}
