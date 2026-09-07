@@ -1,0 +1,27 @@
+name: Migrate NFT surface to perpetuals
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply migration
+        run: node scripts/replace-nft-with-perps.mjs
+
+      - name: Commit migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          git diff --cached --quiet || git commit -m "feat: replace NFT surface with perpetual trading [skip ci]"
+          git push
