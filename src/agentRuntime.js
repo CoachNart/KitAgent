@@ -4,18 +4,396 @@ import { getActiveProvider, getConnectedAddress } from './walletConnector.js';
 import { getDecimals, parseUnits, encodeApprove } from './onchain/erc20.js';
 import { executeAgent } from './agentEngine.js';
 
-const ADDRESS=/0x[a-fA-F0-9]{40}/g;const NATIVE=/\b(eth|native|rbh|robinhood|ether)\b/i;
-function normalizeCommand(command){return String(command||'').trim().replace(/\s+/g,' ');}function addresses(text){return String(text).match(ADDRESS)||[];}function amount(text){return String(text).match(/\b\d+(?:\.\d+)?\b/)?.[0]||null;}
-function detectIntent(command){const s=String(command).toLowerCase();if(/\b(send|transfer)\b/.test(s))return'send';if(/\b(swap|exchange)\b/.test(s))return'swap';if(/\b(bridge|cross.?chain)\b/.test(s))return'bridge';if(/\b(buy|purchase)\b/.test(s))return'buy';if(/\b(sell|dump)\b/.test(s)&&/\bnft\b/.test(s))return'nft';if(/\b(nft|erc721|erc1155|list)\b/.test(s))return'nft';if(/\b(lend|supply|deposit.*morpho|earn.*yield)\b/.test(s))return'lend';if(/\b(borrow|loan)\b/.test(s))return'borrow';if(/\b(stake|staking)\b/.test(s))return'stake';if(/\b(withdraw|unstake|redeem)\b/.test(s))return'withdraw';if(/\b(claim|airdrop)\b/.test(s))return'claim';if(/\bfaucet\b/.test(s))return'faucet';if(/\b(balance|wallet|portfolio|positions?)\b/.test(s))return'wallet';if(/\b(market|markets|apy|yield|tvl|morpho|opportunit|analy[sz]e|price)\b/.test(s))return'market';return'help';}
-async function serverPlan(command,wallet){return executeAgent(command,{wallet});}
-async function quoteBridge(body){const r=await fetch('/api/agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation:'bridge-quote',...body})});const data=await r.json();if(!r.ok||data.ok===false)throw new Error(data.error||'Bridge adapter failed. Run the Vercel API locally or deploy the server adapter.');return data;}
-async function prepareNativeSend(command,from){const recipient=addresses(command).at(-1);const qty=amount(command);if(!recipient||!qty)throw new Error('Send needs an amount and recipient address.');return adapterRegistry.get('native-eth').prepare({from,to:recipient,amountWei:parseUnits(qty,18)});}
-async function prepareTokenSend(command,from){const a=addresses(command);const qty=amount(command);if(a.length<2||!qty)throw new Error('Token send needs token contract, recipient and amount.');const decimals=await getDecimals(a[0]);return adapterRegistry.get('erc20').prepare({from,token:a[0],to:a.at(-1),amount:parseUnits(qty,decimals)});}
-async function prepareSwap(command,from){const a=addresses(command);const qty=amount(command);if(!from||!qty)throw new Error('Swap needs a connected wallet and amount.');const nativeIn=NATIVE.test(command);const nativeOut=/\b(to|for|into)\s+(eth|native|rbh|ether)\b/i.test(command);if(nativeIn&&nativeOut)throw new Error('Choose different input and output assets.');let tokenIn=a[0],tokenOut=a[1];if(nativeIn){if(!tokenOut)throw new Error('Swap ETH into a token contract address.');}else if(nativeOut){if(!tokenIn)throw new Error('Swap a token contract address into ETH.');}else if(a.length<2)throw new Error('Swap needs tokenIn and tokenOut contract addresses.');const amountIn=nativeIn?qty:parseUnits(qty,await getDecimals(tokenIn));return adapterRegistry.get('uniswap-v2').prepare({from,tokenIn,tokenOut,amountIn,slippageBps:100,nativeIn,nativeOut});}
-async function prepareNftTransfer(command,from){const a=addresses(command);const ids=String(command).match(/(?:#|token\s*id\s*)?(\d+)/i);if(a.length<2||!ids)throw new Error('NFT transfer needs NFT contract, recipient and numeric token ID.');return adapterRegistry.get('erc721').prepare({from,token:a[0],to:a[1],tokenId:ids[1]});}
-async function validatePlan(plan){if(!plan?.transactions?.length)throw new Error('Adapter returned an empty transaction plan.');const transactions=await Promise.all(plan.transactions.map(async(tx,index)=>{if(index>0)return{...tx,simulation:{ok:true,skipped:true,reason:'Prerequisite transaction must execute first.'}};try{return{...tx,simulation:await simulateTransaction({from:plan.from,to:tx.to,data:tx.data||'0x',value:tx.value||0n})};}catch(error){throw new Error(`Transaction simulation failed: ${error.message}`);}}));return{...plan,transactions,state:'simulated'};}
-async function bridgePlan(command,from){const a=addresses(command);const qty=amount(command);const chains=String(command).match(/\b\d{2,6}\b/g)||[];if(a.length<2||chains.length<2||!qty)throw new Error('Bridge needs amount, source token, destination token, source chain ID and destination chain ID.');if(String(chains[0])!=='4663')throw new Error('The connected wallet currently signs from Robinhood Chain (4663). Set the bridge source chain to 4663.');const data=await quoteBridge({wallet:from,tokenIn:a[0],tokenOut:a[1],amount:qty,originChain:chains[0],destinationChain:chains[1],recipient:from});const tx=data.transaction;if(!tx?.to||!tx?.data)throw new Error('Bridge adapter returned no executable transaction.');const transactions=[];if(data.allowance?.spender&&data.quote?.sellAmount)transactions.push({to:data.quote.sellToken,data:encodeApprove(data.allowance.spender,data.quote.sellAmount),value:0n});transactions.push({to:tx.to,data:tx.data,value:BigInt(tx.value||0),gas:tx.gas?BigInt(tx.gas):undefined});return{adapter:'0x-cross-chain-v2',title:'Bridge assets',chainId:4663,from,transactions,expectedChanges:[`Bridge ${data.quote.sellAmount} units from chain ${data.originChain} to chain ${data.destinationChain}`],risk:['Bridge transactions are irreversible after signing.','Review source, destination, recipient, quoted output, fees and route before signing.'],metadata:{quoteId:data.quoteId,bridge:data.bridge,quote:data.quote},quote:data.quote,quoteId:data.quoteId,state:'prepared',requiresPermission:true};}
+const ADDRESS = /0x[a-fA-F0-9]{40}/g;
+const NATIVE = /\b(eth|native|rbh|robinhood|ether)\b/i;
 
-export async function planCommand({command,wallet}){const normalized=normalizeCommand(command);const intent=detectIntent(normalized);if(!normalized)return{status:'needs-input',intent:'help',message:'Tell me what you want to execute.'};const from=wallet||getConnectedAddress();if(intent==='send'){if(!from)throw new Error('Connect your wallet first.');return{status:'ready',intent,execution:await validatePlan(NATIVE.test(normalized)?await prepareNativeSend(normalized,from):await prepareTokenSend(normalized,from)};}if(intent==='swap'||intent==='buy'||intent==='sell'){if(!from)throw new Error('Connect your wallet first.');let swapCommand=normalized;if(intent==='buy'&&addresses(normalized).length===1&&!NATIVE.test(normalized))swapCommand=`swap ${amount(normalized)} ETH for ${addresses(normalized)[0]}`;if(intent==='sell'&&addresses(normalized).length===1&&!NATIVE.test(normalized))swapCommand=`swap ${amount(normalized)} ${addresses(normalized)[0]} for ETH`;return{status:'ready',intent:'swap',execution:await validatePlan(await prepareSwap(swapCommand,from))};}if(intent==='nft'&&/\btransfer\b/i.test(normalized)){if(!from)throw new Error('Connect your wallet first.');return{status:'ready',intent:'nft-transfer',execution:await validatePlan(await prepareNftTransfer(normalized,from))};}if(intent==='bridge'){if(!from)throw new Error('Connect your wallet first.');return{status:'ready',intent,execution:await bridgePlan(normalized,from)};}return serverPlan(normalized,from);}
-export async function executePreparedPlan(plan){if(!plan)throw new Error('No execution plan.');const execution=plan.execution||plan;if(!execution.transactions?.length)throw new Error(execution.message||'No executable transaction plan was produced.');const provider=getActiveProvider();if(!provider?.request)throw new Error('Connected wallet provider is unavailable.');const submitted=await submitPlan(execution,provider);const receipts=[];for(const hash of submitted.hashes||[])receipts.push(await waitForReceipt(hash));return{hashes:submitted.hashes,receipts,adapter:execution.adapter,metadata:execution.metadata,quote:execution.quote,quoteId:execution.quoteId};}
-export { detectIntent, normalizeCommand, addresses, amount };
+function normalizeCommand(command) {
+  return String(command || '').trim().replace(/\s+/g, ' ');
+}
+
+function addresses(text) {
+  return String(text).match(ADDRESS) || [];
+}
+
+function amount(text) {
+  const match = String(text).match(/\b\d+(?:\.\d+)?\b/);
+  return match ? match[0] : null;
+}
+
+function last(items) {
+  return items.length ? items[items.length - 1] : null;
+}
+
+function detectIntent(command) {
+  const s = String(command).toLowerCase();
+
+  if (/\b(send|transfer)\b/.test(s)) return 'send';
+  if (/\b(swap|exchange)\b/.test(s)) return 'swap';
+  if (/\b(bridge|cross.?chain)\b/.test(s)) return 'bridge';
+  if (/\b(buy|purchase)\b/.test(s)) return 'buy';
+  if (/\b(sell|dump)\b/.test(s) && /\bnft\b/.test(s)) return 'nft';
+  if (/\b(nft|erc721|erc1155|list)\b/.test(s)) return 'nft';
+  if (/\b(lend|supply|deposit.*morpho|earn.*yield)\b/.test(s)) return 'lend';
+  if (/\b(borrow|loan)\b/.test(s)) return 'borrow';
+  if (/\b(stake|staking)\b/.test(s)) return 'stake';
+  if (/\b(withdraw|unstake|redeem)\b/.test(s)) return 'withdraw';
+  if (/\b(claim|airdrop)\b/.test(s)) return 'claim';
+  if (/\bfaucet\b/.test(s)) return 'faucet';
+  if (/\b(balance|wallet|portfolio|positions?)\b/.test(s)) return 'wallet';
+  if (/\b(market|markets|apy|yield|tvl|morpho|opportunit|analy[sz]e|price)\b/.test(s)) return 'market';
+
+  return 'help';
+}
+
+async function serverPlan(command, wallet) {
+  return executeAgent(command, { wallet });
+}
+
+async function quoteBridge(body) {
+  const response = await fetch('/api/agent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ operation: 'bridge-quote', ...body })
+  });
+
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error('Bridge adapter returned an invalid server response.');
+  }
+
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || 'Bridge adapter failed.');
+  }
+
+  return data;
+}
+
+async function prepareNativeSend(command, from) {
+  const recipient = last(addresses(command));
+  const qty = amount(command);
+
+  if (!recipient || !qty) {
+    throw new Error('Send needs an amount and recipient address.');
+  }
+
+  return adapterRegistry.get('native-eth').prepare({
+    from,
+    to: recipient,
+    amountWei: parseUnits(qty, 18)
+  });
+}
+
+async function prepareTokenSend(command, from) {
+  const found = addresses(command);
+  const qty = amount(command);
+
+  if (found.length < 2 || !qty) {
+    throw new Error('Token send needs token contract, recipient and amount.');
+  }
+
+  const token = found[0];
+  const recipient = last(found);
+  const decimals = await getDecimals(token);
+
+  return adapterRegistry.get('erc20').prepare({
+    from,
+    token,
+    to: recipient,
+    amount: parseUnits(qty, decimals)
+  });
+}
+
+async function prepareSwap(command, from) {
+  const found = addresses(command);
+  const qty = amount(command);
+
+  if (!from || !qty) {
+    throw new Error('Swap needs a connected wallet and amount.');
+  }
+
+  const nativeIn = NATIVE.test(command);
+  const nativeOut = /\b(to|for|into)\s+(eth|native|rbh|ether)\b/i.test(command);
+
+  if (nativeIn && nativeOut) {
+    throw new Error('Choose different input and output assets.');
+  }
+
+  let tokenIn = found[0] || null;
+  let tokenOut = found[1] || null;
+
+  if (nativeIn) {
+    if (!tokenOut) {
+      throw new Error('Swap ETH into a token contract address.');
+    }
+  } else if (nativeOut) {
+    if (!tokenIn) {
+      throw new Error('Swap a token contract address into ETH.');
+    }
+  } else if (found.length < 2) {
+    throw new Error('Swap needs tokenIn and tokenOut contract addresses.');
+  }
+
+  const amountIn = nativeIn
+    ? qty
+    : parseUnits(qty, await getDecimals(tokenIn));
+
+  return adapterRegistry.get('uniswap-v2').prepare({
+    from,
+    tokenIn,
+    tokenOut,
+    amountIn,
+    slippageBps: 100,
+    nativeIn,
+    nativeOut
+  });
+}
+
+async function prepareNftTransfer(command, from) {
+  const found = addresses(command);
+  const idMatch = String(command).match(/(?:#|token\s*id\s*)?(\d+)/i);
+
+  if (found.length < 2 || !idMatch) {
+    throw new Error('NFT transfer needs NFT contract, recipient and numeric token ID.');
+  }
+
+  return adapterRegistry.get('erc721').prepare({
+    from,
+    token: found[0],
+    to: found[1],
+    tokenId: idMatch[1]
+  });
+}
+
+async function validatePlan(plan) {
+  if (!plan || !Array.isArray(plan.transactions) || !plan.transactions.length) {
+    throw new Error('Adapter returned an empty transaction plan.');
+  }
+
+  const transactions = [];
+
+  for (let index = 0; index < plan.transactions.length; index += 1) {
+    const tx = plan.transactions[index];
+
+    if (index > 0) {
+      transactions.push({
+        ...tx,
+        simulation: {
+          ok: true,
+          skipped: true,
+          reason: 'Prerequisite transaction must execute first.'
+        }
+      });
+      continue;
+    }
+
+    try {
+      const simulation = await simulateTransaction({
+        from: plan.from,
+        to: tx.to,
+        data: tx.data || '0x',
+        value: tx.value || 0n
+      });
+
+      if (!simulation || simulation.ok === false) {
+        throw new Error('Transaction simulation failed.');
+      }
+
+      transactions.push({ ...tx, simulation });
+    } catch (error) {
+      throw new Error(`Transaction simulation failed: ${error.message}`);
+    }
+  }
+
+  return {
+    ...plan,
+    transactions,
+    state: 'simulated'
+  };
+}
+
+async function bridgePlan(command, from) {
+  const found = addresses(command);
+  const qty = amount(command);
+  const chains = String(command).match(/\b\d{2,6}\b/g) || [];
+
+  if (found.length < 2 || chains.length < 2 || !qty) {
+    throw new Error('Bridge needs amount, source token, destination token, source chain ID and destination chain ID.');
+  }
+
+  const originChain = String(chains[0]);
+  const destinationChain = String(chains[1]);
+
+  if (originChain !== '4663') {
+    throw new Error('The connected wallet currently signs from Robinhood Chain (4663). Set the bridge source chain to 4663.');
+  }
+
+  const data = await quoteBridge({
+    wallet: from,
+    tokenIn: found[0],
+    tokenOut: found[1],
+    amount: qty,
+    originChain,
+    destinationChain,
+    recipient: from
+  });
+
+  const tx = data.transaction;
+
+  if (!tx || !tx.to || !tx.data) {
+    throw new Error('Bridge adapter returned no executable transaction.');
+  }
+
+  const transactions = [];
+
+  if (data.allowance && data.allowance.spender && data.quote && data.quote.sellAmount) {
+    transactions.push({
+      to: data.quote.sellToken,
+      data: encodeApprove(data.allowance.spender, data.quote.sellAmount),
+      value: 0n,
+      prerequisite: true
+    });
+  }
+
+  transactions.push({
+    to: tx.to,
+    data: tx.data,
+    value: BigInt(tx.value || 0),
+    gas: tx.gas ? BigInt(tx.gas) : undefined
+  });
+
+  return {
+    adapter: '0x-cross-chain-v2',
+    title: 'Bridge assets',
+    chainId: 4663,
+    from,
+    transactions,
+    expectedChanges: [
+      `Bridge ${data.quote && data.quote.sellAmount ? data.quote.sellAmount : qty} units from chain ${originChain} to chain ${destinationChain}`
+    ],
+    risk: [
+      'Bridge transactions are irreversible after signing.',
+      'Review source, destination, recipient, quoted output, fees and route before signing.'
+    ],
+    metadata: {
+      quoteId: data.quoteId,
+      bridge: data.bridge,
+      quote: data.quote
+    },
+    quote: data.quote,
+    quoteId: data.quoteId,
+    state: 'prepared',
+    requiresPermission: true
+  };
+}
+
+export async function planCommand({ command, wallet } = {}) {
+  const normalized = normalizeCommand(command);
+
+  if (!normalized) {
+    return {
+      status: 'needs-input',
+      intent: 'help',
+      message: 'Tell me what you want to execute.'
+    };
+  }
+
+  const intent = detectIntent(normalized);
+  const from = wallet || getConnectedAddress();
+
+  if (intent === 'send') {
+    if (!from) throw new Error('Connect your wallet first.');
+
+    const execution = NATIVE.test(normalized)
+      ? await prepareNativeSend(normalized, from)
+      : await prepareTokenSend(normalized, from);
+
+    return {
+      status: 'ready',
+      intent,
+      execution: await validatePlan(execution)
+    };
+  }
+
+  if (intent === 'swap' || intent === 'buy' || intent === 'sell') {
+    if (!from) throw new Error('Connect your wallet first.');
+
+    let swapCommand = normalized;
+    const found = addresses(normalized);
+
+    if (intent === 'buy' && found.length === 1 && !NATIVE.test(normalized)) {
+      swapCommand = `swap ${amount(normalized)} ETH for ${found[0]}`;
+    }
+
+    if (intent === 'sell' && found.length === 1 && !NATIVE.test(normalized)) {
+      swapCommand = `swap ${amount(normalized)} ${found[0]} for ETH`;
+    }
+
+    return {
+      status: 'ready',
+      intent: 'swap',
+      execution: await validatePlan(await prepareSwap(swapCommand, from))
+    };
+  }
+
+  if (intent === 'nft' && /\btransfer\b/i.test(normalized)) {
+    if (!from) throw new Error('Connect your wallet first.');
+
+    return {
+      status: 'ready',
+      intent: 'nft-transfer',
+      execution: await validatePlan(await prepareNftTransfer(normalized, from))
+    };
+  }
+
+  if (intent === 'bridge') {
+    if (!from) throw new Error('Connect your wallet first.');
+
+    return {
+      status: 'ready',
+      intent,
+      execution: await bridgePlan(normalized, from)
+    };
+  }
+
+  return serverPlan(normalized, from);
+}
+
+export async function executePreparedPlan(plan) {
+  if (!plan) throw new Error('No execution plan.');
+
+  const execution = plan.execution || plan;
+
+  if (!execution.transactions || !execution.transactions.length) {
+    throw new Error(execution.message || 'No executable transaction plan was produced.');
+  }
+
+  const provider = getActiveProvider();
+  if (!provider || !provider.request) {
+    throw new Error('Connected wallet provider is unavailable.');
+  }
+
+  const submitted = await submitPlan(execution, provider);
+  const receipts = [];
+
+  for (const hash of submitted.hashes || []) {
+    receipts.push(await waitForReceipt(hash));
+  }
+
+  return {
+    hashes: submitted.hashes,
+    receipts,
+    adapter: execution.adapter,
+    metadata: execution.metadata,
+    quote: execution.quote,
+    quoteId: execution.quoteId
+  };
+}
+
+export {
+  detectIntent,
+  normalizeCommand,
+  addresses,
+  amount
+};
