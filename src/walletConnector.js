@@ -56,7 +56,9 @@ export const appKit = createAppKit({
   enableReconnect: true,
   enableNetworkSwitch: true,
   enableMobileFullScreen: true,
-  features: { analytics: true, email: false, socials: [] },
+  // Analytics must never sit on the critical wallet-connect path. This also
+  // avoids telemetry failures looking like a wallet/payment publish failure.
+  features: { analytics: false, email: false, socials: [] },
   themeMode: 'dark',
   themeVariables: {
     '--w3m-accent': '#00C7FE',
@@ -74,7 +76,7 @@ function accountState() {
 
 let providerPromise = null;
 
-function waitForConnection(timeoutMs = 120000) {
+function waitForConnection(timeoutMs = 35000) {
   const current = accountState();
   if (current.isConnected) {
     return Promise.resolve({ address: current.address, provider: appKit.getWalletProvider?.() || null });
@@ -102,7 +104,7 @@ function waitForConnection(timeoutMs = 120000) {
       finish(null, error);
       return;
     }
-    timer = setTimeout(() => finish(null, new Error('Wallet connection timed out. Please choose a wallet and try again.')), timeoutMs);
+    timer = setTimeout(() => finish(null, new Error('Wallet handoff timed out. The wallet app was not opened, so no transaction or payment was published.')), timeoutMs);
   });
   return providerPromise;
 }
@@ -112,12 +114,16 @@ export async function connectWallet() {
     const current = accountState();
     if (!current.isConnected) await appKit.open({ view: 'Connect', namespace: 'eip155' });
     const result = await waitForConnection();
-    try {
-      if (typeof appKit.switchNetwork === 'function') await appKit.switchNetwork(ROBINHOOD_CHAIN);
-    } catch (_) {}
+
+    // Do not immediately issue a second WalletConnect request for a network
+    // switch. On mobile this can race the first deep-link handoff and leave the
+    // wallet modal spinning. Network switching is requested only when an action
+    // actually needs Robinhood Chain.
     return { address: result.address, provider: appKit.getWalletProvider?.() || result.provider || null };
   } catch (error) {
     providerPromise = null;
+    try { if (typeof appKit.close === 'function') await appKit.close(); } catch (_) {}
+    try { if (typeof appKit.disconnect === 'function') await appKit.disconnect(); } catch (_) {}
     throw error;
   }
 }
