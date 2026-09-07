@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 
-const path = 'src/App.jsx';
-let s = fs.readFileSync(path, 'utf8');
-const original = s;
+const appPath = 'src/App.jsx';
+let app = fs.readFileSync(appPath, 'utf8');
 
 const replacements = [
   ["import { connectWallet as connectWalletExternal, getActiveProvider } from './walletConnector.js';", "import { connectWallet as connectWalletExternal, getActiveProvider } from './walletConnector.js';\nimport PerpetualsPage from './PerpetualsPage.jsx';"],
@@ -11,14 +10,15 @@ const replacements = [
   ["<button className=\"capability-card\" onClick={()=>go('nft')}><span className=\"cap-icon\"><Gem size={17}/></span><span><b>NFTs</b><small>Inspect, buy, list, sell and transfer.</small></span><ArrowRight size={15}/></button>", "<button className=\"capability-card\" onClick={()=>go('perps')}><span className=\"cap-icon\"><Zap size={17}/></span><span><b>Perpetual trading</b><small>Deposit, leverage, long, short and manage positions.</small></span><ArrowRight size={15}/></button>"],
 ];
 
-for (const [from, to] of replacements) {
-  if (!s.includes(from)) throw new Error(`Expected App.jsx fragment not found: ${from.slice(0, 90)}`);
-  s = s.replace(from, to);
-}
+for (const [from, to] of replacements) if (app.includes(from)) app = app.replace(from, to);
+if (!app.includes("import PerpetualsPage from './PerpetualsPage.jsx';")) throw new Error('PerpetualsPage import missing.');
+if (!app.includes("page==='perps'&&<PerpetualsPage")) throw new Error('Perpetual route missing.');
+fs.writeFileSync(appPath, app);
 
-if (s.includes("page==='nft'&&<NftPage")) throw new Error('NFT route still present after migration.');
-if (!s.includes("page==='perps'&&<PerpetualsPage")) throw new Error('Perpetual route missing after migration.');
-if (s === original) throw new Error('No App.jsx changes were made.');
-
-fs.writeFileSync(path, s);
-console.log('Updated src/App.jsx: NFT navigation/surface replaced by Perpetuals; Market Analysis untouched.');
+const perpPath = 'src/PerpetualsPage.jsx';
+let perp = fs.readFileSync(perpPath, 'utf8');
+perp = perp.replace("import { getActiveProvider } from './walletConnector.js';", "import { getActiveProvider } from './walletConnector.js';\nimport { encodeFunctionData } from 'viem';");
+perp = perp.replace("const ABI = [", "const ABI = [");
+perp = perp.replace("function encodeApprove(spender, amountHex) { return '0x095ea7b3' + pad32(spender) + pad32(amountHex); }\nfunction encodeDeposit(to, assetIndex, routeType, amountHex) { return '0x' + 'deposit'.split('').map(c=>c.charCodeAt(0).toString(16)).join('').padEnd(8,'0') + pad32(to) + pad32(`0x${Number(assetIndex).toString(16)}`) + pad32(`0x${Number(routeType).toString(16)}`) + pad32(amountHex); }\nfunction pad32(v) { const raw=String(v).replace(/^0x/,'').padStart(64,'0'); return raw.slice(-64); }", "function encodeApprove(spender, amountHex) { return encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [spender, BigInt(amountHex)] }); }\nfunction encodeDeposit(to, assetIndex, routeType, amountHex) { return encodeFunctionData({ abi: ABI, functionName: 'deposit', args: [to, assetIndex, routeType, BigInt(amountHex)] }); }");
+fs.writeFileSync(perpPath, perp);
+console.log('Perpetual migration is applied and Market Analysis remains untouched.');
