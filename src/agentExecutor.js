@@ -17,6 +17,13 @@ export async function executePreparedAction(action, { wallet, provider }) {
   const chainId = Number(BigInt(await provider.request({ method: 'eth_chainId' })));
   if (chainId !== ROBINHOOD_CHAIN.chainId) throw new Error('Your wallet is not on Robinhood Chain. Switch to Robinhood Chain and approve again.');
 
+  if (action.kind === 'lighter-order') {
+    const adapter = adapterRegistry.get('lighter');
+    const plan = action.adapter === 'lighter' ? action : await adapter.prepare({ provider, from: wallet, ...action });
+    const result = await adapter.execute(plan, { from: wallet, provider });
+    return { ...result, protocol: 'lighter', status: result.status || 'verified' };
+  }
+
   let plan;
   if (action.kind === 'native-send') {
     if (!ADDRESS.test(action.to || '')) throw new Error('The recipient address is missing or invalid.');
@@ -52,5 +59,5 @@ export async function executePreparedAction(action, { wallet, provider }) {
   return { hash: last.hash, hashes: submittedHashes, plan, receipt: last.receipt, explorerUrl: `${ROBINHOOD_CHAIN.explorer}/tx/${last.hash}`, gasEstimate: submittedHashes.map(x => x.gasEstimate).join(', '), status: 'verified' };
 }
 
-export const supportedExecutionKinds = ['native-send', 'token-transfer', 'token-approve', 'swap', 'nft-transfer', 'morpho'];
+export const supportedExecutionKinds = ['native-send', 'token-transfer', 'token-approve', 'swap', 'nft-transfer', 'morpho', 'lighter-order'];
 export const inspectChain = async () => ({ chainId: Number(BigInt(await rpc('eth_chainId'))), blockNumber: Number(BigInt(await rpc('eth_blockNumber'))) });
