@@ -12,7 +12,7 @@ const TX_HASH=/^0x[0-9a-fA-F]{64}$/;
 const short=(a)=>a?`${a.slice(0,6)}…${a.slice(-4)}`:'';
 const weiToEth=(v)=>Number(BigInt(v||'0'))/1e18;
 const workflowStages=['Discover','Prepare','Review','Ask for approval','Execute','Verify'];
-const approvalTopic=keccak256(stringToHex('Approval(address,uint256)'));
+const approvalTopic=keccak256(stringToHex('Approval(address,address,uint256)'));
 
 async function rpc(method,params=[]){const r=await fetch(RPC_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method,params})});if(!r.ok)throw new Error(`Robinhood RPC returned ${r.status}`);const j=await r.json();if(j.error)throw new Error(j.error.message||'RPC request failed');return j.result;}
 async function explorer(path){const r=await fetch(`${EXPLORER_API}${path}`);if(!r.ok)throw new Error(`Explorer returned ${r.status}`);return r.json();}
