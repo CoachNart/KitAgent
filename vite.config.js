@@ -6,135 +6,16 @@ import path from 'node:path';
 import marketHandler from './api/market.js';
 import perpetualHandler from './api/perpetual.js';
 import registerDeviceHandler from './api/register-device.js';
+import verifyPaymentHandler from './api/verify-payment.js';
 
 function loadLocalFirebaseAdminEnv(mode) {
   const env = loadEnv(mode, process.cwd(), '');
   if (env.FIREBASE_SERVICE_ACCOUNT_JSON) process.env.FIREBASE_SERVICE_ACCOUNT_JSON = env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    const candidates = [
-      path.join(process.cwd(), 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),
-      path.join(os.homedir(), 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),
-      path.join(os.homedir(), 'storage', 'downloads', 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),
-      path.join(os.homedir(), 'downloads', 'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json')
-    ];
-    const found = candidates.find(file => fs.existsSync(file));
-    if (found) process.env.GOOGLE_APPLICATION_CREDENTIALS = found;
+    const candidates = [path.join(process.cwd(),'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),path.join(os.homedir(),'kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),path.join(os.homedir(),'storage','downloads','kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json'),path.join(os.homedir(),'downloads','kitagent-a9fe8-firebase-adminsdk-fbsvc-440f5e3fbc.json')];
+    const found=candidates.find(file=>fs.existsSync(file));if(found)process.env.GOOGLE_APPLICATION_CREDENTIALS=found;
   }
 }
-
-const localApi = () => ({
-  name: 'kitagent-local-api',
-  configureServer(server) {
-    server.middlewares.use(async (req, res, next) => {
-      if (!req.url?.startsWith('/api/market') && !req.url?.startsWith('/api/perpetual') && !req.url?.startsWith('/api/register-device')) return next();
-      try {
-        const url = new URL(req.url, 'http://localhost');
-        req.query = Object.fromEntries(url.searchParams.entries());
-        if (req.url.startsWith('/api/register-device')) {
-          loadLocalFirebaseAdminEnv('development');
-          const chunks = [];
-          for await (const chunk of req) chunks.push(chunk);
-          req.body = Buffer.concat(chunks).toString('utf8');
-          return registerDeviceHandler(req, res);
-        }
-        return (req.url.startsWith('/api/perpetual') ? perpetualHandler : marketHandler)(req, res);
-      } catch (error) {
-        res.statusCode = 502;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ ok: false, error: error?.message || 'Local API failed' }));
-      }
-    });
-  },
-  configurePreviewServer(server) {
-    server.middlewares.use(async (req, res, next) => {
-      if (!req.url?.startsWith('/api/market') && !req.url?.startsWith('/api/perpetual') && !req.url?.startsWith('/api/register-device')) return next();
-      try {
-        const url = new URL(req.url, 'http://localhost');
-        req.query = Object.fromEntries(url.searchParams.entries());
-        if (req.url.startsWith('/api/register-device')) {
-          loadLocalFirebaseAdminEnv('production');
-          const chunks = [];
-          for await (const chunk of req) chunks.push(chunk);
-          req.body = Buffer.concat(chunks).toString('utf8');
-          return registerDeviceHandler(req, res);
-        }
-        return (req.url.startsWith('/api/perpetual') ? perpetualHandler : marketHandler)(req, res);
-      } catch (error) {
-        res.statusCode = 502;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ ok: false, error: error?.message || 'Preview API failed' }));
-      }
-    });
-  }
-});
-
-const kitAgentSourceFix = () => ({
-  name: 'kitagent-source-fix',
-  enforce: 'pre',
-  transform(source, id) {
-    if (id.endsWith('/src/App.jsx')) {
-      let code = source.replaceAll('<Clipboard/>', '<Copy/>');
-      code = [
-        "import LiveMarketPage from './LiveMarketPage.jsx';",
-        "import ChartTerminal from './ChartTerminal.jsx';",
-        "import AccountPage from './AccountPage.jsx';",
-        "import AccessGate from './AccessGate.jsx';",
-        "import { resumePendingWalletConnection } from './walletConnector.js';",
-        "import { executeAgent } from './agentEngine.js';",
-        "import './account-page.css';",
-        "import './permission-modal.css';",
-        "import { CandlestickChart } from 'lucide-react';",
-        code
-      ].join('\n');
-
-      code = code.replace(
-        "const nav=[['terminal','Command center',Terminal],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['nft','NFT studio',Gem],['drops','Airdrops & faucets',Rocket],['activity','Activity',History],['profile','Profile',UserRound]];",
-        "const nav=[['terminal','Command center',Terminal],['market','Market analysis',CandlestickChart],['defi','Chart terminal',BarChart3],['nft','NFT studio',Gem],['profile','Profile',UserRound]];"
-      );
-      code = code.replace('<MarketPage pair={pair} setPair={setPair} tf={tf} setTf={setTf} analyzed={analyzed} setAnalyzed={setAnalyzed}/>', '<AccessGate user={user}><LiveMarketPage/></AccessGate>');
-      code = code.replace('<DeFiPage prepare={prepare}/>', '<AccessGate user={user}><ChartTerminal/></AccessGate>');
-      code = code.replace('<b>DeFi</b><small>Swap, bridge, stake, lend and borrow.</small>', '<b>Chart terminal</b><small>Confirm market setups with live technical charts.</small>');
-      code = code.replace('<DropsPage prepare={prepare} wallet={wallet}/>', '<AccountPage user={user} wallet={wallet} connectWallet={connectWallet}/>');
-      code = code.replace('<ProfilePage wallet={wallet} connectWallet={connectWallet} user={user}/>', '<AccountPage user={user} wallet={wallet} connectWallet={connectWallet}/>');
-      code = code.replace("const go=p=>{setPage(p);setMobile(false)};", "const go=p=>{setPage(p);setMobile(false)};useEffect(()=>{const open=()=>go('profile');window.addEventListener('kitagent-open-profile',open);return()=>window.removeEventListener('kitagent-open-profile',open)},[]);useEffect(()=>{let active=true;resumePendingWalletConnection().then(result=>{if(active&&result?.address){setWallet(result.address);setToast('Wallet connected.')}}).catch(()=>{});return()=>{active=false}},[]);");
-      code = code.replace('Tell KitAgent<br/><span>what needs to happen.</span>', 'Your AI Command Center<br/><span>for the Onchain Markets.</span>');
-      code = code.replace('<NftPage prepare={prepare}/>', '<div className="nft-page-shell"><NftPage prepare={prepare}/></div>');
-      code = code.replace('<div className="hero-kicker">COMMAND CENTER <span className="live-tag"><i/> LIVE</span></div>', '<div className="hero-kicker"></div>');
-      code = code.replace('<div className="command-input"><Command size={19}/><textarea', '<div className="command-input"><textarea');
-      code = code.replace('<button className="run-btn" onClick={()=>runCommand(command)}><Zap size={15}/> Run</button>', '<button className="run-btn" onClick={()=>runCommand(command)}>Run</button>');
-      const quickActions = [
-        'Find my best DeFi opportunity','Check my NFT collection','Find active faucets','Review my token approvals',
-        'Show my live wallet balance','Show my recent transactions','Show my token holdings','Show my NFT holdings',
-        'Analyze ETH/USDT','Analyze SOL/USDT','Analyze XRP/USDT','Analyze BTC perpetual',
-        'Prepare a bridge transfer','Prepare an ETH transfer','Prepare a staking action','Prepare a lending action',
-        'Prepare a borrowing action','Prepare a liquidity position','Prepare a token approval','Find airdrops I qualify for',
-        'Check my Robinhood Chain gas','Inspect this wallet','Track my transaction','Verify my last transaction'
-      ];
-      const quickJs = `{${JSON.stringify(quickActions)}.map(x=><option key={x} value={x}>{x}</option>)}`;
-      code = code.replace(/<div className="suggestions">\{suggestions\.map\(x=><button key=\{x\} onClick=\{\(\)=>\{setCommand\(x\);runCommand\(x\)\}\}>\{x\}<\/button>\)\}<\/div>/, `<div className="suggestion-clip"><select defaultValue="" onChange={e=>{const value=e.target.value;if(value){setCommand(value);runCommand(value);e.target.value=''}}}><option value="">Quick actions</option>{suggestions.map(x=><option key={x} value={x}>{x}</option>)}${quickJs}</select></div>`);
-      code = code.replace('<span className="message-mark">{m.role===\'user\'?<UserRound size={13}/>:null}</span>', '');
-      code = code.replace('<span className="cap-icon"><BarChart3 size={17}/></span>', '');
-      code = code.replace('<span className="cap-icon"><Layers3 size={17}/></span>', '');
-      code = code.replace('<span className="cap-icon"><Gem size={17}/></span>', '');
-      code = code.replace('<ArrowRight size={15}/>', '');
-      code = code.replace('<div className="content">', `<div className="content">{page!=='profile'&&page!=='terminal'&&<div className="workspace-page-title"><h1>{page==='market'?'Market analysis':page==='defi'?'Chart terminal':page==='nft'?'NFT studio':''}</h1></div>}`);
-      code = code.replace("{page==='activity'&&<ActivityPage activity={activity}/>}", '');
-      code = code.replace('<div className="side-section-label">WORKSPACE</div>', '<div className="side-section-label"></div>');
-      code = code.replace('<h3>Workspace</h3>', '<h3>Context</h3>');
-      code = code.replace('Initializing secure workspace', 'Initializing secure session');
-      code = code.replace(`<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><button className="side-link" onClick={()=>go('profile')}><Settings2 size={17}/><span>Settings</span></button><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`, `<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`);
-      code = code.replace(/const runCommand=raw=>\{[\s\S]*?\};\n  if\(showLoader\)/, `const runCommand=raw=>{const text=raw.trim();if(!text)return;setMessages(m=>[...m,{role:'user',text}]);setCommand('');executeAgent(text,{wallet,pair,timeframe:tf}).then(result=>{if(result.kind==='market'||result.kind==='perpetual')go('market');if(result.action)prepare(result.action);setMessages(m=>[...m,{role:'agent',text:result.message,data:result.data||null}])}).catch(error=>setMessages(m=>[...m,{role:'agent',text:\`I couldn't complete that live request: \${error?.message||'adapter error'}. Nothing was executed.\`}]))};\n  if(showLoader)`);
-      return { code, map: null };
-    }
-    if (id.endsWith('/src/LiveMarketPage.jsx')) return { code: `import './live-market-final.css';\n${source}`, map: null };
-    if (id.endsWith('/src/ChartTerminal.jsx')) return { code: `import './chart-terminal.css';\nimport './chart-terminal-overrides.css';\n${source}`, map: null };
-    return null;
-  }
-});
-
-export default defineConfig({
-  plugins: [localApi(), kitAgentSourceFix(), react()],
-  server: { port: 3000, open: true, strictPort: false },
-  build: { target: 'es2020', outDir: 'dist', sourcemap: false },
-  preview: { port: 4173 }
-});
+const localApi=()=>({name:'kitagent-local-api',configureServer(server){server.middlewares.use(async(req,res,next)=>{if(!req.url?.startsWith('/api/market')&&!req.url?.startsWith('/api/perpetual')&&!req.url?.startsWith('/api/register-device')&&!req.url?.startsWith('/api/verify-payment'))return next();try{const url=new URL(req.url,'http://localhost');req.query=Object.fromEntries(url.searchParams.entries());if(req.url.startsWith('/api/register-device')||req.url.startsWith('/api/verify-payment')){loadLocalFirebaseAdminEnv('development');const chunks=[];for await(const chunk of req)chunks.push(chunk);req.body=Buffer.concat(chunks).toString('utf8');return req.url.startsWith('/api/verify-payment')?verifyPaymentHandler(req,res):registerDeviceHandler(req,res)}return(req.url.startsWith('/api/perpetual')?perpetualHandler:marketHandler)(req,res)}catch(error){res.statusCode=502;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({ok:false,error:error?.message||'Local API failed'}))}})},configurePreviewServer(server){server.middlewares.use(async(req,res,next)=>{if(!req.url?.startsWith('/api/market')&&!req.url?.startsWith('/api/perpetual')&&!req.url?.startsWith('/api/register-device')&&!req.url?.startsWith('/api/verify-payment'))return next();try{const url=new URL(req.url,'http://localhost');req.query=Object.fromEntries(url.searchParams.entries());if(req.url.startsWith('/api/register-device')||req.url.startsWith('/api/verify-payment')){loadLocalFirebaseAdminEnv('production');const chunks=[];for await(const chunk of req)chunks.push(chunk);req.body=Buffer.concat(chunks).toString('utf8');return req.url.startsWith('/api/verify-payment')?verifyPaymentHandler(req,res):registerDeviceHandler(req,res)}return(req.url.startsWith('/api/perpetual')?perpetualHandler:marketHandler)(req,res)}catch(error){res.statusCode=502;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({ok:false,error:error?.message||'Preview API failed'}))}})}});
+const kitAgentSourceFix=()=>({name:'kitagent-source-fix',enforce:'pre',transform(source,id){if(id.endsWith('/src/App.jsx')){let code=source.replaceAll('<Clipboard/>','<Copy/>');code=["import LiveMarketPage from './LiveMarketPage.jsx';","import ChartTerminal from './ChartTerminal.jsx';","import AccountPage from './AccountPage.jsx';","import AccessGate from './AccessGate.jsx';","import { resumePendingWalletConnection } from './walletConnector.js';","import { executeAgent } from './agentEngine.js';","import './account-page.css';","import './permission-modal.css';","import { CandlestickChart } from 'lucide-react';",code].join('\n');code=code.replace("const nav=[['terminal','Command center',Terminal],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['nft','NFT studio',Gem],['drops','Airdrops & faucets',Rocket],['activity','Activity',History],['profile','Profile',UserRound]];","const nav=[['terminal','Command center',Terminal],['market','Market analysis',CandlestickChart],['defi','Chart terminal',BarChart3],['nft','NFT studio',Gem],['profile','Profile',UserRound]];");code=code.replace('<MarketPage pair={pair} setPair={setPair} tf={tf} setTf={setTf} analyzed={analyzed} setAnalyzed={setAnalyzed}/>','<AccessGate user={user}><LiveMarketPage/></AccessGate>');code=code.replace('<DeFiPage prepare={prepare}/>','<AccessGate user={user}><ChartTerminal/></AccessGate>');code=code.replace('<b>DeFi</b><small>Swap, bridge, stake, lend and borrow.</small>','<b>Chart terminal</b><small>Confirm market setups with live technical charts.</small>');code=code.replace('<DropsPage prepare={prepare} wallet={wallet}/>','<AccountPage user={user} wallet={wallet} connectWallet={connectWallet}/>');code=code.replace('<ProfilePage wallet={wallet} connectWallet={connectWallet} user={user}/>','<AccountPage user={user} wallet={wallet} connectWallet={connectWallet}/>');code=code.replace("const go=p=>{setPage(p);setMobile(false)};","const go=p=>{setPage(p);setMobile(false)};useEffect(()=>{const open=()=>go('profile');window.addEventListener('kitagent-open-profile',open);return()=>window.removeEventListener('kitagent-open-profile',open)},[]);useEffect(()=>{let active=true;resumePendingWalletConnection().then(result=>{if(active&&result?.address){setWallet(result.address);setToast('Wallet connected.')}}).catch(()=>{});return()=>{active=false}},[]);");code=code.replace('Tell KitAgent<br/><span>what needs to happen.</span>','Your AI Command Center<br/><span>for the Onchain Markets.</span>');code=code.replace('<NftPage prepare={prepare}/>','<div className="nft-page-shell"><NftPage prepare={prepare}/></div>');code=code.replace('<div className="hero-kicker">COMMAND CENTER <span className="live-tag"><i/> LIVE</span></div>','<div className="hero-kicker"></div>');code=code.replace('<div className="command-input"><Command size={19}/><textarea','<div className="command-input"><textarea');code=code.replace('<button className="run-btn" onClick={()=>runCommand(command)}><Zap size={15}/> Run</button>','<button className="run-btn" onClick={()=>runCommand(command)}>Run</button>');const quickActions=['Find my best DeFi opportunity','Check my NFT collection','Find active faucets','Review my token approvals','Show my live wallet balance','Show my recent transactions','Show my token holdings','Show my NFT holdings','Analyze ETH/USDT','Analyze SOL/USDT','Analyze XRP/USDT','Analyze BTC perpetual','Prepare a bridge transfer','Prepare an ETH transfer','Prepare a staking action','Prepare a lending action','Prepare a borrowing action','Prepare a liquidity position','Prepare a token approval','Find airdrops I qualify for','Check my Robinhood Chain gas','Inspect this wallet','Track my transaction','Verify my last transaction'];const quickJs=`{${JSON.stringify(quickActions)}.map(x=><option key={x} value={x}>{x}</option>)}`;code=code.replace(/<div className="suggestions">\{suggestions\.map\(x=><button key=\{x\} onClick=\{\(\)=>\{setCommand\(x\);runCommand\(x\)\}\}>\{x\}<\/button>\)\}<\/div>/,`<div className="suggestion-clip"><select defaultValue="" onChange={e=>{const value=e.target.value;if(value){setCommand(value);runCommand(value);e.target.value=''}}}><option value="">Quick actions</option>{suggestions.map(x=><option key={x} value={x}>{x}</option>)}${quickJs}</select></div>`);code=code.replace('<span className="message-mark">{m.role===\'user\'?<UserRound size={13}/>:null}</span>','');code=code.replace('<span className="cap-icon"><BarChart3 size={17}/></span>','');code=code.replace('<span className="cap-icon"><Layers3 size={17}/></span>','');code=code.replace('<span className="cap-icon"><Gem size={17}/></span>','');code=code.replace('<ArrowRight size={15}/>','');code=code.replace('<div className="content">',`<div className="content">{page!=='profile'&&page!=='terminal'&&<div className="workspace-page-title"><h1>{page==='market'?'Market analysis':page==='defi'?'Chart terminal':page==='nft'?'NFT studio':''}</h1></div>`);code=code.replace("{page==='activity'&&<ActivityPage activity={activity}/>}",'');code=code.replace('<div className="side-section-label">WORKSPACE</div>','<div className="side-section-label"></div>');code=code.replace('<h3>Workspace</h3>','<h3>Context</h3>');code=code.replace('Initializing secure workspace','Initializing secure session');code=code.replace(`<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><button className="side-link" onClick={()=>go('profile')}><Settings2 size={17}/><span>Settings</span></button><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`,`<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`);code=code.replace(/const runCommand=raw=>\{[\s\S]*?\};\n  if\(showLoader\)/,`const runCommand=raw=>{const text=raw.trim();if(!text)return;setMessages(m=>[...m,{role:'user',text}]);setCommand('');executeAgent(text,{wallet,pair,timeframe:tf}).then(result=>{if(result.kind==='market'||result.kind==='perpetual')go('market');if(result.action)prepare(result.action);setMessages(m=>[...m,{role:'agent',text:result.message,data:result.data||null}])}).catch(error=>setMessages(m=>[...m,{role:'agent',text:\`I couldn't complete that live request: \${error?.message||'adapter error'}. Nothing was executed.\`}]))};\n  if(showLoader)`);return{code,map:null}}if(id.endsWith('/src/LiveMarketPage.jsx'))return{code:`import './live-market-final.css';\n${source}`,map:null};if(id.endsWith('/src/ChartTerminal.jsx'))return{code:`import './chart-terminal.css';\nimport './chart-terminal-overrides.css';\n${source}`,map:null};return null}});
+export default defineConfig({plugins:[localApi(),kitAgentSourceFix(),react()],server:{port:3000,open:true,strictPort:false},build:{target:'es2020',outDir:'dist',sourcemap:false},preview:{port:4173}});
