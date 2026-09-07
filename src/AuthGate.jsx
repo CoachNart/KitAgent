@@ -1,9 +1,12 @@
 import { cloneElement, useEffect, useState } from 'react';
-import { browserLocalPersistence, createUserWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged, setPersistence, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { browserLocalPersistence, createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, setPersistence, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ShieldCheck, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { auth, db, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
+
+const isNativeApp=()=>Capacitor.isNativePlatform();
 
 async function registerDevice(user){
   const deviceId=await getDeviceBindingId();
@@ -21,26 +24,14 @@ async function initializeAccount(user){
   const snapshot=await getDoc(ref);
   if(!snapshot.exists()) throw new Error('ACCOUNT_PROFILE_NOT_READY');
   const existing=snapshot.data()||{};
-  const identity={
-    email:user.email||existing.email||'',
-    displayName:user.displayName||existing.displayName||'',
-    photoURL:user.photoURL||existing.photoURL||'',
-    walletAddress:existing.walletAddress||'',
-    maxRiskPercent:existing.maxRiskPercent??1.5,
-    maxTradeSize:existing.maxTradeSize??0,
-    tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},
-    apiKeyMetadata:existing.apiKeyMetadata||{},
-    securitySettings:{...(existing.securitySettings||{}),deviceBindingId},
-    updatedAt:serverTimestamp()
-  };
-  await setDoc(ref,identity,{merge:true});
+  await setDoc(ref,{email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},securitySettings:{...(existing.securitySettings||{}),deviceBindingId},updatedAt:serverTimestamp()},{merge:true});
 }
 
 export default function AuthGate({children}){
   const [user,setUser]=useState(null),[ready,setReady]=useState(false),[mode,setMode]=useState('signin'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
-  useEffect(()=>{if(!auth||!db){setReady(true);return undefined}let active=true;setPersistence(auth,browserLocalPersistence).catch(e=>console.error('KitAgent auth persistence setup failed:',e));const unsubscribe=onAuthStateChanged(auth,async next=>{if(!active)return;setUser(next);setReady(true);if(!next)return;try{await initializeAccount(next);if(active)setMessage('')}catch(error){console.error('KitAgent account/device sync failed:',error);if(active){setUser(null);await auth.signOut().catch(()=>{});setMessage(error?.message||'This account could not be secured on this device.')}}});return()=>{active=false;unsubscribe()}},[]);
+  useEffect(()=>{if(!auth||!db){setReady(true);return undefined}let active=true;setPersistence(auth,browserLocalPersistence).catch(e=>console.error('KitAgent auth persistence setup failed:',e));getRedirectResult(auth).catch(error=>{if(error?.code&&error.code!=='auth/no-auth-event')console.error('KitAgent Google redirect result failed:',error)});const unsubscribe=onAuthStateChanged(auth,async next=>{if(!active)return;setUser(next);setReady(true);if(!next)return;try{await initializeAccount(next);if(active)setMessage('')}catch(error){console.error('KitAgent account/device sync failed:',error);if(active){setUser(null);await auth.signOut().catch(()=>{});setMessage(error?.message||'This account could not be secured on this device.')}}});return()=>{active=false;unsubscribe()}},[]);
   const submit=async event=>{event.preventDefault();if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);if(mode==='signup')await createUserWithEmailAndPassword(auth,email.trim(),password);else await signInWithEmailAndPassword(auth,email.trim(),password)}catch(error){const code=error?.code||'';const friendly={'auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.'};setMessage(friendly[code]||error?.message||'Authentication failed.')}finally{setBusy(false)}};
-  const googleSignIn=async()=>{if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});await signInWithPopup(auth,provider)}catch(error){const code=error?.code||'';const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/popup-blocked':'Your browser blocked the Google sign-in window.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.'};setMessage(friendly[code]||error?.message||'Google authentication failed.')}finally{setBusy(false)}};
+  const googleSignIn=async()=>{if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});if(isNativeApp())await signInWithRedirect(auth,provider);else await signInWithPopup(auth,provider)}catch(error){const code=error?.code||'';const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/popup-blocked':'Your browser blocked the Google sign-in window.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.','auth/operation-not-supported-in-this-environment':'Google sign-in is not supported in this app environment. Use email sign-in or update the Firebase mobile configuration.'};setMessage(friendly[code]||error?.message||'Google authentication failed.')}finally{setBusy(false)}};
   if(!firebaseConfigured)return <AuthScreen title="KitAgent setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;
   if(!ready)return typeof children==='function'?children(null):cloneElement(children,{user:null});
   if(!user)return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit} onGoogle={googleSignIn}/>;
