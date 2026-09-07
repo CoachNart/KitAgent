@@ -5,7 +5,7 @@ import { executePreparedPlan, planCommand } from './agentRuntime.js';
 import { getConnectedAddress } from './walletConnector.js';
 
 function short(v){return v?`${v.slice(0,6)}…${v.slice(-4)}`:'';}
-function formatUnitsSafe(value,decimals=18){try{const n=BigInt(value);const d=10n**BigInt(decimals);const w=n/d;const f=(n%d).toString().padStart(decimals,'0').replace(/0+$/,'');return f?`${w}.${f}`:w.toString();}catch{return String(value??'');}}
+function clearInput(el){if(!el)return;el.value='';el.dispatchEvent(new Event('input',{bubbles:true}));}
 
 export default function CommandAgentBridge({ children }) {
   const [entries,setEntries]=useState([]);
@@ -50,10 +50,11 @@ export default function CommandAgentBridge({ children }) {
   const onClickCapture=useCallback(e=>{
     const runButton=e.target?.closest?.('.run-btn');const suggestion=e.target?.closest?.('.suggestions button');
     if(!runButton&&!suggestion)return;e.preventDefault();e.stopPropagation();
-    const textarea=document.querySelector('.command-input textarea');const text=runButton?(textarea?.value||''):suggestion?.textContent||'';if(text)run(text);
+    const textarea=document.querySelector('.command-input textarea');const text=runButton?(textarea?.value||''):suggestion?.textContent||'';
+    clearInput(textarea);if(text)run(text);
   },[run]);
 
-  const onKeyDownCapture=useCallback(e=>{if(e.target?.matches?.('.command-input textarea')&&e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();e.stopPropagation();run(e.target.value);}},[run]);
+  const onKeyDownCapture=useCallback(e=>{if(e.target?.matches?.('.command-input textarea')&&e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();e.stopPropagation();const text=e.target.value;clearInput(e.target);run(text);}},[run]);
 
   const approve=useCallback(async()=>{if(!pending||busy)return;setBusy(true);try{const result=await executePreparedPlan({execution:pending.execution});const hashes=result.hashes||[result.hash].filter(Boolean);setEntries(e=>[...e,{id:`a-${Date.now()}`,role:'agent',text:`Verified on-chain · ${hashes.map(short).join(', ')}`,meta:{result,success:true}}]);setPending(null);}catch(error){setEntries(e=>[...e,{id:`e-${Date.now()}`,role:'agent',text:error?.message||'Wallet rejected or transaction failed.',meta:{error:true}}]);}finally{setBusy(false);}},[pending,busy]);
   const cancel=useCallback(()=>setPending(null),[]);
