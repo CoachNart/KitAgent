@@ -29,6 +29,8 @@ export async function executePreparedAction(action, { wallet, provider }) {
     plan = await adapterRegistry.get('uniswap-v2').prepare({ from: wallet, tokenIn: action.tokenIn, tokenOut: action.tokenOut, amountIn: action.amountIn, slippageBps: action.slippageBps ?? 50, nativeIn: action.nativeIn, nativeOut: action.nativeOut });
   } else if (action.kind === 'nft-transfer') {
     plan = await adapterRegistry.get('erc721').prepare({ from: wallet, token: action.token, to: action.to, tokenId: action.tokenId });
+  } else if (action.kind === 'morpho') {
+    plan = await adapterRegistry.get('morpho').prepare({ from: wallet, operation: action.operation, vault: action.vault, amount: action.amount, shares: action.shares, market: action.market, borrowAmount: action.borrowAmount, withdrawAmount: action.withdrawAmount, positionData: action.positionData });
   } else {
     throw new Error(`No live execution adapter is enabled for ${action.kind}. I did not submit anything.`);
   }
@@ -50,5 +52,5 @@ export async function executePreparedAction(action, { wallet, provider }) {
   return { hash: last.hash, hashes: submittedHashes, plan, receipt: last.receipt, explorerUrl: `${ROBINHOOD_CHAIN.explorer}/tx/${last.hash}`, gasEstimate: submittedHashes.map(x => x.gasEstimate).join(', '), status: 'verified' };
 }
 
-export const supportedExecutionKinds = ['native-send', 'token-transfer', 'token-approve', 'swap', 'nft-transfer'];
+export const supportedExecutionKinds = ['native-send', 'token-transfer', 'token-approve', 'swap', 'nft-transfer', 'morpho'];
 export const inspectChain = async () => ({ chainId: Number(BigInt(await rpc('eth_chainId'))), blockNumber: Number(BigInt(await rpc('eth_blockNumber'))) });
