@@ -16,9 +16,6 @@ async function registerDevice(user){
 
 async function initializeAccount(user){
   if(!db) throw new Error('KitAgent database is not configured.');
-  // Account creation and trial creation are server-authoritative. The API creates
-  // the first profile atomically with the device binding, so the client never
-  // attempts a first-time Firestore create.
   const deviceBindingId=await registerDevice(user);
   const ref=doc(db,'users',user.uid);
   const snapshot=await getDoc(ref);
@@ -45,7 +42,7 @@ export default function AuthGate({children}){
   const submit=async event=>{event.preventDefault();if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);if(mode==='signup')await createUserWithEmailAndPassword(auth,email.trim(),password);else await signInWithEmailAndPassword(auth,email.trim(),password)}catch(error){const code=error?.code||'';const friendly={'auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.'};setMessage(friendly[code]||error?.message||'Authentication failed.')}finally{setBusy(false)}};
   const googleSignIn=async()=>{if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});await signInWithPopup(auth,provider)}catch(error){const code=error?.code||'';const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/popup-blocked':'Your browser blocked the Google sign-in window.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.'};setMessage(friendly[code]||error?.message||'Google authentication failed.')}finally{setBusy(false)}};
   if(!firebaseConfigured)return <AuthScreen title="KitAgent setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;
-  if(!ready)return <AuthScreen title="Restoring secure session…" message="Checking your saved KitAgent session."/>;
+  if(!ready)return typeof children==='function'?children(null):cloneElement(children,{user:null});
   if(!user)return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit} onGoogle={googleSignIn}/>;
   return typeof children==='function'?children(user):cloneElement(children,{user});
 }
