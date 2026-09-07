@@ -91,25 +91,17 @@ const kitAgentSourceFix = () => ({
         "const nav=[['terminal','Command center',Terminal],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['nft','NFT studio',Gem],['drops','Airdrops & faucets',Rocket],['activity','Activity',History],['profile','Profile',UserRound]];",
         "const nav=[['terminal','Command center',Terminal],['market','Market analysis',CandlestickChart],['defi','Chart terminal',BarChart3],['nft','NFT studio',Gem],['profile','Profile',UserRound]];"
       );
-      code = code.replace("<MarketPage pair={pair} setPair={setPair} tf={tf} setTf={tf} analyzed={analyzed} setAnalyzed={setAnalyzed}/>", '<AccessGate user={user}><LiveMarketPage/></AccessGate>');
-      code = code.replace('<MarketPage pair={pair} setPair={setPair} tf={tf} setTf={tf} analyzed={analyzed} setAnalyzed={analyzed}/>', '<AccessGate user={user}><LiveMarketPage/></AccessGate>');
-      code = code.replace("['defi','DeFi & actions',Layers3]", "['defi','Chart terminal',BarChart3]");
+      code = code.replace('<MarketPage pair={pair} setPair={setPair} tf={tf} setTf={setTf} analyzed={analyzed} setAnalyzed={setAnalyzed}/>', '<AccessGate user={user}><LiveMarketPage/></AccessGate>');
       code = code.replace('<DeFiPage prepare={prepare}/>', '<AccessGate user={user}><ChartTerminal/></AccessGate>');
       code = code.replace('<b>DeFi</b><small>Swap, bridge, stake, lend and borrow.</small>', '<b>Chart terminal</b><small>Confirm market setups with live technical charts.</small>');
-      code = code.replace("['drops','Airdrops & faucets',Rocket]", "['drops','Profile',UserRound]");
-      code = code.replace("['profile','Profile',UserRound]", '');
       code = code.replace('<DropsPage prepare={prepare} wallet={wallet}/>', '<AccountPage user={user} wallet={wallet} connectWallet={connectWallet}/>');
       code = code.replace('<ProfilePage wallet={wallet} connectWallet={connectWallet} user={user}/>', '<AccountPage user={user} wallet={wallet} connectWallet={connectWallet}/>');
-      code = code.replace(
-        "const go=p=>{setPage(p);setMobile(false)};",
-        "const go=p=>{setPage(p);setMobile(false)};useEffect(()=>{const open=()=>go('profile');window.addEventListener('kitagent-open-profile',open);return()=>window.removeEventListener('kitagent-open-profile',open)},[]);useEffect(()=>{let active=true;resumePendingWalletConnection().then(result=>{if(active&&result?.address){setWallet(result.address);setToast('Wallet connected.')}}).catch(()=>{});return()=>{active=false}},[]);"
-      );
+      code = code.replace("const go=p=>{setPage(p);setMobile(false)};", "const go=p=>{setPage(p);setMobile(false)};useEffect(()=>{const open=()=>go('profile');window.addEventListener('kitagent-open-profile',open);return()=>window.removeEventListener('kitagent-open-profile',open)},[]);useEffect(()=>{let active=true;resumePendingWalletConnection().then(result=>{if(active&&result?.address){setWallet(result.address);setToast('Wallet connected.')}}).catch(()=>{});return()=>{active=false}},[]);");
       code = code.replace('Tell KitAgent<br/><span>what needs to happen.</span>', 'Your AI Command Center<br/><span>for the Onchain Markets.</span>');
       code = code.replace('<NftPage prepare={prepare}/>', '<div className="nft-page-shell"><NftPage prepare={prepare}/></div>');
       code = code.replace('<div className="hero-kicker">COMMAND CENTER <span className="live-tag"><i/> LIVE</span></div>', '<div className="hero-kicker"></div>');
       code = code.replace('<div className="command-input"><Command size={19}/><textarea', '<div className="command-input"><textarea');
       code = code.replace('<button className="run-btn" onClick={()=>runCommand(command)}><Zap size={15}/> Run</button>', '<button className="run-btn" onClick={()=>runCommand(command)}>Run</button>');
-
       const quickActions = [
         'Find my best DeFi opportunity','Check my NFT collection','Find active faucets','Review my token approvals',
         'Show my live wallet balance','Show my recent transactions','Show my token holdings','Show my NFT holdings',
@@ -119,32 +111,19 @@ const kitAgentSourceFix = () => ({
         'Check my Robinhood Chain gas','Inspect this wallet','Track my transaction','Verify my last transaction'
       ];
       const quickJs = `{${JSON.stringify(quickActions)}.map(x=><option key={x} value={x}>{x}</option>)}`;
-      code = code.replace(
-        /<div className="suggestions">\{suggestions\.map\(x=><button key=\{x\} onClick=\{\(\)=>\{setCommand\(x\);runCommand\(x\)\}\}>\{x\}<\/button>\)\}<\/div>/,
-        `<div className="suggestion-clip"><select defaultValue="" onChange={e=>{const value=e.target.value;if(value){setCommand(value);runCommand(value);e.target.value=''}}}><option value="">Quick actions</option>{suggestions.map(x=><option key={x} value={x}>{x}</option>)}${quickJs}</select></div>`
-      );
-      code = code.replace("<span className=\"message-mark\">{m.role==='user'?<UserRound size={13}/>:null}</span>", '');
+      code = code.replace(/<div className="suggestions">\{suggestions\.map\(x=><button key=\{x\} onClick=\{\(\)=>\{setCommand\(x\);runCommand\(x\)\}\}>\{x\}<\/button>\)\}<\/div>/, `<div className="suggestion-clip"><select defaultValue="" onChange={e=>{const value=e.target.value;if(value){setCommand(value);runCommand(value);e.target.value=''}}}><option value="">Quick actions</option>{suggestions.map(x=><option key={x} value={x}>{x}</option>)}${quickJs}</select></div>`);
+      code = code.replace('<span className="message-mark">{m.role===\'user\'?<UserRound size={13}/>:null}</span>', '');
       code = code.replace('<span className="cap-icon"><BarChart3 size={17}/></span>', '');
       code = code.replace('<span className="cap-icon"><Layers3 size={17}/></span>', '');
       code = code.replace('<span className="cap-icon"><Gem size={17}/></span>', '');
       code = code.replace('<ArrowRight size={15}/>', '');
-      code = code.replace(
-        '<div className="content">',
-        `<div className="content">{page!=='profile'&&page!=='terminal'&&<div className="workspace-page-title"><h1>{page==='market'?'Market analysis':page==='defi'?'Chart terminal':page==='nft'?'NFT studio':''}</h1></div>}`
-      );
+      code = code.replace('<div className="content">', `<div className="content">{page!=='profile'&&page!=='terminal'&&<div className="workspace-page-title"><h1>{page==='market'?'Market analysis':page==='defi'?'Chart terminal':page==='nft'?'NFT studio':''}</h1></div>}`);
       code = code.replace("{page==='activity'&&<ActivityPage activity={activity}/>}", '');
       code = code.replace('<div className="side-section-label">WORKSPACE</div>', '<div className="side-section-label"></div>');
       code = code.replace('<h3>Workspace</h3>', '<h3>Context</h3>');
       code = code.replace('Initializing secure workspace', 'Initializing secure session');
-      code = code.replace(
-        `<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><button className="side-link" onClick={()=>go('profile')}><Settings2 size={17}/><span>Settings</span></button><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`,
-        `<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`
-      );
-      code = code.replace(
-        /const runCommand=raw=>\{[\s\S]*?\};\n  if\(showLoader\)/,
-        `const runCommand=raw=>{const text=raw.trim();if(!text)return;setMessages(m=>[...m,{role:'user',text}]);setCommand('');executeAgent(text,{wallet,pair,timeframe:tf}).then(result=>{if(result.kind==='market'||result.kind==='perpetual')go('market');if(result.action)prepare(result.action);setMessages(m=>[...m,{role:'agent',text:result.message,data:result.data||null}])}).catch(error=>setMessages(m=>[...m,{role:'agent',text:\`I couldn't complete that live request: \${error?.message||'adapter error'}. Nothing was executed.\`}]))};
-  if(showLoader)`
-      );
+      code = code.replace(`<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><button className="side-link" onClick={()=>go('profile')}><Settings2 size={17}/><span>Settings</span></button><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`, `<div className="side-bottom"><div className="permission-mini"><ShieldCheck size={15}/><div><b>Permission first</b><small>Nothing executes silently.</small></div></div><div className="security-line"><LockKeyhole size={14}/> Non-custodial by design</div></div>`);
+      code = code.replace(/const runCommand=raw=>\{[\s\S]*?\};\n  if\(showLoader\)/, `const runCommand=raw=>{const text=raw.trim();if(!text)return;setMessages(m=>[...m,{role:'user',text}]);setCommand('');executeAgent(text,{wallet,pair,timeframe:tf}).then(result=>{if(result.kind==='market'||result.kind==='perpetual')go('market');if(result.action)prepare(result.action);setMessages(m=>[...m,{role:'agent',text:result.message,data:result.data||null}])}).catch(error=>setMessages(m=>[...m,{role:'agent',text:\`I couldn't complete that live request: \${error?.message||'adapter error'}. Nothing was executed.\`}]))};\n  if(showLoader)`);
       return { code, map: null };
     }
     if (id.endsWith('/src/LiveMarketPage.jsx')) return { code: `import './live-market-final.css';\n${source}`, map: null };
