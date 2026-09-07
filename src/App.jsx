@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { connectWallet as connectWalletExternal, getActiveProvider } from './walletConnector.js';
 import PerpetualsPage from './PerpetualsPage.jsx';
-import PerpetualsPage from './PerpetualsPage.jsx';
 import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Copy, ExternalLink, Fuel, Gem, History, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, UserRound, Wallet, X, Zap } from 'lucide-react';
 
 const ROBINHOOD_CHAIN={name:'Robinhood Chain',chainId:4663,hex:'0x1237',rpcUrl:'https://rpc.mainnet.chain.robinhood.com',explorer:'https://robinhoodchain.blockscout.com',nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18}};
