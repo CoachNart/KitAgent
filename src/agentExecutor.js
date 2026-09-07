@@ -30,7 +30,7 @@ export async function executePreparedAction(action, { wallet, provider }) {
   } else if (action.kind === 'nft-transfer') {
     plan = await adapterRegistry.get('erc721').prepare({ from: wallet, token: action.token, to: action.to, tokenId: action.tokenId });
   } else if (action.kind === 'morpho') {
-    plan = await adapterRegistry.get('morpho').prepare({ from: wallet, operation: action.operation, vault: action.vault, amount: action.amount, shares: action.shares, market: action.market, borrowAmount: action.borrowAmount, withdrawAmount: action.withdrawAmount, positionData: action.positionData });
+    plan = await adapterRegistry.get('morpho').prepare({ provider, from: wallet, operation: action.operation, vault: action.vault, amount: action.amount, market: action.market, borrowAmount: action.borrowAmount, withdrawAmount: action.withdrawAmount, positionData: action.positionData });
   } else {
     throw new Error(`No live execution adapter is enabled for ${action.kind}. I did not submit anything.`);
   }
