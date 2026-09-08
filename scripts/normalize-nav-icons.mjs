@@ -7,16 +7,16 @@ const file = path.join(root, 'src', 'App.jsx');
 let source = fs.readFileSync(file, 'utf8');
 const before = source;
 
-// Keep the source itself aligned with the current product name. The production
-// branding pass also handles built assets, but source should not fall back to the
-// legacy KitAgent identity when running Vite locally.
+// Keep source and production output aligned with the current KitSetups identity.
 source = source.replaceAll('KitAgent', 'KitSetups');
 source = source.replaceAll('KITAGENT', 'KITSETUPS');
 source = source.replaceAll('/kitagent-logo.svg', '/kitsetups-logo.svg');
+source = source.replaceAll('alt="KitAgent"', 'alt="KitSetups"');
 source = source.replace("Terminal, UserRound, Wallet", "Terminal, UserRound, House, Wallet");
+source = source.replace("Terminal, UserRound, House, Wallet", "Terminal, UserRound, House, Wallet");
 
-// Navigation icons: Home stays the Home icon. Both Airdrops and Profile use
-// the same Profile/User icon on desktop and mobile navigation.
+// Navigation icons are shared by desktop and mobile. Home must stay a Home icon;
+// Airdrops and Profile intentionally use the same User/Profile icon.
 source = source.replace("['home','Home',BarChart3]", "['home','Home',House]");
 source = source.replace("['home','Home',UserRound]", "['home','Home',House]");
 source = source.replace("['drops','Airdrops & faucets',Rocket]", "['drops','Airdrops & faucets',UserRound]");
