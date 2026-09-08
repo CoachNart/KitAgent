@@ -4,7 +4,7 @@
   "private": true,
   "description": "KitSetups — AI-powered crypto command center with permission-gated on-chain actions",
   "type": "module",
-  "scripts": {"dev":"vite","prebuild":"node scripts/normalize-nav-icons.mjs && node scripts/restore-activity-profile-brand.mjs","build":"vite build","postbuild":"node scripts/brand-kitsetups.mjs","preview":"vite preview","android:sync":"npm run build && npx cap sync android","android:open":"npm run build && npx cap open android","test:adapters":"node scripts/adapter-smoke.mjs","test:integrations":"node scripts/integration-smoke.mjs"},
+  "scripts": {"dev":"vite","build":"vite build","postbuild":"node scripts/brand-kitsetups.mjs","preview":"vite preview","android:sync":"npm run build && npx cap sync android","android:open":"npm run build && npx cap open android","test:adapters":"node scripts/adapter-smoke.mjs","test:integrations":"node scripts/integration-smoke.mjs"},
   "dependencies": {
     "@capacitor/app":"^8.0.0","@capacitor/browser":"^8.0.0","@capacitor/core":"^8.0.0","@hitesh23k/lighter-sdk":"0.4.1","@morpho-org/morpho-sdk":"5.8.0","@nktkas/hyperliquid":"0.33.3","@reown/appkit":"1.8.23","@reown/appkit-adapter-wagmi":"1.8.23","@tanstack/react-query":"^5.90.5","@wagmi/connectors":"5.11.2","@wagmi/core":"2.21.2","firebase":"^11.1.0","firebase-admin":"^13.0.2","lucide-react":"^0.468.0","react":"^18.3.1","react-dom":"^18.3.1","viem":"2.45.0","wagmi":"2.19.5"
   },
