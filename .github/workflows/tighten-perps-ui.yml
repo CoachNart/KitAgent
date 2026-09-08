@@ -1,20 +1,21 @@
 name: Tighten Perpetuals UI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/tighten-perps-ui.yml'
+  workflow_run:
+    workflows: ["Migrate NFT surface to perpetuals"]
+    types: [completed]
 
 permissions:
   contents: write
 
 jobs:
   tighten:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -31,7 +32,6 @@ jobs:
 
           p = Path('src/PerpetualsPage.jsx')
           s = p.read_text()
-
           s = s.replace('export default function PerpetualsPage(){', 'export default function PerpetualsPage({user}){')
           s = s.replace('Search all Bybit perpetuals…', 'Search all Hyperliquid perpetuals…')
           s = s.replace('Bybit connected', 'Hyperliquid connected')
