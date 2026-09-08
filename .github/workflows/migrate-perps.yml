@@ -18,12 +18,14 @@ jobs:
           fetch-depth: 0
       - name: Restore exact legacy terminal and swap provider
         run: node scripts/switch-perps-to-hyperliquid.mjs
+      - name: Fix Hyperliquid market shape for legacy terminal
+        run: node scripts/fix-hl-legacy-menu.mjs
       - name: Fix live 24h High/Low
         run: node scripts/fix-perps-24h-range.mjs
       - name: Commit migration
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.jsx src/PerpetualsPage.jsx scripts/switch-perps-to-hyperliquid.mjs scripts/replace-nft-with-perps.mjs scripts/tighten-perps-ui.mjs scripts/fix-hl-migration-script.mjs scripts/fix-perps-24h-range.mjs .github/workflows/migrate-perps.yml
+          git add src/App.jsx src/PerpetualsPage.jsx scripts/switch-perps-to-hyperliquid.mjs scripts/fix-hl-legacy-menu.mjs scripts/replace-nft-with-perps.mjs scripts/tighten-perps-ui.mjs scripts/fix-hl-migration-script.mjs scripts/fix-perps-24h-range.mjs .github/workflows/migrate-perps.yml
           git diff --cached --quiet || git commit -m "fix: restore exact Bybit terminal UI with Hyperliquid execution [skip ci]"
           git push
