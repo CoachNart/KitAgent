@@ -25,18 +25,6 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-async function authenticate(req) {
-  const token = String(req.headers.authorization || '').startsWith('Bearer ')
-    ? req.headers.authorization.slice(7)
-    : '';
-  if (!token) throw Object.assign(new Error('Authentication required.'), { code: 'AUTH_TOKEN_MISSING' });
-  try {
-    return await getAdmin().auth().verifyIdToken(token);
-  } catch {
-    throw Object.assign(new Error('Authentication token could not be verified.'), { code: 'AUTH_TOKEN_INVALID' });
-  }
-}
-
 function clean(value, max = 500) {
   return String(value ?? '').slice(0, max);
 }
@@ -114,7 +102,7 @@ export default async function handler(req, res) {
     await ref.set(signal);
     return json(res, 201, { ok: true, id: ref.id, signal: { ...signal, generatedAt: new Date().toISOString(), createdAt: new Date().toISOString() } });
   } catch (error) {
-    const status = ['AUTH_REQUIRED','AUTH_INVALID'].includes(error?.code) ? 401 : error?.code === 'ACCESS_EXPIRED' ? 403 : 500;
+    const status = ['AUTH_REQUIRED','AUTH_INVALID','AUTH_TOKEN_MISSING','AUTH_TOKEN_INVALID'].includes(error?.code) ? 401 : error?.code === 'ACCESS_EXPIRED' ? 403 : 500;
     return json(res, status, { error: error?.message || 'Signal record operation failed.', code: error?.code || 'SIGNAL_RECORD_FAILED' });
   }
 }
