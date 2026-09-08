@@ -33,7 +33,7 @@ function NativeLifecycle(){
           const parsed=new URL(url);
           if(parsed.pathname) window.history.replaceState({},'',`${parsed.pathname}${parsed.search}${parsed.hash}`);
           window.dispatchEvent(new CustomEvent('kitagent:app-url-open',{detail:{url}}));
-        }catch(error){console.warn('KitAgent deep-link handling failed:',error)}
+        }catch(error){console.warn('KitSetups deep-link handling failed:',error)}
       });
     };
     setup();
