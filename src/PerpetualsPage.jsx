@@ -3,6 +3,7 @@ import {ChevronDown,RefreshCw,Share2,X} from 'lucide-react';
 import {ExchangeClient,HttpTransport} from '@nktkas/hyperliquid';
 import {createWalletClient,custom} from 'viem';
 import {arbitrum} from 'viem/chains';
+import {useAppKit,useAppKitAccount,useAppKitProvider} from '@reown/appkit/react';
 import './perpetuals-terminal.css';
 
 const INFO='https://api.hyperliquid.xyz/info';
@@ -21,6 +22,9 @@ const addrLabel=a=>a?`${a.slice(0,6)}…${a.slice(-4)}`:'Wallet required';
 function Field({label,value,setValue,suffix,readOnly=false}){return <div className="perps-field"><label><span>{label}</span><span>{suffix}</span></label><div className="perps-input"><input inputMode="decimal" value={value} onChange={e=>setValue?.(clean(e.target.value))} readOnly={readOnly} placeholder="0.00"/><span>{suffix}</span></div></div>}
 
 export default function PerpetualsPage({user}){
+ const {open}=useAppKit();
+ const {address:appKitAddress,isConnected:appKitConnected}=useAppKitAccount({namespace:'eip155'});
+ const {walletProvider}=useAppKitProvider('eip155');
  const [markets,setMarkets]=useState([]),[symbol,setSymbol]=useState('BTC'),[search,setSearch]=useState(''),[picker,setPicker]=useState(false),[tf,setTf]=useState('5m');
  const [ticker,setTicker]=useState(null),[candles,setCandles]=useState([]),[asks,setAsks]=useState([]),[bids,setBids]=useState([]),[trades,setTrades]=useState([]),[funding,setFunding]=useState(null);
  const [address,setAddress]=useState(''),[wallet,setWallet]=useState(null),[balance,setBalance]=useState(null),[positions,setPositions]=useState([]),[orders,setOrders]=useState([]),[history,setHistory]=useState([]);
@@ -29,15 +33,33 @@ export default function PerpetualsPage({user}){
  const market=markets.find(m=>m.name===symbol),asset=markets.findIndex(m=>m.name===symbol),last=Number(ticker?.lastPrice||0),maxLev=Number(market?.maxLeverage||50),szDecimals=Number(market?.szDecimals??5),orderValue=(Number(margin)||0)*Number(leverage||1),quantity=sizeStep(last?orderValue/last:0,szDecimals),current=positions.find(p=>p.coin===symbol&&Math.abs(Number(p.szi||0))>0);
  const filtered=useMemo(()=>markets.filter(m=>m.name.toLowerCase().includes(search.toLowerCase())).slice(0,180),[markets,search]);
  const notify=msg=>{setNotice(msg);clearTimeout(timerRef.current);timerRef.current=setTimeout(()=>setNotice(''),5000)};
- const ensureWallet=async()=>{if(wallet)return wallet;if(!window.ethereum)throw Error('No injected EVM wallet found. Open KitSetups in a wallet browser or install MetaMask.');const accounts=await window.ethereum.request({method:'eth_requestAccounts'});const account=accounts?.[0];if(!account)throw Error('No wallet account selected.');try{await window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0xa4b1'}]})}catch(e){if(e?.code===4902)await window.ethereum.request({method:'wallet_addEthereumChain',params:[{chainId:'0xa4b1',chainName:'Arbitrum One',nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},rpcUrls:['https://arb1.arbitrum.io/rpc'],blockExplorerUrls:['https://arbiscan.io']}]});else throw e}const wc=createWalletClient({account,chain:arbitrum,transport:custom(window.ethereum)});setWallet(wc);setAddress(account);notify('Wallet connected to Hyperliquid on Arbitrum.');return wc};
+ const ensureWallet=async()=>{
+  if(wallet)return wallet;
+  const provider=walletProvider||window.ethereum;
+  const account=appKitAddress||address||(provider?.selectedAddress||'');
+  if(!provider||!account){
+   if(typeof open==='function'){open({view:'Connect',namespace:'eip155'});throw Error('Choose a wallet to connect to Hyperliquid.');}
+   throw Error('Wallet connection is unavailable.');
+  }
+  try{await provider.request?.({method:'wallet_switchEthereumChain',params:[{chainId:'0xa4b1'}]})}catch(e){
+   if(e?.code===4902)await provider.request?.({method:'wallet_addEthereumChain',params:[{chainId:'0xa4b1',chainName:'Arbitrum One',nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},rpcUrls:['https://arb1.arbitrum.io/rpc'],blockExplorerUrls:['https://arbiscan.io']}]});
+   else if(e?.code!==4902)throw e;
+  }
+  const wc=createWalletClient({account,chain:arbitrum,transport:custom(provider)});
+  setWallet(wc);setAddress(account);notify('Wallet connected to Hyperliquid on Arbitrum.');
+  return wc;
+ };
  const exchange=async()=>new ExchangeClient({transport:new HttpTransport(),wallet:await ensureWallet(),signatureChainId:'0xa4b1'});
  const ensureBuilder=async ex=>{if(!address)return;let approved=false;try{const v=await info({type:'maxBuilderFee',user:address,builder:BUILDER});const s=String(v??'');approved=s.includes('%')?parseFloat(s)>=0.01:Number(v)>=BUILDER;}catch{}if(!approved){await ex.approveBuilderFee({maxFeeRate:'0.01%',builder:BUILDER});notify('KitSetups fee approval signed.')} };
  const refresh=async()=>{try{const meta=await info({type:'metaAndAssetCtxs'});const universe=meta?.[0]?.universe||[],ctxs=meta?.[1]||[];const list=universe.map((m,i)=>({...m,ctx:ctxs[i]}));setMarkets(list);let idx=list.findIndex(m=>m.name===symbol);if(idx<0)idx=0;const c=ctxs[idx]||{},mid=Number(c.midPx||c.markPx||0),prev=Number(c.prevDayPx||0);const day=await info({type:'candleSnapshot',req:{coin:symbol,interval:'1h',startTime:Date.now()-86400000,endTime:Date.now()}}).catch(()=>[]);setTicker({lastPrice:mid,change:prev?((mid-prev)/prev):0,high:day.length?Math.max(...day.map(x=>Number(x.h))):undefined,low:day.length?Math.min(...day.map(x=>Number(x.l))):undefined,volume:c.dayNtlVlm,openInterest:c.openInterest});setFunding(c.funding);const [book,cs,rt]=await Promise.all([info({type:'l2Book',coin:symbol}),info({type:'candleSnapshot',req:{coin:symbol,interval:tf,startTime:Date.now()-7*86400000,endTime:Date.now()}}),info({type:'recentTrades',coin:symbol})]);setAsks((book?.levels?.[1]||[]).map(x=>({price:+x.px,size:+x.sz})));setBids((book?.levels?.[0]||[]).map(x=>({price:+x.px,size:+x.sz})));setCandles((cs||[]).map(x=>({time:+x.t,open:+x.o,high:+x.h,low:+x.l,close:+x.c})).slice(-240));setTrades((rt||[]).map(x=>({price:+x.px,size:+x.sz,side:x.side})).slice(0,40));if(address){const [state,open,fills]=await Promise.all([info({type:'clearinghouseState',user:address}),info({type:'openOrders',user:address}),info({type:'userFills',user:address})]);setBalance(Number(state?.marginSummary?.accountValue||0));setPositions((state?.assetPositions||[]).map(x=>x.position).filter(Boolean));setOrders(open||[]);setHistory(fills||[])}}catch(e){notify(e?.message||'Unable to load Hyperliquid data.')}};
  useEffect(()=>{refresh();const id=setInterval(refresh,5000);return()=>clearInterval(id)},[symbol,tf,address]);
  useEffect(()=>{if(markets.length&&!markets.some(m=>m.name===symbol))setSymbol(markets[0].name)},[markets,symbol]);
  useEffect(()=>{const h=()=>{const a=window.ethereum?.selectedAddress||'';if(a){setAddress(a);setWallet(null)}};window.ethereum?.on?.('accountsChanged',h);if(window.ethereum?.selectedAddress)setAddress(window.ethereum.selectedAddress);return()=>window.ethereum?.removeListener?.('accountsChanged',h)},[]);
+ useEffect(()=>{
+  if(appKitConnected&&appKitAddress){setAddress(appKitAddress);setWallet(null);refresh().catch(()=>{});}
+ },[appKitConnected,appKitAddress]);
  useEffect(()=>{try{wsRef.current?.close()}catch{}const s=new WebSocket(WS);wsRef.current=s;s.onopen=()=>[{type:'l2Book',coin:symbol},{type:'trades',coin:symbol},{type:'candle',coin:symbol,interval:tf},{type:'allMids'}].forEach(subscription=>s.send(JSON.stringify({method:'subscribe',subscription})));s.onmessage=e=>{try{const m=JSON.parse(e.data||'{}');if(m.channel==='l2Book'){setAsks((m.data?.levels?.[1]||[]).map(x=>({price:+x.px,size:+x.sz})));setBids((m.data?.levels?.[0]||[]).map(x=>({price:+x.px,size:+x.sz})))}else if(m.channel==='trades')setTrades(x=>[...(m.data||[]).map(v=>({price:+v.px,size:+v.sz,side:v.side})),...x].slice(0,40));else if(m.channel==='candle'&&m.data){const z=m.data,r={time:+z.t,open:+z.o,high:+z.h,low:+z.l,close:+z.c};setCandles(x=>{const a=x.slice(),i=a.findIndex(v=>v.time===r.time);if(i>=0)a[i]=r;else a.push(r);return a.slice(-240)})}else if(m.channel==='allMids'&&m.data?.mids?.[symbol])setTicker(x=>({...x,lastPrice:Number(m.data.mids[symbol])}))}catch{}};return()=>{try{s.close()}catch{}}},[symbol,tf]);
- const connect=async()=>{try{await ensureWallet();const ex=await exchange();await ensureBuilder(ex);await refresh()}catch(e){notify(e?.message||'Wallet connection failed.')}};
+ const connect=async()=>{try{if(!appKitConnected&&!address&&!wallet){if(typeof open==='function'){open({view:'Connect',namespace:'eip155'});return;}await ensureWallet();}else{const ex=await exchange();await ensureBuilder(ex);await refresh();}}catch(e){notify(e?.message||'Wallet connection failed.')}};
  const disconnect=()=>{setWallet(null);setAddress('');setBalance(null);setPositions([]);setOrders([]);setHistory([]);notify('Wallet disconnected.')};
  const applyLeverage=async()=>{if(!address)return connect();setBusy('lev');try{const ex=await exchange();await ex.updateLeverage({asset,isCross:marginMode==='Cross',leverage:Number(leverage)});notify(`${leverage}x ${marginMode.toLowerCase()} leverage applied.`)}catch(e){notify(e?.message||'Unable to update leverage.')}finally{setBusy('')}};
  const place=async()=>{if(!address)return connect();if(!quantity)return notify('Enter margin to calculate a valid size.');if(type==='Limit'&&!Number(limit))return notify('Enter a valid limit price.');setBusy('order');try{const ex=await exchange();await ensureBuilder(ex);await ex.updateLeverage({asset,isCross:marginMode==='Cross',leverage:Number(leverage)});const rawPrice=type==='Limit'?Number(limit):(side==='Buy'?last*1.01:last*0.99);const order={a:asset,b:side==='Buy',p:priceFormat(rawPrice),s:String(quantity),r:reduceOnly,t:{limit:{tif:type==='Limit'?'Gtc':'Ioc'}}};const result=await ex.order({orders:[order],grouping:'na',builder:{b:BUILDER,f:BUILDER_FEE}});if(result?.status==='err')throw Error(result?.response||'Hyperliquid rejected the order.');notify(`${side==='Buy'?'Long':'Short'} ${type.toLowerCase()} order submitted.`);await refresh()}catch(e){notify(e?.message||'Order failed.')}finally{setBusy('')}};
@@ -48,22 +70,6 @@ export default function PerpetualsPage({user}){
  const shareText=()=>{if(!current)return '';const pnl=Number(current.unrealizedPnl||0),roi=Number(current.marginUsed)?pnl/Number(current.marginUsed):0;return `KitSetups Perpetuals\n${current.coin}-PERP · ${Number(current.szi)>0?'LONG':'SHORT'} · ${current.leverage?.value||leverage}x\nPnL ${pnl>=0?'+':''}${money(pnl)} · ROI ${pct(roi)}\nSize ${n(Math.abs(Number(current.szi)),4)} · Entry ${money(current.entryPx)} · Mark ${money(last)}\nTrader ${user?.displayName||user?.name||'KitSetups Trader'}`};
  const copyShare=async()=>{try{await navigator.clipboard.writeText(shareText());notify('KitSetups PnL copied.');setShareOpen(false)}catch{notify('Unable to copy PnL.')}};
  const chart=candles.slice(-90),lo=chart.length?Math.min(...chart.map(x=>x.low)):0,hi=chart.length?Math.max(...chart.map(x=>x.high)):1,range=hi-lo||1,maxBook=Math.max(1,...asks.slice(0,12).map(x=>x.size),...bids.slice(0,12).map(x=>x.size));
- useEffect(()=>{
-  let socket; let stopped=false;
-  try{
-   ws.current?.close();
-   socket=new WebSocket('wss://stream.bybit.com/v5/public/linear');
-   ws.current=socket;
-   socket.onopen=()=>{if(stopped)return;socket.send(JSON.stringify({op:'subscribe',args:[`tickers.${symbol}`,`orderbook.50.${symbol}`,`publicTrade.${symbol}`,`kline.${TF[tf]}.${symbol}`]}))};
-   socket.onmessage=e=>{if(stopped)return;try{const m=JSON.parse(e.data||'{}');const d=m.data;const topic=m.topic||'';
-    if(topic.startsWith('tickers.')){const x=Array.isArray(d)?d[0]:d;if(x)setTicker(prev=>({...prev,...x}))}
-    else if(topic.startsWith('orderbook.')){if(d?.a)setAsks(d.a.map(x=>({price:+x[0],size:+x[1]})));if(d?.b)setBids(d.b.map(x=>({price:+x[0],size:+x[1]})))}
-    else if(topic.startsWith('publicTrade.')){const rows=Array.isArray(d)?d:[];setTrades(prev=>[...rows.map(x=>({price:+x.p,size:+x.v,side:x.S})),...prev].slice(0,80))}
-    else if(topic.startsWith('kline.')){const rows=Array.isArray(d)?d:[];if(rows[0]){const k=rows[0];const next={time:+k.start,open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume};setCandles(prev=>{const copy=prev.slice(-239);const last=copy[copy.length-1];if(last&&last.time===next.time)copy[copy.length-1]=next;else copy.push(next);return copy})}}
-   }catch{}};
-  }catch{socket=null}
-  return()=>{stopped=true;try{socket?.close()}catch{}};
- },[symbol,tf]);
  // kitagent-live-stream-v2
  return <div className="perps-terminal"><div className="perps-shell">{notice&&<div className="perps-toast">{notice}<button onClick={()=>setNotice('')}><X size={13}/></button></div>}
   <header className="perps-market"><div className="perps-symbol"><button onClick={()=>setPicker(v=>!v)}><span className="perps-coin">{symbol[0]}</span><span><b>{symbol}-PERP</b><small>Hyperliquid perpetual</small></span><ChevronDown size={14}/></button>{picker&&<div className="perps-picker"><input autoFocus value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search perpetuals"/><div className="perps-picker-list">{filtered.map(m=><button key={m.name} onClick={()=>{setSymbol(m.name);setPicker(false);setSearch('')}}><span>{m.name}-PERP</span><span className="perps-muted">{m.maxLeverage}x</span></button>)}</div></div>}</div><div className="perps-market-stats"><div><span>Mark</span><strong>{money(last)}</strong></div><div><span>24h</span><strong className={(ticker?.change||0)>=0?'perps-positive':'perps-negative'}>{pct(ticker?.change)}</strong></div><div><span>High</span><strong>{money(ticker?.high)}</strong></div><div><span>Low</span><strong>{money(ticker?.low)}</strong></div><div><span>Volume</span><strong>{n(ticker?.volume,0)}</strong></div><div><span>Funding</span><strong>{funding?`${(Number(funding)*100).toFixed(4)}%`:'—'}</strong></div></div><div className="perps-live"><i/>LIVE</div></header>
