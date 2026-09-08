@@ -26,5 +26,22 @@ jobs:
           git rm --ignore-unmatch src/walletConnector.js || true
           git diff --cached --quiet || git commit -m 'fix: final platform hardening [skip ci]'
           git push
+      - name: Repair duplicate App imports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.jsx')
+          s = p.read_text()
+          s = s.replace("import AccessGate from './AccessGate.jsx';\n", '')
+          s = s.replace("import LiveMarketPage from './LiveMarketPage.jsx';\n", '')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix: remove duplicate App imports [skip ci]'
+            git push
+          fi
       - run: npm install
       - run: NODE_OPTIONS=--max-old-space-size=4096 npm run build
