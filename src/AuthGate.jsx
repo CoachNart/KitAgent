@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ShieldCheck, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { auth, db, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
+import { enableKitSetupsNotifications } from './notifications.js';
 
 async function registerDevice(user){
   const deviceId=await getDeviceBindingId();
@@ -22,6 +23,7 @@ async function initializeAccount(user){
   const existing=snapshot.exists()?(snapshot.data()||{}):{};
   const isNew=!snapshot.exists();
   await setDoc(ref,{email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},securitySettings:{...(existing.securitySettings||{}),deviceBindingId},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
+  enableKitSetupsNotifications(user).catch(error=>console.warn('KitSetups notifications could not be enabled:',error));
 }
 
 export default function AuthGate({children}){
