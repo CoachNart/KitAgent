@@ -1,0 +1,26 @@
+name: Repair Hyperliquid terminal
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'repair Hyperliquid terminal') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Repair source
+        run: node scripts/repair-hl-perps-source.mjs
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/PerpetualsPage.jsx scripts/repair-hl-perps-source.mjs .github/workflows/repair-hl-terminal.yml
+          git diff --cached --quiet || git commit -m "fix: repair Hyperliquid perpetual terminal source [skip ci]"
+          git push
