@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { connectWallet as connectWalletExternal, getActiveProvider } from './walletConnector.js';
-import PerpetualsPage from './PerpetualsPage.jsx';
+import PerpetualsPage from './HyperliquidPerpetualsPage.jsx';
 import HomePage from './HomePage.jsx';
 import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Copy, ExternalLink, Fuel, Gem, History, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, UserRound, Wallet, X, Zap } from 'lucide-react';
 
