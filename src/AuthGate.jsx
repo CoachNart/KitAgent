@@ -1,10 +1,21 @@
 import { cloneElement, useEffect, useState } from 'react';
-import { browserLocalPersistence, createUserWithEmailAndPassword, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, setPersistence, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { browserLocalPersistence, createUserWithEmailAndPassword, onAuthStateChanged, setPersistence, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ShieldCheck, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { auth, db, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
-import NotificationCenter from './NotificationCenter.jsx';
+
+function makeUsername(email, uid){
+  const base=(email||'user').split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,18)||'user';
+  const suffix=(uid||'').replace(/[^a-z0-9]/gi,'').slice(-5).toLowerCase()||Math.random().toString(36).slice(2,7);
+  return `${base}-${suffix}`;
+}
+
+function makeAvatar(username){
+  const letters=(username||'K').split(/[-_\s]+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('')||'K';
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="24" fill="#111827"/><circle cx="48" cy="48" r="38" fill="none" stroke="#22c55e" stroke-opacity=".65" stroke-width="2"/><text x="48" y="56" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="white">${letters}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
 
 async function registerDevice(user){
   const deviceId=await getDeviceBindingId();
@@ -21,19 +32,16 @@ async function initializeAccount(user){
   const snapshot=await getDoc(ref);
   const existing=snapshot.exists()?(snapshot.data()||{}):{};
   const isNew=!snapshot.exists();
-  const providers=(user.providerData||[]).map(provider=>provider.providerId).filter(Boolean);
-  const authProvider=providers[0]||existing.authProvider||'password';
-  await setDoc(ref,{uid:user.uid,email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',emailVerified:Boolean(user.emailVerified),authProvider,authProviders:providers.length?providers:(existing.authProviders||[authProvider]),walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
+  const username=existing.username||makeUsername(user.email||existing.email,user.uid);
+  const photoURL=existing.photoURL||user.photoURL||makeAvatar(username);
+  if(user.displayName!==username||user.photoURL!==photoURL){
+    try{await updateProfile(user,{displayName:username,photoURL})}catch(error){console.warn('KitSetups profile update deferred:',error)}
+  }
+  await setDoc(ref,{uid:user.uid,email:user.email||existing.email||'',username,displayName:username,photoURL,emailVerified:Boolean(user.emailVerified),authProvider:'password',authProviders:['password'],walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
   try{
     const deviceBindingId=await registerDevice(user);
     await setDoc(ref,{securitySettings:{...(existing.securitySettings||{}),deviceBindingId},updatedAt:serverTimestamp()},{merge:true});
-  }catch(error){
-    console.error('KitSetups device registration deferred:',error);
-  }
-}
-
-function isMobileBrowser(){
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent||'');
+  }catch(error){console.error('KitSetups device registration deferred:',error)}
 }
 
 export default function AuthGate({children}){
@@ -44,38 +52,16 @@ export default function AuthGate({children}){
     const boot=async()=>{
       try{
         await setPersistence(auth,browserLocalPersistence);
-        let redirectUser=null;
-        try{
-          const result=await getRedirectResult(auth);
-          redirectUser=result?.user||null;
-        }catch(error){
-          if(error?.code&&error.code!=='auth/no-auth-event'){
-            console.error('KitSetups Google redirect result failed:',error);
-            if(active)setMessage(error?.message||'Google authentication could not be completed.');
-          }
-        }
-        if(!active)return;
-        if(redirectUser){
-          setUser(redirectUser);
-          setReady(true);
-          initializeAccount(redirectUser).catch(error=>console.error('KitSetups account sync deferred:',error));
-          return;
-        }
         const unsubscribe=onAuthStateChanged(auth,next=>{
           if(!active)return;
           if(!next){setUser(null);setReady(true);return}
-          setUser(next);
-          setReady(true);
+          setUser(next);setReady(true);
           initializeAccount(next).catch(error=>console.error('KitSetups account sync deferred:',error));
         });
         return unsubscribe;
-      }catch(error){
-        console.error('KitSetups auth initialization failed:',error);
-        if(active)setReady(true);
-      }
+      }catch(error){console.error('KitSetups auth initialization failed:',error);if(active)setReady(true)}
     };
-    let unsubscribe;
-    boot().then(cleanup=>{unsubscribe=cleanup||undefined});
+    let unsubscribe;boot().then(cleanup=>{unsubscribe=cleanup||undefined});
     return()=>{active=false;unsubscribe?.()};
   },[]);
 
@@ -94,46 +80,13 @@ export default function AuthGate({children}){
     }finally{setBusy(false)}
   };
 
-  const googleSignIn=async()=>{
-    if(!auth||!db)return;
-    setBusy(true);setMessage('');
-    try{
-      await setPersistence(auth,browserLocalPersistence);
-      const provider=new GoogleAuthProvider();
-      provider.setCustomParameters({prompt:'select_account'});
-
-      // Mobile browsers are much more reliable with Firebase's redirect resolver.
-      // Use popup on desktop, then fall back to redirect when the popup resolver
-      // is blocked or reports an internal/unsupported-environment error.
-      if(isMobileBrowser()){
-        await signInWithRedirect(auth,provider);
-        return;
-      }
-
-      try{
-        await signInWithPopup(auth,provider);
-      }catch(popupError){
-        const code=popupError?.code||'';
-        if(['auth/internal-error','auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(code)){
-          await signInWithRedirect(auth,provider);
-          return;
-        }
-        throw popupError;
-      }
-    }catch(error){
-      const code=error?.code||'';
-      const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.','auth/unauthorized-domain':'This website is not authorized for Google sign-in. Add kitsetups.xyz and www.kitsetups.xyz to Firebase Authentication → Settings → Authorized domains.','auth/network-request-failed':'Network error. Check your connection and try again.','auth/internal-error':'Google authentication could not start. Please refresh once and try again. If this persists, the Firebase Google provider/domain configuration needs attention.'};
-      setMessage(friendly[code]||error?.message||'Google authentication failed.');
-    }finally{setBusy(false)}
-  };
-
   if(!firebaseConfigured)return <AuthScreen title="KitSetups setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;
   if(!ready)return typeof children==='function'?children(null):cloneElement(children,{user:null});
-  if(!user)return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit} onGoogle={googleSignIn}/>;
-  return <><NotificationCenter user={user}/>{typeof children==='function'?children(user):cloneElement(children,{user})}</>;
+  if(!user)return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit}/>;
+  return typeof children==='function'?children(user):cloneElement(children,{user});
 }
 
-function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPassword,busy=false,message='',onSubmit,onGoogle,title='KitSetups'}){
+function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPassword,busy=false,message='',onSubmit,title='KitSetups'}){
   const interactive=Boolean(onSubmit);
-  return <div className="auth-screen"><div className="auth-glow"/><div className="auth-card"><div className="auth-brand"><img src="/kitsetups-logo.svg" alt="KitSetups"/><div><b>KitSetups</b><small>AI command center</small></div></div><div className="auth-kicker"><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div><h1>{title}</h1>{interactive&&<p className="auth-intro">{mode==='signin'?'Sign in to continue to your command center.':'Create your account and start your 3-day free trial.'}</p>}{interactive&&<><button type="button" className="google-auth" onClick={onGoogle} disabled={busy}><span className="google-mark" style={{color:'#EA4335'}}>G</span>{busy?'Connecting…':'Continue with Google'}</button><div className="auth-divider"><span>or continue with email</span></div><form onSubmit={onSubmit}><label className="auth-label">EMAIL<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label className="auth-label">PASSWORD<input required minLength={6} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label>{message&&<div className="auth-error">{message}</div>}<button disabled={busy} className="auth-submit" type="submit">{busy?<LoaderCircle size={16}/>:mode==='signin'?<LogIn size={16}/>:<UserPlus size={16}/>} {busy?'Verifying account…':mode==='signin'?'Sign in':'Create account'}</button><button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('')}} className="auth-switch">{mode==='signin'?'New to KitSetups? Create an account':'Already have an account? Sign in'}</button></form></>}{!interactive&&<div className="auth-error">{message}</div>}<div className="auth-foot">Your account is secured by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</div></div></div>
+  return <div className="auth-screen"><div className="auth-glow"/><div className="auth-card"><div className="auth-brand"><img src="/kitsetups-logo.svg" alt="KitSetups"/><div><b>KitSetups</b><small>AI command center</small></div></div><div className="auth-kicker"><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div><h1>{title}</h1>{interactive&&<p className="auth-intro">{mode==='signin'?'Sign in to continue to your command center.':'Create your account and KitSetups will generate your username and avatar automatically.'}</p>}{interactive&&<form onSubmit={onSubmit}><label className="auth-label">EMAIL<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label className="auth-label">PASSWORD<input required minLength={6} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label>{message&&<div className="auth-error">{message}</div>}<button disabled={busy} className="auth-submit" type="submit">{busy?<LoaderCircle size={16}/>:mode==='signin'?<LogIn size={16}/>:<UserPlus size={16}/>} {busy?'Verifying account…':mode==='signin'?'Sign in':'Create account'}</button><button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('')}} className="auth-switch">{mode==='signin'?'New to KitSetups? Create an account':'Already have an account? Sign in'}</button></form>}{!interactive&&<div className="auth-error">{message}</div>}<div className="auth-foot">Your account is secured by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</div></div></div>
 }
