@@ -14,69 +14,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.sha }}
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
-      - name: Apply final platform hardening once
-        if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'final platform hardening') }}
-        run: |
-          node scripts/final-hardening-v2.mjs
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src api vercel.json
-          git rm --ignore-unmatch src/walletConnector.js || true
-          git diff --cached --quiet || git commit -m 'fix: final platform hardening [skip ci]'
-          git push
-      - name: Apply requested UI and market cleanup
-        if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'cleanup navigation and market auth') }}
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          app = Path('src/App.jsx')
-          s = app.read_text()
-          s = s.replace('History, Layers3, LockKeyhole', 'History, House, Layers3, LockKeyhole')
-          nav = "const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['perps','Perpetuals',Zap],['drops','Airdrops & faucets',Rocket],['activity','History',History],['profile','Profile',UserRound]];"
-          s = re.sub(r'const nav=\[[^\n]*?\];', nav, s, count=1)
-          s = re.sub(r"(?:import AccessGate from './AccessGate\.jsx';\n)+", '', s)
-          s = re.sub(r"(?:import LiveMarketPage from './LiveMarketPage\.jsx';\n)+", '', s)
-          s = s.replace("import HomePage from './HomePage.jsx';", "import HomePage from './HomePage.jsx';\nimport AccessGate from './AccessGate.jsx';\nimport LiveMarketPage from './LiveMarketPage.jsx';", 1)
-          s = re.sub(r"(?:import SignalHistory from './SignalHistory\.jsx';\n)+", '', s)
-          s = s.replace("import PerpetualsPage from './PerpetualsPage.jsx';", "import PerpetualsPage from './PerpetualsPage.jsx';\nimport SignalHistory from './SignalHistory.jsx';", 1)
-          s = s.replace("{page==='activity'&&<ActivityPage activity={activity}/>}", "{page==='activity'&&<SignalHistory/>}")
-          s = re.sub(r'\nfunction ActivityPage\(\{activity\}\)\{.*?\}\nfunction ProfilePage', '\nfunction ProfilePage', s, count=1, flags=re.S)
-          s = re.sub(r"\{page==='market'&&<MarketPage pair=\{pair\} setPair=\{setPair\} tf=\{tf\} setTf=\{setTf\} analyzed=\{analyzed\} setAnalyzed=\{setAnalyzed\}/>\}", "{page==='market'&&<AccessGate user={user}><LiveMarketPage/></AccessGate>}", s, count=1)
-          app.write_text(s)
-          market = Path('src/LiveMarketPage.jsx')
-          m = market.read_text()
-          old = "const endpoint='/api/market';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}`);"
-          new = "const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});"
-          if old in m: m = m.replace(old, new)
-          old_err = "if(!r.ok||!body.ok)throw new Error(body.error||`Market analysis failed (${r.status})`);"
-          new_err = "if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired.')}throw new Error(body.error||`Market analysis failed (${r.status})`);}"
-          m = m.replace(old_err, new_err)
-          market.write_text(m)
-          for name in ['scripts/normalize-nav-icons.mjs', 'scripts/restore-activity-profile-brand.mjs']:
-              p = Path(name)
-              if p.exists(): p.write_text(p.read_text().replace("['drops','Airdrops & faucets',UserRound]", "['drops','Airdrops & faucets',Rocket]"))
-          Path('src/AccountPage.jsx').unlink(missing_ok=True)
-          PY
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src scripts
-          git rm --ignore-unmatch src/AccountPage.jsx || true
-          if ! git diff --cached --quiet; then
-            git commit -m 'fix: apply requested navigation history and market auth cleanup [skip ci]'
-            git push
-          fi
       - name: Apply final profile auth and branding cleanup
-        if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'final profile auth branding repair') }}
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, 'final profile auth branding repair') }}
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
-
           app = Path('src/App.jsx')
           s = app.read_text()
           s = s.replace('Terminal, UserRound, Wallet, X, Zap', 'Terminal, CircleUserRound, Wallet, X, Zap')
@@ -84,13 +31,11 @@ jobs:
           s = s.replace('>KITAGENT</div>', '>KITSETUPS</div>')
           s = s.replace("m.role==='user'?'YOU':'KITAGENT'", "m.role==='user'?'YOU':'KITSETUPS'")
           app.write_text(s)
-
           account = Path('src/AccountPage.jsx')
           s = account.read_text()
           s = s.replace("import SignalHistory from './SignalHistory.jsx';\n", '')
-          s = s.replace('  <SignalHistory/>\n', '')
+          s = re.sub(r'\s*<SignalHistory\s*/>\s*', '\n', s)
           account.write_text(s)
-
           auth = Path('src/AuthGate.jsx')
           s = auth.read_text()
           s = s.replace(', getRedirectResult, GoogleAuthProvider', '')
@@ -101,8 +46,6 @@ jobs:
           s = s.replace(',onGoogle', '')
           s = re.sub(r'<button type="button" className="google-auth".*?</button><div className="auth-divider"><span>or continue with email</span></div>', '', s, count=1, flags=re.S)
           auth.write_text(s)
-
-          # Remove visible legacy branding from source/public assets, while preserving internal event identifiers.
           for root in (Path('src'), Path('public')):
               if not root.exists(): continue
               for f in root.rglob('*'):
@@ -116,6 +59,6 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src public
           git diff --cached --quiet || git commit -m 'fix: profile icon auth history and KitSetups branding [skip ci]'
-          git push
+          git push origin HEAD:main
       - run: npm install
       - run: NODE_OPTIONS=--max-old-space-size=4096 npm run build
