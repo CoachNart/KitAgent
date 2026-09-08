@@ -4,7 +4,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ShieldCheck, LoaderCircle, LogIn, UserPlus } from 'lucide-react';
 import { auth, db, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
-import { enableKitSetupsNotifications } from './notifications.js';
+import NotificationCenter from './NotificationCenter.jsx';
 
 async function registerDevice(user){
   const deviceId=await getDeviceBindingId();
@@ -23,7 +23,6 @@ async function initializeAccount(user){
   const existing=snapshot.exists()?(snapshot.data()||{}):{};
   const isNew=!snapshot.exists();
   await setDoc(ref,{email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},securitySettings:{...(existing.securitySettings||{}),deviceBindingId},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
-  enableKitSetupsNotifications(user).catch(error=>console.warn('KitSetups notifications could not be enabled:',error));
 }
 
 export default function AuthGate({children}){
@@ -34,6 +33,6 @@ export default function AuthGate({children}){
   if(!firebaseConfigured)return <AuthScreen title="KitSetups setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;
   if(!ready)return typeof children==='function'?children(null):cloneElement(children,{user:null});
   if(!user)return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit} onGoogle={googleSignIn}/>;
-  return typeof children==='function'?children(user):cloneElement(children,{user});
+  return <><NotificationCenter user={user}/>{typeof children==='function'?children(user):cloneElement(children,{user})}</>;
 }
 function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPassword,busy=false,message='',onSubmit,onGoogle,title='KitSetups'}){const interactive=Boolean(onSubmit);return <div className="auth-screen"><div className="auth-glow"/><div className="auth-card"><div className="auth-brand"><img src="/kitsetups-logo.svg" alt="KitSetups"/><div><b>KitSetups</b><small>AI command center</small></div></div><div className="auth-kicker"><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div><h1>{title}</h1>{interactive&&<p className="auth-intro">{mode==='signin'?'Sign in to continue to your command center.':'Create your account and start your 3-day free trial.'}</p>}{interactive&&<><button type="button" className="google-auth" onClick={onGoogle} disabled={busy}><span className="google-mark" style={{color:'#EA4335'}}>G</span>{busy?'Connecting…':'Continue with Google'}</button><div className="auth-divider"><span>or continue with email</span></div><form onSubmit={onSubmit}><label className="auth-label">EMAIL<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label className="auth-label">PASSWORD<input required minLength={6} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label>{message&&<div className="auth-error">{message}</div>}<button disabled={busy} className="auth-submit" type="submit">{busy?<LoaderCircle size={16}/>:mode==='signin'?<LogIn size={16}/>:<UserPlus size={16}/>} {busy?'Verifying account…':mode==='signin'?'Sign in':'Create account'}</button><button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('')}} className="auth-switch">{mode==='signin'?'New to KitSetups? Create an account':'Already have an account? Sign in'}</button></form></>}{!interactive&&<div className="auth-error">{message}</div>}<div className="auth-foot">Your account is secured by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</div></div></div>}
