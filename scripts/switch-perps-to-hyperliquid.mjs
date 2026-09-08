@@ -7,14 +7,15 @@ const old=execFileSync('git',['show',`${oldCommit}:${repo}`],{encoding:'utf8'});
 const marker='return <div className="page-wrap ka-perps">';
 const cut=old.indexOf(marker);
 if(cut<0) throw new Error('Exact legacy perpetual terminal UI marker was not found.');
-const tail=old.slice(cut);
+let tail=old.slice(cut);
+tail=tail.replaceAll('Bybit connected','Hyperliquid connected').replaceAll('Connect Bybit','Connect wallet').replaceAll('Search all Bybit perpetuals…','Search all Hyperliquid perpetuals…').replaceAll('Connect Bybit to see positions.','Connect wallet to see positions.').replaceAll('Connect Bybit to see orders.','Connect wallet to see orders.').replaceAll('Connect Bybit to see history.','Connect wallet to see history.').replaceAll('Connect Bybit to trade','Connect wallet to trade').replaceAll('Trading executes on your Bybit derivatives account. Use an API key with trading permission only — never enable withdrawals.','Trading executes on Hyperliquid. Your wallet signs trading actions; KitSetups never asks for your private key.').replace('<h3>Connect wallet</h3><p>Use a Bybit API key with derivatives trading permission. Withdrawal permission is not required.</p><label>API key<input value={apiKey} onChange={e=>setApiKey(e.target.value)} autoComplete="off"/></label><label>API secret<input type="password" value={apiSecret} onChange={e=>setApiSecret(e.target.value)} autoComplete="off"/></label><button className="connect-main" onClick={connect}>Connect trading account</button>','<h3>Connect wallet</h3><p>Connect your MetaMask or another injected EVM wallet. Trading actions are signed by your wallet.</p><button className="connect-main" onClick={connect}>Connect wallet</button>');
 const prefix=String.raw`import {useEffect,useMemo,useRef,useState} from 'react';
 import {BarChart3,ChevronDown,KeyRound,LogOut,RefreshCw,Share2,X} from 'lucide-react';
 import {ExchangeClient,HttpTransport} from '@nktkas/hyperliquid';
 import {createWalletClient,custom} from 'viem';
 import {arbitrum} from 'viem/chains';
 
-const TF={"1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m","1h":"1h","2h":"2h","4h":"4h","6h":"4h","12h":"12h","1d":"1d","1w":"1w"};
+const TF={"1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m","1h":"1h","2h":"2h","4h":"4h","6h":"4h","12h":"4h","1d":"1d","1w":"1w"};
 const HL='https://api.hyperliquid.xyz/info';
 const info=body=>fetch(HL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j?.error||`Hyperliquid request failed (${r.status})`);return j});
 const n=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
@@ -27,6 +28,7 @@ export default function PerpetualsPage(){
  const [markets,setMarkets]=useState([]),[symbol,setSymbol]=useState('BTC'),[query,setQuery]=useState(''),[picker,setPicker]=useState(false),[tf,setTf]=useState('5m');
  const [ticker,setTicker]=useState(null),[candles,setCandles]=useState([]),[asks,setAsks]=useState([]),[bids,setBids]=useState([]),[trades,setTrades]=useState([]),[funding,setFunding]=useState('');
  const [connected,setConnected]=useState(false),[modal,setModal]=useState(false),[walletClient,setWalletClient]=useState(null),[address,setAddress]=useState('');
+ const [apiKey,setApiKey]=useState(''),[apiSecret,setApiSecret]=useState('');
  const [balance,setBalance]=useState(null),[positions,setPositions]=useState([]),[orders,setOrders]=useState([]),[history,setHistory]=useState([]);
  const [side,setSide]=useState('Buy'),[type,setType]=useState('Market'),[marginMode,setMarginMode]=useState('Cross'),[leverage,setLeverage]=useState(5),[margin,setMargin]=useState('100'),[limit,setLimit]=useState(''),[tp,setTp]=useState(''),[sl,setSl]=useState(''),[reduceOnly,setReduceOnly]=useState(false),[tab,setTab]=useState('positions'),[busy,setBusy]=useState(''),[notice,setNotice]=useState('');
  const ws=useRef(null),toast=useRef(null); const infoMarket=markets.find(x=>x.name===symbol); const assetIdx=markets.findIndex(x=>x.name===symbol); const last=Number(ticker?.lastPrice||ticker?.markPx||0); const maxLev=Number(infoMarket?.maxLeverage||50); const szDecimals=Number(infoMarket?.szDecimals??5); const orderValue=(Number(margin)||0)*Number(leverage||1); const qty=stepDown(last?orderValue/last:0,szDecimals); const current=positions.find(p=>p.coin===symbol&&Math.abs(Number(p.szi||0))>0);
@@ -51,5 +53,5 @@ export default function PerpetualsPage(){
  const chart=candles.slice(-100);const lo=chart.length?Math.min(...chart.map(x=>x.low)):0;const hi=chart.length?Math.max(...chart.map(x=>x.high)):1;const range=hi-lo||1;
 `;
 fs.writeFileSync(repo,prefix+tail);
-const app='src/App.jsx';let a=fs.readFileSync(app,'utf8');a=a.replace("import PerpetualsPage from './HyperliquidPerpetualsPage.jsx';","import PerpetualsPage from './PerpetualsPage.jsx';");fs.writeFileSync(app,a);
-console.log('Rebuilt PerpetualsPage from exact legacy Bybit terminal UI; provider is Hyperliquid.');
+let app=fs.readFileSync('src/App.jsx','utf8');app=app.replace("import PerpetualsPage from './HyperliquidPerpetualsPage.jsx';","import PerpetualsPage from './PerpetualsPage.jsx';");fs.writeFileSync('src/App.jsx',app);
+console.log('Exact legacy perpetual UI restored; only the provider/connection layer is Hyperliquid.');
