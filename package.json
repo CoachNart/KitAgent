@@ -1,6 +1,6 @@
 {
   "name": "kitagent",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "private": true,
   "description": "KitAgent — AI-powered crypto command center with permission-gated on-chain actions",
   "type": "module",
