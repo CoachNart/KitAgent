@@ -33,3 +33,5 @@ jobs:
           git add src/App.jsx
           git diff --cached --quiet || git commit -m "fix: restore complete App source after import repair [skip ci]"
           git push
+      - name: Repair complete
+        run: echo "App.jsx restored from intact source and duplicate import removed." # force fresh repair run
