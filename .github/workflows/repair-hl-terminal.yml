@@ -15,14 +15,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Sync latest main
-        run: git pull --rebase origin main
-      - name: Repair source
-        run: node scripts/repair-hl-perps-source.mjs
-      - name: Commit repair
+      - name: Repair source with race-safe retry
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/PerpetualsPage.jsx scripts/repair-hl-perps-source.mjs .github/workflows/repair-hl-terminal.yml
-          git diff --cached --quiet || git commit -m "fix: repair Hyperliquid perpetual terminal source [skip ci]"
-          git push
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            git fetch origin main
+            git reset --hard origin/main
+            node scripts/repair-hl-perps-source.mjs
+            git add src/PerpetualsPage.jsx scripts/repair-hl-perps-source.mjs .github/workflows/repair-hl-terminal.yml
+            git diff --cached --quiet && echo "Repair already present." && exit 0
+            git commit -m "fix: repair Hyperliquid perpetual terminal source [skip ci]"
+            git push && exit 0
+            git reset --hard origin/main
+            sleep 2
+          done
+          echo "Could not publish repair after 10 attempts."
+          exit 1
