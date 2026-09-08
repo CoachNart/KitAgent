@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+const path='src/PerpetualsPage.jsx';
+let s=fs.readFileSync(path,'utf8');
+const duplicate="const BUILDER_ADDRESS='0x2E5c7Cb21bA789cFE815e3471fCc1CBEd6680Cc9';\nconst BUILDER_FEE='0.01%';\nconst BUILDER_FEE_TENTHS_BPS=10;\nconst BUILDER='0x2E5c7Cb21bA789cFE815e3471fCc1CBEd6680Cc9';\nconst BUILDER_FEE=10;";
+const clean="const BUILDER='0x2E5c7Cb21bA789cFE815e3471fCc1CBEd6680Cc9';\nconst BUILDER_FEE=10;";
+s=s.replace(duplicate,clean);
+s=s.replace("const uni=(m?.[0]?.universe||[]).map(x=>({...x,baseCoin:x.name,leverageFilter:{maxLeverage:x.maxLeverage}}));","const uni=(m?.[0]?.universe||[]).map(x=>({...x,symbol:x.name,baseCoin:x.name,leverageFilter:{maxLeverage:x.maxLeverage}}));");
+s=s.replace('await approveBuilder(ex);await approveBuilder(ex);','await approveBuilder(ex);');
+fs.writeFileSync(path,s);
+console.log('Hyperliquid perpetual source repaired: duplicate builder declarations removed and legacy market selector mapping restored.');
