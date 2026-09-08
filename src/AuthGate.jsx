@@ -21,14 +21,13 @@ async function initializeAccount(user){
   const snapshot=await getDoc(ref);
   const existing=snapshot.exists()?(snapshot.data()||{}):{};
   const isNew=!snapshot.exists();
-  // Create/update the Firebase profile first. Authentication must never be lost just
-  // because the optional device-security API is unavailable or misconfigured.
-  await setDoc(ref,{uid:user.uid,email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
+  const providers=(user.providerData||[]).map(provider=>provider.providerId).filter(Boolean);
+  const authProvider=providers[0]||existing.authProvider||'password';
+  await setDoc(ref,{uid:user.uid,email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',emailVerified:Boolean(user.emailVerified),authProvider,authProviders:providers.length?providers:(existing.authProviders||[authProvider]),walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
   try{
     const deviceBindingId=await registerDevice(user);
     await setDoc(ref,{securitySettings:{...(existing.securitySettings||{}),deviceBindingId},updatedAt:serverTimestamp()},{merge:true});
   }catch(error){
-    // Device binding is a security enhancement, not an authentication gate.
     console.error('KitSetups device registration deferred:',error);
   }
 }
@@ -38,8 +37,6 @@ export default function AuthGate({children}){
   useEffect(()=>{if(!auth||!db){setReady(true);return undefined}let active=true;setPersistence(auth,browserLocalPersistence).catch(e=>console.error('KitSetups auth persistence setup failed:',e));getRedirectResult(auth).catch(error=>{if(error?.code&&error.code!=='auth/no-auth-event')console.error('KitSetups Google redirect result failed:',error)});const unsubscribe=onAuthStateChanged(auth,next=>{
     if(!active)return;
     if(!next){setUser(null);setReady(true);return}
-    // Important: authentication state is authoritative. Never bounce a valid Firebase
-    // user back to the auth screen because profile/device initialization failed.
     setUser(next);
     setReady(true);
     initializeAccount(next).catch(error=>console.error('KitSetups account sync deferred:',error));
