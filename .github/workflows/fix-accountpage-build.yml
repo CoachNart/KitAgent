@@ -23,7 +23,7 @@ jobs:
           p = Path('src/App.jsx')
           s = p.read_text()
           s = s.replace("import AccountPage from './AccountPage.jsx';", "import AccountPageComponent from './AccountPage.jsx';", 1)
-          s = s.replace("{page==='profile'&&<AccountPage wallet={wallet} connectWallet={connectWallet} user={user}/>}" , "{page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>}" , 1)
+          s = s.replace("{page==='profile'&&<AccountPage wallet={wallet} connectWallet={connectWallet} user={user}/>}", "{page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>}", 1)
           p.write_text(s)
           PY
           git config user.name 'github-actions[bot]'
@@ -31,3 +31,5 @@ jobs:
           git add src/App.jsx
           git commit -m 'fix: resolve AccountPage build collision' || true
           git push
+      - name: Verification marker
+        run: echo "AccountPage collision repair workflow executed"
