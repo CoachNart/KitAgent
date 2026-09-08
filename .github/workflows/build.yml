@@ -41,10 +41,12 @@ jobs:
           nav = "const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['perps','Perpetuals',Zap],['drops','Airdrops & faucets',Rocket],['activity','History',History],['profile','Profile',UserRound]];"
           s = re.sub(r'const nav=\[[^\n]*?\];', nav, s, count=1)
 
-          if "import SignalHistory from './SignalHistory.jsx';" not in s:
-              s = s.replace("import PerpetualsPage from './PerpetualsPage.jsx';", "import PerpetualsPage from './PerpetualsPage.jsx';\nimport SignalHistory from './SignalHistory.jsx';")
-          if "import AccessGate from './AccessGate.jsx';" not in s:
-              s = s.replace("import HomePage from './HomePage.jsx';", "import HomePage from './HomePage.jsx';\nimport AccessGate from './AccessGate.jsx';\nimport LiveMarketPage from './LiveMarketPage.jsx';")
+          # Guarantee exactly one copy of the canonical page imports.
+          s = re.sub(r"(?:import AccessGate from './AccessGate\.jsx';\n)+", '', s)
+          s = re.sub(r"(?:import LiveMarketPage from './LiveMarketPage\.jsx';\n)+", '', s)
+          s = s.replace("import HomePage from './HomePage.jsx';", "import HomePage from './HomePage.jsx';\nimport AccessGate from './AccessGate.jsx';\nimport LiveMarketPage from './LiveMarketPage.jsx';", 1)
+          s = re.sub(r"(?:import SignalHistory from './SignalHistory\.jsx';\n)+", '', s)
+          s = s.replace("import PerpetualsPage from './PerpetualsPage.jsx';", "import PerpetualsPage from './PerpetualsPage.jsx';\nimport SignalHistory from './SignalHistory.jsx';", 1)
 
           # Replace Activity with the existing signal/history implementation and remove the old page implementation.
           s = s.replace("{page==='activity'&&<ActivityPage activity={activity}/>}", "{page==='activity'&&<SignalHistory/>}")
@@ -65,16 +67,12 @@ jobs:
           m = m.replace(old_err, new_err)
           market.write_text(m)
 
-          # Keep the build-time normalizers aligned with the canonical navigation.
           for name in ['scripts/normalize-nav-icons.mjs', 'scripts/restore-activity-profile-brand.mjs']:
               p = Path(name)
               if p.exists():
                   x = p.read_text().replace("['drops','Airdrops & faucets',UserRound]", "['drops','Airdrops & faucets',Rocket]")
-                  if "scripts/restore-activity-profile-brand.mjs" in name:
-                      x = x.replace("['home','Home',House],['market'", "['home','Home',House],['market'")
                   p.write_text(x)
 
-          # The unused duplicate account/profile implementation is intentionally removed.
           Path('src/AccountPage.jsx').unlink(missing_ok=True)
           print('Requested KitAgent cleanup applied.')
           PY
