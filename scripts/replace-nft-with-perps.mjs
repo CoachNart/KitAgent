@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {execFileSync} from 'node:child_process';
 
 const appPath = 'src/App.jsx';
 let app = fs.readFileSync(appPath, 'utf8');
@@ -21,4 +22,7 @@ let perp = fs.readFileSync(perpPath, 'utf8');
 perp = perp.replace("import { getActiveProvider } from './walletConnector.js';", "import { getActiveProvider } from './walletConnector.js';\nimport { encodeFunctionData } from 'viem';");
 perp = perp.replace("function encodeApprove(spender, amountHex) { return '0x095ea7b3' + pad32(spender) + pad32(amountHex); }\nfunction encodeDeposit(to, assetIndex, routeType, amountHex) { return '0x' + 'deposit'.split('').map(c=>c.charCodeAt(0).toString(16)).join('').padEnd(8,'0') + pad32(to) + pad32(`0x${Number(assetIndex).toString(16)}`) + pad32(`0x${Number(routeType).toString(16)}`) + pad32(amountHex); }\nfunction pad32(v) { const raw=String(v).replace(/^0x/,'').padStart(64,'0'); return raw.slice(-64); }", "function encodeApprove(spender, amountHex) { return encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [spender, BigInt(amountHex)] }); }\nfunction encodeDeposit(to, assetIndex, routeType, amountHex) { return encodeFunctionData({ abi: ABI, functionName: 'deposit', args: [to, assetIndex, routeType, BigInt(amountHex)] }); }");
 fs.writeFileSync(perpPath, perp);
-console.log('Perpetual migration is applied and Market Analysis remains untouched.');
+
+execFileSync(process.execPath,['scripts/switch-perps-to-hyperliquid.mjs'],{stdio:'inherit'});
+execFileSync(process.execPath,['scripts/tighten-perps-ui.mjs'],{stdio:'inherit'});
+console.log('Perpetual migration is applied, Hyperliquid execution is selected, and Market Analysis remains untouched.');
