@@ -32,6 +32,10 @@ async function initializeAccount(user){
   }
 }
 
+function isMobileBrowser(){
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent||'');
+}
+
 export default function AuthGate({children}){
   const [user,setUser]=useState(null),[ready,setReady]=useState(false),[mode,setMode]=useState('signin'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   useEffect(()=>{
@@ -40,9 +44,6 @@ export default function AuthGate({children}){
     const boot=async()=>{
       try{
         await setPersistence(auth,browserLocalPersistence);
-        // Resolve an OAuth redirect before exposing the auth screen. Otherwise Firebase
-        // can briefly emit a null auth state while the Google redirect result is still
-        // being restored, which sends a valid Google user back to sign-up/sign-in.
         let redirectUser=null;
         try{
           const result=await getRedirectResult(auth);
@@ -77,11 +78,62 @@ export default function AuthGate({children}){
     boot().then(cleanup=>{unsubscribe=cleanup||undefined});
     return()=>{active=false;unsubscribe?.()};
   },[]);
-  const submit=async event=>{event.preventDefault();if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);if(mode==='signup')await createUserWithEmailAndPassword(auth,email.trim(),password);else await signInWithEmailAndPassword(auth,email.trim(),password)}catch(error){const code=error?.code||'';const friendly={'auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.','auth/too-many-requests':'Too many attempts. Please wait a moment and try again.'};setMessage(friendly[code]||error?.message||'Authentication failed.')}finally{setBusy(false)}};
-  const googleSignIn=async()=>{if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});try{await signInWithPopup(auth,provider)}catch(popupError){const code=popupError?.code||'';if(['auth/internal-error','auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(code)){await signInWithRedirect(auth,provider);return}throw popupError}}catch(error){const code=error?.code||'';const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.','auth/unauthorized-domain':'This website is not authorized for Google sign-in. Add the KitSetups web domain to Firebase Authentication → Settings → Authorized domains.','auth/operation-not-supported-in-this-environment':'Google sign-in is not supported in this browser environment.','auth/network-request-failed':'Network error. Check your connection and try again.','auth/internal-error':'Google sign-in could not open correctly. Check that the current KitSetups domain is authorized in Firebase, then try again.'};setMessage(friendly[code]||error?.message||'Google authentication failed.')}finally{setBusy(false)}};
+
+  const submit=async event=>{
+    event.preventDefault();
+    if(!auth||!db)return;
+    setBusy(true);setMessage('');
+    try{
+      await setPersistence(auth,browserLocalPersistence);
+      if(mode==='signup')await createUserWithEmailAndPassword(auth,email.trim(),password);
+      else await signInWithEmailAndPassword(auth,email.trim(),password);
+    }catch(error){
+      const code=error?.code||'';
+      const friendly={'auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.','auth/too-many-requests':'Too many attempts. Please wait a moment and try again.'};
+      setMessage(friendly[code]||error?.message||'Authentication failed.');
+    }finally{setBusy(false)}
+  };
+
+  const googleSignIn=async()=>{
+    if(!auth||!db)return;
+    setBusy(true);setMessage('');
+    try{
+      await setPersistence(auth,browserLocalPersistence);
+      const provider=new GoogleAuthProvider();
+      provider.setCustomParameters({prompt:'select_account'});
+
+      // Mobile browsers are much more reliable with Firebase's redirect resolver.
+      // Use popup on desktop, then fall back to redirect when the popup resolver
+      // is blocked or reports an internal/unsupported-environment error.
+      if(isMobileBrowser()){
+        await signInWithRedirect(auth,provider);
+        return;
+      }
+
+      try{
+        await signInWithPopup(auth,provider);
+      }catch(popupError){
+        const code=popupError?.code||'';
+        if(['auth/internal-error','auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(code)){
+          await signInWithRedirect(auth,provider);
+          return;
+        }
+        throw popupError;
+      }
+    }catch(error){
+      const code=error?.code||'';
+      const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.','auth/unauthorized-domain':'This website is not authorized for Google sign-in. Add kitsetups.xyz and www.kitsetups.xyz to Firebase Authentication → Settings → Authorized domains.','auth/network-request-failed':'Network error. Check your connection and try again.','auth/internal-error':'Google authentication could not start. Please refresh once and try again. If this persists, the Firebase Google provider/domain configuration needs attention.'};
+      setMessage(friendly[code]||error?.message||'Google authentication failed.');
+    }finally{setBusy(false)}
+  };
+
   if(!firebaseConfigured)return <AuthScreen title="KitSetups setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;
   if(!ready)return typeof children==='function'?children(null):cloneElement(children,{user:null});
   if(!user)return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit} onGoogle={googleSignIn}/>;
   return <><NotificationCenter user={user}/>{typeof children==='function'?children(user):cloneElement(children,{user})}</>;
 }
-function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPassword,busy=false,message='',onSubmit,onGoogle,title='KitSetups'}){const interactive=Boolean(onSubmit);return <div className="auth-screen"><div className="auth-glow"/><div className="auth-card"><div className="auth-brand"><img src="/kitsetups-logo.svg" alt="KitSetups"/><div><b>KitSetups</b><small>AI command center</small></div></div><div className="auth-kicker"><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div><h1>{title}</h1>{interactive&&<p className="auth-intro">{mode==='signin'?'Sign in to continue to your command center.':'Create your account and start your 3-day free trial.'}</p>}{interactive&&<><button type="button" className="google-auth" onClick={onGoogle} disabled={busy}><span className="google-mark" style={{color:'#EA4335'}}>G</span>{busy?'Connecting…':'Continue with Google'}</button><div className="auth-divider"><span>or continue with email</span></div><form onSubmit={onSubmit}><label className="auth-label">EMAIL<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label className="auth-label">PASSWORD<input required minLength={6} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label>{message&&<div className="auth-error">{message}</div>}<button disabled={busy} className="auth-submit" type="submit">{busy?<LoaderCircle size={16}/>:mode==='signin'?<LogIn size={16}/>:<UserPlus size={16}/>} {busy?'Verifying account…':mode==='signin'?'Sign in':'Create account'}</button><button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('')}} className="auth-switch">{mode==='signin'?'New to KitSetups? Create an account':'Already have an account? Sign in'}</button></form></>}{!interactive&&<div className="auth-error">{message}</div>}<div className="auth-foot">Your account is secured by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</div></div></div>}
+
+function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPassword,busy=false,message='',onSubmit,onGoogle,title='KitSetups'}){
+  const interactive=Boolean(onSubmit);
+  return <div className="auth-screen"><div className="auth-glow"/><div className="auth-card"><div className="auth-brand"><img src="/kitsetups-logo.svg" alt="KitSetups"/><div><b>KitSetups</b><small>AI command center</small></div></div><div className="auth-kicker"><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div><h1>{title}</h1>{interactive&&<p className="auth-intro">{mode==='signin'?'Sign in to continue to your command center.':'Create your account and start your 3-day free trial.'}</p>}{interactive&&<><button type="button" className="google-auth" onClick={onGoogle} disabled={busy}><span className="google-mark" style={{color:'#EA4335'}}>G</span>{busy?'Connecting…':'Continue with Google'}</button><div className="auth-divider"><span>or continue with email</span></div><form onSubmit={onSubmit}><label className="auth-label">EMAIL<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label className="auth-label">PASSWORD<input required minLength={6} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label>{message&&<div className="auth-error">{message}</div>}<button disabled={busy} className="auth-submit" type="submit">{busy?<LoaderCircle size={16}/>:mode==='signin'?<LogIn size={16}/>:<UserPlus size={16}/>} {busy?'Verifying account…':mode==='signin'?'Sign in':'Create account'}</button><button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('')}} className="auth-switch">{mode==='signin'?'New to KitSetups? Create an account':'Already have an account? Sign in'}</button></form></>}{!interactive&&<div className="auth-error">{message}</div>}<div className="auth-foot">Your account is secured by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</div></div></div>
+}
