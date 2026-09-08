@@ -15,6 +15,7 @@ source = source.replaceAll('KITAGENT', 'KITSETUPS');
 source = source.replaceAll('/kitagent-logo.svg', '/kitsetups-logo.svg');
 source = source.replace("Terminal, UserRound, Wallet", "Terminal, UserRound, House, Wallet");
 source = source.replace("['home','Home',UserRound]", "['home','Home',House]");
+source = source.replace("['drops','Airdrops & faucets',Rocket]", "['drops','Airdrops & faucets',UserRound]");
 source = source.replace("['profile','Profile',Rocket]", "['profile','Profile',UserRound]");
 
 if (source !== before) fs.writeFileSync(file, source);
