@@ -12,9 +12,8 @@ function makeUsername(email, uid){
 }
 
 function makeAvatar(username){
-  const letters=(username||'K').split(/[-_\s]+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('')||'K';
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="24" fill="#111827"/><circle cx="48" cy="48" r="38" fill="none" stroke="#22c55e" stroke-opacity=".65" stroke-width="2"/><text x="48" y="56" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="white">${letters}</text></svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  const seed=encodeURIComponent(`kitsetups-${username||Math.random().toString(36).slice(2)}`);
+  return `https://api.dicebear.com/9.x/adventurer/svg?seed=${seed}&backgroundType=gradientLinear&radius=24&size=96`;
 }
 
 async function registerDevice(user){
