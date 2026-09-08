@@ -1,3 +1,4 @@
+# cleanup pass trigger
 name: Build KitAgent
 on:
   push:
@@ -32,49 +33,33 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import re
-
           app = Path('src/App.jsx')
           s = app.read_text()
-
-          # One canonical Profile destination; Home uses a home icon and Airdrops keeps its rocket icon.
           s = s.replace('History, Layers3, LockKeyhole', 'History, House, Layers3, LockKeyhole')
           nav = "const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['perps','Perpetuals',Zap],['drops','Airdrops & faucets',Rocket],['activity','History',History],['profile','Profile',UserRound]];"
           s = re.sub(r'const nav=\[[^\n]*?\];', nav, s, count=1)
-
-          # Guarantee exactly one copy of the canonical page imports.
           s = re.sub(r"(?:import AccessGate from './AccessGate\.jsx';\n)+", '', s)
           s = re.sub(r"(?:import LiveMarketPage from './LiveMarketPage\.jsx';\n)+", '', s)
           s = s.replace("import HomePage from './HomePage.jsx';", "import HomePage from './HomePage.jsx';\nimport AccessGate from './AccessGate.jsx';\nimport LiveMarketPage from './LiveMarketPage.jsx';", 1)
           s = re.sub(r"(?:import SignalHistory from './SignalHistory\.jsx';\n)+", '', s)
           s = s.replace("import PerpetualsPage from './PerpetualsPage.jsx';", "import PerpetualsPage from './PerpetualsPage.jsx';\nimport SignalHistory from './SignalHistory.jsx';", 1)
-
-          # Replace Activity with the existing signal/history implementation and remove the old page implementation.
           s = s.replace("{page==='activity'&&<ActivityPage activity={activity}/>}", "{page==='activity'&&<SignalHistory/>}")
           s = re.sub(r'\nfunction ActivityPage\(\{activity\}\)\{.*?\}\nfunction ProfilePage', '\nfunction ProfilePage', s, count=1, flags=re.S)
-
-          # Use the authenticated live market page instead of the local unauthenticated placeholder.
           s = re.sub(r"\{page==='market'&&<MarketPage pair=\{pair\} setPair=\{setPair\} tf=\{tf\} setTf=\{setTf\} analyzed=\{analyzed\} setAnalyzed=\{setAnalyzed\}/>\}", "{page==='market'&&<AccessGate user={user}><LiveMarketPage/></AccessGate>}", s, count=1)
           app.write_text(s)
-
           market = Path('src/LiveMarketPage.jsx')
           m = market.read_text()
           old = "const endpoint='/api/market';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}`);"
           new = "const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});"
-          if old in m:
-              m = m.replace(old, new)
+          if old in m: m = m.replace(old, new)
           old_err = "if(!r.ok||!body.ok)throw new Error(body.error||`Market analysis failed (${r.status})`);"
           new_err = "if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired.')}throw new Error(body.error||`Market analysis failed (${r.status})`);}"
           m = m.replace(old_err, new_err)
           market.write_text(m)
-
           for name in ['scripts/normalize-nav-icons.mjs', 'scripts/restore-activity-profile-brand.mjs']:
               p = Path(name)
-              if p.exists():
-                  x = p.read_text().replace("['drops','Airdrops & faucets',UserRound]", "['drops','Airdrops & faucets',Rocket]")
-                  p.write_text(x)
-
+              if p.exists(): p.write_text(p.read_text().replace("['drops','Airdrops & faucets',UserRound]", "['drops','Airdrops & faucets',Rocket]"))
           Path('src/AccountPage.jsx').unlink(missing_ok=True)
-          print('Requested KitAgent cleanup applied.')
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
