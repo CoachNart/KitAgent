@@ -1,4 +1,4 @@
-# final deployment trigger
+# final deployment trigger - 2026-09-08
 name: Build KitAgent
 on:
   push:
