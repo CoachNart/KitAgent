@@ -1,0 +1,68 @@
+name: Repair Profile Activity and Branding
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore intended profile and activity UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          app_path = Path('src/App.jsx')
+          app = app_path.read_text()
+
+          # Restore the real AccountPage that was accidentally removed by the cleanup workflow.
+          import subprocess
+          account = subprocess.check_output([
+              'git','show','cdb1a7a336e98d2c3ffe8044d03a2ed09791044d:src/AccountPage.jsx'
+          ], text=True)
+          Path('src/AccountPage.jsx').write_text(account)
+
+          # Use the dedicated Profile/Account page instead of the stale duplicate inline ProfilePage.
+          if "import AccountPage from './AccountPage.jsx';" not in app:
+              app = app.replace("import HomePage from './HomePage.jsx';", "import HomePage from './HomePage.jsx';\nimport AccountPage from './AccountPage.jsx';", 1)
+          app = app.replace("{page==='profile'&&<ProfilePage wallet={wallet} connectWallet={connectWallet} user={user}/>}" , "{page==='profile'&&<AccountPage wallet={wallet} connectWallet={connectWallet} user={user}/>}" )
+          app = re.sub(r'function ProfilePage[\\s\\S]*?(?=function PermissionModal)', '', app, count=1)
+
+          # Restore the richer transaction Activity page from the last known good App source.
+          historical = subprocess.check_output([
+              'git','show','6d30e00c773d9847f6b17c11139ac014b401207f:src/App.jsx'
+          ], text=True)
+          match = re.search(r'(function ActivityPage[\\s\\S]*?)(?=function ProfilePage)', historical)
+          if match:
+              app = re.sub(r'function ActivityPage[\\s\\S]*?(?=function PermissionModal)', '', app, count=1)
+              app = app.replace('function PermissionModal', match.group(1) + '\nfunction PermissionModal', 1)
+              app = app.replace("{page==='activity'&&<SignalHistory/>}", "{page==='activity'&&<ActivityPage activity={activity}/>}" )
+          app_path.write_text(app)
+
+          # Make the user-facing product name KitSetups everywhere in source/UI copy.
+          roots = [Path('src'), Path('public')]
+          for root in roots:
+              if not root.exists():
+                  continue
+              for p in root.rglob('*'):
+                  if not p.is_file() or p.suffix.lower() not in {'.js','.jsx','.ts','.tsx','.css','.html','.json','.svg','.txt','.md'}:
+                      continue
+                  try:
+                      text = p.read_text()
+                  except Exception:
+                      continue
+                  if 'KitAgent' in text:
+                      p.write_text(text.replace('KitAgent', 'KitSetups'))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src public
+          git commit -m 'fix: restore profile activity and KitSetups branding [skip ci]' || exit 0
+          git push
