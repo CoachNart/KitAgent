@@ -8,7 +8,7 @@ let source=fs.readFileSync(file,'utf8');
 
 // Keep exactly one Profile navigation entry. Profile always uses the profile/user icon;
 // Airdrops & Faucets remains its own navigation destination.
-source=source.replace(/const nav=\[[^\n]*?\];/,"const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['perps','Perpetuals',Zap],['drops','Airdrops & faucets',UserRound],['activity','Activity',History],['profile','Profile',UserRound]];");
+source=source.replace(/const nav=\[[^\n]*?\];/,"const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['perps','Perpetuals',Zap],['drops','Airdrops & faucets',Rocket],['activity','Activity',History],['profile','Profile',UserRound]];");
 
 if(!source.includes("import SignalHistory from './SignalHistory.jsx';")){
   source=source.replace("import PerpetualsPage from './PerpetualsPage.jsx';","import PerpetualsPage from './PerpetualsPage.jsx';\nimport SignalHistory from './SignalHistory.jsx';");
