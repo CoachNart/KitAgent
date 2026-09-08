@@ -10,6 +10,7 @@ import './overrides.css';
 import './command-center-overrides.css';
 import './agent-terminal.css';
 import './perpetuals-responsive.css';
+import './home.css';
 
 function NativeLifecycle(){
   useEffect(()=>{
