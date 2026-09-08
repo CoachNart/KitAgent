@@ -1,0 +1,33 @@
+name: Fix AccountPage build collision
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-accountpage-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fix duplicate AccountPage symbol
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.jsx')
+          s = p.read_text()
+          s = s.replace("import AccountPage from './AccountPage.jsx';", "import AccountPageComponent from './AccountPage.jsx';", 1)
+          s = s.replace("{page==='profile'&&<AccountPage wallet={wallet} connectWallet={connectWallet} user={user}/>}" , "{page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>}" , 1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git commit -m 'fix: resolve AccountPage build collision' || true
+          git push
