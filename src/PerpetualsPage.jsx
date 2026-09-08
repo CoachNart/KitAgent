@@ -39,6 +39,23 @@ export default function PerpetualsPage(){
  const close=p=>{if(!creds||!p)return setModal(true);setBusy('close');priv('create',creds,{order:{category:'linear',symbol:p.symbol,side:p.side==='Buy'?'Sell':'Buy',orderType:'Market',qty:String(p.size),positionIdx:+(p.positionIdx||0),reduceOnly:true,timeInForce:'IOC'}}).then(()=>{say('Close order submitted.');return refreshPrivate()}).catch(e=>say(e.message)).finally(()=>setBusy(''))};
  const share=async()=>{if(!current)return say('No open position to share.');const pnl=Number(current.unrealisedPnl||current.unrealizedPnl||0);const text=`KitAgent Perpetuals · ${current.symbol}\n${current.side==='Buy'?'Long':'Short'} ${current.leverage||leverage}x\nPnL ${pnl>=0?'+':''}${usd(pnl)} · ${n(current.size,4)} contracts\nEntry ${usd(current.avgPrice)} · Mark ${usd(current.markPrice)}`;try{if(navigator.share)await navigator.share({title:'KitAgent PnL',text});else await navigator.clipboard.writeText(text);say('PnL copied.')}catch{}};
  const chart=candles.slice(-100);const lo=chart.length?Math.min(...chart.map(x=>x.low)):0;const hi=chart.length?Math.max(...chart.map(x=>x.high)):1;const range=hi-lo||1;
+ useEffect(()=>{
+  let socket; let stopped=false;
+  try{
+   ws.current?.close();
+   socket=new WebSocket('wss://stream.bybit.com/v5/public/linear');
+   ws.current=socket;
+   socket.onopen=()=>{if(stopped)return;socket.send(JSON.stringify({op:'subscribe',args:[`tickers.${symbol}`,`orderbook.50.${symbol}`,`publicTrade.${symbol}`,`kline.${TF[tf]}.${symbol}`]}))};
+   socket.onmessage=e=>{if(stopped)return;try{const m=JSON.parse(e.data||'{}');const d=m.data;const topic=m.topic||'';
+    if(topic.startsWith('tickers.')){const x=Array.isArray(d)?d[0]:d;if(x)setTicker(prev=>({...prev,...x}))}
+    else if(topic.startsWith('orderbook.')){if(d?.a)setAsks(d.a.map(x=>({price:+x[0],size:+x[1]})));if(d?.b)setBids(d.b.map(x=>({price:+x[0],size:+x[1]})))}
+    else if(topic.startsWith('publicTrade.')){const rows=Array.isArray(d)?d:[];setTrades(prev=>[...rows.map(x=>({price:+x.p,size:+x.v,side:x.S})),...prev].slice(0,80))}
+    else if(topic.startsWith('kline.')){const rows=Array.isArray(d)?d:[];if(rows[0]){const k=rows[0];const next={time:+k.start,open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume};setCandles(prev=>{const copy=prev.slice(-239);const last=copy[copy.length-1];if(last&&last.time===next.time)copy[copy.length-1]=next;else copy.push(next);return copy})}}
+   }catch{}};
+  }catch{socket=null}
+  return()=>{stopped=true;try{socket?.close()}catch{}};
+ },[symbol,tf]);
+ // kitagent-live-stream-v2
  return <div className="page-wrap ka-perps"><style>{CSS}</style>{notice&&<div className="ka-toast">{notice}<button onClick={()=>setNotice('')}><X size={14}/></button></div>}
  <div className="ka-marketbar glass-panel"><div className="pair"><button onClick={()=>setPicker(v=>!v)}><i>{symbol[0]}</i><span><b>{symbol.replace('USDT','')}/USDT</b><small>Linear perpetual</small></span><ChevronDown size={14}/></button>{picker&&<div className="pair-menu"><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search all Bybit perpetuals…"/>{filtered.map(m=><button key={m.symbol} onClick={()=>{setSymbol(m.symbol);setPicker(false);setQuery('')}}><b>{m.baseCoin}/USDT</b><small>{m.leverageFilter?.maxLeverage||'—'}x</small></button>)}</div>}</div>
  <div className="stats"><span>Last <b>{usd(last)}</b></span><span>24h <b className={+(ticker?.price24hPcnt||0)>=0?'long':'short'}>{ticker?.price24hPcnt?`${(+ticker.price24hPcnt*100).toFixed(2)}%`:'—'}</b></span><span>High <b>{usd(ticker?.highPrice24h)}</b></span><span>Low <b>{usd(ticker?.lowPrice24h)}</b></span><span>Volume <b>{n(ticker?.turnover24h,0)}</b></span><span>Funding <b>{funding?`${(+funding*100).toFixed(4)}%`:'—'}</b></span></div>
