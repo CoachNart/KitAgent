@@ -32,16 +32,15 @@ export default async function handler(req,res){
     if(!/^[a-f0-9]{64}$/.test(deviceId||''))return json(res,400,{error:'Invalid device binding.',code:'DEVICE_ID_INVALID'});
     const db=a.firestore(),deviceRef=db.collection('deviceBindings').doc(deviceId),userRef=db.collection('users').doc(decoded.uid);
 
-    // Reclaim only bindings whose owner has genuinely been deleted from Firebase Auth.
-    // Active accounts remain protected by the transaction below.
+    // Check Auth outside the Firestore transaction. A missing owner means the
+    // Firestore binding is stale and may be reclaimed; an active owner remains blocked.
     const existingDevice=await deviceRef.get();
+    let staleOwnerUid=null;
     if(existingDevice.exists){
       const owner=existingDevice.data()?.uid;
       if(owner&&owner!==decoded.uid){
         try{await a.auth().getUser(owner)}
-        catch(error){
-          if(error?.code!=='auth/user-not-found') throw error;
-        }
+        catch(error){if(error?.code==='auth/user-not-found')staleOwnerUid=owner;else throw error}
       }
     }
 
@@ -49,11 +48,9 @@ export default async function handler(req,res){
       const deviceSnap=await tx.get(deviceRef),userSnap=await tx.get(userRef);
       const device=deviceSnap.exists?deviceSnap.data():null;
       const user=userSnap.exists?userSnap.data():null;
-
       if(device?.uid&&device.uid!==decoded.uid){
-        let ownerStillExists=true;
-        try{await a.auth().getUser(device.uid)}catch(error){if(error?.code==='auth/user-not-found')ownerStillExists=false;else throw error}
-        if(ownerStillExists){const e=new Error('DEVICE_ALREADY_REGISTERED');e.code=e.message;throw e}
+        // Only reclaim when the preflight Auth lookup proved this exact owner was deleted.
+        if(device.uid!==staleOwnerUid){const e=new Error('DEVICE_ALREADY_REGISTERED');e.code=e.message;throw e}
         tx.delete(deviceRef);
       }
       if(user?.securitySettings?.deviceBindingId&&user.securitySettings.deviceBindingId!==deviceId){const e=new Error('ACCOUNT_ALREADY_BOUND');e.code=e.message;throw e}
@@ -64,16 +61,11 @@ export default async function handler(req,res){
       if(userSnap.exists){
         const security={...(user.securitySettings||{}),deviceBindingId:deviceId};
         const patch={securitySettings:security,updatedAt:a.firestore.FieldValue.serverTimestamp()};
-        // Never shorten or restart an existing trial. Only repair missing trial dates.
-        if(!user.trialStartedAt||!user.trialEndsAt){
-          const nowMs=Date.now();
-          patch.trialStartedAt=new Date(nowMs);
-          patch.trialEndsAt=new Date(nowMs+3*86400000);
-        }
+        // Never restart an existing trial. Repair dates only when they are genuinely absent.
+        if(!user.trialStartedAt||!user.trialEndsAt){const nowMs=Date.now();patch.trialStartedAt=new Date(nowMs);patch.trialEndsAt=new Date(nowMs+3*86400000)}
         tx.update(userRef,patch);
       }else{
-        const nowMs=Date.now();
-        const now=new Date(nowMs),end=new Date(nowMs+3*86400000);
+        const nowMs=Date.now(),now=new Date(nowMs),end=new Date(nowMs+3*86400000);
         tx.create(userRef,{uid:decoded.uid,email:decoded.email||'',displayName:decoded.name||'',photoURL:decoded.picture||'',status:'active',plan:'free',monthlyUsage:{used:0,limit:0},subscription:{name:'Premium',price:20,currency:'USD',billingPeriod:'month',accessDays:30,features:['Unlimited setups','Live intelligence'],paymentAsset:'USDT',paymentNetwork:'BNB Chain',paymentAddress:'0x1c35bf9d920e1b5d7e7e37ce1d15a1b9500f8474'},api:{status:'coming_soon'},securitySettings:{deviceBindingId:deviceId},trialStartedAt:now,trialEndsAt:end,createdAt:a.firestore.FieldValue.serverTimestamp(),updatedAt:a.firestore.FieldValue.serverTimestamp()});
       }
     });
