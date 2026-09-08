@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
+import { authenticate, requireActiveAccess } from './_access.js';
 
 function getAdmin() {
   if (admin.apps.length) return admin;
@@ -49,6 +50,7 @@ export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) return json(res, 405, { error: 'Method not allowed.' });
   try {
     const decoded = await authenticate(req);
+    if (req.method === 'POST') await requireActiveAccess(decoded.uid);
     const db = getAdmin().firestore();
     const collection = db.collection('users').doc(decoded.uid).collection('signals');
 
@@ -112,7 +114,7 @@ export default async function handler(req, res) {
     await ref.set(signal);
     return json(res, 201, { ok: true, id: ref.id, signal: { ...signal, generatedAt: new Date().toISOString(), createdAt: new Date().toISOString() } });
   } catch (error) {
-    const status = error?.code === 'AUTH_TOKEN_MISSING' || error?.code === 'AUTH_TOKEN_INVALID' ? 401 : 500;
+    const status = ['AUTH_REQUIRED','AUTH_INVALID'].includes(error?.code) ? 401 : error?.code === 'ACCESS_EXPIRED' ? 403 : 500;
     return json(res, status, { error: error?.message || 'Signal record operation failed.', code: error?.code || 'SIGNAL_RECORD_FAILED' });
   }
 }
