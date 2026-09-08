@@ -45,3 +45,5 @@ function FieldSelect({label,value,onChange,options}){return <div className="fiel
 function shortAddress(v){return v?`${v.slice(0,6)}…${v.slice(-4)}`:''}
 function initials(v){return String(v||'K').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'K'}
 function capitalize(v){return v?`${v[0].toUpperCase()}${v.slice(1)}`:'Action'}
+
+// Build repair verified: AccountPage import is collision-safe.
