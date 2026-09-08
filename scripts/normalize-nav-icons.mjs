@@ -7,7 +7,6 @@ const file = path.join(root, 'src', 'App.jsx');
 let source = fs.readFileSync(file, 'utf8');
 const before = source;
 
-// Keep the source resilient even if an older App.jsx is checked out before build.
 source = source.replaceAll('KitAgent', 'KitSetups');
 source = source.replaceAll('KITAGENT', 'KITSETUPS');
 source = source.replaceAll('/kitagent-logo.svg', '/kitsetups-logo.svg');
@@ -19,12 +18,14 @@ source = source.replaceAll('Robinhood Chain ·', 'Arbitrum / Hyperliquid ·');
 source = source.replaceAll('Mainnet · 4663', 'Arbitrum One · Hyperliquid');
 source = source.replaceAll('Chain ID 4663', 'Arbitrum One · Hyperliquid');
 source = source.replaceAll('RH</span>', 'HL</span>');
-source = source.replaceAll('Network: Robinhood Chain', 'Network: Arbitrum / Hyperliquid');
+source = source.replaceAll('https://rpc.mainnet.chain.robinhood.com', 'https://arb1.arbitrum.io/rpc');
+source = source.replaceAll('https://robinhoodchain.blockscout.com', 'https://arbiscan.io');
+source = source.replaceAll('chainId:4663', 'chainId:42161');
+source = source.replaceAll("hex:'0x1237'", "hex:'0xa4b1'");
 
 if (!source.includes("import { House } from 'lucide-react';")) {
-  source = source.replace("import { Activity,", "import { House, Activity,");
+  source = source.replace("import { Activity,", "import { House } from 'lucide-react';\nimport { Activity,");
 }
-source = source.replace("Terminal, UserRound, House, Wallet", "Terminal, UserRound, House, Wallet");
 source = source.replace("Terminal, UserRound, Wallet", "Terminal, UserRound, House, Wallet");
 source = source.replace("['home','Home',BarChart3]", "['home','Home',House]");
 source = source.replace("['home','Home',UserRound]", "['home','Home',House]");
@@ -37,7 +38,6 @@ if (!source.includes("import NotificationCenter from './NotificationCenter.jsx';
 source = source.replaceAll('<NotificationCenter user={user}/>', '');
 source = source.replace('<div className="header-actions"><div className="system">', '<div className="header-actions"><NotificationCenter user={user} embedded/><div className="system">');
 
-// Profile editor: generated username remains the default, but users can safely change it.
 if (!source.includes("const PROFILE_EDITOR_MARKER='kitsetups-profile-editor-v1';")) {
   source = source.replace(
     "function ProfilePage({wallet,connectWallet,user}){",
@@ -45,12 +45,11 @@ if (!source.includes("const PROFILE_EDITOR_MARKER='kitsetups-profile-editor-v1';
   );
 }
 
-const profileImportNeedles=[
+for (const [addition, needle] of [
   ["import { updateProfile } from 'firebase/auth';", "import { useEffect, useState } from 'react';"],
   ["import { collection, doc, getDocs, limit, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';", "import { useEffect, useState } from 'react';"],
   ["import { db } from './firebase.js';", "import HomePage from './HomePage.jsx';"]
-];
-for (const [addition, needle] of profileImportNeedles) {
+]) {
   if (!source.includes(addition)) source = source.replace(needle, `${needle}\n${addition}`);
 }
 
@@ -61,9 +60,8 @@ if(profileStart>=0&&profileEnd>profileStart){
   source=source.slice(0,profileStart)+profile+source.slice(profileEnd);
 }
 
-const networkLine=/const HYPERLIQUID_NETWORK=[^;]+;/;
-if(!networkLine.test(source)){
-  source=source.replace(/const [A-Z_]+_CHAIN=[^;]+;/, "const HYPERLIQUID_NETWORK={name:'Arbitrum / Hyperliquid',chainId:42161,hex:'0xa4b1',rpcUrl:'https://arb1.arbitrum.io/rpc',explorer:'https://arbiscan.io',nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18}};");
-}
+const networkObject="const HYPERLIQUID_NETWORK={name:'Arbitrum / Hyperliquid',chainId:42161,hex:'0xa4b1',rpcUrl:'https://arb1.arbitrum.io/rpc',explorer:'https://arbiscan.io',nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18}};";
+source=source.replace(/const HYPERLIQUID_NETWORK=[^;]+;/,networkObject);
+if(!source.includes('const HYPERLIQUID_NETWORK=')) source=source.replace(/const [A-Z_]+_CHAIN=[^;]+;/,networkObject);
 
 if (source !== before) fs.writeFileSync(file, source);
