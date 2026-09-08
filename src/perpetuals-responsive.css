@@ -9,6 +9,24 @@
 .ka-perps .pair-menu{max-width:min(300px,calc(100vw - 28px))}
 .ka-perps .chart-panel header small{color:var(--red)!important}
 .ka-perps .connected i{background:var(--red)!important;box-shadow:0 0 9px var(--red)!important}
+
+/* Compact position/order area: keep actions visible and give the panel its own scroll. */
+.ka-perps .account-panel{overflow:hidden}
+.ka-perps .account-panel .tabs{font-size:12px;min-height:34px}
+.ka-perps .account-panel .tabs button{font-size:11px;padding:7px 9px;white-space:nowrap}
+.ka-perps .account-panel .row{font-size:11px;line-height:1.2}
+.ka-perps .account-panel .row>*{min-width:0}
+.ka-perps .account-panel .position-actions,.ka-perps .account-panel .actions,.ka-perps .account-panel .row button{font-size:11px}
+.ka-perps .account-panel .position-actions{display:flex!important;flex-wrap:wrap;gap:6px;margin-top:7px;position:relative;z-index:3}
+.ka-perps .account-panel .position-actions button,.ka-perps .account-panel .share-pnl,.ka-perps .account-panel .close-trade{display:inline-flex!important;align-items:center;justify-content:center;min-height:30px;padding:6px 9px;white-space:nowrap}
+.ka-perps .account-panel .share-pnl{border:1px solid rgba(0,199,254,.35)}
+.ka-perps .account-panel .close-trade{border:1px solid rgba(255,76,76,.35)}
+.ka-perps .account-panel .position-card,.ka-perps .account-panel .position-row{padding:8px 10px!important}
+.ka-perps .account-panel .position-card *,.ka-perps .account-panel .position-row *{font-size:11px}
+.ka-perps .account-panel .position-card strong,.ka-perps .account-panel .position-row strong{font-size:12px}
+.ka-perps .account-panel .positions-list,.ka-perps .account-panel .orders-list,.ka-perps .account-panel .history-list{max-height:250px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-right:2px}
+.ka-perps .account-panel .positions-list:empty,.ka-perps .account-panel .orders-list:empty{min-height:0}
+
 @media (max-width:1050px){
   .ka-perps .ka-marketbar{flex-wrap:wrap}
   .ka-perps .stats{order:3;width:100%;flex-basis:100%;overflow-x:auto;padding-top:2px}
@@ -34,17 +52,21 @@
   .ka-perps .chart-panel nav button{flex:0 0 auto}
   .ka-perps .chart{height:clamp(230px,58vw,330px);padding:5px}
   .ka-perps .two{grid-template-columns:1fr;gap:8px}
-  .ka-perps .book{max-height:310px}
+  .ka-perps .book{max-height:310px;overflow:auto}
   .ka-perps .book p{padding-left:10px;padding-right:10px}
   .ka-perps .tabs{gap:2px;white-space:nowrap}
   .ka-perps .tabs button{flex:0 0 auto;padding:8px 9px}
-  .ka-perps .row{display:grid;grid-template-columns:repeat(2,minmax(max-content,1fr));gap:8px;padding:10px;overflow-x:auto}
+  .ka-perps .row{display:grid;grid-template-columns:repeat(2,minmax(max-content,1fr));gap:6px;padding:8px;overflow-x:auto}
   .ka-perps .row button{margin-left:0}
-  .ka-perps .trade-panel{position:relative;top:auto;padding:11px}
+  .ka-perps .trade-panel{position:relative;top:auto;padding:9px}
   .ka-perps .quick{flex-wrap:wrap}
   .ka-perps .quick button{min-width:38px}
   .ka-perps .mode{grid-template-columns:1fr 1fr}
   .ka-perps .mode button:last-child{grid-column:1/-1}
+  .ka-perps .account-panel{max-height:390px;overflow:hidden}
+  .ka-perps .account-panel .positions-list,.ka-perps .account-panel .orders-list,.ka-perps .account-panel .history-list{max-height:190px}
+  .ka-perps .account-panel .position-actions{gap:5px}
+  .ka-perps .account-panel .position-actions button,.ka-perps .account-panel .share-pnl,.ka-perps .account-panel .close-trade{flex:1 1 calc(50% - 5px);font-size:10px;padding:6px 7px}
   .ka-perps .modal-back{padding:12px}
   .ka-perps .modal{width:100%;max-height:calc(100dvh - 24px);overflow:auto}
   .ka-perps .ka-toast{left:10px;right:10px;top:68px;max-width:none}
