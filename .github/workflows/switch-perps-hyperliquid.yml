@@ -1,0 +1,26 @@
+name: Switch Perpetuals to Hyperliquid
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/switch-perps-to-hyperliquid.mjs'
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/switch-perps-to-hyperliquid.mjs
+      - name: Commit route switch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git diff --cached --quiet || git commit -m 'feat: switch perpetuals execution to Hyperliquid'
+          git push
