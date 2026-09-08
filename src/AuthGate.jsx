@@ -34,13 +34,49 @@ async function initializeAccount(user){
 
 export default function AuthGate({children}){
   const [user,setUser]=useState(null),[ready,setReady]=useState(false),[mode,setMode]=useState('signin'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
-  useEffect(()=>{if(!auth||!db){setReady(true);return undefined}let active=true;setPersistence(auth,browserLocalPersistence).catch(e=>console.error('KitSetups auth persistence setup failed:',e));getRedirectResult(auth).catch(error=>{if(error?.code&&error.code!=='auth/no-auth-event')console.error('KitSetups Google redirect result failed:',error)});const unsubscribe=onAuthStateChanged(auth,next=>{
-    if(!active)return;
-    if(!next){setUser(null);setReady(true);return}
-    setUser(next);
-    setReady(true);
-    initializeAccount(next).catch(error=>console.error('KitSetups account sync deferred:',error));
-  });return()=>{active=false;unsubscribe()}},[]);
+  useEffect(()=>{
+    if(!auth||!db){setReady(true);return undefined}
+    let active=true;
+    const boot=async()=>{
+      try{
+        await setPersistence(auth,browserLocalPersistence);
+        // Resolve an OAuth redirect before exposing the auth screen. Otherwise Firebase
+        // can briefly emit a null auth state while the Google redirect result is still
+        // being restored, which sends a valid Google user back to sign-up/sign-in.
+        let redirectUser=null;
+        try{
+          const result=await getRedirectResult(auth);
+          redirectUser=result?.user||null;
+        }catch(error){
+          if(error?.code&&error.code!=='auth/no-auth-event'){
+            console.error('KitSetups Google redirect result failed:',error);
+            if(active)setMessage(error?.message||'Google authentication could not be completed.');
+          }
+        }
+        if(!active)return;
+        if(redirectUser){
+          setUser(redirectUser);
+          setReady(true);
+          initializeAccount(redirectUser).catch(error=>console.error('KitSetups account sync deferred:',error));
+          return;
+        }
+        const unsubscribe=onAuthStateChanged(auth,next=>{
+          if(!active)return;
+          if(!next){setUser(null);setReady(true);return}
+          setUser(next);
+          setReady(true);
+          initializeAccount(next).catch(error=>console.error('KitSetups account sync deferred:',error));
+        });
+        return unsubscribe;
+      }catch(error){
+        console.error('KitSetups auth initialization failed:',error);
+        if(active)setReady(true);
+      }
+    };
+    let unsubscribe;
+    boot().then(cleanup=>{unsubscribe=cleanup||undefined});
+    return()=>{active=false;unsubscribe?.()};
+  },[]);
   const submit=async event=>{event.preventDefault();if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);if(mode==='signup')await createUserWithEmailAndPassword(auth,email.trim(),password);else await signInWithEmailAndPassword(auth,email.trim(),password)}catch(error){const code=error?.code||'';const friendly={'auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.','auth/too-many-requests':'Too many attempts. Please wait a moment and try again.'};setMessage(friendly[code]||error?.message||'Authentication failed.')}finally{setBusy(false)}};
   const googleSignIn=async()=>{if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});try{await signInWithPopup(auth,provider)}catch(popupError){const code=popupError?.code||'';if(['auth/internal-error','auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(code)){await signInWithRedirect(auth,provider);return}throw popupError}}catch(error){const code=error?.code||'';const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.','auth/unauthorized-domain':'This website is not authorized for Google sign-in. Add the KitSetups web domain to Firebase Authentication → Settings → Authorized domains.','auth/operation-not-supported-in-this-environment':'Google sign-in is not supported in this browser environment.','auth/network-request-failed':'Network error. Check your connection and try again.','auth/internal-error':'Google sign-in could not open correctly. Check that the current KitSetups domain is authorized in Firebase, then try again.'};setMessage(friendly[code]||error?.message||'Google authentication failed.')}finally{setBusy(false)}};
   if(!firebaseConfigured)return <AuthScreen title="KitSetups setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;
