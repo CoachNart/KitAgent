@@ -32,8 +32,6 @@ export default async function handler(req,res){
     if(!/^[a-f0-9]{64}$/.test(deviceId||''))return json(res,400,{error:'Invalid device binding.',code:'DEVICE_ID_INVALID'});
     const db=a.firestore(),deviceRef=db.collection('deviceBindings').doc(deviceId),userRef=db.collection('users').doc(decoded.uid);
 
-    // Check Auth outside the Firestore transaction. A missing owner means the
-    // Firestore binding is stale and may be reclaimed; an active owner remains blocked.
     const existingDevice=await deviceRef.get();
     let staleOwnerUid=null;
     if(existingDevice.exists){
@@ -48,15 +46,13 @@ export default async function handler(req,res){
       const deviceSnap=await tx.get(deviceRef),userSnap=await tx.get(userRef);
       const device=deviceSnap.exists?deviceSnap.data():null;
       const user=userSnap.exists?userSnap.data():null;
-      if(device?.uid&&device.uid!==decoded.uid){
-        // Only reclaim when the preflight Auth lookup proved this exact owner was deleted.
-        if(device.uid!==staleOwnerUid){const e=new Error('DEVICE_ALREADY_REGISTERED');e.code=e.message;throw e}
-        tx.delete(deviceRef);
-      }
+      const stale=device?.uid&&device.uid!==decoded.uid&&device.uid===staleOwnerUid;
+      if(device?.uid&&device.uid!==decoded.uid&&!stale){const e=new Error('DEVICE_ALREADY_REGISTERED');e.code=e.message;throw e}
       if(user?.securitySettings?.deviceBindingId&&user.securitySettings.deviceBindingId!==deviceId){const e=new Error('ACCOUNT_ALREADY_BOUND');e.code=e.message;throw e}
 
-      if(!deviceSnap.exists||device?.uid!==decoded.uid)tx.create(deviceRef,{uid:decoded.uid,createdAt:a.firestore.FieldValue.serverTimestamp(),lastSeenAt:a.firestore.FieldValue.serverTimestamp(),version:2});
-      else tx.update(deviceRef,{lastSeenAt:a.firestore.FieldValue.serverTimestamp()});
+      const deviceData={uid:decoded.uid,lastSeenAt:a.firestore.FieldValue.serverTimestamp(),version:2};
+      if(!deviceSnap.exists||stale)tx.set(deviceRef,{...deviceData,createdAt:a.firestore.FieldValue.serverTimestamp()},{merge:true});
+      else tx.update(deviceRef,{lastSeenAt:deviceData.lastSeenAt});
 
       if(userSnap.exists){
         const security={...(user.securitySettings||{}),deviceBindingId:deviceId};
