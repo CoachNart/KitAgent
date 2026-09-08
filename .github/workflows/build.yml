@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [main]
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,5 +16,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
+      - name: Apply final platform hardening once
+        if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'final platform hardening') }}
+        run: |
+          node scripts/final-hardening-v2.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src api vercel.json
+          git rm --ignore-unmatch src/walletConnector.js || true
+          git diff --cached --quiet || git commit -m 'fix: final platform hardening [skip ci]'
+          git push
       - run: npm install
-      - run: npm run build
+      - run: NODE_OPTIONS=--max-old-space-size=4096 npm run build
