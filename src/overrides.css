@@ -81,3 +81,7 @@
 }
 
 /* Keep the latest wallet provider hardening deployment-coupled. */
+/* KitSetups loader + responsive profile navigation hardening */
+.loader-sub{font-size:0!important}.loader-sub:after{content:"The Crypto Command Center";font-size:inherit}.loader-status span:last-child{font-size:0!important}.loader-status span:last-child:after{content:"SECURE WORKSPACE";font-size:6px}
+.kit-brand small:after{content:"THE CRYPTO COMMAND CENTER"}
+@media(max-width:700px){.kit-sidebar nav{grid-template-columns:repeat(6,1fr)}.kit-sidebar nav .side-link:nth-child(5){display:none!important}.kit-sidebar nav .side-link{font-size:8px}.kit-sidebar nav .side-link span{display:none!important}.kit-sidebar nav .side-link:nth-child(7){display:flex!important}.kit-sidebar nav .side-link:nth-child(7) svg{display:block}.kit-sidebar nav .side-link:nth-child(7){grid-column:auto}}
