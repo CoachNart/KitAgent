@@ -10,7 +10,6 @@ const replacements = [
   ["{page==='nft'&&<NftPage prepare={prepare}/>} ", "{page==='perps'&&<PerpetualsPage wallet={wallet} connectWallet={connectWallet}/>} "],
   ["<button className=\"capability-card\" onClick={()=>go('nft')}><span className=\"cap-icon\"><Gem size={17}/></span><span><b>NFTs</b><small>Inspect, buy, list, sell and transfer.</small></span><ArrowRight size={15}/></button>", "<button className=\"capability-card\" onClick={()=>go('perps')}><span className=\"cap-icon\"><Zap size={17}/></span><span><b>Perpetual trading</b><small>Deposit, leverage, long, short and manage positions.</small></span><ArrowRight size={15}/></button>"],
 ];
-
 for (const [from, to] of replacements) if (app.includes(from)) app = app.replace(from, to);
 app = app.replace(/(?:import PerpetualsPage from '\.\/PerpetualsPage\.jsx';\n?)+/g, "import PerpetualsPage from './PerpetualsPage.jsx';\n");
 if (!app.includes("import PerpetualsPage from './PerpetualsPage.jsx';")) throw new Error('PerpetualsPage import missing.');
@@ -25,5 +24,4 @@ fs.writeFileSync(perpPath, perp);
 
 execFileSync(process.execPath,['scripts/fix-hl-migration-script.mjs'],{stdio:'inherit'});
 execFileSync(process.execPath,['scripts/switch-perps-to-hyperliquid.mjs'],{stdio:'inherit'});
-execFileSync(process.execPath,['scripts/tighten-perps-ui.mjs'],{stdio:'inherit'});
-console.log('Perpetual migration is applied, Hyperliquid execution is selected, and Market Analysis remains untouched.');
+console.log('Perpetual migration applied: exact legacy terminal UI preserved, Hyperliquid is the provider/execution layer, and Market Analysis remains untouched.');
