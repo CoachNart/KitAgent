@@ -31,6 +31,21 @@ export default async function handler(req,res){
     const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const deviceId=body.deviceId;
     if(!/^[a-f0-9]{64}$/.test(deviceId||''))return json(res,400,{error:'Invalid device binding.',code:'DEVICE_ID_INVALID'});
     const db=a.firestore(),deviceRef=db.collection('deviceBindings').doc(deviceId),userRef=db.collection('users').doc(decoded.uid);
+
+    // If an old binding points to a Firebase Auth user that no longer exists,
+    // it is stale and can be safely reclaimed for the newly authenticated user.
+    const existingDevice=await deviceRef.get();
+    if(existingDevice.exists){
+      const owner=existingDevice.data()?.uid;
+      if(owner&&owner!==decoded.uid){
+        try{await a.auth().getUser(owner)}
+        catch(error){
+          if(error?.code==='auth/user-not-found') await deviceRef.delete();
+          else throw error;
+        }
+      }
+    }
+
     await db.runTransaction(async tx=>{
       const deviceSnap=await tx.get(deviceRef),userSnap=await tx.get(userRef);const device=deviceSnap.exists?deviceSnap.data():null;const user=userSnap.exists?userSnap.data():null;
       if(device?.uid&&device.uid!==decoded.uid){const e=new Error('DEVICE_ALREADY_REGISTERED');e.code=e.message;throw e}
