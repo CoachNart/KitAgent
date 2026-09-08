@@ -27,4 +27,20 @@ async function walk(dir) {
 }
 
 await walk(root);
-console.log('KitSetups branding applied to production build.');
+
+const messagingWorker = path.join(root, 'firebase-messaging-sw.js');
+try {
+  let worker = await readFile(messagingWorker, 'utf8');
+  const env = {
+    '__VITE_FIREBASE_API_KEY__': process.env.VITE_FIREBASE_API_KEY || '',
+    '__VITE_FIREBASE_AUTH_DOMAIN__': process.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+    '__VITE_FIREBASE_PROJECT_ID__': process.env.VITE_FIREBASE_PROJECT_ID || '',
+    '__VITE_FIREBASE_STORAGE_BUCKET__': process.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+    '__VITE_FIREBASE_MESSAGING_SENDER_ID__': process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+    '__VITE_FIREBASE_APP_ID__': process.env.VITE_FIREBASE_APP_ID || '',
+  };
+  for (const [placeholder, value] of Object.entries(env)) worker = worker.replaceAll(placeholder, value.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+  await writeFile(messagingWorker, worker, 'utf8');
+} catch {}
+
+console.log('KitSetups branding and push worker configuration applied to production build.');
