@@ -14,6 +14,7 @@ import './command-center-overrides.css';
 import './agent-terminal.css';
 import './perpetuals-responsive.css';
 import './home.css';
+import './account-page.css';
 
 function NativeLifecycle(){
   useEffect(()=>{
