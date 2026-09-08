@@ -1,31 +1,14 @@
 name: Repair App source
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   repair:
-    if: ${{ !contains(github.event.head_commit.message, '[app-repaired]') }}
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Restore last known complete App source
-        run: |
-          git checkout 7dd269988e52d5006a94babcd346caf1209570fb -- src/App.jsx
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.jsx
-          if git diff --cached --quiet; then
-            echo "App.jsx already matches the known complete source."
-            exit 0
-          fi
-          git commit -m "fix: restore complete App source [app-repaired]"
-          git push
+      - run: echo "Disabled: App.jsx is now maintained directly in main."
