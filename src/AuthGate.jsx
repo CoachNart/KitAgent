@@ -17,18 +17,34 @@ async function registerDevice(user){
 
 async function initializeAccount(user){
   if(!db) throw new Error('KitSetups database is not configured.');
-  const deviceBindingId=await registerDevice(user);
   const ref=doc(db,'users',user.uid);
   const snapshot=await getDoc(ref);
   const existing=snapshot.exists()?(snapshot.data()||{}):{};
   const isNew=!snapshot.exists();
-  await setDoc(ref,{email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},securitySettings:{...(existing.securitySettings||{}),deviceBindingId},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
+  // Create/update the Firebase profile first. Authentication must never be lost just
+  // because the optional device-security API is unavailable or misconfigured.
+  await setDoc(ref,{uid:user.uid,email:user.email||existing.email||'',displayName:user.displayName||existing.displayName||'',photoURL:user.photoURL||existing.photoURL||'',walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},...(isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{}),updatedAt:serverTimestamp()},{merge:true});
+  try{
+    const deviceBindingId=await registerDevice(user);
+    await setDoc(ref,{securitySettings:{...(existing.securitySettings||{}),deviceBindingId},updatedAt:serverTimestamp()},{merge:true});
+  }catch(error){
+    // Device binding is a security enhancement, not an authentication gate.
+    console.error('KitSetups device registration deferred:',error);
+  }
 }
 
 export default function AuthGate({children}){
   const [user,setUser]=useState(null),[ready,setReady]=useState(false),[mode,setMode]=useState('signin'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
-  useEffect(()=>{if(!auth||!db){setReady(true);return undefined}let active=true;setPersistence(auth,browserLocalPersistence).catch(e=>console.error('KitSetups auth persistence setup failed:',e));getRedirectResult(auth).catch(error=>{if(error?.code&&error.code!=='auth/no-auth-event')console.error('KitSetups Google redirect result failed:',error)});const unsubscribe=onAuthStateChanged(auth,async next=>{if(!active)return;if(!next){setUser(null);setReady(true);return}try{await initializeAccount(next);if(active)setUser(next)}catch(error){console.error('KitSetups account/device sync failed:',error);if(active)setMessage(error?.message||'This account could not be secured on this device.')}finally{if(active)setReady(true)}});return()=>{active=false;unsubscribe()}},[]);
-  const submit=async event=>{event.preventDefault();if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);if(mode==='signup')await createUserWithEmailAndPassword(auth,email.trim(),password);else await signInWithEmailAndPassword(auth,email.trim(),password)}catch(error){const code=error?.code||'';const friendly={'auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.'};setMessage(friendly[code]||error?.message||'Authentication failed.')}finally{setBusy(false)}};
+  useEffect(()=>{if(!auth||!db){setReady(true);return undefined}let active=true;setPersistence(auth,browserLocalPersistence).catch(e=>console.error('KitSetups auth persistence setup failed:',e));getRedirectResult(auth).catch(error=>{if(error?.code&&error.code!=='auth/no-auth-event')console.error('KitSetups Google redirect result failed:',error)});const unsubscribe=onAuthStateChanged(auth,next=>{
+    if(!active)return;
+    if(!next){setUser(null);setReady(true);return}
+    // Important: authentication state is authoritative. Never bounce a valid Firebase
+    // user back to the auth screen because profile/device initialization failed.
+    setUser(next);
+    setReady(true);
+    initializeAccount(next).catch(error=>console.error('KitSetups account sync deferred:',error));
+  });return()=>{active=false;unsubscribe()}},[]);
+  const submit=async event=>{event.preventDefault();if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);if(mode==='signup')await createUserWithEmailAndPassword(auth,email.trim(),password);else await signInWithEmailAndPassword(auth,email.trim(),password)}catch(error){const code=error?.code||'';const friendly={'auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.','auth/too-many-requests':'Too many attempts. Please wait a moment and try again.'};setMessage(friendly[code]||error?.message||'Authentication failed.')}finally{setBusy(false)}};
   const googleSignIn=async()=>{if(!auth||!db)return;setBusy(true);setMessage('');try{await setPersistence(auth,browserLocalPersistence);const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});try{await signInWithPopup(auth,provider)}catch(popupError){const code=popupError?.code||'';if(['auth/internal-error','auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(code)){await signInWithRedirect(auth,provider);return}throw popupError}}catch(error){const code=error?.code||'';const friendly={'auth/popup-closed-by-user':'Google sign-in was cancelled.','auth/account-exists-with-different-credential':'An account already exists with another sign-in method.','auth/unauthorized-domain':'This website is not authorized for Google sign-in. Add the KitSetups web domain to Firebase Authentication → Settings → Authorized domains.','auth/operation-not-supported-in-this-environment':'Google sign-in is not supported in this browser environment.','auth/network-request-failed':'Network error. Check your connection and try again.','auth/internal-error':'Google sign-in could not open correctly. Check that the current KitSetups domain is authorized in Firebase, then try again.'};setMessage(friendly[code]||error?.message||'Google authentication failed.')}finally{setBusy(false)}};
   if(!firebaseConfigured)return <AuthScreen title="KitSetups setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;
   if(!ready)return typeof children==='function'?children(null):cloneElement(children,{user:null});
