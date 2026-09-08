@@ -6,7 +6,7 @@ permissions:
   contents: write
 jobs:
   repair:
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'one-time wallet repair workflow') }}
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'trigger wallet repair') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
