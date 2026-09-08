@@ -1,0 +1,23 @@
+name: Add KitSetups builder fee
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply builder fee patch
+        run: node scripts/add-builder-fee.mjs
+      - name: Commit builder fee patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/PerpetualsPage.jsx
+          git diff --cached --quiet || git commit -m "feat: enable KitSetups builder fee on Hyperliquid [skip ci]"
+          git push
