@@ -2,8 +2,11 @@ import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import { WagmiProvider } from 'wagmi';
 import App from './App.jsx';
 import AuthGate from './AuthGate.jsx';
+import { queryClient, wagmiAdapter } from './walletkit.jsx';
+import { QueryClientProvider } from '@tanstack/react-query';
 import './styles.css';
 import './brand.css';
 import './overrides.css';
@@ -18,7 +21,6 @@ function NativeLifecycle(){
     let backHandle;
     let urlHandle;
     let active=true;
-
     const setup=async()=>{
       backHandle=await CapacitorApp.addListener('backButton',({canGoBack})=>{
         if(!active) return;
@@ -44,9 +46,12 @@ function NativeLifecycle(){
   return null;
 }
 
+function Root(){
+  const content=<><NativeLifecycle /><AuthGate>{user => <App user={user} />}</AuthGate></>;
+  if(!wagmiAdapter) return content;
+  return <WagmiProvider config={wagmiAdapter.wagmiConfig}><QueryClientProvider client={queryClient}>{content}</QueryClientProvider></WagmiProvider>;
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <NativeLifecycle />
-    <AuthGate>{user => <App user={user} />}</AuthGate>
-  </React.StrictMode>
+  <React.StrictMode><Root /></React.StrictMode>
 );
