@@ -70,5 +70,52 @@ jobs:
             git commit -m 'fix: apply requested navigation history and market auth cleanup [skip ci]'
             git push
           fi
+      - name: Apply final profile auth and branding cleanup
+        if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && contains(github.event.head_commit.message, 'final profile auth branding repair') }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          app = Path('src/App.jsx')
+          s = app.read_text()
+          s = s.replace('Terminal, UserRound, Wallet, X, Zap', 'Terminal, CircleUserRound, Wallet, X, Zap')
+          s = s.replace("['profile','Profile',UserRound]", "['profile','Profile',CircleUserRound]")
+          s = s.replace('>KITAGENT</div>', '>KITSETUPS</div>')
+          s = s.replace("m.role==='user'?'YOU':'KITAGENT'", "m.role==='user'?'YOU':'KITSETUPS'")
+          app.write_text(s)
+
+          account = Path('src/AccountPage.jsx')
+          s = account.read_text()
+          s = s.replace("import SignalHistory from './SignalHistory.jsx';\n", '')
+          s = s.replace('  <SignalHistory/>\n', '')
+          account.write_text(s)
+
+          auth = Path('src/AuthGate.jsx')
+          s = auth.read_text()
+          s = s.replace(', getRedirectResult, GoogleAuthProvider', '')
+          s = s.replace(', signInWithPopup, signInWithRedirect', '')
+          s = re.sub(r"getRedirectResult\(auth\)\.catch\(error=>\{.*?\}\);", '', s, count=1)
+          s = re.sub(r";const googleSignIn=async\(\)=>\{.*?\};if\(!firebaseConfigured\)", ";if(!firebaseConfigured)", s, count=1, flags=re.S)
+          s = s.replace(' onGoogle={googleSignIn}', '')
+          s = s.replace(',onGoogle', '')
+          s = re.sub(r'<button type="button" className="google-auth".*?</button><div className="auth-divider"><span>or continue with email</span></div>', '', s, count=1, flags=re.S)
+          auth.write_text(s)
+
+          # Remove visible legacy branding from source/public assets, while preserving internal event identifiers.
+          for root in (Path('src'), Path('public')):
+              if not root.exists(): continue
+              for f in root.rglob('*'):
+                  if not f.is_file() or f.suffix.lower() not in {'.js','.jsx','.ts','.tsx','.css','.html','.md','.json','.svg','.txt'}: continue
+                  try: text=f.read_text()
+                  except UnicodeDecodeError: continue
+                  new=text.replace('KitAgent','KitSetups').replace('KITAGENT','KITSETUPS')
+                  if new!=text: f.write_text(new)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src public
+          git diff --cached --quiet || git commit -m 'fix: profile icon auth history and KitSetups branding [skip ci]'
+          git push
       - run: npm install
       - run: NODE_OPTIONS=--max-old-space-size=4096 npm run build
