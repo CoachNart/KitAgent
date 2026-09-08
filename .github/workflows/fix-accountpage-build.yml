@@ -1,4 +1,4 @@
-name: Fix AccountPage build collision
+name: Apply final profile auth and branding cleanup
 
 on:
   workflow_dispatch:
@@ -16,25 +16,63 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Fix duplicate AccountPage symbol
+      - name: Apply requested UI cleanup
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
+          # Profile icon: use the explicit profile icon, not a generic user/settings glyph.
           p = Path('src/App.jsx')
           s = p.read_text()
-          s = s.replace("import AccountPage from './AccountPage.jsx';", "import AccountPageComponent from './AccountPage.jsx';", 1)
-          s = s.replace("{page==='profile'&&<AccountPage wallet={wallet} connectWallet={connectWallet} user={user}/>}", "{page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>}", 1)
-          marker = "// Build repair verified: AccountPage import is collision-safe."
-          if marker not in s:
-              s += "\n" + marker + "\n"
+          s = s.replace('Terminal, UserRound, Wallet, X, Zap', 'Terminal, CircleUserRound, Wallet, X, Zap')
+          s = s.replace("['profile','Profile',UserRound]", "['profile','Profile',CircleUserRound]")
+          s = s.replace('>KITAGENT</div>', '>KITSETUPS</div>')
+          s = s.replace("m.role==='user'?'YOU':'KITAGENT'", "m.role==='user'?'YOU':'KITSETUPS'")
           p.write_text(s)
+
+          # Remove the duplicate Signal Track Record from the Profile page.
+          p = Path('src/AccountPage.jsx')
+          s = p.read_text()
+          s = s.replace("import SignalHistory from './SignalHistory.jsx';\n", '')
+          s = s.replace('  <SignalHistory/>\n', '')
+          p.write_text(s)
+
+          # Email/password only authentication. Remove Google provider, handlers and UI.
+          p = Path('src/AuthGate.jsx')
+          s = p.read_text()
+          s = s.replace(', getRedirectResult, GoogleAuthProvider', '')
+          s = s.replace(', signInWithPopup, signInWithRedirect', '')
+          s = s.replace('getRedirectResult(auth).catch(error=>{if(error?.code&&error.code!==\'auth/no-auth-event\')console.error(\'KitSetups Google redirect result failed:\',error)});', '')
+          s = re.sub(r";const googleSignIn=async\(\)=>\{.*?\};if\(!firebaseConfigured\)", ";if(!firebaseConfigured)", s, flags=re.S)
+          s = s.replace(" onGoogle={googleSignIn}", '')
+          s = s.replace(',onGoogle', '')
+          s = re.sub(r"<button type=\"button\" className=\"google-auth\".*?</button><div className=\"auth-divider\"><span>or continue with email</span></div>", '', s, flags=re.S)
+          p.write_text(s)
+
+          # Remove visible legacy KitAgent branding from source/public text assets.
+          extensions = {'.js','.jsx','.ts','.tsx','.css','.html','.md','.json','.svg','.txt'}
+          for root in (Path('src'), Path('public')):
+              if not root.exists():
+                  continue
+              for f in root.rglob('*'):
+                  if f.is_file() and f.suffix.lower() in extensions:
+                      try:
+                          text = f.read_text()
+                      except UnicodeDecodeError:
+                          continue
+                      new = text.replace('KitAgent', 'KitSetups').replace('KITAGENT', 'KITSETUPS')
+                      if new != text:
+                          f.write_text(new)
+
+          # Keep internal event/file identifiers intact; only user-facing branding is changed.
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/App.jsx
-          git commit -m 'fix: resolve AccountPage build collision' || true
+          git add src public
+          git diff --cached --quiet || git commit -m 'fix: clean profile history auth and KitSetups branding'
           git push
-      - name: Verification marker
-        run: echo "AccountPage collision repair workflow executed"
-# deployment repair trigger
-# retrigger-2026-09-08
+      - name: Verify source cleanup
+        run: |
+          grep -n "GoogleAuthProvider\|signInWithPopup\|signInWithRedirect\|google-auth\|SignalHistory\|KITAGENT\|KitAgent" src/App.jsx src/AuthGate.jsx src/AccountPage.jsx || true
+          echo "Final profile/auth/branding cleanup complete"
