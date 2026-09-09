@@ -50,8 +50,6 @@ export default async function handler(req, res) {
     const existingLock = await lockRef.get();
     if (existingLock.exists) return json(res, 409, { error: 'An account already exists for this email identity. Sign in instead.', code: 'ACCOUNT_ALREADY_EXISTS' });
 
-    // A second server-side guard stops the same network from creating a second account
-    // with a different browser/email. This is deliberately checked before Auth creation.
     if (networkRef) {
       const networkLock = await networkRef.get();
       if (networkLock.exists) return json(res, 409, { error: 'An account has already been created from this network. Sign in instead.', code: 'NETWORK_ACCOUNT_EXISTS' });
@@ -85,11 +83,24 @@ export default async function handler(req, res) {
     let userRecord;
     try {
       userRecord = await a.auth().createUser({ email, password, emailVerified: false });
+      const now = new Date();
+      const trialEndsAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+      await db.collection('users').doc(userRecord.uid).set({
+        uid: userRecord.uid,
+        email,
+        status: 'active',
+        plan: 'free',
+        trialStartedAt: now,
+        trialEndsAt,
+        createdAt: now,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
       await lockRef.set({ uid: userRecord.uid, status: 'active', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
       if (networkRef) await networkRef.set({ uid: userRecord.uid, email, canonicalEmail: canonical, status: 'active', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     } catch (error) {
       await lockRef.delete().catch(() => {});
       if (networkRef) await networkRef.delete().catch(() => {});
+      await db.collection('users').doc(userRecord?.uid || 'invalid').delete().catch(() => {});
       if (error?.code === 'auth/email-already-exists') return json(res, 409, { error: 'An account already exists with this email. Sign in instead.', code: 'ACCOUNT_ALREADY_EXISTS' });
       throw error;
     }
