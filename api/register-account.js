@@ -7,13 +7,14 @@ function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type
 function canonicalEmail(value){const email=String(value||'').trim().toLowerCase();const [local,domain]=email.split('@');if(!local||!domain)return email;if(domain==='gmail.com'||domain==='googlemail.com')return `${local.split('+')[0].replace(/\./g,'')}@gmail.com`;return email}
 function requestIp(req){const forwarded=String(req.headers['x-forwarded-for']||'').split(',')[0].trim();return forwarded||String(req.headers['x-real-ip']||'').trim()||''}
 function networkKey(ip){return crypto.createHash('sha256').update(`kitsetups-signup-v2:${ip}`).digest('hex')}
-async function verifyTurnstile(req,token){const secret=process.env.TURNSTILE_SECRET;if(!secret)return false;if(!token)return false;const response=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({secret,response:token,remoteip:requestIp(req)||undefined})});const result=await response.json();return Boolean(response.ok&&result.success)}
+async function verifyAppCheck(a,req){const token=String(req.headers['x-firebase-appcheck']||'').trim();if(!token)return false;try{await a.appCheck().verifyToken(token);return true}catch(error){console.warn('Firebase App Check verification failed:',error?.message||error);return false}}
 
 export default async function handler(req,res){
  if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
  try{
-  const a=getAdmin();const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const email=String(body.email||'').trim().toLowerCase();const password=String(body.password||'');
-  if(process.env.TURNSTILE_SECRET){const verified=await verifyTurnstile(req,String(body.turnstileToken||''));if(!verified)return json(res,403,{error:'Security verification failed. Please try again.',code:'CAPTCHA_FAILED'})}else return json(res,500,{error:'Security verification is not configured.',code:'TURNSTILE_NOT_CONFIGURED'});
+  const a=getAdmin();
+  if(!(await verifyAppCheck(a,req)))return json(res,403,{error:'Security verification failed. Please refresh and try again.',code:'APPCHECK_FAILED'});
+  const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const email=String(body.email||'').trim().toLowerCase();const password=String(body.password||'');
   if(!/^\S+@\S+\.\S+$/.test(email))return json(res,400,{error:'Enter a valid email address.',code:'INVALID_EMAIL'});if(password.length<6)return json(res,400,{error:'Use a stronger password (at least 6 characters).',code:'WEAK_PASSWORD'});
   const canonical=canonicalEmail(email);const ip=requestIp(req);const db=a.firestore();const lockRef=db.collection('accountIdentityLocks').doc(encodeURIComponent(canonical));const networkRef=ip?db.collection('signupNetworkLocks').doc(networkKey(ip)):null;const existingLock=await lockRef.get();if(existingLock.exists)return json(res,409,{error:'An account already exists for this email identity. Sign in instead.',code:'ACCOUNT_ALREADY_EXISTS'});
   if(networkRef){const networkLock=await networkRef.get();if(networkLock.exists)return json(res,409,{error:'An account has already been created from this network. Sign in instead.',code:'NETWORK_ACCOUNT_EXISTS'})}
