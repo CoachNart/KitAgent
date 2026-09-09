@@ -2,114 +2,24 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 
-function getAdmin() {
-  if (admin.apps.length) return admin;
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (raw) {
-    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw.trim().replace(/^['\"]|['\"]$/g, ''))) });
-    return admin;
-  }
-  if (credentialPath && fs.existsSync(credentialPath)) {
-    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath, 'utf8'))) });
-    return admin;
-  }
-  const e = new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING'); e.code = e.message; throw e;
-}
-function json(res, status, body) { res.statusCode = status; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); }
-function canonicalEmail(value) {
-  const email = String(value || '').trim().toLowerCase();
-  const [local, domain] = email.split('@');
-  if (!local || !domain) return email;
-  if (domain === 'gmail.com' || domain === 'googlemail.com') return `${local.split('+')[0].replace(/\./g, '')}@gmail.com`;
-  return email;
-}
-function requestIp(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return forwarded || String(req.headers['x-real-ip'] || '').trim() || '';
-}
-function networkKey(ip) {
-  return crypto.createHash('sha256').update(`kitsetups-signup-v2:${ip}`).digest('hex');
-}
+function getAdmin(){if(admin.apps.length)return admin;const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON;const credentialPath=process.env.GOOGLE_APPLICATION_CREDENTIALS;if(raw){admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['\"]|['\"]$/g,'')))});return admin}if(credentialPath&&fs.existsSync(credentialPath)){admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath,'utf8')))});return admin}const e=new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING');e.code=e.message;throw e}
+function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body))}
+function canonicalEmail(value){const email=String(value||'').trim().toLowerCase();const [local,domain]=email.split('@');if(!local||!domain)return email;if(domain==='gmail.com'||domain==='googlemail.com')return `${local.split('+')[0].replace(/\./g,'')}@gmail.com`;return email}
+function requestIp(req){const forwarded=String(req.headers['x-forwarded-for']||'').split(',')[0].trim();return forwarded||String(req.headers['x-real-ip']||'').trim()||''}
+function networkKey(ip){return crypto.createHash('sha256').update(`kitsetups-signup-v2:${ip}`).digest('hex')}
+async function verifyTurnstile(req,token){const secret=process.env.TURNSTILE_SECRET;if(!secret)return false;if(!token)return false;const response=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({secret,response:token,remoteip:requestIp(req)||undefined})});const result=await response.json();return Boolean(response.ok&&result.success)}
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed.' });
-  try {
-    const a = getAdmin();
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const email = String(body.email || '').trim().toLowerCase();
-    const password = String(body.password || '');
-    if (!/^\S+@\S+\.\S+$/.test(email)) return json(res, 400, { error: 'Enter a valid email address.', code: 'INVALID_EMAIL' });
-    if (password.length < 6) return json(res, 400, { error: 'Use a stronger password (at least 6 characters).', code: 'WEAK_PASSWORD' });
-
-    const canonical = canonicalEmail(email);
-    const ip = requestIp(req);
-    const db = a.firestore();
-    const lockRef = db.collection('accountIdentityLocks').doc(encodeURIComponent(canonical));
-    const networkRef = ip ? db.collection('signupNetworkLocks').doc(networkKey(ip)) : null;
-    const existingLock = await lockRef.get();
-    if (existingLock.exists) return json(res, 409, { error: 'An account already exists for this email identity. Sign in instead.', code: 'ACCOUNT_ALREADY_EXISTS' });
-
-    if (networkRef) {
-      const networkLock = await networkRef.get();
-      if (networkLock.exists) return json(res, 409, { error: 'An account has already been created from this network. Sign in instead.', code: 'NETWORK_ACCOUNT_EXISTS' });
-    }
-
-    try {
-      const existingUser = await a.auth().getUserByEmail(email);
-      if (existingUser) return json(res, 409, { error: 'An account already exists with this email. Sign in instead.', code: 'ACCOUNT_ALREADY_EXISTS' });
-    } catch (error) {
-      if (error?.code !== 'auth/user-not-found') throw error;
-    }
-
-    const reservation = { email, canonicalEmail: canonical, createdAt: admin.firestore.FieldValue.serverTimestamp(), status: 'reserved' };
-    try {
-      await db.runTransaction(async tx => {
-        const snap = await tx.get(lockRef);
-        if (snap.exists) { const e = new Error('ACCOUNT_ALREADY_EXISTS'); e.code = e.message; throw e; }
-        if (networkRef) {
-          const networkSnap = await tx.get(networkRef);
-          if (networkSnap.exists) { const e = new Error('NETWORK_ACCOUNT_EXISTS'); e.code = e.message; throw e; }
-          tx.create(networkRef, { email, canonicalEmail: canonical, status: 'reserved', createdAt: admin.firestore.FieldValue.serverTimestamp() });
-        }
-        tx.create(lockRef, reservation);
-      });
-    } catch (error) {
-      if (error?.code === 'ACCOUNT_ALREADY_EXISTS') return json(res, 409, { error: 'An account already exists for this email identity. Sign in instead.', code: error.code });
-      if (error?.code === 'NETWORK_ACCOUNT_EXISTS') return json(res, 409, { error: 'An account has already been created from this network. Sign in instead.', code: error.code });
-      throw error;
-    }
-
-    let userRecord;
-    try {
-      userRecord = await a.auth().createUser({ email, password, emailVerified: false });
-      const now = new Date();
-      const trialEndsAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-      await db.collection('users').doc(userRecord.uid).set({
-        uid: userRecord.uid,
-        email,
-        status: 'active',
-        plan: 'free',
-        trialStartedAt: now,
-        trialEndsAt,
-        createdAt: now,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await lockRef.set({ uid: userRecord.uid, status: 'active', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-      if (networkRef) await networkRef.set({ uid: userRecord.uid, email, canonicalEmail: canonical, status: 'active', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-    } catch (error) {
-      await lockRef.delete().catch(() => {});
-      if (networkRef) await networkRef.delete().catch(() => {});
-      await db.collection('users').doc(userRecord?.uid || 'invalid').delete().catch(() => {});
-      if (error?.code === 'auth/email-already-exists') return json(res, 409, { error: 'An account already exists with this email. Sign in instead.', code: 'ACCOUNT_ALREADY_EXISTS' });
-      throw error;
-    }
-
-    const customToken = await a.auth().createCustomToken(userRecord.uid);
-    return json(res, 200, { customToken, uid: userRecord.uid });
-  } catch (error) {
-    if (error?.code === 'FIREBASE_ADMIN_CREDENTIALS_MISSING') return json(res, 500, { error: 'Firebase Admin credentials are missing.', code: error.code });
-    console.error('register-account failed', error);
-    return json(res, 500, { error: 'Account creation could not be completed.', code: 'ACCOUNT_REGISTRATION_FAILED' });
-  }
+export default async function handler(req,res){
+ if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
+ try{
+  const a=getAdmin();const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const email=String(body.email||'').trim().toLowerCase();const password=String(body.password||'');
+  if(process.env.TURNSTILE_SECRET){const verified=await verifyTurnstile(req,String(body.turnstileToken||''));if(!verified)return json(res,403,{error:'Security verification failed. Please try again.',code:'CAPTCHA_FAILED'})}else return json(res,500,{error:'Security verification is not configured.',code:'TURNSTILE_NOT_CONFIGURED'});
+  if(!/^\S+@\S+\.\S+$/.test(email))return json(res,400,{error:'Enter a valid email address.',code:'INVALID_EMAIL'});if(password.length<6)return json(res,400,{error:'Use a stronger password (at least 6 characters).',code:'WEAK_PASSWORD'});
+  const canonical=canonicalEmail(email);const ip=requestIp(req);const db=a.firestore();const lockRef=db.collection('accountIdentityLocks').doc(encodeURIComponent(canonical));const networkRef=ip?db.collection('signupNetworkLocks').doc(networkKey(ip)):null;const existingLock=await lockRef.get();if(existingLock.exists)return json(res,409,{error:'An account already exists for this email identity. Sign in instead.',code:'ACCOUNT_ALREADY_EXISTS'});
+  if(networkRef){const networkLock=await networkRef.get();if(networkLock.exists)return json(res,409,{error:'An account has already been created from this network. Sign in instead.',code:'NETWORK_ACCOUNT_EXISTS'})}
+  try{const existingUser=await a.auth().getUserByEmail(email);if(existingUser)return json(res,409,{error:'An account already exists with this email. Sign in instead.',code:'ACCOUNT_ALREADY_EXISTS'})}catch(error){if(error?.code!=='auth/user-not-found')throw error}
+  const reservation={email,canonicalEmail:canonical,createdAt:admin.firestore.FieldValue.serverTimestamp(),status:'reserved'};try{await db.runTransaction(async tx=>{const snap=await tx.get(lockRef);if(snap.exists){const e=new Error('ACCOUNT_ALREADY_EXISTS');e.code=e.message;throw e}if(networkRef){const networkSnap=await tx.get(networkRef);if(networkSnap.exists){const e=new Error('NETWORK_ACCOUNT_EXISTS');e.code=e.message;throw e}tx.create(networkRef,{email,canonicalEmail:canonical,status:'reserved',createdAt:admin.firestore.FieldValue.serverTimestamp()})}tx.create(lockRef,reservation)})}catch(error){if(error?.code==='ACCOUNT_ALREADY_EXISTS')return json(res,409,{error:'An account already exists for this email identity. Sign in instead.',code:error.code});if(error?.code==='NETWORK_ACCOUNT_EXISTS')return json(res,409,{error:'An account has already been created from this network. Sign in instead.',code:error.code});throw error}
+  let userRecord;try{userRecord=await a.auth().createUser({email,password,emailVerified:false});const now=new Date();const trialEndsAt=new Date(now.getTime()+3*24*60*60*1000);await db.collection('users').doc(userRecord.uid).set({uid:userRecord.uid,email,status:'active',plan:'free',trialStartedAt:now,trialEndsAt,createdAt:now,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});await lockRef.set({uid:userRecord.uid,status:'active',updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});if(networkRef)await networkRef.set({uid:userRecord.uid,email,canonicalEmail:canonical,status:'active',updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true})}catch(error){await lockRef.delete().catch(()=>{});if(networkRef)await networkRef.delete().catch(()=>{});await db.collection('users').doc(userRecord?.uid||'invalid').delete().catch(()=>{});if(error?.code==='auth/email-already-exists')return json(res,409,{error:'An account already exists with this email. Sign in instead.',code:'ACCOUNT_ALREADY_EXISTS'});throw error}
+  const customToken=await a.auth().createCustomToken(userRecord.uid);return json(res,200,{customToken,uid:userRecord.uid});
+ }catch(error){if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_MISSING')return json(res,500,{error:'Firebase Admin credentials are missing.',code:error.code});console.error('register-account failed',error);return json(res,500,{error:'Account creation could not be completed.',code:'ACCOUNT_REGISTRATION_FAILED'})}
 }
