@@ -1,6 +1,7 @@
 import { getApps, getApp, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, initializeRecaptchaConfig } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,3 +16,17 @@ export const firebaseConfigured = Object.values(config).every(Boolean);
 const app = firebaseConfigured ? (getApps().length ? getApp() : initializeApp(config)) : null;
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
+
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || '';
+export const appCheck = app && appCheckSiteKey
+  ? initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  : null;
+
+if (auth) {
+  initializeRecaptchaConfig(auth).catch(error => {
+    console.warn('KitSetups Firebase reCAPTCHA configuration could not be loaded:', error);
+  });
+}
