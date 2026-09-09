@@ -13,7 +13,7 @@ export default function HomePage({go,wallet}){
  const btc=useMemo(()=>tickers.find(x=>x.symbol==='BTCUSDT')||{},[tickers]);
  return <div className="home-page">
   <section className="home-top">
-   <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you.</h1><p>Markets move. KitSetups keeps you close to the signal.</p></div>
+   <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you.</h1><p>Welcome To Your Crypto Command Center for AI-powered market intelligence, actionable trade setups, real-time signals, and a smarter way to trade.</p></div>
    <button className="home-refresh" onClick={refresh} disabled={busy} aria-label="Refresh markets"><RefreshCw size={17} className={busy?'spin':''}/></button>
   </section>
   <section className="home-balance">
