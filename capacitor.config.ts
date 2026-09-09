@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   },
   server: {
     androidScheme: 'https',
-    url: 'https://www.kit-agent.xyz'
+    url: 'https://kitsetups.xyz'
   }
 };
 
