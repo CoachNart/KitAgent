@@ -3,3 +3,34 @@
 /* Loader hierarchy: KITSETUPS first, then exactly one small grey tagline. */
 .loader-content::before,.loader-content::after,.loader-logo::before,.loader-logo::after,.loader-wordmark::before,.loader-wordmark::after,.loader-sub::before,.loader-sub::after{content:none!important;display:none!important}.loader-content .loader-wordmark{display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:3!important;margin:8px 0 0!important;color:#e8f6f8!important;font-size:18px!important;line-height:1!important;font-weight:800!important;letter-spacing:.14em!important;text-align:center!important}.loader-content .loader-sub{display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:3!important;margin:8px 0 16px!important;color:#8b949e!important;font-size:10px!important;line-height:1.3!important;font-weight:400!important;letter-spacing:.04em!important;text-align:center!important}
 @media(max-width:700px){.command-hero h2{font-size:36px!important;line-height:1.02!important;letter-spacing:-.045em!important;max-width:100%!important}.command-hero h2 span{white-space:normal}.command-card .terminal-window{margin:10px 10px 0}.command-card .terminal-output{min-height:245px;max-height:360px;padding:14px 12px}.command-card .terminal-input{margin:10px 10px 0!important;min-height:108px!important;padding:11px!important}.command-card .terminal-input textarea{min-height:72px!important;height:72px!important;font-family:'Geist Mono','SFMono-Regular',Consolas,monospace!important;font-size:11px!important}.command-card .terminal-input .run-btn{min-width:64px!important;height:36px!important;padding:0 12px!important}.command-card .suggestion-clip{margin:9px 10px 12px}.command-card .suggestion-clip select{height:40px;font-size:9px}.loader-content .loader-wordmark{font-size:17px!important;margin-top:8px!important}.loader-content .loader-sub{font-size:10px!important;margin-top:7px!important;margin-bottom:15px!important}}
+
+/* KitSetups motion layer — shared by desktop and mobile. */
+@keyframes ks-page-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes ks-rise{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes ks-soft-pulse{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
+@keyframes ks-glow{0%,100%{opacity:.25}50%{opacity:.6}}
+@keyframes ks-loader-track{from{transform:scaleX(0);transform-origin:left}to{transform:scaleX(1);transform-origin:left}}
+.command-page,.page-wrap,.home-page{animation:ks-page-in .55s cubic-bezier(.22,.8,.22,1) both}
+.command-hero h2{animation:ks-rise .65s .08s cubic-bezier(.22,.8,.22,1) both}
+.hero-sub{animation:ks-rise .6s .16s cubic-bezier(.22,.8,.22,1) both}
+.command-card{animation:ks-rise .65s .22s cubic-bezier(.22,.8,.22,1) both}
+.command-rail .rail-card{animation:ks-rise .6s cubic-bezier(.22,.8,.22,1) both}
+.command-rail .rail-card:nth-child(2){animation-delay:.12s}
+.capability-card{transition:transform .25s ease,border-color .25s ease,background .25s ease,box-shadow .25s ease}
+.capability-card:hover{transform:translateY(-3px);box-shadow:0 12px 34px rgba(0,199,254,.07)}
+.command-card .run-btn{transition:transform .2s ease,box-shadow .2s ease,filter .2s ease}
+.command-card .run-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(17,201,237,.2);filter:brightness(1.05)}
+.live-tag i,.live-dot i,.online-label i{animation:ks-soft-pulse 1.8s ease-in-out infinite}
+.loader-glow{animation:ks-glow 2.2s ease-in-out infinite}
+.loader-track i{animation:ks-loader-track 2.05s cubic-bezier(.2,.8,.2,1) both}
+.home-balance{animation:ks-rise .6s .08s cubic-bezier(.22,.8,.22,1) both}
+.home-section-head{animation:ks-rise .5s .16s cubic-bezier(.22,.8,.22,1) both}
+.market-row{transition:background .2s ease,transform .2s ease}
+.market-row:hover{background:rgba(255,255,255,.035);transform:translateX(3px)}
+.home-actions>button,.home-strip{animation:ks-rise .5s cubic-bezier(.22,.8,.22,1) both}
+.home-actions>button:nth-child(2){animation-delay:.07s}.home-actions>button:nth-child(3){animation-delay:.14s}.home-strip{animation-delay:.21s}
+.chain-pill,.permission-mini{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}.chain-pill:hover,.permission-mini:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,199,254,.06)}
+@media(max-width:700px){.command-page,.page-wrap,.home-page{animation-duration:.45s}.command-hero h2{animation-delay:.04s}.hero-sub{animation-delay:.1s}.command-card{animation-delay:.16s}.command-rail .rail-card{animation-delay:.12s}.command-rail .rail-card:nth-child(2){animation-delay:.2s}.capability-card:hover{transform:none}.market-row:hover{transform:none}.home-actions>button:nth-child(2){animation-delay:.05s}.home-actions>button:nth-child(3){animation-delay:.1s}.home-strip{animation-delay:.15s}}
+@media(prefers-reduced-motion:reduce){.command-page,.page-wrap,.home-page,.command-hero h2,.hero-sub,.command-card,.command-rail .rail-card,.home-balance,.home-section-head,.home-actions>button,.home-strip{animation:none!important}.live-tag i,.live-dot i,.online-label i,.loader-glow,.loader-track i{animation:none!important}.capability-card,.market-row,.chain-pill,.permission-mini,.command-card .run-btn{transition:none!important}}
+/* Desktop hero cleanup: remove the redundant COMMAND CENTER / LIVE eyebrow above the main headline. */
+.command-hero .hero-kicker{display:none!important}
