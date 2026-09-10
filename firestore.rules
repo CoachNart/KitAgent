@@ -5,7 +5,6 @@ service cloud.firestore {
     function owns(uid) { return signedIn() && request.auth.uid == uid; }
 
     match /users/{uid} {
-      // A newly authenticated user must be able to create only their own account record.
       allow create: if owns(uid)
         && request.resource.data.uid == uid
         && request.resource.data.email is string
@@ -26,7 +25,11 @@ service cloud.firestore {
         && request.resource.data.trialEndsAt == resource.data.trialEndsAt
         && request.resource.data.subscriptionEndsAt == resource.data.subscriptionEndsAt
         && request.resource.data.latestPaymentVerification == resource.data.latestPaymentVerification
-        && request.resource.data.securitySettings.deviceBindingId == resource.data.securitySettings.deviceBindingId;
+        && (
+          !('securitySettings' in resource.data)
+          || !('deviceBindingId' in resource.data.securitySettings)
+          || request.resource.data.securitySettings.deviceBindingId == resource.data.securitySettings.deviceBindingId
+        );
 
       match /transactions/{transactionId} {
         allow read, create, update, delete: if owns(uid);
@@ -36,7 +39,6 @@ service cloud.firestore {
       }
       match /paymentVerifications/{verificationId} {
         allow read: if owns(uid);
-        // Payment verification is server-authoritative. Clients cannot create, edit, or delete verification records.
         allow create, update, delete: if false;
       }
     }
