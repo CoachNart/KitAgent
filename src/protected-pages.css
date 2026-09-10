@@ -1,0 +1,20 @@
+.kit-content-protected .live-market,
+.kit-content-protected .signal-history,
+.kit-content-protected .chart-terminal,
+.kit-content-protected [class*="perps-"]{
+  -webkit-user-select:none!important;
+  user-select:none!important;
+  -webkit-touch-callout:none!important;
+}
+.kit-content-protected .signal-saved,
+.kit-content-protected .liquidity-card small{
+  font-size:9px!important;
+  line-height:1.45!important;
+  letter-spacing:0!important;
+  font-weight:500!important;
+  max-width:100%!important;
+  word-break:normal!important;
+  overflow-wrap:anywhere!important;
+}
+.kit-print-blocked body>*{visibility:hidden!important}
+@media print{.kit-content-protected .live-market,.kit-content-protected .signal-history,.kit-content-protected .chart-terminal,.kit-content-protected [class*="perps-"]{display:none!important}}
