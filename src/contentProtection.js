@@ -1,4 +1,4 @@
-const PROTECTED_SELECTORS=['.live-market','.signal-history','.chart-terminal','[class*="perps-"]'];
+const PROTECTED_SELECTORS=['.live-market','.signal-history','.chart-terminal'];
 const isProtected=()=>PROTECTED_SELECTORS.some(selector=>document.querySelector(selector));
 const stop=(event)=>{event.preventDefault();event.stopPropagation();return false};
 const refresh=()=>{document.documentElement.classList.toggle('kit-content-protected',isProtected())};
