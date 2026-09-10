@@ -1,24 +1,26 @@
 import crypto from 'crypto';
 const json=(res,status,data)=>{res.status(status).setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
 const bodyOf=async req=>{if(req.body&&typeof req.body==='object')return req.body;let raw='';for await(const c of req)raw+=c;try{return JSON.parse(raw||'{}')}catch{return {}}};
-const mexcBase='https://api.mexc.com'; const bitgetBase='https://api.bitget.com';
+const mexcBase='https://api.mexc.com';const bitgetBase='https://api.bitget.com';
 const b64=s=>crypto.createHmac('sha256',s).digest('base64');
 const mexcSigned=({path,method='GET',params={},key,secret})=>{const timestamp=String(Date.now());const query=new URLSearchParams({...params,timestamp}).toString();const signature=crypto.createHmac('sha256',secret).update(query).digest('hex');return {url:`${mexcBase}${path}?${query}&signature=${signature}`,headers:{'X-MEXC-APIKEY':key}}};
 const bitgetSigned=({path,method='GET',params={},body='',key,secret,passphrase})=>{const timestamp=String(Date.now());const query=Object.keys(params).length?'?'+new URLSearchParams(params).toString():'';const pre=timestamp+method.toUpperCase()+path+query+body;return {url:`${bitgetBase}${path}${query}`,headers:{'ACCESS-KEY':key,'ACCESS-SIGN':b64(pre),'ACCESS-TIMESTAMP':timestamp,'ACCESS-PASSPHRASE':passphrase,'Content-Type':'application/json','locale':'en-US'}}};
 async function call(url,options={}){const r=await fetch(url,{...options,headers:{...(options.headers||{}),'User-Agent':'KitAgent/1.0'}});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data={message:text}}if(!r.ok)throw new Error(data?.msg||data?.message||`Exchange request failed (${r.status})`);return data;}
+const mexcInterval=i=>({ '1m':'Min1','5m':'Min5','15m':'Min15','30m':'Min30','1h':'Min60','4h':'Hour4','1d':'Day1'}[String(i).toLowerCase()]||'Min5');
+const bitgetInterval=i=>({ '1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','4h':'4H','1d':'1D'}[String(i).toLowerCase()]||'5m');
 export default async function handler(req,res){try{
- const b=await bodyOf(req),exchange=String(b.exchange||'mexc').toLowerCase(),action=String(b.action||'ticker'),symbol=String(b.symbol||'BTCUSDT').toUpperCase();
+ const b=await bodyOf(req),exchange=String(b.exchange||'mexc').toLowerCase(),action=String(b.action||'ticker'),symbol=String(b.symbol||'BTCUSDT').toUpperCase(),interval=String(b.interval||'5m');
  if(!['mexc','bitget'].includes(exchange))return json(res,400,{error:'Unsupported exchange'});
  if(action==='ticker'||action==='book'||action==='candles'){
   if(exchange==='mexc'){
    const sym=symbol.replace('USDT','_USDT');
    if(action==='ticker')return json(res,200,await call(`${mexcBase}/api/v1/contract/ticker?symbol=${encodeURIComponent(sym)}`));
    if(action==='book')return json(res,200,await call(`${mexcBase}/api/v1/contract/depth/${encodeURIComponent(sym)}?limit=20`));
-   return json(res,200,await call(`${mexcBase}/api/v1/contract/kline/${encodeURIComponent(sym)}?interval=Min5&start=${Date.now()-86400000}&end=${Date.now()}`));
+   return json(res,200,await call(`${mexcBase}/api/v1/contract/kline/${encodeURIComponent(sym)}?interval=${mexcInterval(interval)}&start=${Math.floor(Date.now()/1000)-7*86400}&end=${Math.floor(Date.now()/1000)}`));
   }
   if(action==='ticker')return json(res,200,await call(`${bitgetBase}/api/v3/market/tickers?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}`));
   if(action==='book')return json(res,200,await call(`${bitgetBase}/api/v3/market/orderbook?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}&limit=20`));
-  return json(res,200,await call(`${bitgetBase}/api/v3/market/candles?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}&interval=5m&limit=200`));
+  return json(res,200,await call(`${bitgetBase}/api/v3/market/candles?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}&interval=${bitgetInterval(interval)}&limit=200`));
  }
  if(action==='connect'){
   if(!b.key||!b.secret||(exchange==='bitget'&&!b.passphrase))return json(res,400,{error:'API credentials are required'});
