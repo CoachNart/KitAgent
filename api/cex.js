@@ -4,39 +4,44 @@ const bodyOf=async req=>{if(req.body&&typeof req.body==='object')return req.body
 const mexcBase='https://api.mexc.com';const bitgetBase='https://api.bitget.com';
 const b64=s=>crypto.createHmac('sha256',s).digest('base64');
 const mexcSigned=({path,method='GET',params={},key,secret})=>{const timestamp=String(Date.now());const query=new URLSearchParams({...params,timestamp}).toString();const signature=crypto.createHmac('sha256',secret).update(query).digest('hex');return {url:`${mexcBase}${path}?${query}&signature=${signature}`,headers:{'X-MEXC-APIKEY':key}}};
-const bitgetSigned=({path,method='GET',params={},body='',key,secret,passphrase})=>{const timestamp=String(Date.now());const query=Object.keys(params).length?'?'+new URLSearchParams(params).toString():'';const pre=timestamp+method.toUpperCase()+path+query+body;return {url:`${bitgetBase}${path}${query}`,headers:{'ACCESS-KEY':key,'ACCESS-SIGN':b64(pre),'ACCESS-TIMESTAMP':timestamp,'ACCESS-PASSPHRASE':passphrase,'Content-Type':'application/json','locale':'en-US'}}};
+const bitgetSigned=({path,method='GET',params={},body='',key,secret,passphrase})=>{const query=Object.keys(params).length?'?'+new URLSearchParams(params).toString():'';const timestamp=String(Date.now());const pre=timestamp+method.toUpperCase()+path+query+body;return {url:`${bitgetBase}${path}${query}`,headers:{'ACCESS-KEY':key,'ACCESS-SIGN':b64(pre),'ACCESS-TIMESTAMP':timestamp,'ACCESS-PASSPHRASE':passphrase,'Content-Type':'application/json','locale':'en-US'}}};
 async function call(url,options={}){const r=await fetch(url,{...options,headers:{...(options.headers||{}),'User-Agent':'KitAgent/1.0'}});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data={message:text}}if(!r.ok)throw new Error(data?.msg||data?.message||`Exchange request failed (${r.status})`);return data;}
-const mexcInterval=i=>({ '1m':'Min1','5m':'Min5','15m':'Min15','30m':'Min30','1h':'Min60','4h':'Hour4','1d':'Day1'}[String(i).toLowerCase()]||'Min5');
-const bitgetInterval=i=>({ '1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','4h':'4H','1d':'1D'}[String(i).toLowerCase()]||'5m');
+const mexcSym=s=>String(s||'BTCUSDT').toUpperCase().replace(/[-/]/g,'').replace('USDT','_USDT');
+const mexcInterval=i=>({'1m':'Min1','5m':'Min5','15m':'Min15','30m':'Min30','1h':'Min60','4h':'Hour4','1d':'Day1'}[String(i).toLowerCase()]||'Min5');
+const bitgetInterval=i=>({'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','4h':'4H','1d':'1D'}[String(i).toLowerCase()]||'5m');
 export default async function handler(req,res){try{
  const b=await bodyOf(req),exchange=String(b.exchange||'mexc').toLowerCase(),action=String(b.action||'ticker'),symbol=String(b.symbol||'BTCUSDT').toUpperCase(),interval=String(b.interval||'5m');
  if(!['mexc','bitget'].includes(exchange))return json(res,400,{error:'Unsupported exchange'});
- if(action==='ticker'||action==='book'||action==='candles'){
-  if(exchange==='mexc'){
-   const sym=symbol.replace('USDT','_USDT');
-   if(action==='ticker')return json(res,200,await call(`${mexcBase}/api/v1/contract/ticker?symbol=${encodeURIComponent(sym)}`));
-   if(action==='book')return json(res,200,await call(`${mexcBase}/api/v1/contract/depth/${encodeURIComponent(sym)}?limit=20`));
-   return json(res,200,await call(`${mexcBase}/api/v1/contract/kline/${encodeURIComponent(sym)}?interval=${mexcInterval(interval)}&start=${Math.floor(Date.now()/1000)-7*86400}&end=${Math.floor(Date.now()/1000)}`));
-  }
-  if(action==='ticker')return json(res,200,await call(`${bitgetBase}/api/v3/market/tickers?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}`));
-  if(action==='book')return json(res,200,await call(`${bitgetBase}/api/v3/market/orderbook?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}&limit=20`));
-  return json(res,200,await call(`${bitgetBase}/api/v3/market/candles?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}&interval=${bitgetInterval(interval)}&limit=200`));
- }
- if(action==='connect'){
-  if(!b.key||!b.secret||(exchange==='bitget'&&!b.passphrase))return json(res,400,{error:'API credentials are required'});
-  if(exchange==='mexc'){const s=mexcSigned({path:'/api/v1/private/account/assets',key:b.key,secret:b.secret});return json(res,200,await call(s.url,{headers:s.headers}));}
-  const s=bitgetSigned({path:'/api/v3/account/assets',key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{headers:s.headers}));
- }
- if(!b.key||!b.secret||(exchange==='bitget'&&!b.passphrase))return json(res,400,{error:'Connect the exchange first'});
  if(exchange==='mexc'){
-  const sym=symbol.replace('USDT','_USDT');
-  if(action==='positions'){const s=mexcSigned({path:'/api/v1/private/position/open_positions',key:b.key,secret:b.secret});return json(res,200,await call(s.url,{headers:s.headers}));}
-  if(action==='orders'){const s=mexcSigned({path:'/api/v1/private/order/list/open_orders',params:{symbol:sym},key:b.key,secret:b.secret});return json(res,200,await call(s.url,{headers:s.headers}));}
-  if(action==='order'){const p={symbol:sym,price:b.price,vol:b.volume,side:b.side==='buy'?1:3,openType:b.marginMode==='isolated'?1:2,type:b.orderType==='market'?5:1,leverage:b.leverage};const s=mexcSigned({path:'/api/v1/private/order/submit',method:'POST',params:p,key:b.key,secret:b.secret});return json(res,200,await call(s.url,{method:'POST',headers:s.headers}));}
- }else{
-  if(action==='positions'){const s=bitgetSigned({path:'/api/v3/position/all-position',params:{category:'USDT-FUTURES'},key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{headers:s.headers}));}
-  if(action==='orders'){const s=bitgetSigned({path:'/api/v3/trade/current-orders',params:{category:'USDT-FUTURES',symbol},key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{headers:s.headers}));}
-  if(action==='order'){const payload={category:'USDT-FUTURES',symbol,side:b.side==='buy'?'buy':'sell',orderType:b.orderType==='market'?'market':'limit',qty:String(b.volume),price:b.orderType==='market'?undefined:String(b.price),marginMode:b.marginMode==='isolated'?'isolated':'crossed',tradeSide:'open'};Object.keys(payload).forEach(k=>payload[k]===undefined&&delete payload[k]);const body=JSON.stringify(payload);const s=bitgetSigned({path:'/api/v3/trade/place-order',method:'POST',body,key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{method:'POST',headers:s.headers,body}));}
+  const sym=mexcSym(symbol);
+  if(action==='pairs')return json(res,200,await call(`${mexcBase}/api/v1/contract/detail`));
+  if(action==='ticker')return json(res,200,await call(`${mexcBase}/api/v1/contract/ticker?symbol=${encodeURIComponent(sym)}`));
+  if(action==='book')return json(res,200,await call(`${mexcBase}/api/v1/contract/depth/${encodeURIComponent(sym)}?limit=50`));
+  if(action==='candles'){const end=Math.floor(Date.now()/1000),start=end-7*86400;return json(res,200,await call(`${mexcBase}/api/v1/contract/kline/${encodeURIComponent(sym)}?interval=${mexcInterval(interval)}&start=${start}&end=${end}`));}
+  if(!b.key||!b.secret)return json(res,400,{error:'Connect the MEXC Futures API first'});
+  const signed=(path,params={},method='GET')=>mexcSigned({path,params,key:b.key,secret:b.secret,method});const run=async(s,opts={})=>call(s.url,{...opts,headers:s.headers});
+  if(action==='connect'||action==='balance'){const s=signed('/api/v1/private/account/assets');return json(res,200,await run(s));}
+  if(action==='positions'){const s=signed('/api/v1/private/position/open_positions');return json(res,200,await run(s));}
+  if(action==='orders'){const s=signed(`/api/v1/private/order/list/open_orders/${encodeURIComponent(sym)}`);return json(res,200,await run(s));}
+  if(action==='history'){const s=signed('/api/v1/private/order/list/history_orders',{symbol:sym,page_num:1,page_size:50});return json(res,200,await run(s));}
+  if(action==='positionHistory'){const s=signed('/api/v1/private/position/list/history_positions',{symbol:sym,page_num:1,page_size:50});return json(res,200,await run(s));}
+  if(action==='cancel'){const s=signed('/api/v1/private/order/cancel',{},'POST');return json(res,200,await run(s,{method:'POST',body:JSON.stringify(b.orderIds||[])}));}
+  if(action==='changeLeverage'){const p={positionId:Number(b.positionId||0),leverage:Number(b.leverage),openType:b.marginMode==='isolated'?1:2,symbol:sym,positionType:Number(b.positionType||1)};const s=signed('/api/v1/private/position/change_leverage',p,'POST');return json(res,200,await run(s,{method:'POST'}));}
+  if(action==='order'){
+   const opening=b.intent!=='close';const side=opening?(b.side==='buy'?1:3):(b.side==='buy'?4:2);const p={symbol:sym,price:Number(b.price||0),vol:Number(b.volume),side,openType:b.marginMode==='isolated'?1:2,type:b.orderType==='market'?5:1,leverage:Number(b.leverage||5)};
+   if(b.positionId)p.positionId=Number(b.positionId);if(b.takeProfit)p.takeProfitPrice=Number(b.takeProfit);if(b.stopLoss)p.stopLossPrice=Number(b.stopLoss);
+   const s=signed('/api/v1/private/order/submit',p,'POST');return json(res,200,await run(s,{method:'POST'}));
+  }
+  return json(res,400,{error:'Unsupported MEXC action'});
  }
- return json(res,400,{error:'Unsupported CEX action'});
+ if(action==='pairs')return json(res,200,await call(`${bitgetBase}/api/v3/market/contracts?category=USDT-FUTURES`));
+ if(action==='ticker')return json(res,200,await call(`${bitgetBase}/api/v3/market/tickers?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}`));
+ if(action==='book')return json(res,200,await call(`${bitgetBase}/api/v3/market/orderbook?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}&limit=50`));
+ if(action==='candles')return json(res,200,await call(`${bitgetBase}/api/v3/market/candles?category=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}&interval=${bitgetInterval(interval)}&limit=500`));
+ if(!b.key||!b.secret||!b.passphrase)return json(res,400,{error:'Connect the Bitget Futures API first'});
+ if(action==='connect'||action==='balance'){const s=bitgetSigned({path:'/api/v3/account/assets',key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{headers:s.headers}));}
+ if(action==='positions'){const s=bitgetSigned({path:'/api/v3/position/all-position',params:{category:'USDT-FUTURES'},key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{headers:s.headers}));}
+ if(action==='orders'){const s=bitgetSigned({path:'/api/v3/trade/current-orders',params:{category:'USDT-FUTURES',symbol},key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{headers:s.headers}));}
+ if(action==='order'){const payload={category:'USDT-FUTURES',symbol,side:b.side==='buy'?'buy':'sell',orderType:b.orderType==='market'?'market':'limit',qty:String(b.volume),marginMode:b.marginMode==='isolated'?'isolated':'crossed',tradeSide:b.intent==='close'?'close':'open'};if(b.orderType==='limit')payload.price=String(b.price);const body=JSON.stringify(payload);const s=bitgetSigned({path:'/api/v3/trade/place-order',method:'POST',body,key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{method:'POST',headers:s.headers,body}));}
+ return json(res,400,{error:'Unsupported Bitget action'});
 }catch(e){return json(res,502,{error:e?.message||'CEX request failed'});}}
