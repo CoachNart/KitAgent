@@ -1,4 +1,4 @@
-name: Build KitAgent Android
+name: Build KitSetups Android
 
 on:
   workflow_dispatch:
@@ -37,24 +37,48 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Apply KitSetups native branding
+        shell: bash
+        run: |
+          set -e
+          mkdir -p android/app/src/main/res/drawable
+          cp android-assets/kitsetups_icon.xml android/app/src/main/res/drawable/kitsetups_icon.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          s = s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/kitsetups_icon"')
+          s = s.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/kitsetups_icon"')
+          p.write_text(s)
+
+          gradle = Path('android/app/build.gradle')
+          if gradle.exists():
+              g = gradle.read_text()
+              g = g.replace('versionCode 1', 'versionCode 233')
+              g = g.replace('versionName "1.0"', 'versionName "2.3.3"')
+              gradle.write_text(g)
+          PY
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Verify APK
-        run: ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify APK branding
+        run: |
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -q 'kitsetups_icon'
 
       - name: Package APK
         run: |
           mkdir -p android-artifact
-          cp android/app/build/outputs/apk/debug/app-debug.apk android-artifact/KitAgent-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk android-artifact/KitSetups-debug.apk
           cd android-artifact
-          zip -j KitAgent-Android-debug.zip KitAgent-debug.apk
+          zip -j KitSetups-Android-debug.zip KitSetups-debug.apk
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: KitAgent-Android-debug
-          path: android-artifact/KitAgent-Android-debug.zip
+          name: KitSetups-Android-debug
+          path: android-artifact/KitSetups-Android-debug.zip
           if-no-files-found: error
           retention-days: 30
