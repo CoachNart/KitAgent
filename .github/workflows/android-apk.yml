@@ -38,13 +38,18 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Add native app polish
+      - name: Apply KitSetups native branding
         shell: bash
         run: |
+          set -e
+          mkdir -p android/app/src/main/res/drawable
+          cp android-assets/kitsetups_icon.xml android/app/src/main/res/drawable/kitsetups_icon.xml
           python3 - <<'PY'
           from pathlib import Path
           p = Path('android/app/src/main/AndroidManifest.xml')
           s = p.read_text()
+          s = s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/kitsetups_icon"')
+          s = s.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/kitsetups_icon"')
           s = s.replace('android:theme="@style/AppTheme.NoActionBarLaunch"', 'android:theme="@style/AppTheme.NoActionBarLaunch" android:usesCleartextTraffic="false" android:resizeableActivity="true"')
           marker = '</activity>'
           deep_link = '''\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="kitsetups.xyz" />\n                <data android:scheme="https" android:host="www.kitsetups.xyz" />\n            </intent-filter>\n          '''
@@ -68,6 +73,7 @@ jobs:
         run: |
           test -f android/app/build/outputs/apk/debug/app-debug.apk
           unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -q 'assets/public'
+          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -q 'kitsetups_icon'
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
