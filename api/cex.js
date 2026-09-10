@@ -22,7 +22,7 @@ export default async function handler(req,res){try{
  }
  if(action==='connect'){
   if(!b.key||!b.secret||(exchange==='bitget'&&!b.passphrase))return json(res,400,{error:'API credentials are required'});
-  if(exchange==='mexc'){const s=mexcSigned({path:'/api/v3/account',key:b.key,secret:b.secret});return json(res,200,await call(s.url,{headers:s.headers}));}
+  if(exchange==='mexc'){const s=mexcSigned({path:'/api/v1/private/account/assets',key:b.key,secret:b.secret});return json(res,200,await call(s.url,{headers:s.headers}));}
   const s=bitgetSigned({path:'/api/v3/account/assets',key:b.key,secret:b.secret,passphrase:b.passphrase});return json(res,200,await call(s.url,{headers:s.headers}));
  }
  if(!b.key||!b.secret||(exchange==='bitget'&&!b.passphrase))return json(res,400,{error:'Connect the exchange first'});
