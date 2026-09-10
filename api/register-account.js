@@ -17,7 +17,9 @@ export default async function handler(req,res){
   const a=getAdmin();
   const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const email=String(body.email||'').trim().toLowerCase();const password=String(body.password||'');const ip=requestIp(req);
   const recaptcha=await verifyRecaptcha(String(body.recaptchaToken||'').trim(),ip);if(!recaptcha.configured)return json(res,500,{error:'reCAPTCHA is not configured.',code:'RECAPTCHA_NOT_CONFIGURED'});if(!recaptcha.ok)return json(res,403,{error:'Please complete the reCAPTCHA check and try again.',code:'RECAPTCHA_FAILED'});
-  if(!(await verifyAppCheck(a,req)))return json(res,403,{error:'Security verification failed. Please refresh and try again.',code:'APPCHECK_FAILED'});
+  // reCAPTCHA v2 is the registration security gate. Firebase App Check remains enabled
+  // for the client, but a stale/rejected Enterprise token must not block signup.
+  if(req.headers['x-firebase-appcheck'])await verifyAppCheck(a,req);
   if(!/^\S+@\S+\.\S+$/.test(email))return json(res,400,{error:'Enter a valid email address.',code:'INVALID_EMAIL'});if(password.length<6)return json(res,400,{error:'Use a stronger password (at least 6 characters).',code:'WEAK_PASSWORD'});
   const canonical=canonicalEmail(email);const db=a.firestore();const lockRef=db.collection('accountIdentityLocks').doc(encodeURIComponent(canonical));const networkRef=ip?db.collection('signupNetworkLocks').doc(networkKey(ip)):null;const existingLock=await lockRef.get();if(existingLock.exists)return json(res,409,{error:'An account already exists for this email identity. Sign in instead.',code:'ACCOUNT_ALREADY_EXISTS'});
   if(networkRef){const networkLock=await networkRef.get();if(networkLock.exists)return json(res,409,{error:'An account has already been created from this network. Sign in instead.',code:'NETWORK_ACCOUNT_EXISTS'})}
