@@ -1,7 +1,6 @@
 import { cloneElement, useEffect, useRef, useState } from 'react';
 import { browserLocalPersistence, onAuthStateChanged, setPersistence, signInWithCustomToken, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import { getToken } from 'firebase/app-check';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ShieldCheck, LoaderCircle, LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { auth, db, appCheck, firebaseConfigured } from './firebase.js';
 import { getDeviceBindingId } from './deviceBinding.js';
@@ -9,18 +8,16 @@ import { getDeviceBindingId } from './deviceBinding.js';
 const RECAPTCHA_SITE_KEY = '6Ldj4LItAAAAAI0YLXqR4GcB_11tbI3F82htAva3';
 
 function makeUsername(email,uid){const base=(email||'user').split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,18)||'user';const suffix=(uid||'').replace(/[^a-z0-9]/gi,'').slice(-5).toLowerCase()||Math.random().toString(36).slice(2,7);return `${base}-${suffix}`}
-function makeAvatar(username){const seed=encodeURIComponent(`kitsetups-${username||Math.random().toString(36).slice(2)}`);return `https://api.dicebear.com/9.x/adventurer/svg?seed=${seed}&backgroundType=gradientLinear&radius=24&size=96`}
 async function registerDevice(user){const deviceId=await getDeviceBindingId();const token=await user.getIdToken();const response=await fetch('/api/register-device',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({deviceId})});let payload={};try{payload=await response.json()}catch{}if(!response.ok)throw Object.assign(new Error(payload.error||'This device cannot be registered.'),{code:payload.code||'DEVICE_REGISTRATION_FAILED'});return deviceId}
-async function getAppCheckHeaders(){if(!appCheck)return {};const token=await getToken(appCheck);return {'X-Firebase-AppCheck':token.token}}
 async function initializeAccount(user){
  if(!db)throw new Error('KitSetups database is not configured.');
- const ref=doc(db,'users',user.uid);const snapshot=await getDoc(ref);const existing=snapshot.exists()?(snapshot.data()||{}):{};const isNew=!snapshot.exists();
- const username=existing.username||makeUsername(user.email||existing.email,user.uid);
- const existingPhoto=existing.photoURL||'';const photoURL=existingPhoto&&!existingPhoto.startsWith('data:image/svg+xml')?existingPhoto:(user.photoURL||makeAvatar(username));
- if(user.displayName!==username||user.photoURL!==photoURL){try{await updateProfile(user,{displayName:username,photoURL})}catch(error){console.warn('KitSetups profile update deferred:',error)}}
- const trialPatch=isNew?{plan:'free',trialStartedAt:serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:(!existing.trialStartedAt||!existing.trialEndsAt)?{plan:existing.plan||'free',trialStartedAt:existing.trialStartedAt||serverTimestamp(),trialEndsAt:new Date(Date.now()+3*24*60*60*1000)}:{};
- await setDoc(ref,{uid:user.uid,email:user.email||existing.email||'',username,displayName:username,photoURL,emailVerified:Boolean(user.emailVerified),authProvider:'password',authProviders:['password'],walletAddress:existing.walletAddress||'',maxRiskPercent:existing.maxRiskPercent??1.5,maxTradeSize:existing.maxTradeSize??0,tradingPreferences:existing.tradingPreferences||{targetRiskReward:2.5},apiKeyMetadata:existing.apiKeyMetadata||{},...trialPatch,updatedAt:serverTimestamp()},{merge:true});
- const deviceBindingId=await registerDevice(user);await setDoc(ref,{securitySettings:{...(existing.securitySettings||{}),deviceBindingId},updatedAt:serverTimestamp()},{merge:true});
+ const username=makeUsername(user.email,user.uid);
+ const photoURL=user.photoURL||`https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(`kitsetups-${username}`)}&backgroundType=gradientLinear&radius=24&size=96`;
+ // Profile/device persistence is server-authoritative. Do not write the users document
+ // from the client during auth: this used to race Firestore rules and cause
+ // "Missing or insufficient permissions" immediately after a successful sign-in.
+ try{if(user.displayName!==username||user.photoURL!==photoURL)await updateProfile(user,{displayName:user.displayName||username,photoURL})}catch(error){console.warn('KitSetups profile update deferred:',error)}
+ await registerDevice(user);
 }
 
 export default function AuthGate({children}){const [user,setUser]=useState(null),[ready,setReady]=useState(false),[mode,setMode]=useState('signin'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[captchaToken,setCaptchaToken]=useState('');const captchaContainer=useRef(null);const captchaWidget=useRef(null);
