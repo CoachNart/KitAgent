@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.kitagent.app',
-  appName: 'KitAgent',
+  appName: 'KitSetups',
   webDir: 'dist',
   android: {
     backgroundColor: '#07090c'
