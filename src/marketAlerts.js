@@ -1,7 +1,7 @@
 import { auth } from './firebase.js';
 
 const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT'];
-const BYBIT_URL='https://api.bybit.com/v5/market/kline';
+const BYBIT_URLS=['https://api.bybit.com/v5/market/kline','https://api.bytick.com/v5/market/kline'];
 const NEWS_URL='https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const POLL_MS=60_000;
 const EARLY_INTERVAL='5';
@@ -44,16 +44,24 @@ function structure(c){
 }
 
 async function market(symbol,interval){
-  const u=new URL(BYBIT_URL);
-  u.searchParams.set('category','linear');
-  u.searchParams.set('symbol',symbol);
-  u.searchParams.set('interval',interval);
-  u.searchParams.set('limit','150');
-  const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
-  if(!r.ok)throw new Error(`Bybit ${r.status}`);
-  const body=await r.json();
-  if(body?.retCode!==0)throw new Error(`Bybit ${body?.retCode||'request failed'}`);
-  return candles(body?.result?.list?.slice(1)||[]);
+  let lastError=null;
+  for(const endpoint of BYBIT_URLS){
+    try{
+      const u=new URL(endpoint);
+      u.searchParams.set('category','linear');
+      u.searchParams.set('symbol',symbol);
+      u.searchParams.set('interval',interval);
+      u.searchParams.set('limit','150');
+      const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
+      if(!r.ok){lastError=new Error(`Bybit HTTP ${r.status}`);continue;}
+      const body=await r.json();
+      if(body?.retCode!==0){lastError=new Error(`Bybit ${body?.retCode||'request failed'}: ${body?.retMsg||'unknown error'}`);continue;}
+      const rows=body?.result?.list;
+      if(!Array.isArray(rows)||rows.length<30){lastError=new Error('Bybit returned insufficient candle data');continue;}
+      return candles(rows.slice(1));
+    }catch(e){lastError=e instanceof Error?e:new Error(String(e));}
+  }
+  throw lastError||new Error('Bybit request failed');
 }
 
 function parseNewsTime(item){
@@ -68,7 +76,7 @@ function parseNewsTime(item){
 }
 
 async function news(){
-  const r=await fetch(NEWS_URL,{headers:{Accept:'application/json','User-Agent':'KitAgent/1.0'},cache:'no-store'});
+  const r=await fetch(NEWS_URL,{headers:{Accept:'application/json'},cache:'no-store'});
   if(!r.ok)throw new Error(`Calendar ${r.status}`);
   const data=await r.json(),now=Date.now();
   return(Array.isArray(data)?data:[]).map((x,i)=>({...x,id:String(x.id||`${x.date||''}-${x.time||''}-${x.title||''}-${i}`),when:parseNewsTime(x)})).filter(x=>String(x.impact||'').toLowerCase()==='high'&&x.when&&x.when>now-300000&&x.when<now+7*86400000).sort((a,b)=>a.when-b.when);
@@ -82,15 +90,18 @@ async function poll(){
   emit();
   try{
     const seen=read(seenKey),newsSeen=read(newsKey),pending=read(pendingKey);
-    const marketResults=await Promise.all(SYMBOLS.map(async symbol=>{
+    const marketResults=[];
+    for(const symbol of SYMBOLS){
       try{
         const [fast,confirm]=await Promise.all([market(symbol,EARLY_INTERVAL),market(symbol,CONFIRM_INTERVAL)]);
         const early=structure(fast).event;
         const confirmed=structure(confirm).event;
-        const fastLast=fast.at(-1),confirmLast=confirm.at(-1);
-        return {symbol,price:fastLast?.close||null,early,confirmed,ok:true};
-      }catch(e){return {symbol,price:null,early:null,confirmed:null,ok:false,error:e?.message||'request failed'};}
-    }));
+        const fastLast=fast.at(-1);
+        marketResults.push({symbol,price:fastLast?.close||null,early,confirmed,ok:true});
+      }catch(e){
+        marketResults.push({symbol,price:null,early:null,confirmed:null,ok:false,error:e?.message||'Bybit request failed'});
+      }
+    }
 
     let lastEvent=snapshot.lastEvent,lastConfirmed=snapshot.lastConfirmed;
     for(const result of marketResults){
@@ -104,7 +115,6 @@ async function poll(){
           notify(`${symbol.replace('USDT','')} 5m structure shift`,`${early.type}: ${early.direction} break detected. Waiting for 15m confirmation.`,earlyKey);
         }
       }
-
       if(confirmed){
         const candidate=pending[symbol];
         const age=candidate?now-Number(candidate.detectedAt):Infinity;
