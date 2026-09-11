@@ -3,12 +3,15 @@ const json=(res,status,data)=>{res.status(status).setHeader('Content-Type','appl
 const bodyOf=async req=>{if(req.body&&typeof req.body==='object')return req.body;let raw='';for await(const c of req)raw+=c;try{return JSON.parse(raw||'{}')}catch{return {}}};
 const mexcBase='https://api.mexc.com';const bitgetBase='https://api.bitget.com';
 const b64=s=>crypto.createHmac('sha256',s).digest('base64');
-const mexcSigned=({path,method='GET',params={},key,secret})=>{const timestamp=String(Date.now());const query=new URLSearchParams({...params,timestamp}).toString();const signature=crypto.createHmac('sha256',secret).update(query).digest('hex');return {url:`${mexcBase}${path}?${query}&signature=${signature}`,headers:{'X-MEXC-APIKEY':key}}};
+const mexcSigned=({path,method='GET',params={},key,secret})=>{const timestamp=String(Date.now());const query=new URLSearchParams({...params,timestamp}).toString();const signature=crypto.createHmac('sha256',secret).update(query).digest('hex');return {url:`${mexcBase}${path}?${query}&signature=${signature}`,headers:{'X-MEXC-APIKEY':key,'Content-Type':'application/json'}}};
 const bitgetSigned=({path,method='GET',params={},body='',key,secret,passphrase})=>{const query=Object.keys(params).length?'?'+new URLSearchParams(params).toString():'';const timestamp=String(Date.now());const pre=timestamp+method.toUpperCase()+path+query+body;return {url:`${bitgetBase}${path}${query}`,headers:{'ACCESS-KEY':key,'ACCESS-SIGN':b64(pre),'ACCESS-TIMESTAMP':timestamp,'ACCESS-PASSPHRASE':passphrase,'Content-Type':'application/json','locale':'en-US'}}};
-async function call(url,options={}){const r=await fetch(url,{...options,headers:{...(options.headers||{}),'User-Agent':'KitAgent/1.0'}});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data={message:text}}if(!r.ok)throw new Error(data?.msg||data?.message||`Exchange request failed (${r.status})`);return data;}
+async function call(url,options={}){const r=await fetch(url,{...options,headers:{...(options.headers||{}),'User-Agent':'KitAgent/1.0'}});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data={message:text}}if(!r.ok)throw new Error(data?.msg||data?.message||`Exchange request failed (${r.status})`);if(data?.success===false)throw new Error(data?.message||data?.msg||`Exchange request failed (${data?.code??'unknown'})`);return data;}
 const mexcSym=s=>String(s||'BTCUSDT').toUpperCase().replace(/[-/]/g,'').replace('USDT','_USDT');
 const mexcInterval=i=>({'1m':'Min1','5m':'Min5','15m':'Min15','30m':'Min30','1h':'Min60','4h':'Hour4','1d':'Day1'}[String(i).toLowerCase()]||'Min5');
 const bitgetInterval=i=>({'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','4h':'4H','1d':'1D'}[String(i).toLowerCase()]||'5m');
+const asArray=v=>Array.isArray(v)?v:(Array.isArray(v?.data)?v.data:[]);
+const normalizeMexcSpot=v=>(Array.isArray(v?.balances)?v.balances:[]).map(x=>({currency:String(x.asset||''),availableBalance:Number(x.free||0),cashBalance:Number(x.free||0),frozenBalance:Number(x.locked||0),equity:Number(x.free||0)+Number(x.locked||0),balance:Number(x.free||0)+Number(x.locked||0),source:'spot'})).filter(x=>x.currency);
+const normalizeMexcFutures=v=>asArray(v).map(x=>({...x,currency:String(x.currency||x.coin||''),balance:Number(x.equity??x.balance??0),source:'futures'})).filter(x=>x.currency);
 export default async function handler(req,res){try{
  const b=await bodyOf(req),exchange=String(b.exchange||'mexc').toLowerCase(),action=String(b.action||'ticker'),symbol=String(b.symbol||'BTCUSDT').toUpperCase(),interval=String(b.interval||'5m');
  if(!['mexc','bitget'].includes(exchange))return json(res,400,{error:'Unsupported exchange'});
@@ -20,7 +23,17 @@ export default async function handler(req,res){try{
   if(action==='candles'){const end=Math.floor(Date.now()/1000),start=end-7*86400;return json(res,200,await call(`${mexcBase}/api/v1/contract/kline/${encodeURIComponent(sym)}?interval=${mexcInterval(interval)}&start=${start}&end=${end}`));}
   if(!b.key||!b.secret)return json(res,400,{error:'Connect the MEXC Futures API first'});
   const signed=(path,params={},method='GET')=>mexcSigned({path,params,key:b.key,secret:b.secret,method});const run=async(s,opts={})=>call(s.url,{...opts,headers:s.headers});
-  if(action==='connect'||action==='balance'){const s=signed('/api/v1/private/account/assets');return json(res,200,await run(s));}
+  if(action==='connect'||action==='balance'){
+   const futuresPromise=run(signed('/api/v1/private/account/assets')).catch(()=>null);
+   const spotPromise=run(signed('/api/v3/account')).catch(()=>null);
+   const [futures,spot]=await Promise.all([futuresPromise,spotPromise]);
+   const futuresAssets=normalizeMexcFutures(futures);const spotAssets=normalizeMexcSpot(spot);
+   if(!futuresAssets.length&&!spotAssets.length)return json(res,502,{error:'MEXC account connected, but no readable Spot or Futures balances were returned. Check that the API key has account/reading permissions.'});
+   const byCurrency=new Map();
+   for(const x of futuresAssets)byCurrency.set(x.currency,x);
+   for(const x of spotAssets){const existing=byCurrency.get(x.currency);if(!existing||Number(existing.balance||existing.equity||0)===0)byCurrency.set(x.currency,x);}
+   return json(res,200,Array.from(byCurrency.values()));
+  }
   if(action==='positions'){const s=signed('/api/v1/private/position/open_positions');return json(res,200,await run(s));}
   if(action==='orders'){const s=signed(`/api/v1/private/order/list/open_orders/${encodeURIComponent(sym)}`);return json(res,200,await run(s));}
   if(action==='history'){const s=signed('/api/v1/private/order/list/history_orders',{symbol:sym,page_num:1,page_size:50});return json(res,200,await run(s));}
