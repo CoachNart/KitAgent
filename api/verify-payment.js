@@ -5,7 +5,7 @@ const PAYMENT_ADDRESS='0x1c35bf9d920e1b5d7e7e37ce1d15a1b9500f8474'.toLowerCase()
 const USDT_BSC='0x55d398326f99059ff775485246999027b3197955'.toLowerCase();
 const BSC_RPC=process.env.BSC_RPC_URL||'https://bsc-dataseed.binance.org';
 const PRICE_USDT=20n*10n**18n;
-const DEFAULT_COMMISSION_BPS=2000;
+const DEFAULT_COMMISSION_BPS=1000;
 const TRANSFER_TOPIC='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55aeb5b8a8a39';
 function getAdmin(){if(admin.apps.length)return admin;const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON,credentialPath=process.env.GOOGLE_APPLICATION_CREDENTIALS;if(raw){try{admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['\"]|['\"]$/g,'')))});return admin}catch{}}if(credentialPath&&fs.existsSync(credentialPath)){admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath,'utf8')))});return admin}const e=new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING');e.code=e.message;throw e}
 function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body))}
@@ -27,7 +27,7 @@ export default async function handler(req,res){
   const sender=String(tx.from||'').toLowerCase();
   if(!/^0x[a-f0-9]{40}$/.test(sender))return json(res,422,{error:'The transaction sender could not be resolved.'});
   const matching=(receipt.logs||[]).find(log=>{const topics=log.topics||[];return String(log.address||'').toLowerCase()===USDT_BSC&&String(topics[0]||'').toLowerCase()===TRANSFER_TOPIC&&normalizeAddress(topics[2])===PAYMENT_ADDRESS&&parseAmount(log.data)>=PRICE_USDT});
-  if(!matching)return json(res,422,{error:'No valid payment of at least 20 USDT to the KitAgent payment address was found in this transaction.'});
+  if(!matching)return json(res,422,{error:'No valid payment of at least 20 USDT to the KitSetuop payment address was found in this transaction.'});
   const amount=parseAmount(matching.data),amountUsdt=Number(amount)/1e18,verificationRef=userRef.collection('paymentVerifications').doc();
   let earned=0;
   await db.runTransaction(async transaction=>{
@@ -40,12 +40,12 @@ export default async function handler(req,res){
    if(affiliateSnap?.exists&&affiliateSnap.data()?.status==='active'&&String(affiliateSnap.data()?.userId||'')!==decoded.uid){
     const affiliate=affiliateSnap.data(),bps=commissionBps(affiliate.commissionRateBps),amountCents=Math.round(amountUsdt*100),commissionCents=Math.floor(amountCents*bps/10000),commissionAmount=commissionCents/100;earned=commissionAmount;
     if(commissionAmount>0){
-     transaction.set(commissionRef,{affiliateId:affiliateSnap.id,affiliateUserId:affiliate.userId,referredUserId:decoded.uid,referralCode:affiliate.referralCode,subscriptionTransactionHash:hash,grossAmount:amountUsdt,commissionRateBps:bps,commissionAmount,status:'available',createdAt:admin.firestore.FieldValue.serverTimestamp(),paidAt:null},{merge:false});
+     transaction.set(commissionRef,{affiliateId:affiliateSnap.id,affiliateUserId:affiliate.userId,referredUserId:decoded.uid,referralCode:affiliate.referralCode,subscriptionTransactionHash:hash,grossAmount:amountUsdt,commissionRateBps:bps,commissionAmount,status:'available',payoutSchedule:'monthly',createdAt:admin.firestore.FieldValue.serverTimestamp(),paidAt:null},{merge:false});
      transaction.update(affiliateSnap.ref,{totalEarned:admin.firestore.FieldValue.increment(commissionAmount),availableBalance:admin.firestore.FieldValue.increment(commissionAmount),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
-     const referralRef=db.collection('referrals').doc(decoded.uid);transaction.set(referralRef,{affiliateId:affiliateSnap.id,referredUserId:decoded.uid,referralCode:affiliate.referralCode,status:'qualified',qualifiedAt:admin.firestore.FieldValue.serverTimestamp(),lastSubscriptionTransactionHash:hash,lastCommissionAmount:commissionAmount,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+     const referralRef=db.collection('referrals').doc(decoded.uid);transaction.set(referralRef,{affiliateId:affiliateSnap.id,referredUserId:decoded.uid,referralCode:affiliate.referralCode,status:'qualified',qualifiedAt:admin.firestore.FieldValue.serverTimestamp(),lastSubscriptionTransactionHash:hash,lastCommissionAmount:commissionAmount,payoutSchedule:'monthly',updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     }
    }
   });
-  return json(res,200,{verified:true,status:'verified',amount:amountUsdt,accessDays:30,affiliateCommission:earned});
- }catch(error){if(error?.code==='PAYMENT_ALREADY_USED')return json(res,409,{error:'This transaction has already been used for a KitAgent Premium activation.'});if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_MISSING')return json(res,500,{error:'Firebase Admin credentials are missing.'});console.error('verify-payment failed',error);return json(res,500,{error:'Payment verification could not be completed.'})}
+  return json(res,200,{verified:true,status:'verified',amount:amountUsdt,accessDays:30,affiliateCommission:earned,payoutSchedule:'monthly'});
+ }catch(error){if(error?.code==='PAYMENT_ALREADY_USED')return json(res,409,{error:'This transaction has already been used for a KitSetuop Premium activation.'});if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_MISSING')return json(res,500,{error:'Firebase Admin credentials are missing.'});console.error('verify-payment failed',error);return json(res,500,{error:'Payment verification could not be completed.'})}
 }
