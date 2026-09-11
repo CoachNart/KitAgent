@@ -1,150 +1,25 @@
 (()=>{
-// Stable enhancement layer: never continuously re-render or mutate the CEX terminal.
-const K={key:'',secret:'',passphrase:'',exchange:'mexc',pairs:[],account:null,positions:[],closed:[],history:[],tab:'open',name:localStorage.getItem('kitsetups_trader_name')||'KitSetups Trader'};
-let observerStarted=false;
-let loading=false;
-let loadedSignature='';
-let marginScheduled=false;
-
+const K={key:'',secret:'',passphrase:'',exchange:'mexc',pairs:[],account:null,positions:[],closed:[],history:[],tab:'open',refreshing:false};
 const api=(action,extra={})=>fetch('/api/cex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,exchange:K.exchange,key:K.key,secret:K.secret,passphrase:K.passphrase,symbol:(document.querySelector('#ks')?.value||'BTCUSDT'),...extra})}).then(async r=>{const j=await r.json();if(!r.ok||j.error)throw Error(j.error||'Exchange request failed');return j});
+const arr=v=>Array.isArray(v)?v:(Array.isArray(v?.data)?v.data:[]);
 const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
 const n=v=>Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:6}):'—';
-const arr=v=>Array.isArray(v)?v:(v?.data&&Array.isArray(v.data)?v.data:[]);
-
-const css=`.ks-account{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#18202b;border-bottom:1px solid #18202b}.ks-stat{background:#0a0f15;padding:9px 10px;min-width:0}.ks-stat small{display:block;color:#657287;font-size:8px}.ks-stat b{font-size:12px}.ks-trade-note{font-size:9px;color:#657287;margin-top:3px}.ks-quick{display:flex;gap:4px;margin-top:5px}.ks-quick button{flex:1;padding:3px;background:#111721;color:#9aa8bb;border:1px solid #263141;border-radius:4px;font-size:8px}.ks-tabs{display:flex;gap:4px;padding:8px 10px 0}.ks-tabs button{background:#111721;color:#aab6c7;border:1px solid #263141;border-radius:5px;padding:5px 10px;font-size:10px}.ks-tabs button.active{border-color:#25d6d0;color:#25d6d0}.ks-pnl{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0a1017;border:1px solid #1a2633;border-radius:8px;padding:9px 10px;margin-bottom:8px}.ks-pnl strong{font-size:16px}.ks-share{background:#25d6d0;color:#061012;border:0;border-radius:5px;padding:6px 9px;font-weight:800;font-size:9px}.ks-sharecard{background:#071018;border:1px solid #25d6d0;border-radius:12px;padding:18px;color:#eef5fb}.ks-brand{font-size:11px;letter-spacing:2px;color:#25d6d0;font-weight:900}.ks-cardpnl{font-size:30px;font-weight:900;margin:14px 0 4px}.ks-cardgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;font-size:10px}.ks-cardgrid span{display:block;color:#718097;font-size:8px}.ks-modal button{cursor:pointer}@media(max-width:700px){.ks-account{grid-template-columns:repeat(2,minmax(0,1fr))}.ks-pnl{align-items:flex-start}.ks-cardgrid{grid-template-columns:1fr 1fr}}`;
+const num=v=>Number(v)||0;
+const css=`.ks-account{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#18202b;border-bottom:1px solid #18202b}.ks-stat{background:#0a0f15;padding:9px 10px;min-width:0}.ks-stat small{display:block;color:#657287;font-size:8px}.ks-stat b{font-size:12px}.ks-tabs{display:flex;gap:4px;padding:8px 10px 0}.ks-tabs button{background:#111721;color:#aab6c7;border:1px solid #263141;border-radius:5px;padding:5px 10px;font-size:10px}.ks-tabs button.active{border-color:#25d6d0;color:#25d6d0}.ks-panel{padding:8px 10px;overflow:auto}.ks-pnl{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0a1017;border:1px solid #1a2633;border-radius:8px;padding:9px 10px;margin-bottom:8px}.ks-pnl strong{font-size:16px}.ks-margin-field{margin:7px 0}.ks-margin-field label{display:flex;justify-content:space-between;color:#718097;font-size:9px;margin-bottom:4px}.ks-margin-field input{width:100%;height:32px;background:#0c1118;color:#eef3f9;border:1px solid #202a38;border-radius:6px;padding:0 8px;box-sizing:border-box}.ks-quick{display:flex;gap:4px;margin-top:5px}.ks-quick button{flex:1;padding:3px;background:#111721;color:#9aa8bb;border:1px solid #263141;border-radius:4px;font-size:8px}.ks-note{font-size:9px;color:#657287;margin-top:3px}.ks-live{color:#25d6d0;font-size:8px}@media(max-width:700px){.ks-account{grid-template-columns:repeat(2,minmax(0,1fr))}.ks-pnl{align-items:flex-start}}`;
 if(!document.getElementById('ks-enh-css')){const s=document.createElement('style');s.id='ks-enh-css';s.textContent=css;document.head.appendChild(s)}
-
-function capture(){
- const modal=document.querySelector('.kc-modal');
- const go=modal?.querySelector('#go');
- if(!go||go.dataset.ksHook)return;
- go.dataset.ksHook='1';
- go.addEventListener('click',()=>{
-   const ak=modal.querySelector('#ak'),as=modal.querySelector('#as'),ap=modal.querySelector('#ap');
-   K.key=ak?.value?.trim()||'';K.secret=as?.value?.trim()||'';K.passphrase=ap?.value?.trim()||'';
-   K.exchange=document.querySelector('#kx')?.value||'mexc';
-   loadedSignature='';
-   setTimeout(load,700);
- },{once:false});
-}
-
-async function load(){
- if(!K.key||!K.secret||loading)return;
- const sig=`${K.exchange}|${K.key}|${K.secret}|${K.passphrase}`;
- if(sig===loadedSignature)return;
- loading=true;
- try{
-   const [ba,p,o,h,ch]=await Promise.all([api('balance'),api('positions'),api('orders'),api('history'),api('positionHistory')]);
-   K.account=arr(ba).find(x=>String(x.currency||x.coin||'').toUpperCase()==='USDT')||arr(ba)[0]||null;
-   K.positions=arr(p);K.history=arr(h);K.closed=arr(ch);
-   loadedSignature=sig;
-   scheduleEnhancements();
- }catch(e){
-   // Keep the terminal usable if private account data is unavailable.
- }finally{loading=false}
-}
-
-function renderAccount(){
- const root=document.querySelector('#kit-cex');if(!root)return;
- const a=K.account||{},p=K.positions||[];
- const unreal=Number(a.unrealized||a.unrealised||0)||p.reduce((s,x)=>s+Number(x.unrealised||x.unrealizedPnl||x.unrealizedPL||0),0);
- const margin=Number(a.positionMargin||0)||p.reduce((s,x)=>s+Number(x.im||x.margin||x.initialMargin||0),0);
- const equity=Number(a.equity||a.balance||0)+unreal;
- const avail=Number(a.availableBalance||a.availableCash||a.availableOpen||a.available||0);
- let box=root.querySelector(':scope > .ks-account');
- if(!box){box=document.createElement('div');box.className='ks-account';root.prepend(box)}
- box.innerHTML=`<div class="ks-stat"><small>WALLET BALANCE</small><b>${n(a.cashBalance||a.balance||a.equity||0)} USDT</b></div><div class="ks-stat"><small>AVAILABLE MARGIN</small><b>${n(avail)} USDT</b></div><div class="ks-stat"><small>POSITION MARGIN</small><b>${n(margin)} USDT</b></div><div class="ks-stat"><small>EQUITY</small><b>${n(equity)} USDT</b></div><div class="ks-stat"><small>UNREALIZED PNL</small><b>${n(unreal)} USDT</b></div>`;
-}
-
-function contract(){
- const current=(document.querySelector('#ks')?.value||'BTCUSDT').toUpperCase();
- return (K.pairs||[]).find(p=>String(p.symbol||'').replace('_USDT','USDT').toUpperCase()===current)||{contractSize:.0001,volUnit:1,minVol:1,volScale:0};
-}
-async function getPairs(){if(K.pairs.length)return;try{K.pairs=arr(await api('pairs'))}catch(e){K.pairs=[]}}
-
-function syncMargin(){
- if(marginScheduled)return;
- marginScheduled=true;
- requestAnimationFrame(()=>{
-   marginScheduled=false;
-   const order=document.querySelector('.kc-order');
-   if(!order||order.querySelector('#ks-margin'))return;
-   getPairs().then(()=>{
-     const size=document.querySelector('#size');
-     if(!size||document.querySelector('#ks-margin'))return;
-     const field=document.createElement('div');field.className='kc-field';
-     field.innerHTML='<label>Margin <span id="ks-est">Enter USDT</span></label><input id="ks-margin" inputmode="decimal" placeholder="Amount in USDT"><div class="ks-quick"><button data-q="25">25%</button><button data-q="50">50%</button><button data-q="75">75%</button><button data-q="100">Max</button></div><div class="ks-trade-note">Your margin × leverage sets the position size. KitSetups handles contracts automatically.</div>';
-     const label=size.closest('.kc-field');if(!label?.parentNode)return;
-     label.parentNode.insertBefore(field,label);
-     size.readOnly=true;
-     const first=label.querySelector('label');if(first)first.childNodes[0].textContent='Contracts';
-     const recalc=()=>{
-       const m=Number(document.querySelector('#ks-margin')?.value||0),lev=Number(document.querySelector('#lev')?.value||5),price=Number(document.querySelector('#price')?.value||document.querySelector('#kit-cex .kc-mid')?.textContent?.replace(/,/g,'')||0);
-       const c=contract(),cs=Number(c.contractSize||.0001);if(!m||!price||!cs)return;
-       let v=m*lev/(price*cs);const unit=Number(c.volUnit||0),scale=Number(c.volScale||0);
-       if(unit>0)v=Math.floor(v/unit)*unit;if(scale>=0&&scale<=8)v=Number(v.toFixed(scale));
-       size.value=v;const est=document.querySelector('#ks-est');if(est)est.textContent=`≈ ${n(v)} contracts`;
-     };
-     document.querySelector('#ks-margin')?.addEventListener('input',recalc);
-     document.querySelector('#lev')?.addEventListener('input',recalc);
-     document.querySelector('#price')?.addEventListener('input',recalc);
-     document.querySelectorAll('.ks-quick button').forEach(b=>b.addEventListener('click',()=>{const a=K.account||{},avail=Number(a.availableBalance||a.availableCash||a.availableOpen||a.available||0);const m=document.querySelector('#ks-margin');if(m)m.value=(avail*Number(b.dataset.q)/100).toFixed(4);recalc()}));
-     recalc();
-   });
- });
-}
-
-function pnl(p,closed=false){
- if(closed)return Number(p.closeProfitLoss??p.realised??p.realizedPnl??p.profit??0);
- const side=Number(p.positionType||p.posSide)===2?-1:1,entry=Number(p.holdAvgPrice||p.openAvgPrice||p.avgOpenPrice||0),mark=Number(p.fairPrice||p.markPrice||0),vol=Number(p.holdVol||p.total||p.size||0),cs=Number(((K.pairs||[]).find(x=>String(x.symbol||'').replace('_USDT','USDT')===String(p.symbol||'').replace('_USDT','USDT'))||{}).contractSize||.0001);
- return Number(p.unrealised??p.unrealizedPnl??p.unrealizedPL??((mark-entry)*vol*cs*side));
-}
-
-function renderTabs(){
- const root=document.querySelector('#kit-cex');if(!root)return;
- let tabs=root.querySelector(':scope > .ks-tabs');
- if(!tabs){
-   tabs=document.createElement('div');tabs.className='ks-tabs';tabs.innerHTML='<button data-ks-tab="open">Open</button><button data-ks-tab="close">Close</button><button data-ks-tab="history">History</button>';root.appendChild(tabs);
-   const panel=document.createElement('div');panel.className='kc-panel ks-panel';panel.id='ks-panel';root.appendChild(panel);
-   tabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{K.tab=b.dataset.ksTab;tabs.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));if(K.tab==='open')await refreshOpen();if(K.tab==='close')await refreshClosed();if(K.tab==='history')await refreshHistory();renderPanel()}));
-   tabs.querySelector('[data-ks-tab="open"]')?.classList.add('active');
- }
- renderPanel();
-}
-async function refreshOpen(){if(!K.key)return;try{K.positions=arr(await api('positions'))}catch(e){}}
-async function refreshClosed(){if(!K.key)return;try{K.closed=arr(await api('positionHistory'))}catch(e){}}
-async function refreshHistory(){if(!K.key)return;try{K.history=arr(await api('history'))}catch(e){}}
-function renderPanel(){
- const p=document.querySelector('#ks-panel');if(!p)return;
- let rows=[],total=0,title='Open positions';
- if(K.tab==='open'){rows=K.positions;total=rows.reduce((s,x)=>s+pnl(x),0)}else if(K.tab==='close'){rows=K.closed;total=rows.reduce((s,x)=>s+pnl(x,true),0);title='Closed positions'}else{rows=K.history;total=rows.reduce((s,x)=>s+Number(x.profit||x.realizedPnl||0),0);title='Order history'}
- const sign=total>=0?'+':'';
- p.innerHTML=`<div class="ks-pnl"><div><small style="color:#657287">KITSETUPS PNL · ${esc(title)}</small><br><strong>${sign}${n(total)} USDT</strong></div><button class="ks-share" id="ks-share">Share PNL</button></div>${rows.length?`<table class="kc-table"><thead><tr><th>Pair</th><th>Side</th><th>Entry</th><th>Exit/Mark</th><th>Margin</th><th>PNL</th><th>ROI</th>${K.tab==='open'?'<th></th>':''}</tr></thead><tbody>${rows.map(x=>{const pp=pnl(x,K.tab==='close'),m=Number(x.im||x.margin||x.initialMargin||0)||Math.abs(pp)/Math.max(Number(x.leverage||5),1),roi=m?pp/m*100:0,side=Number(x.positionType||x.posSide)===2?'Short':Number(x.side)===3?'Short':'Long';return `<tr><td>${esc(x.symbol||'—')}</td><td>${side}</td><td>${n(x.holdAvgPrice||x.openAvgPrice||x.avgOpenPrice||x.price)}</td><td>${n(x.closeAvgPrice||x.newCloseAvgPrice||x.fairPrice||x.markPrice||x.dealAvgPrice)}</td><td>${n(m)} USDT</td><td>${pp>=0?'+':''}${n(pp)} USDT</td><td>${roi>=0?'+':''}${n(roi)}%</td>${K.tab==='open'?`<td><button class="kc-action" data-ks-close="${esc(x.positionId||x.id||'')}">Close</button></td>`:''}</tr>`}).join('')}</tbody></table>`:'<div class="kc-empty">No records yet</div>'}`;
- p.querySelector('#ks-share')?.addEventListener('click',()=>share(total,rows[0]||{}));
- p.querySelectorAll('[data-ks-close]').forEach(b=>b.addEventListener('click',()=>{const old=document.querySelector(`[data-close="${CSS.escape(b.dataset.ksClose)}"]`);old?.click()}));
-}
-function share(total,p){const name=prompt('Name for the KitSetups PNL card',K.name)||K.name;K.name=name;localStorage.setItem('kitsetups_trader_name',name);const side=Number(p.positionType||p.posSide)===2?'Short':'Long';const modal=document.createElement('div');modal.className='kc-modal';modal.innerHTML=`<div class="kc-card"><div class="ks-sharecard"><div class="ks-brand">KITSETUPS</div><div style="color:#718097;font-size:9px;margin-top:4px">Performance snapshot</div><div class="ks-cardpnl">${total>=0?'+':''}${n(total)} USDT</div><div style="font-size:10px;margin-bottom:14px">${esc(name)} · ${esc(p.symbol||document.querySelector('#ks')?.value||'BTCUSDT')} · ${side}</div><div class="ks-cardgrid"><div><span>Entry</span>${n(p.holdAvgPrice||p.openAvgPrice||p.avgOpenPrice)}</div><div><span>Mark / Close</span>${n(p.closeAvgPrice||p.fairPrice||p.markPrice||p.dealAvgPrice)}</div><div><span>Leverage</span>${n(p.leverage||document.querySelector('#lev')?.value||5)}x</div><div><span>Margin</span>${n(p.im||p.margin||p.initialMargin||0)} USDT</div></div><div style="margin-top:18px;color:#25d6d0;font-size:9px">Powered by KitSetups · Live futures performance</div></div><button id="ks-copy">Copy PNL</button><button id="ks-print">Print card</button><button class="close" id="ks-close">Close</button></div>`;document.body.appendChild(modal);modal.querySelector('#ks-close').onclick=()=>modal.remove();modal.querySelector('#ks-copy').onclick=()=>navigator.clipboard?.writeText(`KITSETUPS | ${name} | ${p.symbol||'Futures'} | ${total>=0?'+':''}${n(total)} USDT`);modal.querySelector('#ks-print').onclick=()=>window.print()}
-
-function scheduleEnhancements(){
- if(!document.querySelector('#kit-cex'))return;
- renderAccount();renderTabs();syncMargin();
-}
-function observe(){
- if(observerStarted)return;observerStarted=true;
- const root=document.querySelector('.perps-terminal');if(!root)return;
- let timer=0;
- new MutationObserver(muts=>{
-   // Only react to terminal replacement. Ignore mutations generated by this layer itself.
-   if(muts.every(m=>m.target.closest?.('.ks-account,.ks-tabs,.ks-panel')))return;
-   clearTimeout(timer);timer=setTimeout(()=>{capture();scheduleEnhancements()},120);
- }).observe(root,{childList:true,subtree:true});
-}
-function hook(){
- capture();
- const root=document.querySelector('#kit-cex');
- if(root){observe();if(K.key)load();scheduleEnhancements();}
-}
-
-hook();
-setInterval(()=>hook(),4000);
+function accountData(){const a=K.account||{},p=K.positions||[];const unreal=num(a.unrealized??a.unrealised??a.unrealizedPnl??a.unrealizedPL)+p.reduce((s,x)=>s+num(x.unrealised??x.unrealizedPnl??x.unrealizedPL),0);const margin=num(a.positionMargin??a.positionMarginBalance??a.marginUsed)+p.reduce((s,x)=>s+num(x.im??x.margin??x.initialMargin),0);const wallet=num(a.cashBalance??a.balance??a.walletBalance??a.equity);const equity=num(a.equity??a.totalEquity??a.balance)+unreal;const avail=num(a.availableBalance??a.availableCash??a.availableOpen??a.available??a.availableBalanceUsdt);return{wallet,avail,margin,equity,unreal}}
+function renderAccount(){const root=document.querySelector('#kit-cex');if(!root)return;let box=root.querySelector(':scope > .ks-account');if(!box){box=document.createElement('div');box.className='ks-account';root.prepend(box)}const a=accountData();box.innerHTML=`<div class="ks-stat"><small>WALLET BALANCE</small><b>${n(a.wallet)} USDT</b></div><div class="ks-stat"><small>AVAILABLE MARGIN</small><b>${n(a.avail)} USDT</b></div><div class="ks-stat"><small>POSITION MARGIN</small><b>${n(a.margin)} USDT</b></div><div class="ks-stat"><small>EQUITY</small><b>${n(a.equity)} USDT</b></div><div class="ks-stat"><small>UNREALIZED PNL</small><b>${a.unreal>=0?'+':''}${n(a.unreal)} USDT</b></div>`}
+function pairInfo(){const symbol=(document.querySelector('#ks')?.value||'BTCUSDT').toUpperCase().replace('_USDT','USDT');return K.pairs.find(p=>String(p.symbol||p.contractId||p.instId||'').toUpperCase().replace('_USDT','USDT')===symbol)}
+async function ensurePairs(){if(K.pairs.length)return;try{K.pairs=arr(await api('pairs'))}catch(e){}}
+function installMarginSizing(){const order=document.querySelector('.kc-order');if(!order||order.querySelector('#ks-margin'))return;const size=document.querySelector('#size');if(!size)return;const field=document.createElement('div');field.className='ks-margin-field';field.innerHTML='<label>Margin <span id="ks-est">Live account</span></label><input id="ks-margin" inputmode="decimal" placeholder="USDT margin"><div class="ks-quick"><button data-q="25">25%</button><button data-q="50">50%</button><button data-q="75">75%</button><button data-q="100">Max</button></div><div class="ks-note">Margin × leverage → live contract size. Exchange specifications are used; nothing is hardcoded.</div>';size.closest('.kc-field')?.parentNode?.insertBefore(field,size.closest('.kc-field'));size.readOnly=true;const calc=()=>{const m=num(document.querySelector('#ks-margin')?.value),lev=num(document.querySelector('#lev')?.value),price=num(document.querySelector('#price')?.value||document.querySelector('#kit-cex .kc-mid')?.textContent?.replace(/,/g,'')),p=pairInfo(),cs=num(p?.contractSize),unit=num(p?.volUnit),scale=Number.isFinite(Number(p?.volScale))?Number(p.volScale):null;if(!m||!lev||!price||!cs){const e=document.querySelector('#ks-est');if(e)e.textContent=p?'Waiting for live price':'Live contract specs unavailable';return}let v=m*lev/(price*cs);if(unit>0)v=Math.floor(v/unit)*unit;if(scale!==null)v=Number(v.toFixed(scale));size.value=v;const e=document.querySelector('#ks-est');if(e)e.textContent=`≈ ${n(v)} contracts`};document.querySelector('#ks-margin')?.addEventListener('input',calc);document.querySelector('#lev')?.addEventListener('input',calc);document.querySelector('#price')?.addEventListener('input',calc);document.querySelectorAll('.ks-quick button').forEach(b=>b.addEventListener('click',()=>{const avail=accountData().avail;const input=document.querySelector('#ks-margin');if(input)input.value=(avail*num(b.dataset.q)/100).toFixed(6);calc()}));ensurePairs().then(calc)}
+function positionPnl(p,closed=false){if(closed)return num(p.closeProfitLoss??p.realised??p.realizedPnl??p.profit);const direct=p.unrealised??p.unrealizedPnl??p.unrealizedPL;if(direct!=null)return num(direct);const entry=num(p.holdAvgPrice??p.openAvgPrice??p.avgOpenPrice),mark=num(p.fairPrice??p.markPrice),vol=num(p.holdVol??p.total??p.size),info=K.pairs.find(x=>String(x.symbol||'').replace('_USDT','USDT')===String(p.symbol||'').replace('_USDT','USDT')),cs=num(info?.contractSize),side=Number(p.positionType??p.posSide)===2?-1:1;return entry&&mark&&vol&&cs?(mark-entry)*vol*cs*side:0}
+function positionMargin(p){return num(p.im??p.margin??p.initialMargin)}
+function roiFor(p,closed){const pnl=positionPnl(p,closed),m=positionMargin(p);return m?pnl/m*100:0}
+function sideOf(p){return Number(p.positionType??p.posSide)===2||Number(p.side)===3?'Short':'Long'}
+function renderPanel(){const panel=document.querySelector('#ks-panel');if(!panel)return;let rows,total,title;if(K.tab==='open'){rows=K.positions;total=rows.reduce((s,x)=>s+positionPnl(x),0);title='Open positions'}else if(K.tab==='close'){rows=K.closed;total=rows.reduce((s,x)=>s+positionPnl(x,true),0);title='Closed positions'}else{rows=K.history;total=rows.reduce((s,x)=>s+num(x.profit??x.realizedPnl??x.realised),0);title='Order history'}const sign=total>=0?'+':'';const body=rows.length?`<table class="kc-table"><thead><tr><th>Pair</th><th>Side</th><th>Entry</th><th>Exit/Mark</th><th>Margin</th><th>PNL</th><th>ROI</th>${K.tab==='open'?'<th>Action</th>':''}</tr></thead><tbody>${rows.map(x=>{const p=positionPnl(x,K.tab==='close'),m=positionMargin(x),r=roiFor(x,K.tab==='close');return `<tr><td>${esc(x.symbol||x.contractId||'—')}</td><td>${sideOf(x)}</td><td>${n(x.holdAvgPrice??x.openAvgPrice??x.avgOpenPrice??x.price)}</td><td>${n(x.closeAvgPrice??x.newCloseAvgPrice??x.fairPrice??x.markPrice??x.dealAvgPrice)}</td><td>${n(m)} USDT</td><td>${p>=0?'+':''}${n(p)} USDT</td><td>${r>=0?'+':''}${n(r)}%</td>${K.tab==='open'?`<td><button class="kc-action" data-ks-close="${esc(x.positionId||x.id||'')}">Close</button></td>`:''}</tr>`}).join('')}</tbody></table>`:'<div class="kc-empty">No records yet</div>';panel.innerHTML=`<div class="ks-pnl"><div><small style="color:#657287">LIVE ${esc(title)}</small><br><strong>${sign}${n(total)} USDT</strong></div><span class="ks-live">● LIVE DATA</span></div>${body}`;panel.querySelectorAll('[data-ks-close]').forEach(b=>b.addEventListener('click',()=>document.querySelector(`[data-close="${CSS.escape(b.dataset.ksClose)}"]`)?.click()))}
+function renderTabs(){const root=document.querySelector('#kit-cex');if(!root)return;let tabs=root.querySelector(':scope > .ks-tabs');if(!tabs){tabs=document.createElement('div');tabs.className='ks-tabs';tabs.innerHTML='<button data-ks-tab="open">Open</button><button data-ks-tab="close">Close</button><button data-ks-tab="history">History</button>';root.appendChild(tabs);const panel=document.createElement('div');panel.className='ks-panel';panel.id='ks-panel';root.appendChild(panel);tabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{K.tab=b.dataset.ksTab;tabs.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));renderPanel()}));}tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.ksTab===K.tab));renderPanel()}
+function capture(){const modal=document.querySelector('.kc-modal');const go=modal?.querySelector('#go');if(!go||go.dataset.ksEnh)return;go.dataset.ksEnh='1';go.addEventListener('click',()=>{K.key=modal.querySelector('#ak')?.value?.trim()||'';K.secret=modal.querySelector('#as')?.value?.trim()||'';K.passphrase=modal.querySelector('#ap')?.value?.trim()||'';K.exchange=document.querySelector('#kx')?.value||'mexc';setTimeout(()=>refresh(true),700)})}
+async function refresh(){if(!K.key||!K.secret||K.refreshing)return;K.refreshing=true;try{const [ba,p,h,ch]=await Promise.all([api('balance'),api('positions'),api('history'),api('positionHistory')]);K.account=arr(ba).find(x=>String(x.currency||x.coin||'').toUpperCase()==='USDT')||arr(ba)[0]||null;K.positions=arr(p);K.history=arr(h);K.closed=arr(ch);renderAccount();renderTabs();installMarginSizing()}catch(e){}finally{K.refreshing=false}}
+function watch(){let seen=false;const check=()=>{const root=document.querySelector('#kit-cex');if(!root)return;if(!seen){seen=true;capture();renderAccount();renderTabs();installMarginSizing();}else{capture();installMarginSizing()}};const ob=new MutationObserver(muts=>{for(const m of muts){for(const node of m.addedNodes||[]){if(node.nodeType===1&&(node.id==='kit-cex'||node.querySelector?.('#kit-cex'))){check();return}}}});ob.observe(document.body,{childList:true,subtree:true});check();setInterval(()=>{if(document.querySelector('#kit-cex')&&K.key&&K.secret)refresh()},5000)}
+watch();
 })();
