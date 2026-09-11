@@ -9,9 +9,9 @@ async function call(url,options={}){const r=await fetch(url,{...options,headers:
 const mexcSym=s=>String(s||'BTCUSDT').toUpperCase().replace(/[-/]/g,'').replace('USDT','_USDT');
 const mexcInterval=i=>({'1m':'Min1','5m':'Min5','15m':'Min15','30m':'Min30','1h':'Min60','4h':'Hour4','1d':'Day1'}[String(i).toLowerCase()]||'Min5');
 const bitgetInterval=i=>({'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','4h':'4H','1d':'1D'}[String(i).toLowerCase()]||'5m');
-const asArray=v=>Array.isArray(v)?v:(Array.isArray(v?.data)?v.data:[]);
-const normalizeMexcSpot=v=>(Array.isArray(v?.balances)?v.balances:[]).map(x=>({currency:String(x.asset||''),availableBalance:Number(x.free||0),cashBalance:Number(x.free||0),frozenBalance:Number(x.locked||0),equity:Number(x.free||0)+Number(x.locked||0),balance:Number(x.free||0)+Number(x.locked||0),source:'spot'})).filter(x=>x.currency);
-const normalizeMexcFutures=v=>asArray(v).map(x=>({...x,currency:String(x.currency||x.coin||''),balance:Number(x.equity??x.balance??0),source:'futures'})).filter(x=>x.currency);
+const asArray=v=>Array.isArray(v)?v:(Array.isArray(v?.data)?v.data:(v?.data&&typeof v.data==='object'?[v.data]:(v&&typeof v==='object'?[v]:[])));
+const normalizeMexcSpot=v=>(Array.isArray(v?.balances)?v.balances:[]).map(x=>{const available=Number(x.free??x.available??0);const locked=Number(x.locked??x.freeze??0);const total=Number(x.total??available+locked);return {currency:String(x.asset||x.currency||''),availableBalance:available,available, cashBalance:total,frozenBalance:locked,equity:total,balance:total,source:'spot'}}).filter(x=>x.currency);
+const normalizeMexcFutures=v=>asArray(v).map(x=>{const currency=String(x.currency||x.coin||x.asset||x.marginCoin||'');const wallet=Number(x.walletBalance??x.equity??x.balance??x.wallet??0);const available=Number(x.availableBalance??x.available??x.availableMargin??wallet);const equity=Number(x.equity??x.walletBalance??x.balance??wallet);return {...x,currency,availableBalance:available,available,equity,balance:wallet,cashBalance:wallet,frozenBalance:Math.max(wallet-available,0),source:'futures'}}).filter(x=>x.currency);
 export default async function handler(req,res){try{
  const b=await bodyOf(req),exchange=String(b.exchange||'mexc').toLowerCase(),action=String(b.action||'ticker'),symbol=String(b.symbol||'BTCUSDT').toUpperCase(),interval=String(b.interval||'5m');
  if(!['mexc','bitget'].includes(exchange))return json(res,400,{error:'Unsupported exchange'});
@@ -40,7 +40,7 @@ export default async function handler(req,res){try{
    const futuresAssets=normalizeMexcFutures(futuresResult.data);const spotAssets=normalizeMexcSpot(spotResult.data);
    const byCurrency=new Map();
    for(const x of futuresAssets)byCurrency.set(x.currency,x);
-   for(const x of spotAssets){const existing=byCurrency.get(x.currency);if(!existing||Number(existing.balance||existing.equity||0)===0)byCurrency.set(x.currency,x);}
+   for(const x of spotAssets){const existing=byCurrency.get(x.currency);if(!existing||Number(existing.balance||existing.equity||existing.availableBalance||0)===0)byCurrency.set(x.currency,x);}
    return json(res,200,Array.from(byCurrency.values()));
   }
   if(action==='positions'){const s=signed('/api/v1/private/position/open_positions');return json(res,200,await run(s));}
