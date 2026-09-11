@@ -13,6 +13,7 @@
       set(html){
         const active=document.activeElement;
         const activeInside=active&&root.contains(active);
+        if(activeInside&&active.matches('input,select,textarea'))return;
         const snapshot=[];
         root.querySelectorAll('input,select,textarea').forEach((el,index)=>{
           snapshot.push({
@@ -47,4 +48,4 @@
   scan();
 })();
 
-// Deployment trigger: preserve the CEX input persistence patch exactly as-is.
+// CEX fix: never replace the live terminal DOM while the user is editing a field.
