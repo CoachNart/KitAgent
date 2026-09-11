@@ -49,3 +49,4 @@
 })();
 
 // CEX fix: never replace the live terminal DOM while the user is editing a field.
+// Deployment trigger for the corrected CEX input fix.
