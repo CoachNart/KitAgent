@@ -29,15 +29,9 @@ export default async function handler(req,res){try{
   if(action==='connect'||action==='balance'){
    const futuresResult=await run(futuresSigned('/api/v1/private/account/assets')).then(data=>({ok:true,data})).catch(error=>({ok:false,error}));
    const spotResult=await run(spotSigned('/api/v3/account')).then(data=>({ok:true,data})).catch(error=>({ok:false,error}));
-   if(action==='connect'){
-    if(!futuresResult.ok&&!spotResult.ok){const f=futuresResult.error?.message||'unavailable';const s=spotResult.error?.message||'unavailable';return json(res,502,{error:`MEXC API credentials were rejected or account access is unavailable. Futures: ${f}. Spot: ${s}.`});}
-    return json(res,200,{connected:true,spot:spotResult.ok,futures:futuresResult.ok});
-   }
-   if(!futuresResult.ok&&!spotResult.ok){const f=futuresResult.error?.message||'unavailable';const s=spotResult.error?.message||'unavailable';return json(res,502,{error:`MEXC balance access failed. Futures: ${f}. Spot: ${s}.`});}
-   const futuresAssets=normalizeMexcFutures(futuresResult.data);const spotAssets=normalizeMexcSpot(spotResult.data);const byCurrency=new Map();
-   for(const x of futuresAssets)byCurrency.set(x.currency,x);
-   for(const x of spotAssets){const existing=byCurrency.get(x.currency);if(!existing||Number(existing.balance||existing.equity||existing.availableBalance||0)===0)byCurrency.set(x.currency,x);}
-   return json(res,200,Array.from(byCurrency.values()));
+   if(action==='connect'){if(!futuresResult.ok&&!spotResult.ok)return json(res,502,{error:`MEXC API credentials were rejected or account access is unavailable. Futures: ${futuresResult.error?.message||'unavailable'}. Spot: ${spotResult.error?.message||'unavailable'}.`});return json(res,200,{connected:true,spot:spotResult.ok,futures:futuresResult.ok});}
+   if(!futuresResult.ok&&!spotResult.ok)return json(res,502,{error:`MEXC balance access failed. Futures: ${futuresResult.error?.message||'unavailable'}. Spot: ${spotResult.error?.message||'unavailable'}.`});
+   const futuresAssets=normalizeMexcFutures(futuresResult.data),spotAssets=normalizeMexcSpot(spotResult.data),byCurrency=new Map();for(const x of futuresAssets)byCurrency.set(x.currency,x);for(const x of spotAssets){const existing=byCurrency.get(x.currency);if(!existing||Number(existing.balance||existing.equity||existing.availableBalance||0)===0)byCurrency.set(x.currency,x)}return json(res,200,Array.from(byCurrency.values()));
   }
   if(action==='positions'){const s=futuresSigned('/api/v1/private/position/open_positions');return json(res,200,await run(s));}
   if(action==='orders'){const s=futuresSigned(`/api/v1/private/order/list/open_orders/${encodeURIComponent(sym)}`);return json(res,200,await run(s));}
@@ -45,11 +39,7 @@ export default async function handler(req,res){try{
   if(action==='positionHistory'){const s=futuresSigned('/api/v1/private/position/list/history_positions',{symbol:sym,page_num:1,page_size:50});return json(res,200,await run(s));}
   if(action==='cancel'){const body=JSON.stringify(b.orderIds||[]);const s=futuresSigned('/api/v1/private/order/cancel',{},'POST',body);return json(res,200,await run(s,{method:'POST',body}));}
   if(action==='changeLeverage'){const p={positionId:Number(b.positionId||0),leverage:Number(b.leverage),openType:b.marginMode==='isolated'?1:2,symbol:sym,positionType:Number(b.positionType||1)};const body=JSON.stringify(p);const s=futuresSigned('/api/v1/private/position/change_leverage',{},'POST',body);return json(res,200,await run(s,{method:'POST',body}));}
-  if(action==='order'){
-   const opening=b.intent!=='close';const side=opening?(b.side==='buy'?1:3):(b.side==='buy'?4:2);const p={symbol:sym,price:Number(b.price||0),vol:Number(b.volume),side,openType:b.marginMode==='isolated'?1:2,type:b.orderType==='market'?5:1,leverage:Number(b.leverage||5)};
-   if(b.positionId)p.positionId=Number(b.positionId);if(b.takeProfit)p.takeProfitPrice=Number(b.takeProfit);if(b.stopLoss)p.stopLossPrice=Number(b.stopLoss);
-   const body=JSON.stringify(p);const s=futuresSigned('/api/v1/private/order/submit',{},'POST',body);return json(res,200,await run(s,{method:'POST',body}));
-  }
+  if(action==='order'){const opening=b.intent!=='close';const side=opening?(b.side==='buy'?1:3):(b.side==='buy'?4:2);const p={symbol:sym,price:Number(b.price||0),vol:Number(b.volume),side,openType:b.marginMode==='isolated'?1:2,type:b.orderType==='market'?5:1,leverage:Number(b.leverage||5)};if(b.positionId)p.positionId=Number(b.positionId);if(b.takeProfit)p.takeProfitPrice=Number(b.takeProfit);if(b.stopLoss)p.stopLossPrice=Number(b.stopLoss);const body=JSON.stringify(p);const s=futuresSigned('/api/v1/private/order/submit',{},'POST',body);return json(res,200,await run(s,{method:'POST',body}));}
   return json(res,400,{error:'Unsupported MEXC action'});
  }
  if(action==='pairs')return json(res,200,await call(`${bitgetBase}/api/v3/market/contracts?category=USDT-FUTURES`));
