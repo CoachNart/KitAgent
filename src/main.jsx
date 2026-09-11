@@ -5,7 +5,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { WagmiProvider } from 'wagmi';
 import App from './App.jsx';
 import AuthGate from './AuthGate.jsx';
-import { queryClient, wagmiAdapter } from './walletkit.jsx';
+import { queryClient, wagmiAdapter } from './walletkit.js';
 import { QueryClientProvider } from '@tanstack/react-query';
 import './styles.css';
 import './brand.css';
@@ -19,6 +19,9 @@ import './protected-pages.css';
 import './contentProtection.js';
 import './cexIntegratedEnhancements.js';
 import './cexTerminal.js';
+import { startMarketAlerts } from './marketAlerts.js';
+
+startMarketAlerts();
 
 function NativeLifecycle(){
   useEffect(()=>{
