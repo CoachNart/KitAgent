@@ -5,13 +5,15 @@ const INTERVAL='5';
 const BYBIT_URL='https://api.bybit.com/v5/market/kline';
 const NEWS_URL='https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const POLL_MS=60_000;
-const seenKey='kitsetups-structure-events-v2';
-const newsKey='kitsetups-news-events-v2';
+const seenKey='kitsetups-structure-events-v3';
+const newsKey='kitsetups-news-events-v3';
 let timer=null;
 let running=false;
+let snapshot={running:false,source:'Bybit',timeframe:'5m',checkedAt:0,markets:[],news:[],lastEvent:null,error:null};
 
 function read(key){try{return JSON.parse(localStorage.getItem(key)||'{}')}catch{return{}}}
 function save(key,v){try{localStorage.setItem(key,JSON.stringify(v))}catch{}}
+function emit(){try{window.dispatchEvent(new CustomEvent('kitagent:market-alert-update',{detail:snapshot}))}catch{}}
 function notify(title,body,tag){if(typeof Notification==='undefined'||Notification.permission!=='granted')return;try{new Notification(title,{body,icon:'/kitsetups-logo.svg',badge:'/kitsetups-logo.svg',tag})}catch{}}
 
 function candles(rows){
@@ -73,23 +75,32 @@ async function news(){
 async function poll(){
   if(running)return;
   running=true;
+  const now=Date.now();
+  snapshot={...snapshot,running:true,checkedAt:now,error:null};
+  emit();
   try{
-    const current=read(seenKey),newsSeen=read(newsKey),now=Date.now();
-    await Promise.all(SYMBOLS.map(async symbol=>{
+    const current=read(seenKey),newsSeen=read(newsKey);
+    const marketResults=await Promise.all(SYMBOLS.map(async symbol=>{
       try{
-        const event=structure(await market(symbol)).event;
-        if(event){
-          const key=`${symbol}-${event.direction}-${event.time}`;
-          if(!current[key]){
-            current[key]=now;
-            notify(`${symbol.replace('USDT','')} ${event.direction==='bullish'?'bullish':'bearish'} structure`,`${event.type}: 5m closed through a confirmed swing level.`,key);
-          }
-        }
-      }catch(e){console.warn('[alerts] market check failed',symbol,e?.message||e)}
+        const c=await market(symbol),event=structure(c).event,last=c.at(-1);
+        return {symbol,price:last?.close||null,event:event?{...event}:null,ok:true};
+      }catch(e){return {symbol,price:null,event:null,ok:false,error:e?.message||'request failed'};}
     }));
-
+    let lastEvent=snapshot.lastEvent;
+    for(const result of marketResults){
+      if(result.event){
+        const event=result.event,key=`${result.symbol}-${event.direction}-${event.time}`;
+        if(!current[key]){
+          current[key]=now;
+          lastEvent={...event,symbol:result.symbol,detectedAt:now};
+          notify(`${result.symbol.replace('USDT','')} ${event.direction==='bullish'?'bullish':'bearish'} structure`,`${event.type}: 5m closed through a confirmed swing level.`,key);
+        }
+      }
+    }
+    let upcoming=[];
     try{
-      for(const item of await news()){
+      upcoming=await news();
+      for(const item of upcoming){
         const mins=Math.round((Number(item.when)-now)/60000);
         if(mins<10||mins>30)continue;
         const key=`${item.id}-${Math.floor(Number(item.when)/600000)}`;
@@ -98,23 +109,29 @@ async function poll(){
         notify(`HIGH IMPACT — ${item.country||'Market'}`,`${item.title||'Major economic release'} in about ${mins} min. Expect elevated volatility.`,key);
       }
     }catch(e){console.warn('[alerts] news check failed',e?.message||e)}
-
     const cutoff=now-7*86400000;
     for(const[k,v]of Object.entries(current))if(v<cutoff)delete current[k];
     for(const[k,v]of Object.entries(newsSeen))if(v<cutoff)delete newsSeen[k];
     save(seenKey,current);save(newsKey,newsSeen);
+    snapshot={running:false,source:'Bybit',timeframe:'5m',checkedAt:now,markets:marketResults,news:upcoming.slice(0,8).map(x=>({id:x.id,title:x.title,country:x.country,when:x.when,impact:x.impact})),lastEvent,error:marketResults.some(x=>!x.ok)?'Some Bybit symbols could not be checked.':null};
+    emit();
+  }catch(e){
+    snapshot={...snapshot,running:false,checkedAt:now,error:e?.message||'Alert monitor failed'};
+    emit();
   }finally{running=false}
 }
 
 export function startMarketAlerts(){
   if(typeof window==='undefined'||timer)return;
   const begin=()=>{
-    if(typeof Notification!=='undefined'&&Notification.permission==='default'){
-      Notification.requestPermission().catch(()=>{});
-    }
+    if(typeof Notification!=='undefined'&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});
+    snapshot={...snapshot,running:true};
+    emit();
     poll();
     timer=window.setInterval(poll,POLL_MS);
   };
   if(auth)auth.onAuthStateChanged(user=>{if(user)begin()});
   else begin();
 }
+
+export function getMarketAlertSnapshot(){return snapshot}
