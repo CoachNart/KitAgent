@@ -1,0 +1,11 @@
+services:
+  - type: worker
+    name: kitagent-market-alert-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: node workers/market-alert-worker.mjs
+    autoDeploy: true
+    envVars:
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
