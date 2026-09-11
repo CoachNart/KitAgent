@@ -24,11 +24,20 @@ export default async function handler(req,res){try{
   if(!b.key||!b.secret)return json(res,400,{error:'Connect the MEXC Futures API first'});
   const signed=(path,params={},method='GET')=>mexcSigned({path,params,key:b.key,secret:b.secret,method});const run=async(s,opts={})=>call(s.url,{...opts,headers:s.headers});
   if(action==='connect'||action==='balance'){
-   const futuresPromise=run(signed('/api/v1/private/account/assets')).catch(()=>null);
-   const spotPromise=run(signed('/api/v3/account')).catch(()=>null);
-   const [futures,spot]=await Promise.all([futuresPromise,spotPromise]);
-   const futuresAssets=normalizeMexcFutures(futures);const spotAssets=normalizeMexcSpot(spot);
-   if(!futuresAssets.length&&!spotAssets.length)return json(res,502,{error:'MEXC account connected, but no readable Spot or Futures balances were returned. Check that the API key has account/reading permissions.'});
+   const futuresResult=await run(signed('/api/v1/private/account/assets')).then(data=>({ok:true,data})).catch(error=>({ok:false,error}));
+   const spotResult=await run(signed('/api/v3/account')).then(data=>({ok:true,data})).catch(error=>({ok:false,error}));
+   if(action==='connect'){
+    if(!futuresResult.ok&&!spotResult.ok){
+     const f=futuresResult.error?.message||'unavailable';const s=spotResult.error?.message||'unavailable';
+     return json(res,502,{error:`MEXC API credentials were rejected or account access is unavailable. Futures: ${f}. Spot: ${s}.`});
+    }
+    return json(res,200,{connected:true,spot:spotResult.ok,futures:futuresResult.ok});
+   }
+   if(!futuresResult.ok&&!spotResult.ok){
+    const f=futuresResult.error?.message||'unavailable';const s=spotResult.error?.message||'unavailable';
+    return json(res,502,{error:`MEXC balance access failed. Futures: ${f}. Spot: ${s}.`});
+   }
+   const futuresAssets=normalizeMexcFutures(futuresResult.data);const spotAssets=normalizeMexcSpot(spotResult.data);
    const byCurrency=new Map();
    for(const x of futuresAssets)byCurrency.set(x.currency,x);
    for(const x of spotAssets){const existing=byCurrency.get(x.currency);if(!existing||Number(existing.balance||existing.equity||0)===0)byCurrency.set(x.currency,x);}
