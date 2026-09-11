@@ -1,15 +1,17 @@
 import { auth } from './firebase.js';
 
 const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT'];
-const INTERVAL='5';
 const BYBIT_URL='https://api.bybit.com/v5/market/kline';
 const NEWS_URL='https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const POLL_MS=60_000;
-const seenKey='kitsetups-structure-events-v3';
-const newsKey='kitsetups-news-events-v3';
+const EARLY_INTERVAL='5';
+const CONFIRM_INTERVAL='15';
+const seenKey='kitsetups-structure-events-v4';
+const newsKey='kitsetups-news-events-v4';
+const pendingKey='kitsetups-pending-structure-v1';
 let timer=null;
 let running=false;
-let snapshot={running:false,source:'Bybit',timeframe:'5m',checkedAt:0,markets:[],news:[],lastEvent:null,error:null};
+let snapshot={running:false,source:'Bybit',timeframe:'5m → 15m',checkedAt:0,markets:[],news:[],lastEvent:null,lastConfirmed:null,error:null};
 
 function read(key){try{return JSON.parse(localStorage.getItem(key)||'{}')}catch{return{}}}
 function save(key,v){try{localStorage.setItem(key,JSON.stringify(v))}catch{}}
@@ -41,11 +43,11 @@ function structure(c){
   return{event};
 }
 
-async function market(symbol){
+async function market(symbol,interval){
   const u=new URL(BYBIT_URL);
   u.searchParams.set('category','linear');
   u.searchParams.set('symbol',symbol);
-  u.searchParams.set('interval',INTERVAL);
+  u.searchParams.set('interval',interval);
   u.searchParams.set('limit','150');
   const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
   if(!r.ok)throw new Error(`Bybit ${r.status}`);
@@ -79,24 +81,46 @@ async function poll(){
   snapshot={...snapshot,running:true,checkedAt:now,error:null};
   emit();
   try{
-    const current=read(seenKey),newsSeen=read(newsKey);
+    const seen=read(seenKey),newsSeen=read(newsKey),pending=read(pendingKey);
     const marketResults=await Promise.all(SYMBOLS.map(async symbol=>{
       try{
-        const c=await market(symbol),event=structure(c).event,last=c.at(-1);
-        return {symbol,price:last?.close||null,event:event?{...event}:null,ok:true};
-      }catch(e){return {symbol,price:null,event:null,ok:false,error:e?.message||'request failed'};}
+        const [fast,confirm]=await Promise.all([market(symbol,EARLY_INTERVAL),market(symbol,CONFIRM_INTERVAL)]);
+        const early=structure(fast).event;
+        const confirmed=structure(confirm).event;
+        const fastLast=fast.at(-1),confirmLast=confirm.at(-1);
+        return {symbol,price:fastLast?.close||null,early,confirmed,ok:true};
+      }catch(e){return {symbol,price:null,early:null,confirmed:null,ok:false,error:e?.message||'request failed'};}
     }));
-    let lastEvent=snapshot.lastEvent;
+
+    let lastEvent=snapshot.lastEvent,lastConfirmed=snapshot.lastConfirmed;
     for(const result of marketResults){
-      if(result.event){
-        const event=result.event,key=`${result.symbol}-${event.direction}-${event.time}`;
-        if(!current[key]){
-          current[key]=now;
-          lastEvent={...event,symbol:result.symbol,detectedAt:now};
-          notify(`${result.symbol.replace('USDT','')} ${event.direction==='bullish'?'bullish':'bearish'} structure`,`${event.type}: 5m closed through a confirmed swing level.`,key);
+      const {symbol,early,confirmed}=result;
+      if(early){
+        const earlyKey=`${symbol}-${early.direction}-${early.time}`;
+        pending[symbol]={direction:early.direction,time:early.time,level:early.level,detectedAt:now};
+        if(!seen[earlyKey]){
+          seen[earlyKey]=now;
+          lastEvent={...early,symbol,detectedAt:now,timeframe:'5m'};
+          notify(`${symbol.replace('USDT','')} 5m structure shift`,`${early.type}: ${early.direction} break detected. Waiting for 15m confirmation.`,earlyKey);
+        }
+      }
+
+      if(confirmed){
+        const candidate=pending[symbol];
+        const age=candidate?now-Number(candidate.detectedAt):Infinity;
+        const matches=candidate&&candidate.direction===confirmed.direction&&age>=0&&age<=6*60*60*1000;
+        if(matches){
+          const key=`${symbol}-${confirmed.direction}-15m-${confirmed.time}`;
+          if(!seen[key]){
+            seen[key]=now;
+            lastConfirmed={...confirmed,symbol,detectedAt:now,timeframe:'15m'};
+            notify(`${symbol.replace('USDT','')} ${confirmed.direction} structure confirmed`,`15m BOS confirms the 5m ${confirmed.direction} structure shift.`,key);
+          }
+          delete pending[symbol];
         }
       }
     }
+
     let upcoming=[];
     try{
       upcoming=await news();
@@ -109,11 +133,14 @@ async function poll(){
         notify(`HIGH IMPACT — ${item.country||'Market'}`,`${item.title||'Major economic release'} in about ${mins} min. Expect elevated volatility.`,key);
       }
     }catch(e){console.warn('[alerts] news check failed',e?.message||e)}
+
     const cutoff=now-7*86400000;
-    for(const[k,v]of Object.entries(current))if(v<cutoff)delete current[k];
+    for(const[k,v]of Object.entries(seen))if(v<cutoff)delete seen[k];
     for(const[k,v]of Object.entries(newsSeen))if(v<cutoff)delete newsSeen[k];
-    save(seenKey,current);save(newsKey,newsSeen);
-    snapshot={running:false,source:'Bybit',timeframe:'5m',checkedAt:now,markets:marketResults,news:upcoming.slice(0,8).map(x=>({id:x.id,title:x.title,country:x.country,when:x.when,impact:x.impact})),lastEvent,error:marketResults.some(x=>!x.ok)?'Some Bybit symbols could not be checked.':null};
+    for(const[k,v]of Object.entries(pending))if(now-Number(v.detectedAt)>6*60*60*1000)delete pending[k];
+    save(seenKey,seen);save(newsKey,newsSeen);save(pendingKey,pending);
+
+    snapshot={running:false,source:'Bybit',timeframe:'5m → 15m',checkedAt:now,markets:marketResults,news:upcoming.slice(0,8).map(x=>({id:x.id,title:x.title,country:x.country,when:x.when,impact:x.impact})),lastEvent,lastConfirmed,error:marketResults.some(x=>!x.ok)?'Some Bybit symbols could not be checked.':null};
     emit();
   }catch(e){
     snapshot={...snapshot,running:false,checkedAt:now,error:e?.message||'Alert monitor failed'};
