@@ -46,3 +46,5 @@
   observer.observe(document.documentElement,{childList:true,subtree:true});
   scan();
 })();
+
+// Deployment trigger: preserve the CEX input persistence patch exactly as-is.
