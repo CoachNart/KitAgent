@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, LoaderCircle, Users, WalletCards } from 'lucide-react';
 import { auth } from './firebase.js';
+import './affiliate-panel.css';
 
 export default function AffiliatePanel(){
  const [data,setData]=useState(null),[busy,setBusy]=useState(true),[message,setMessage]=useState(''),[code,setCode]=useState('');
