@@ -18,8 +18,6 @@ import './signal-history.css';
 import './protected-pages.css';
 import './contentProtection.js';
 import './cexTerminal.js';
-import './cexEnhancements.js';
-import './cexPersistence.js';
 
 function NativeLifecycle(){
   useEffect(()=>{
