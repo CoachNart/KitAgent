@@ -18,6 +18,8 @@ import './signal-history.css';
 import './protected-pages.css';
 import './contentProtection.js';
 import './cexTerminal.js';
+import './cexEnhancements.js';
+import './cexPersistence.js';
 
 function NativeLifecycle(){
   useEffect(()=>{
@@ -35,27 +37,26 @@ function NativeLifecycle(){
         if(!active||!url) return;
         try{
           const parsed=new URL(url);
-          if(parsed.pathname) window.history.replaceState({},'',`${parsed.pathname}${parsed.search}${parsed.hash}`);
-          window.dispatchEvent(new CustomEvent('kitagent:app-url-open',{detail:{url}}));
-        }catch(error){console.warn('KitSetups deep-link handling failed:',error)}
+          const path=parsed.pathname||'/';
+          if(path) window.history.replaceState({},'',path+parsed.search+parsed.hash);
+        }catch{}
       });
     };
     setup();
-    return()=>{
-      active=false;
-      backHandle?.remove();
-      urlHandle?.remove();
-    };
+    return()=>{active=false;backHandle?.remove();urlHandle?.remove()};
   },[]);
   return null;
 }
 
-function Root(){
-  const content=<><NativeLifecycle /><AuthGate>{user => <App user={user} />}</AuthGate></>;
-  if(!wagmiAdapter) return content;
-  return <WagmiProvider config={wagmiAdapter.wagmiConfig}><QueryClientProvider client={queryClient}>{content}</QueryClientProvider></WagmiProvider>;
-}
-
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode><Root /></React.StrictMode>
+  <React.StrictMode>
+    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <AuthGate>
+          <NativeLifecycle />
+          <App />
+        </AuthGate>
+      </QueryClientProvider>
+    </WagmiProvider>
+  </React.StrictMode>
 );
