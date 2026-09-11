@@ -17,14 +17,14 @@ function getAdmin(){
 function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body))}
 function rateBps(){const n=Number(process.env.AFFILIATE_COMMISSION_BPS||DEFAULT_RATE_BPS);return Number.isFinite(n)&&n>=0&&n<=10000?Math.floor(n):DEFAULT_RATE_BPS}
 function cleanCode(v){return String(v||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24)}
-function makeCode(email){const base=String(email||'KITSETUOP').split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8)||'KITSETUOP';return `KITSETUOP-${base}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`.slice(0,24)}
+function makeCode(email){const base=String(email||'KITSETUPS').split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8)||'KITSETUPS';return `KITSETUPS-${base}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`.slice(0,24)}
 async function authUser(a,req){const header=String(req.headers.authorization||'');const token=header.startsWith('Bearer ')?header.slice(7):'';if(!token)return null;try{return await a.auth().verifyIdToken(token)}catch{return null}}
 
 export default async function handler(req,res){
  if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
  try{
   const a=getAdmin(),decoded=await authUser(a,req);if(!decoded)return json(res,401,{error:'Authentication required.'});
-  const db=a.firestore(),userRef=db.collection('users').doc(decoded.uid),userSnap=await userRef.get();if(!userSnap.exists)return json(res,404,{error:'KitSetuop account not found.'});
+  const db=a.firestore(),userRef=db.collection('users').doc(decoded.uid),userSnap=await userRef.get();if(!userSnap.exists)return json(res,404,{error:'KitSetups account not found.'});
   const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),action=String(body.action||'dashboard').toLowerCase();
   if(action==='register'){
    const existing=await db.collection('affiliates').where('userId','==',decoded.uid).limit(1).get();
