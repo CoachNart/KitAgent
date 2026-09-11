@@ -15,7 +15,16 @@ export async function enableKitSetupsNotifications(user) {
   if (permission !== 'granted') return { enabled: false, reason: permission };
 
   const messaging = getMessaging(getApp());
-  const token = await getToken(messaging).catch((error) => {
+  const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || undefined;
+  const serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js').catch((error) => {
+    console.warn('KitSetups push service worker registration failed:', error);
+    return undefined;
+  });
+
+  const token = await getToken(messaging, {
+    ...(vapidKey ? { vapidKey } : {}),
+    ...(serviceWorkerRegistration ? { serviceWorkerRegistration } : {}),
+  }).catch((error) => {
     console.warn('KitSetups push token registration failed:', error);
     return null;
   });
