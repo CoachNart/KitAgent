@@ -19,6 +19,7 @@ import './protected-pages.css';
 import './contentProtection.js';
 import './cexIntegratedEnhancements.js';
 import './cexTerminal.js';
+import './cexStableInteractionPatch.js';
 import { startMarketAlerts } from './marketAlerts.js';
 
 startMarketAlerts();
