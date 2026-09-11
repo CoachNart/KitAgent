@@ -20,8 +20,7 @@
             value:el.value,
             checked:typeof el.checked==='boolean'?el.checked:undefined,
             selectionStart:typeof el.selectionStart==='number'?el.selectionStart:null,
-            selectionEnd:typeof el.selectionEnd==='number'?el.selectionEnd:null,
-            type:el.type||''
+            selectionEnd:typeof el.selectionEnd==='number'?el.selectionEnd:null
           });
         });
         const activeIndex=activeInside?[...root.querySelectorAll('input,select,textarea')].indexOf(active):-1;
@@ -36,7 +35,7 @@
         if(activeIndex>=0&&fields[activeIndex]){
           const el=fields[activeIndex];
           el.focus({preventScroll:true});
-          if(s.snapshotStart!==null&&typeof el.setSelectionRange==='function')el.setSelectionRange(s.selectionStart,s.selectionEnd);
+          if(s.selectionStart!==null&&s.selectionEnd!==null&&typeof el.setSelectionRange==='function')el.setSelectionRange(s.selectionStart,s.selectionEnd);
         }
       }
     });
