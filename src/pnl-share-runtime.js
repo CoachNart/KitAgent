@@ -16,6 +16,18 @@
     return ((mark-entry)/entry*100) * (side === 'short' ? -1 : 1);
   }
 
+  function cleanShareText(text){
+    const raw = String(text || '');
+    const name = raw.split(' · KitSetups Futures')[0] || 'KitSetups Trader';
+    const symbol = pick(raw,/Futures\s+([A-Z0-9_/]+)\s*·\s*(?:Long|Short)/i,'BTC/USDT');
+    const side = pick(raw,/Futures\s+[A-Z0-9_/]+\s*·\s*(Long|Short)/i,'Long');
+    const entry = pick(raw,/Entry:\s*([0-9,]+(?:\.[0-9]+)?)/i);
+    const mark = pick(raw,/Mark:\s*([0-9,]+(?:\.[0-9]+)?)/i);
+    const leverage = pick(raw,/Leverage:\s*([0-9.]+)x/i);
+    const percentage = positionPercent(raw);
+    return `${name} · KitSetups Futures\n${symbol} · ${side.toLowerCase()}\nPnL: ${percentage >= 0 ? '+' : ''}${fmt(percentage,4)}%\nEntry: ${entry} · Mark: ${mark}\nLeverage: ${leverage}x`;
+  }
+
   function shareSvg(text){
     const raw = String(text || '');
     const name = raw.split(' · KitSetups Futures')[0] || 'KitSetups Trader';
@@ -59,7 +71,9 @@
       await image.decode();
       const canvas = document.createElement('canvas');
       canvas.width = 1080; canvas.height = 1920;
-      canvas.getContext('2d').drawImage(image,0,0);
+      const context = canvas.getContext('2d');
+      if(!context) throw new Error('Canvas unavailable');
+      context.drawImage(image,0,0);
       const pngBlob = await new Promise(resolve => canvas.toBlob(resolve,'image/png'));
       if(!pngBlob) throw new Error('PNG conversion failed');
       return new File([pngBlob],filename,{type:'image/png'});
@@ -70,10 +84,12 @@
   if(nativeShare){
     navigator.share = async data => {
       if(data?.title === 'KitSetups Futures PnL' && data?.text){
+        const cleaned = cleanShareText(data.text);
         try {
-          const file = await svgToPngFile(shareSvg(data.text),'kitsetups-futures.png');
+          const file = await svgToPngFile(shareSvg(cleaned),'kitsetups-futures.png');
           if(navigator.canShare?.({files:[file]})) return nativeShare({title:'KitSetups Futures',files:[file]});
-        } catch(_) { /* fall through to normal text sharing */ }
+        } catch(_) { /* fall through to clean text sharing */ }
+        return nativeShare({...data,text:cleaned});
       }
       return nativeShare(data);
     };
