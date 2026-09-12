@@ -21,6 +21,7 @@ import './cexIntegratedEnhancements.js';
 import './cexTerminal.js';
 import './cexStableInteractionPatch.js';
 import './cexInputGuardPatch.js';
+import './cexOrderInputBridge.js';
 import './cexMexcDataPatch.js';
 import { startMarketAlerts } from './marketAlerts.js';
 
