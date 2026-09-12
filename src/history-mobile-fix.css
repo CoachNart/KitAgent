@@ -1,12 +1,7 @@
-/* History route safety only. Navigation is owned by nav-polish.css. */
+/* History route safety. Keep the actual History workspace visible on small screens. */
 @media(max-width:760px){
-  .content{padding-bottom:96px!important;}
-  .signal-history{
-    display:block!important;
-    visibility:visible!important;
-    opacity:1!important;
-    width:100%!important;
-    min-height:calc(100vh - 120px)!important;
-  }
-  .signal-history > *{visibility:visible!important;}
+  .content{padding-bottom:104px!important;overflow:visible!important;}
+  .signal-history{display:block!important;visibility:visible!important;opacity:1!important;width:100%!important;max-width:none!important;min-height:calc(100vh - 120px)!important;overflow:visible!important;position:relative!important;z-index:1!important;}
+  .signal-history > *{visibility:visible!important;opacity:1!important;}
+  .signal-history-head,.history-view-tabs,.signal-stats,.signal-filters,.signal-list,.signal-empty,.activity-list{visibility:visible!important;opacity:1!important;}
 }
