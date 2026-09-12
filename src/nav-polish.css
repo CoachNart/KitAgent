@@ -18,28 +18,27 @@
 .kit-sidebar nav .side-link:nth-child(6) svg{color:#62e8a7!important;}
 .kit-sidebar nav .side-link.selected:nth-child(1) svg,.kit-sidebar nav .side-link.selected:nth-child(2) svg,.kit-sidebar nav .side-link.selected:nth-child(3) svg,.kit-sidebar nav .side-link.selected:nth-child(4) svg,.kit-sidebar nav .side-link.selected:nth-child(5) svg,.kit-sidebar nav .side-link.selected:nth-child(6) svg{color:#bffffc!important;}
 
-/* Chart terminal: technical-analysis candlestick glyph only — no special box, badge or shape. */
+/* Chart terminal: keep the technical-analysis candlestick icon, but make the button itself identical to every other nav control. */
 .kit-sidebar nav .side-link:nth-child(3) svg{display:none!important;}
-.kit-sidebar nav .side-link:nth-child(3):after{content:""!important;position:relative!important;left:auto!important;top:auto!important;bottom:auto!important;width:18px!important;height:18px!important;flex:0 0 18px!important;display:block!important;background-color:#6ea8ff!important;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3v18M3.5 7.5h5v5h-5zM12 3v18M9.5 5h5v9h-5zM18 3v18M15.5 10h5v6h-5z' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat!important;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3v18M3.5 7.5h5v5h-5zM12 3v18M9.5 5h5v9h-5zM18 3v18M15.5 10h5v6h-5z' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat!important;opacity:.82!important;}
-.kit-sidebar nav .side-link:nth-child(3):hover:after,.kit-sidebar nav .side-link:nth-child(3).selected:after{background-color:#bffffc!important;opacity:1!important;}
+.kit-sidebar nav .side-link:nth-child(3) span{display:flex!important;align-items:center!important;gap:11px!important;}
+.kit-sidebar nav .side-link:nth-child(3) span:before{content:""!important;display:block!important;position:relative!important;width:18px!important;height:18px!important;flex:0 0 18px!important;background-color:#6ea8ff!important;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3v18M3.5 7.5h5v5h-5zM12 3v18M9.5 5h5v9h-5zM18 3v18M15.5 10h5v6h-5z' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat!important;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3v18M3.5 7.5h5v5h-5zM12 3v18M9.5 5h5v9h-5zM18 3v18M15.5 10h5v6h-5z' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat!important;opacity:.82!important;}
+.kit-sidebar nav .side-link:nth-child(3):hover span:before,.kit-sidebar nav .side-link:nth-child(3).selected span:before{background-color:#bffffc!important;opacity:1!important;}
 
-/* History is a permanent workspace destination. Keep it visible and in the six-button layout. */
-.kit-sidebar nav .side-link:nth-child(5){display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;grid-column:auto!important;order:initial!important;}
+/* History is a real sixth-layout workspace destination: force its fifth grid cell to exist on every mobile width. */
+.kit-sidebar nav .side-link:nth-child(5){display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;grid-column:5!important;grid-row:1!important;order:5!important;min-width:0!important;width:100%!important;}
 .kit-sidebar nav .side-link:nth-child(5) svg,.kit-sidebar nav .side-link:nth-child(5) span{display:block!important;visibility:visible!important;opacity:1!important;}
 
 @media(max-width:760px){
-  .kit-sidebar nav{gap:4px!important;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;flex-direction:initial!important;visibility:visible!important;overflow:visible!important;}
+  .kit-sidebar nav{gap:4px!important;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;grid-auto-flow:column!important;grid-auto-columns:minmax(0,1fr)!important;flex-direction:initial!important;visibility:visible!important;overflow:visible!important;}
   .kit-sidebar .side-link{min-height:60px!important;height:60px!important;padding:7px 2px 6px!important;border-radius:15px!important;gap:5px!important;font-size:6.8px!important;font-weight:700!important;transform:none!important;}
   .kit-sidebar .side-link:after{display:none!important;}
   .kit-sidebar .side-link:hover{transform:none!important;background:transparent!important;border-color:transparent!important;box-shadow:none!important;}
   .kit-sidebar .side-link svg{width:20px!important;height:20px!important;flex-basis:20px!important;}
   .kit-sidebar .side-link.selected{background:linear-gradient(180deg,rgba(37,214,208,.13),rgba(37,214,208,.035))!important;border-color:rgba(37,214,208,.2)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 6px 20px rgba(37,214,208,.07)!important;}
   .kit-sidebar .side-link.selected svg{transform:scale(1.08)!important;}
-  /* Restore only the technical-analysis glyph after the generic mobile :after reset. Same 20px footprint as every other icon. */
-  .kit-sidebar nav .side-link:nth-child(3):after{content:""!important;display:block!important;position:relative!important;left:auto!important;top:auto!important;bottom:auto!important;width:20px!important;height:20px!important;flex:0 0 20px!important;border-radius:0!important;background-color:#6ea8ff!important;-webkit-mask-size:contain!important;mask-size:contain!important;}
-  .kit-sidebar nav .side-link:nth-child(3):hover:after,.kit-sidebar nav .side-link:nth-child(3).selected:after{display:block!important;background-color:#bffffc!important;}
-  /* History remains explicitly visible on mobile. */
-  .kit-sidebar nav .side-link:nth-child(5){display:flex!important;visibility:visible!important;opacity:1!important;min-height:60px!important;height:60px!important;grid-column:auto!important;order:initial!important;}
+  .kit-sidebar nav .side-link:nth-child(3) span{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px!important;width:100%!important;}
+  .kit-sidebar nav .side-link:nth-child(3) span:before{width:20px!important;height:20px!important;flex-basis:20px!important;}
+  .kit-sidebar nav .side-link:nth-child(5){display:flex!important;visibility:visible!important;opacity:1!important;grid-column:5!important;grid-row:1!important;order:5!important;min-height:60px!important;height:60px!important;width:100%!important;min-width:0!important;}
   .kit-sidebar nav .side-link:nth-child(5) svg,.kit-sidebar nav .side-link:nth-child(5) span{display:block!important;visibility:visible!important;opacity:1!important;}
 }
-@media(max-width:380px){.kit-sidebar nav{gap:2px!important;grid-template-columns:repeat(6,minmax(0,1fr))!important}.kit-sidebar .side-link{font-size:6.2px!important;border-radius:13px!important}.kit-sidebar .side-link svg{width:18px!important;height:18px!important;flex-basis:18px!important}.kit-sidebar nav .side-link:nth-child(3):after{width:18px!important;height:18px!important;flex-basis:18px!important;}}
+@media(max-width:380px){.kit-sidebar nav{gap:2px!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;grid-auto-flow:column!important}.kit-sidebar .side-link{font-size:6.2px!important;border-radius:13px!important}.kit-sidebar .side-link svg{width:18px!important;height:18px!important;flex-basis:18px!important}.kit-sidebar nav .side-link:nth-child(3) span:before{width:18px!important;height:18px!important;flex-basis:18px!important;}}
