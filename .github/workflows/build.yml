@@ -1,4 +1,4 @@
-# final deployment trigger - 2026-09-08
+# trigger KitAgent product polish
 name: Build KitAgent
 on:
   push:
