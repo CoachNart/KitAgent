@@ -10,7 +10,6 @@
 .kit-sidebar .side-link.selected{color:#ecffff!important;background:linear-gradient(105deg,rgba(37,214,208,.14),rgba(37,214,208,.035) 68%,transparent)!important;border-color:rgba(37,214,208,.22)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 10px 30px rgba(37,214,208,.08)!important;}
 .kit-sidebar .side-link.selected:after{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:99px;background:linear-gradient(180deg,#25d6d0,#8d7cff);box-shadow:0 0 14px rgba(37,214,208,.8)!important;}
 .kit-sidebar .side-link.selected svg{opacity:1!important;transform:scale(1.08)!important;filter:drop-shadow(0 0 8px rgba(37,214,208,.32))!important;}
-/* Six distinct visual identities: home, market, terminal, perpetuals, history, profile. */
 .kit-sidebar nav .side-link:nth-child(1) svg{color:#8d7cff!important;}
 .kit-sidebar nav .side-link:nth-child(2) svg{color:#25d6d0!important;}
 .kit-sidebar nav .side-link:nth-child(3) svg{color:#6ea8ff!important;}
@@ -18,13 +17,27 @@
 .kit-sidebar nav .side-link:nth-child(5) svg{color:#c58cff!important;}
 .kit-sidebar nav .side-link:nth-child(6) svg{color:#62e8a7!important;}
 .kit-sidebar nav .side-link.selected:nth-child(1) svg,.kit-sidebar nav .side-link.selected:nth-child(2) svg,.kit-sidebar nav .side-link.selected:nth-child(3) svg,.kit-sidebar nav .side-link.selected:nth-child(4) svg,.kit-sidebar nav .side-link.selected:nth-child(5) svg,.kit-sidebar nav .side-link.selected:nth-child(6) svg{color:#bffffc!important;}
+
+/* Chart terminal: dedicated terminal glyph, exact same nav button dimensions. */
+.kit-sidebar nav .side-link[data-nav-page="defi"] svg{display:none!important;}
+.kit-sidebar nav .side-link[data-nav-page="defi"]:after{content:"⌘"!important;position:relative!important;left:auto!important;top:auto!important;bottom:auto!important;width:18px!important;height:18px!important;flex:0 0 18px!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:5px!important;background:rgba(110,168,255,.10)!important;color:#6ea8ff!important;box-shadow:inset 0 0 0 1px rgba(110,168,255,.24)!important;font-size:12px!important;font-weight:800!important;line-height:1!important;}
+.kit-sidebar nav .side-link[data-nav-page="defi"].selected:after{background:rgba(191,255,252,.12)!important;color:#bffffc!important;box-shadow:inset 0 0 0 1px rgba(191,255,252,.26)!important,0 0 10px rgba(37,214,208,.16)!important;}
+
+/* History is a permanent workspace destination. */
+.kit-sidebar nav .side-link[data-nav-page="history"]{display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;}
+.kit-sidebar nav .side-link[data-nav-page="history"] svg,.kit-sidebar nav .side-link[data-nav-page="history"] span{visibility:visible!important;opacity:1!important;}
+
 @media(max-width:760px){
-  .kit-sidebar nav{gap:4px!important;}
+  .kit-sidebar nav{gap:4px!important;display:flex!important;flex-direction:column!important;visibility:visible!important;}
   .kit-sidebar .side-link{min-height:60px!important;height:60px!important;padding:7px 2px 6px!important;border-radius:15px!important;gap:5px!important;font-size:6.8px!important;font-weight:700!important;transform:none!important;}
   .kit-sidebar .side-link:after{display:none!important;}
   .kit-sidebar .side-link:hover{transform:none!important;background:transparent!important;border-color:transparent!important;box-shadow:none!important;}
   .kit-sidebar .side-link svg{width:20px!important;height:20px!important;flex-basis:20px!important;}
   .kit-sidebar .side-link.selected{background:linear-gradient(180deg,rgba(37,214,208,.13),rgba(37,214,208,.035))!important;border-color:rgba(37,214,208,.2)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 6px 20px rgba(37,214,208,.07)!important;}
   .kit-sidebar .side-link.selected svg{transform:scale(1.08)!important;}
+  .kit-sidebar nav .side-link[data-nav-page="defi"]:after{content:"⌘"!important;display:flex!important;position:relative!important;left:auto!important;top:auto!important;bottom:auto!important;width:20px!important;height:20px!important;flex:0 0 20px!important;border-radius:6px!important;font-size:12px!important;}
+  .kit-sidebar nav .side-link[data-nav-page="defi"].selected:after{display:flex!important;}
+  .kit-sidebar nav .side-link[data-nav-page="history"]{display:flex!important;visibility:visible!important;opacity:1!important;min-height:60px!important;height:60px!important;}
+  .kit-sidebar nav .side-link[data-nav-page="history"] svg,.kit-sidebar nav .side-link[data-nav-page="history"] span{display:block!important;visibility:visible!important;opacity:1!important;}
 }
-@media(max-width:380px){.kit-sidebar nav{gap:2px!important}.kit-sidebar .side-link{font-size:6.2px!important;border-radius:13px!important}.kit-sidebar .side-link svg{width:18px!important;height:18px!important;flex-basis:18px!important}}
+@media(max-width:380px){.kit-sidebar nav{gap:2px!important}.kit-sidebar .side-link{font-size:6.2px!important;border-radius:13px!important}.kit-sidebar .side-link svg{width:18px!important;height:18px!important;flex-basis:18px!important}.kit-sidebar nav .side-link[data-nav-page="defi"]:after{width:18px!important;height:18px!important;flex-basis:18px!important;}}
