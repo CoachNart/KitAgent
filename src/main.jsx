@@ -58,6 +58,7 @@ function Root(){
   return <WagmiProvider config={wagmiAdapter.wagmiConfig}><QueryClientProvider client={queryClient}>{content}</QueryClientProvider></WagmiProvider>;
 }
 
+// Deployment trigger: clean MEXC futures terminal is ready for production build.
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><Root /></React.StrictMode>
 );
