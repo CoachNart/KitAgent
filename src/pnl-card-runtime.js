@@ -41,19 +41,19 @@ function parsePosition(dialog) {
 
 function cardHtml(data) {
   const tone = data.positive ? 'profit' : 'loss';
-  const arrow = data.positive ? '↗' : '↘';
   return `<div class="kit-pnl-card ${tone}">
     <div class="kit-pnl-top"><div class="kit-pnl-brand">KITSETUPS</div><div class="kit-pnl-side ${tone}">${data.side}</div></div>
     <div class="kit-pnl-user"><div class="kit-pnl-avatar"><span>${clean(data.name).slice(0,1).toUpperCase()}</span></div><div><b>${clean(data.name)}</b><small>${clean(data.pair)}</small></div></div>
-    <div class="kit-pnl-result ${tone}">${arrow} ${data.positive ? '+' : ''}${fmt(data.percent, 2)}%</div>
+    <div class="kit-pnl-visual ${tone}"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="kit-pnl-result ${tone}">${data.positive ? '+' : ''}${fmt(data.percent, 2)}%</div>
     <div class="kit-pnl-label">POSITION PERFORMANCE</div>
     <div class="kit-pnl-grid">
       <div><small>ENTRY</small><b>${data.entry ? fmt(data.entry) : '—'}</b></div>
       <div><small>MARK</small><b>${data.mark ? fmt(data.mark) : '—'}</b></div>
       <div><small>LEVERAGE</small><b>${data.leverage ? `${fmt(data.leverage, 0)}x` : '—'}</b></div>
-      <div><small>POSITION</small><b>${data.side}</b></div>
+      <div><small>DIRECTION</small><b>${data.side}</b></div>
     </div>
-    <div class="kit-pnl-footer">KitSetups Futures · kitsetups.xyz</div>
+    <div class="kit-pnl-footer"><span>● LIVE POSITION</span><b>KitSetups</b></div>
   </div>`;
 }
 
@@ -62,17 +62,22 @@ function injectStyle() {
   const style = document.createElement('style');
   style.id = 'kit-pnl-runtime-style';
   style.textContent = `
-    .pnl-share-dialog{width:min(390px,calc(100vw - 24px))!important;padding:10px!important;overflow:hidden!important}
+    .pnl-share-dialog{width:min(410px,calc(100vw - 20px))!important;padding:9px!important;overflow:hidden!important}
     .pnl-share-dialog svg{display:none!important}
     .pnl-share-dialog .pnl-share-card{padding:0!important;border:0!important;background:none!important;box-shadow:none!important}
-    .kit-pnl-card{width:100%;aspect-ratio:4/5;border-radius:18px;padding:20px;box-sizing:border-box;position:relative;overflow:hidden;background:linear-gradient(145deg,#0d141d,#080b10);border:1px solid #263141;font-family:Inter Tight,Inter,system-ui,sans-serif;color:#e7edf7}
-    .kit-pnl-card:before{content:"";position:absolute;inset:-35% -20% auto auto;width:230px;height:230px;border-radius:50%;background:rgba(37,214,208,.10);filter:blur(22px);pointer-events:none}.kit-pnl-card.loss:before{background:rgba(255,82,102,.10)}
-    .kit-pnl-top,.kit-pnl-user{display:flex;position:relative;z-index:1}.kit-pnl-top{align-items:center;justify-content:space-between}.kit-pnl-brand{font-size:13px;font-weight:950;letter-spacing:2.4px;color:#25d6d0}.kit-pnl-card.loss .kit-pnl-brand{color:#ff5266}
-    .kit-pnl-side{font-size:9px;font-weight:900;letter-spacing:.12em;padding:5px 8px;border-radius:999px;color:#25d6d0;background:rgba(37,214,208,.11)}.kit-pnl-side.loss{color:#ff5266;background:rgba(255,82,102,.11)}
-    .kit-pnl-user{align-items:center;gap:10px;margin-top:24px}.kit-pnl-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#111c25;border:1px solid #25d6d0;color:#eef3f9;font-size:15px;font-weight:900;flex:0 0 auto}.kit-pnl-avatar img{width:100%;height:100%;object-fit:cover}.kit-pnl-user b{display:block;font-size:13px}.kit-pnl-user small{display:block;margin-top:3px;color:#66768a;font-size:9px}
-    .kit-pnl-result{position:relative;z-index:1;margin-top:25px;font-size:48px;line-height:1;font-weight:950;letter-spacing:-2px}.kit-pnl-result.profit{color:#25d6d0}.kit-pnl-result.loss{color:#ff5266}.kit-pnl-label{position:relative;z-index:1;margin-top:8px;color:#66768a;font-size:8px;letter-spacing:.12em;font-weight:800}
-    .kit-pnl-grid{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:18px}.kit-pnl-grid>div{background:#0b1119;border:1px solid #192331;border-radius:9px;padding:9px}.kit-pnl-grid small{display:block;color:#66768a;font-size:7px;letter-spacing:.08em;margin-bottom:4px}.kit-pnl-grid b{font-size:10px;font-variant-numeric:tabular-nums}.kit-pnl-footer{position:absolute;z-index:1;left:20px;right:20px;bottom:18px;color:#66768a;font-size:8px;letter-spacing:.03em}
-    @media(max-width:420px){.pnl-share-dialog{width:calc(100vw - 20px)!important}.kit-pnl-card{padding:17px}.kit-pnl-result{font-size:40px}.kit-pnl-user{margin-top:18px}.kit-pnl-footer{left:17px;right:17px;bottom:15px}}
+    .kit-pnl-card{width:100%;aspect-ratio:8/9;border-radius:18px;padding:18px;box-sizing:border-box;position:relative;overflow:hidden;background:radial-gradient(circle at 85% 18%,rgba(37,214,208,.15),transparent 34%),linear-gradient(145deg,#101b24 0%,#080c12 72%);border:1px solid #263d46;font-family:Inter Tight,Inter,system-ui,sans-serif;color:#e7edf7}
+    .kit-pnl-card.loss{background:radial-gradient(circle at 85% 18%,rgba(255,82,102,.16),transparent 34%),linear-gradient(145deg,#21131a 0%,#080c12 72%);border-color:#51303a}
+    .kit-pnl-card:after{content:"";position:absolute;left:-30%;bottom:-38%;width:150%;height:70%;background:radial-gradient(ellipse,rgba(37,214,208,.09),transparent 62%);transform:rotate(-8deg);pointer-events:none}.kit-pnl-card.loss:after{background:radial-gradient(ellipse,rgba(255,82,102,.10),transparent 62%)}
+    .kit-pnl-top,.kit-pnl-user,.kit-pnl-result,.kit-pnl-label,.kit-pnl-grid,.kit-pnl-footer{position:relative;z-index:2}.kit-pnl-top,.kit-pnl-user{display:flex}.kit-pnl-top{align-items:center;justify-content:space-between}.kit-pnl-brand{font-size:12px;font-weight:950;letter-spacing:2.5px;color:#25d6d0}.kit-pnl-card.loss .kit-pnl-brand{color:#ff5266}
+    .kit-pnl-side{font-size:8px;font-weight:900;letter-spacing:.12em;padding:5px 8px;border-radius:999px;color:#25d6d0;background:rgba(37,214,208,.11);border:1px solid rgba(37,214,208,.18)}.kit-pnl-side.loss{color:#ff5266;background:rgba(255,82,102,.11);border-color:rgba(255,82,102,.2)}
+    .kit-pnl-user{align-items:center;gap:9px;margin-top:15px}.kit-pnl-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#111c25;border:1px solid #25d6d0;color:#eef3f9;font-size:14px;font-weight:900;flex:0 0 auto}.kit-pnl-card.loss .kit-pnl-avatar{border-color:#ff5266}.kit-pnl-avatar img{width:100%;height:100%;object-fit:cover}.kit-pnl-user b{display:block;font-size:12px}.kit-pnl-user small{display:block;margin-top:2px;color:#708191;font-size:8px}
+    .kit-pnl-visual{height:76px;margin:13px -18px 0;position:relative;overflow:hidden;opacity:.95;background:repeating-linear-gradient(90deg,transparent 0,transparent 39px,rgba(255,255,255,.035) 40px),repeating-linear-gradient(0deg,transparent 0,transparent 24px,rgba(255,255,255,.035) 25px)}
+    .kit-pnl-visual:before{content:"";position:absolute;left:-5%;right:-5%;top:42px;height:2px;background:linear-gradient(90deg,transparent 0%,rgba(37,214,208,.1) 10%,#25d6d0 38%,#25d6d0 61%,rgba(37,214,208,.22) 82%,transparent);transform:rotate(-9deg);box-shadow:0 0 14px rgba(37,214,208,.5)}.kit-pnl-visual.loss:before{background:linear-gradient(90deg,transparent 0%,rgba(255,82,102,.1) 10%,#ff5266 38%,#ff5266 61%,rgba(255,82,102,.22) 82%,transparent);transform:rotate(9deg);box-shadow:0 0 14px rgba(255,82,102,.5)}
+    .kit-pnl-visual span{position:absolute;bottom:17px;width:3px;border-radius:3px;background:#25d6d0;box-shadow:0 0 8px rgba(37,214,208,.45)}.kit-pnl-visual.loss span{background:#ff5266;box-shadow:0 0 8px rgba(255,82,102,.45)}.kit-pnl-visual span:nth-child(1){left:10%;height:20px}.kit-pnl-visual span:nth-child(2){left:22%;height:36px}.kit-pnl-visual span:nth-child(3){left:35%;height:27px}.kit-pnl-visual span:nth-child(4){left:47%;height:49px}.kit-pnl-visual span:nth-child(5){left:58%;height:37px}.kit-pnl-visual span:nth-child(6){left:69%;height:58px}.kit-pnl-visual span:nth-child(7){left:80%;height:47px}.kit-pnl-visual span:nth-child(8){left:91%;height:64px}
+    .kit-pnl-result{margin-top:2px;font-size:43px;line-height:1;font-weight:950;letter-spacing:-1.8px}.kit-pnl-result.profit{color:#25d6d0}.kit-pnl-result.loss{color:#ff5266}.kit-pnl-label{margin-top:5px;color:#71818f;font-size:7px;letter-spacing:.13em;font-weight:800}
+    .kit-pnl-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}.kit-pnl-grid>div{background:rgba(10,17,24,.78);border:1px solid rgba(38,49,65,.9);border-radius:8px;padding:8px}.kit-pnl-grid small{display:block;color:#66788a;font-size:7px;letter-spacing:.08em;margin-bottom:3px}.kit-pnl-grid b{font-size:10px;font-variant-numeric:tabular-nums}
+    .kit-pnl-footer{position:absolute;left:18px;right:18px;bottom:13px;display:flex;justify-content:space-between;align-items:center;color:#5f7280;font-size:7px;letter-spacing:.06em}.kit-pnl-footer span{color:#25d6d0}.kit-pnl-card.loss .kit-pnl-footer span{color:#ff5266}.kit-pnl-footer b{color:#9babb5;font-size:8px;letter-spacing:.12em}
+    @media(max-width:420px){.pnl-share-dialog{width:calc(100vw - 14px)!important}.kit-pnl-card{padding:15px;border-radius:16px}.kit-pnl-visual{margin-left:-15px;margin-right:-15px;height:68px}.kit-pnl-result{font-size:36px}.kit-pnl-user{margin-top:12px}.kit-pnl-grid{gap:5px;margin-top:8px}.kit-pnl-grid>div{padding:7px}.kit-pnl-footer{left:15px;right:15px;bottom:11px}}
   `;
   document.head.appendChild(style);
 }
@@ -100,25 +105,41 @@ function loadImage(src) {
   });
 }
 
+function drawTradeVisual(ctx, data, x, y, w, h, accent) {
+  ctx.save();
+  ctx.globalAlpha = .34;
+  ctx.strokeStyle = '#78909c'; ctx.lineWidth = 1;
+  for (let gx=x; gx<=x+w; gx+=52) { ctx.beginPath(); ctx.moveTo(gx,y); ctx.lineTo(gx,y+h); ctx.stroke(); }
+  for (let gy=y; gy<=y+h; gy+=28) { ctx.beginPath(); ctx.moveTo(x,gy); ctx.lineTo(x+w,gy); ctx.stroke(); }
+  ctx.globalAlpha = .95;
+  const points = data.positive ? [h*.72,h*.61,h*.68,h*.48,h*.54,h*.31,h*.42,h*.2] : [h*.22,h*.34,h*.28,h*.48,h*.39,h*.58,h*.48,h*.75];
+  ctx.beginPath();
+  points.forEach((v,i)=>{const px=x+(i/(points.length-1))*w, py=y+v; if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py)});
+  ctx.strokeStyle=accent;ctx.lineWidth=3;ctx.shadowColor=accent;ctx.shadowBlur=12;ctx.stroke();ctx.shadowBlur=0;
+  points.forEach((v,i)=>{const px=x+(i/(points.length-1))*w,py=y+v;ctx.fillStyle=accent;ctx.fillRect(px-2,py-7,4,14)});
+  ctx.restore();
+}
+
 async function renderPng(data) {
-  const W = 800, H = 1000;
+  const W = 800, H = 900;
   const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
   const accent = data.positive ? '#25d6d0' : '#ff5266';
-  const bg = ctx.createLinearGradient(0,0,W,H); bg.addColorStop(0,'#0d141d'); bg.addColorStop(1,'#080b10'); ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
-  const glow = ctx.createRadialGradient(620,130,10,620,130,330); glow.addColorStop(0,accent+'38'); glow.addColorStop(1,accent+'00'); ctx.fillStyle=glow; ctx.fillRect(0,0,W,500);
+  const bg = ctx.createLinearGradient(0,0,W,H); bg.addColorStop(0,data.positive?'#101b24':'#21131a'); bg.addColorStop(1,'#080b10'); ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  const glow = ctx.createRadialGradient(650,120,10,650,120,330); glow.addColorStop(0,accent+'42'); glow.addColorStop(1,accent+'00'); ctx.fillStyle=glow; ctx.fillRect(0,0,W,500);
   const round=(x,y,w,h,r)=>{ctx.beginPath();ctx.roundRect(x,y,w,h,r)};
-  round(20,20,W-40,H-40,28); ctx.strokeStyle='#263141'; ctx.lineWidth=2; ctx.stroke();
+  round(18,18,W-36,H-36,28); ctx.strokeStyle='#263d46'; ctx.lineWidth=2; ctx.stroke();
   const font=(size,weight='400')=>{ctx.font=`${weight} ${size}px Inter Tight,Inter,Arial,sans-serif`};
-  font(20,'900');ctx.fillStyle=accent;ctx.fillText('KITSETUPS',52,72);
-  round(660,45,88,32,16);ctx.fillStyle=accent+'18';ctx.fill();font(12,'900');ctx.fillStyle=accent;ctx.textAlign='center';ctx.fillText(data.side,704,66);ctx.textAlign='left';
-  ctx.beginPath();ctx.arc(76,128,24,0,Math.PI*2);ctx.fillStyle='#111c25';ctx.fill();ctx.strokeStyle=accent;ctx.stroke();
-  const img=await loadImage(data.avatarUrl);if(img){ctx.save();ctx.beginPath();ctx.arc(76,128,22,0,Math.PI*2);ctx.clip();ctx.drawImage(img,54,106,44,44);ctx.restore()}else{font(16,'900');ctx.fillStyle='#eef3f9';ctx.textAlign='center';ctx.fillText(data.name.slice(0,1).toUpperCase(),76,134);ctx.textAlign='left'}
-  font(15,'800');ctx.fillStyle='#eef3f9';ctx.fillText(data.name,116,126);font(11,'600');ctx.fillStyle='#66768a';ctx.fillText(data.pair,116,146);
-  font(70,'950');ctx.fillStyle=accent;ctx.fillText(`${data.positive?'+':''}${fmt(data.percent,2)}%`,52,260);font(11,'800');ctx.fillStyle='#66768a';ctx.fillText('POSITION PERFORMANCE',52,286);
-  const cells=[['ENTRY',data.entry?fmt(data.entry):'—'],['MARK',data.mark?fmt(data.mark):'—'],['LEVERAGE',data.leverage?`${fmt(data.leverage,0)}x`:'—'],['POSITION',data.side]];
-  cells.forEach((c,i)=>{const x=i%2?408:52,y=330+Math.floor(i/2)*118;round(x,y,340,94,14);ctx.fillStyle='#0b1119';ctx.fill();ctx.strokeStyle='#192331';ctx.stroke();font(10,'700');ctx.fillStyle='#66768a';ctx.fillText(c[0],x+18,y+27);font(17,'800');ctx.fillStyle='#eef3f9';ctx.fillText(c[1],x+18,y+58)});
-  font(10,'600');ctx.fillStyle='#66768a';ctx.fillText('KitSetups Futures · kitsetups.xyz',52,944);
+  font(20,'900');ctx.fillStyle=accent;ctx.fillText('KITSETUPS',50,67);
+  round(662,41,86,31,16);ctx.fillStyle=accent+'20';ctx.fill();font(12,'900');ctx.fillStyle=accent;ctx.textAlign='center';ctx.fillText(data.side,705,62);ctx.textAlign='left';
+  ctx.beginPath();ctx.arc(74,118,22,0,Math.PI*2);ctx.fillStyle='#111c25';ctx.fill();ctx.strokeStyle=accent;ctx.stroke();
+  const img=await loadImage(data.avatarUrl);if(img){ctx.save();ctx.beginPath();ctx.arc(74,118,20,0,Math.PI*2);ctx.clip();ctx.drawImage(img,54,98,40,40);ctx.restore()}else{font(15,'900');ctx.fillStyle='#eef3f9';ctx.textAlign='center';ctx.fillText(data.name.slice(0,1).toUpperCase(),74,123);ctx.textAlign='left'}
+  font(15,'800');ctx.fillStyle='#eef3f9';ctx.fillText(data.name,108,116);font(10,'600');ctx.fillStyle='#71818f';ctx.fillText(data.pair,108,135);
+  drawTradeVisual(ctx,data,50,160,700,76,accent);
+  font(64,'950');ctx.fillStyle=accent;ctx.fillText(`${data.positive?'+':''}${fmt(data.percent,2)}%`,50,285);font(10,'800');ctx.fillStyle='#71818f';ctx.fillText('POSITION PERFORMANCE',50,307);
+  const cells=[['ENTRY',data.entry?fmt(data.entry):'—'],['MARK',data.mark?fmt(data.mark):'—'],['LEVERAGE',data.leverage?`${fmt(data.leverage,0)}x`:'—'],['DIRECTION',data.side]];
+  cells.forEach((c,i)=>{const x=i%2?408:50,y=335+Math.floor(i/2)*100;round(x,y,342,80,13);ctx.fillStyle='#0b1119';ctx.fill();ctx.strokeStyle='#192b35';ctx.stroke();font(9,'700');ctx.fillStyle='#66788a';ctx.fillText(c[0],x+17,y+24);font(16,'800');ctx.fillStyle='#eef3f9';ctx.fillText(c[1],x+17,y+53)});
+  font(9,'700');ctx.fillStyle=accent;ctx.fillText('● LIVE POSITION',50,850);font(10,'900');ctx.fillStyle='#9babb5';ctx.textAlign='right';ctx.fillText('KITSETUPS',750,850);ctx.textAlign='left';
   const blob=await new Promise(r=>canvas.toBlob(r,'image/png',1)); if(!blob) throw new Error('Could not render PNG');
   return {file:new File([blob],`kitsetups-pnl-${Date.now()}.png`,{type:'image/png'}),url:URL.createObjectURL(blob)};
 }
