@@ -7,104 +7,12 @@ on:
 
 jobs:
   android:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Apply CEX PnL and protection patch
-        shell: bash
-        run: |
-          set -e
-          python3 <<'PY'
-          from pathlib import Path
-          import re
-          path = Path('src/PerpetualsPage.jsx')
-          s = path.read_text()
-          if 'KITSETUPS_PNL_PNG_V2' in s:
-              print('CEX patch already present')
-              raise SystemExit(0)
-          s = s.replace("  const [pnlSharePosition, setPnlSharePosition] = useState(null);\n", "  const [pnlSharePosition, setPnlSharePosition] = useState(null);\n  const [pnlCardUrl, setPnlCardUrl] = useState('');\n")
-          marker = "  const stopOrders = account.stopOrders.filter(o => normalize(o.symbol) === normalize(symbol) && !n(o.isFinished));\n"
-          helper = marker + """  const protectionFor = useCallback(p => {
-    const pid = String(p?.positionId ?? '');
-    const matches = account.stopOrders.filter(o => normalize(o.symbol) === normalize(p?.symbol || symbol) && !n(o.isFinished) && String(o.positionId ?? o.positionID ?? '') === pid);
-    return matches.reduce((acc, o) => ({ ...acc, id: acc.id || o.id || o.stopPlanOrderId, stopPlanOrderId: acc.stopPlanOrderId || o.stopPlanOrderId || o.id, stopLossPrice: acc.stopLossPrice || o.stopLossPrice || (n(o.triggerSide) === 2 ? o.triggerPrice : 0), takeProfitPrice: acc.takeProfitPrice || o.takeProfitPrice || (n(o.triggerSide) === 1 ? o.triggerPrice : 0) }), null);
-  }, [account.stopOrders, symbol]);
-  const protectionPrice = (risk, kind) => n(risk?.[kind === 'sl' ? 'stopLossPrice' : 'takeProfitPrice']);
-"""
-          if marker not in s: raise SystemExit('stopOrders marker missing')
-          s = s.replace(marker, helper, 1)
-          old = """  const openRiskManager = p => {
-    const existing = stopOrders.find(o => String(o.positionId) === String(p.positionId));
-    setRiskPosition(p);
-    setRiskTp(existing?.takeProfitPrice ? String(existing.takeProfitPrice) : '');
-    setRiskSl(existing?.stopLossPrice ? String(existing.stopLossPrice) : '');
-  };
-"""
-          new = """  const openRiskManager = p => {
-    const existing = protectionFor(p);
-    setRiskPosition(p);
-    setRiskTp(protectionPrice(existing, 'tp') ? String(protectionPrice(existing, 'tp')) : '');
-    setRiskSl(protectionPrice(existing, 'sl') ? String(protectionPrice(existing, 'sl')) : '');
-  };
-"""
-          if old not in s: raise SystemExit('openRiskManager marker missing')
-          s = s.replace(old, new, 1)
-          s = s.replace("const existing = stopOrders.find(o => String(o.positionId) === String(riskPosition.positionId));", "const existing = protectionFor(riskPosition);", 2)
-          old = """await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined });"""
-          new = """await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined, profitTrend: n(takeProfit) ? (side === 'buy' ? 1 : 2) : undefined, lossTrend: n(stopLoss) ? (side === 'buy' ? 2 : 1) : undefined });"""
-          if old not in s: raise SystemExit('order payload marker missing')
-          s = s.replace(old, new, 1)
-          start = s.index('  const sharePnl = async p => {')
-          end = s.index('  const estimatedMargin =', start)
-          replacement = r'''  // KITSETUPS_PNL_PNG_V2
-  const createPnlCardFile = async p => {
-    const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1920;
-    const ctx = canvas.getContext('2d'); const W = 1080, H = 1920;
-    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl), entry = n(p.holdAvgPrice || p.openAvgPrice), mark = n(last), liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice), margin = n(p.im), lev = n(p.leverage || p.leverageRatio), size = n(p.holdVol);
-    const positive = pnl >= 0, accent = positive ? '#25d6d0' : '#ff5266', sideText = n(p.positionType) === 1 ? 'LONG' : 'SHORT';
-    const risk = protectionFor(p), sl = protectionPrice(risk,'sl'), tp = protectionPrice(risk,'tp');
-    const round = (x,y,w,h,r) => { ctx.beginPath(); ctx.roundRect(x,y,w,h,r); };
-    const text = (v,x,y,sz,color,weight='400',align='left') => { ctx.font = `${weight} ${sz}px Inter,Arial,sans-serif`; ctx.fillStyle=color; ctx.textAlign=align; ctx.fillText(String(v),x,y); };
-    const label = (v,x,y) => text(v,x,y,20,'#66768a','600'), value = (v,x,y) => text(v,x,y,29,'#eef3f9','700');
-    const bg = ctx.createLinearGradient(0,0,W,H); bg.addColorStop(0,'#06090e'); bg.addColorStop(1,'#0d1720'); ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-    const glow = ctx.createRadialGradient(850,210,20,850,210,500); glow.addColorStop(0,accent+'55'); glow.addColorStop(1,accent+'00'); ctx.fillStyle=glow; ctx.fillRect(0,0,W,700);
-    round(48,48,984,1824,46); ctx.strokeStyle='#263141'; ctx.lineWidth=2; ctx.stroke();
-    text('KITSETUPS',88,126,30,accent,'800'); text('FUTURES POSITION',88,166,18,'#66768a','600');
-    ctx.beginPath(); ctx.arc(116,250,52,0,Math.PI*2); ctx.fillStyle='#111c25'; ctx.fill(); ctx.strokeStyle=accent; ctx.stroke();
-    let avatarDrawn=false; if(profileAvatar){try{const img=new Image();img.crossOrigin='anonymous';img.src=profileAvatar;await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;});ctx.save();ctx.beginPath();ctx.arc(116,250,47,0,Math.PI*2);ctx.clip();ctx.drawImage(img,69,203,94,94);ctx.restore();avatarDrawn=true;}catch(_){}}
-    if(!avatarDrawn) text(profileName.slice(0,1).toUpperCase(),116,262,34,'#eef3f9','800','center');
-    text(profileName,190,248,28,'#eef3f9','700'); text(`${displaySymbol(p.symbol)} · ${sideText}`,190,282,18,'#66768a','600');
-    label('UNREALIZED PNL',88,430); text(`${positive?'↗':'↘'} ${fmt(pnl,4)}`,88,530,86,accent,'800'); text('USDT',88,570,20,'#8b99aa','600'); ctx.fillStyle='#202c38';ctx.fillRect(88,650,904,2);
-    label('ENTRY',88,730);value(fmt(entry),88,770);label('MARK',540,730);value(fmt(mark),540,770);label('SIZE',88,860);value(fmt(size),88,900);label('LEVERAGE',540,860);value(`${fmt(lev,0)}x`,540,900);label('LIQUIDATION',88,990);text(fmt(liq),88,1030,29,'#ff8a96','700');label('MARGIN',540,990);value(`${fmt(margin,4)} USDT`,540,1030);
-    round(88,1110,904,270,28);ctx.fillStyle='#0b121a';ctx.fill();ctx.strokeStyle='#202c38';ctx.stroke();text('RISK MANAGEMENT',124,1170,18,accent,'800');label('STOP LOSS',124,1220);value(sl?fmt(sl):'Not set',124,1260);label('TAKE PROFIT',540,1220);value(tp?fmt(tp):'Not set',540,1260);text(risk?'Protection active · adjustable while position is open.':'No active protective order.',124,1320,17,risk?'#25d6d0':'#66768a','600');
-    text(new Date().toLocaleString(),88,1780,18,'#66768a','500');text('kitsetups.xyz',88,1820,18,accent,'800');
-    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png',1)); if(!blob) throw new Error('Could not render the PnL card.'); const file=new File([blob],`kitsetups-${String(p.symbol||'position').replace(/[^a-z0-9_-]/gi,'')}-pnl.png`,{type:'image/png'}); return {file,url:URL.createObjectURL(blob)};
-  };
-  useEffect(()=>{let active=true;if(!pnlSharePosition){setPnlCardUrl('');return undefined;}createPnlCardFile(pnlSharePosition).then(({url})=>{if(active)setPnlCardUrl(url);else URL.revokeObjectURL(url);}).catch(e=>{if(active)setError(e.message||'Could not render the PnL card.');});return()=>{active=false;};},[pnlSharePosition,profileName,profileAvatar,last,account.stopOrders]);
-  const sharePnl=async p=>{try{const rendered=await createPnlCardFile(p);const caption=`${profileName} · KitSetups Futures\n${displaySymbol(p.symbol)} · ${n(p.positionType)===1?'Long':'Short'}\nPnL: ${fmt(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl,4)} USDT`;if(navigator.share&&navigator.canShare?.({files:[rendered.file]}))await navigator.share({files:[rendered.file],title:'KitSetups Futures PnL',text:caption});else{const a=document.createElement('a');a.href=rendered.url;a.download=rendered.file.name;a.click();if(navigator.share)await navigator.share({title:'KitSetups Futures PnL',text:caption});else if(navigator.clipboard)await navigator.clipboard.writeText(caption);}setTimeout(()=>URL.revokeObjectURL(rendered.url),1500);}catch(e){if(e?.name!=='AbortError')setError(e.message||'Share was not available on this device.');}};
-  const downloadPnl=async p=>{try{const rendered=await createPnlCardFile(p);const a=document.createElement('a');a.href=rendered.url;a.download=rendered.file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(rendered.url),1500);}catch(e){setError(e.message||'Could not download the PnL card.');}};
-
-'''
-          s=s[:start]+replacement+s[end:]
-          modal_start=s.index('    {pnlSharePosition && <div className="mexc-modal"'); modal_end=s.index('    {riskPosition &&',modal_start)
-          s=s[:modal_start]+'''    {pnlSharePosition && <div className="mexc-modal" onMouseDown={e=>e.target===e.currentTarget&&setPnlSharePosition(null)}><div className="pnl-share-dialog"><div className="pnl-share-preview">{pnlCardUrl?<img src={pnlCardUrl} alt="KitSetups Futures PnL"/>:<div className="pnl-card-loading">Preparing your PnL card…</div>}</div><div className="pnl-share-actions"><button onClick={()=>sharePnl(pnlSharePosition)} disabled={!pnlCardUrl}>Share card</button><button onClick={()=>downloadPnl(pnlSharePosition)} disabled={!pnlCardUrl}>Download PNG</button><button className="ghost" onClick={()=>setPnlSharePosition(null)}>Close</button></div></div></div>}
-''' + s[modal_end:]
-          s=s.replace('<Positions rows={positions} stopOrders={stopOrders}', '<Positions rows={positions} stopOrders={stopOrders} protectionFor={protectionFor}')
-          s=s.replace('function Positions({ rows, stopOrders, onClose, onShare, onDownload, onManageRisk })','function Positions({ rows, stopOrders, protectionFor, onClose, onShare, onDownload, onManageRisk })')
-          s=s.replace("const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));","const risk = protectionFor(p);")
-          path.write_text(s)
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/PerpetualsPage.jsx
-          if git diff --cached --quiet; then echo "No CEX patch needed"; exit 0; fi
-          git commit -m "fix: unify pnl card and show active protection"
-          git push
 
       - name: Setup Node
         uses: actions/setup-node@v4
