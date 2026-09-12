@@ -4,7 +4,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const num=(v,d=8)=>Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:d}):'—';
 const pct=v=>Number.isFinite(Number(v))?(Number(v)*100).toFixed(4)+'%':'—';
 const state=()=>{try{return JSON.parse(localStorage.getItem('kitagent_cex_v2')||'{}')}catch{return{}}};
-const api=async(action,s,extra={})=>{const r=await fetch('/api/mexc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,symbol:s.symbol||'BTCUSDT',key:s.key||'',secret:s.secret||'',...extra})});const j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw Error(j.error||`MEXC request failed (${r.status})`);return j};
+const api=async(action,s,extra={})=>{const r=await fetch('/api/cex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,symbol:s.symbol||'BTCUSDT',key:s.key||'',secret:s.secret||'',...extra})});const j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw Error(j.error||`MEXC request failed (${r.status})`);return j};
 let lastMarket=null,lastAccount={};
 function root(){return ROOT_IDS.map(id=>document.getElementById(id)).find(Boolean)}
 function symbolFromRoot(r){const el=r?.querySelector('[data-pair],#ks');return String(el?.value||'BTCUSDT').toUpperCase().replace(/[-/]/g,'').replace('_USDT','USDT')}
