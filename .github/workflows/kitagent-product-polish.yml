@@ -1,0 +1,54 @@
+name: KitAgent product polish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore History and polish UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app = Path('src/App.jsx')
+          s = app.read_text()
+          s = s.replace("['activity','History',History]", "['history','History',History]")
+          s = s.replace("page==='activity'&&<SignalHistory/>", "page==='history'&&<SignalHistory/>")
+          if "./nav-polish.css" not in s:
+              s = s.replace("import { useEffect, useState } from 'react';", "import { useEffect, useState } from 'react';\nimport './nav-polish.css';", 1)
+          app.write_text(s)
+
+          css = Path('src/mexcFutures.css')
+          s = css.read_text()
+          start = s.find('.pnl-share-card{')
+          end = s.find('.pnl-share-actions{', start)
+          if start != -1 and end != -1:
+              replacement = '''.pnl-share-card{position:relative;isolation:isolate;aspect-ratio:1.62/1;min-height:0;height:auto;padding:24px 24px 20px;border-radius:17px;overflow:hidden;background:radial-gradient(circle at 86% 8%,rgba(37,214,208,.16),transparent 27%),radial-gradient(circle at 4% 92%,rgba(37,214,208,.07),transparent 30%),linear-gradient(145deg,#101922 0%,#080d13 58%,#06090e 100%);border:1px solid rgba(37,214,208,.2);display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto auto 1fr auto;column-gap:18px;align-items:start}.pnl-share-card::before{content:"";position:absolute;inset:-45% -18% auto auto;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(37,214,208,.18),rgba(37,214,208,0) 68%);filter:blur(4px);z-index:-1}.pnl-share-card::after{content:"↗";position:absolute;right:20px;top:18px;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(37,214,208,.09);border:1px solid rgba(37,214,208,.22);color:#25d6d0;font-size:20px;font-weight:950}.pnl-share-card:has(.negative-text)::after{content:"↘";background:rgba(255,82,102,.09);border-color:rgba(255,82,102,.24);color:#ff5266}.pnl-share-card small{color:#25d6d0;font-weight:950;letter-spacing:.15em;font-size:8px}.pnl-share-card h3{grid-column:1/-1;margin:14px 60px 0 0;font-size:21px;letter-spacing:-.04em;line-height:1.05}.pnl-share-card>strong{grid-column:1/-1;display:block;font-size:48px;line-height:.92;letter-spacing:-.055em;font-variant-numeric:tabular-nums;margin:10px 0 0;word-break:break-word}.pnl-share-card>span{grid-column:1/-1;display:block;margin-top:6px;color:#657287;font-size:8px;text-transform:uppercase;letter-spacing:.13em}.pnl-share-card>p{grid-column:1/-1;color:#aab6c7;font-size:9px;line-height:1.4;margin:12px 0 0}.pnl-share-card>p strong{display:inline;font-size:inherit;letter-spacing:0;margin:0}.positive-text{color:#25d6d0}.negative-text{color:#ff5266}.pnl-share-card .pnl-meta{grid-column:1/-1;margin-top:14px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-self:end}.pnl-share-card .pnl-meta>*{padding:8px 9px;border:1px solid #192b34;background:rgba(7,12,17,.72);border-radius:8px;min-width:0}.pnl-share-card .pnl-meta small{display:block;color:#657287;letter-spacing:.07em;font-size:6.5px}.pnl-share-card .pnl-meta b{display:block;margin-top:3px;font-size:9px;color:#e7edf7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pnl-share-card .kitsetups-mark{grid-column:1/-1;margin-top:10px;display:flex;align-items:center;gap:7px;color:#e7edf7;font-size:8px;font-weight:900;letter-spacing:.09em}.pnl-share-card .kitsetups-mark::before{content:"K";width:20px;height:20px;border-radius:5px;display:grid;place-items:center;background:#25d6d0;color:#061012;font-size:10px}.pnl-share-actions{display:flex;gap:6px;margin-top:8px}'''
+              s = s[:start] + replacement + s[end + len('.pnl-share-actions{'):]
+          css.write_text(s)
+
+          nav = Path('src/nav-polish.css')
+          nav.write_text('''/* Premium KitSetups navigation — app-shell only. */\n.kit-sidebar nav{gap:7px!important;}\n.kit-sidebar .side-link{position:relative!important;min-height:44px!important;padding:10px 12px!important;border:1px solid transparent!important;border-radius:13px!important;background:transparent!important;color:#718097!important;display:flex!important;align-items:center!important;gap:11px!important;font-size:11px!important;font-weight:700!important;letter-spacing:-.01em!important;transition:transform .18s ease,background .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease!important;}\n.kit-sidebar .side-link svg{width:17px!important;height:17px!important;stroke-width:1.8!important;opacity:.86;transition:transform .18s ease,opacity .18s ease,filter .18s ease!important;}\n.kit-sidebar .side-link:hover{color:#d9f9ff!important;background:rgba(37,214,208,.055)!important;border-color:rgba(37,214,208,.10)!important;transform:translateX(2px)!important;}\n.kit-sidebar .side-link.selected{color:#e9feff!important;background:linear-gradient(100deg,rgba(37,214,208,.15),rgba(37,214,208,.035))!important;border-color:rgba(37,214,208,.22)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 10px 30px rgba(37,214,208,.06)!important;}\n.kit-sidebar .side-link.selected:before{content:"";position:absolute;left:-1px;top:9px;bottom:9px;width:2px;border-radius:99px;background:#25d6d0;box-shadow:0 0 14px rgba(37,214,208,.75);}\n.kit-sidebar .side-link.selected svg{opacity:1;transform:scale(1.04);filter:drop-shadow(0 0 7px rgba(37,214,208,.32));}\n@media(max-width:760px){\n  .kit-sidebar nav{gap:3px!important;}\n  .kit-sidebar .side-link{min-height:60px!important;height:60px!important;padding:7px 2px 5px!important;border-radius:14px!important;gap:5px!important;font-size:6.7px!important;font-weight:650!important;transform:none!important;}\n  .kit-sidebar .side-link svg{width:18px!important;height:18px!important;opacity:.86;}\n  .kit-sidebar .side-link.selected:before{left:50%;top:auto;bottom:3px;width:18px;height:2px;transform:translateX(-50%);}\n}\n''')
+
+          # Keep this workflow itself out of the product repo after it has done its job.
+          wf = Path('.github/workflows/kitagent-product-polish.yml')
+          # Commit source/CSS changes first; workflow file is removed in the same commit.
+          wf.unlink(missing_ok=True)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx src/mexcFutures.css src/nav-polish.css .github/workflows/kitagent-product-polish.yml
+          git commit -m "feat: restore history and polish trading share UI"
+          git push
