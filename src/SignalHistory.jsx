@@ -1,4 +1,5 @@
 import {useEffect,useMemo,useState} from 'react';
+import './signal-history.css';
 import {BarChart3,ChevronRight,RefreshCw,Target,TrendingDown,TrendingUp} from 'lucide-react';
 import {auth} from './firebase.js';
 
