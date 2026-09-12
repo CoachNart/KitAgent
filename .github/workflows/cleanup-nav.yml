@@ -18,15 +18,14 @@ jobs:
           from pathlib import Path
           p=Path('src/App.jsx')
           s=p.read_text()
-          s=s.replace("import NotificationCenter from './NotificationCenter.jsx';", "import NotificationCenter from './NotificationCenter.jsx';\nimport ChartTerminal from './ChartTerminal.jsx';")
+          if "import ChartTerminal from './ChartTerminal.jsx';" not in s:
+              s=s.replace("import NotificationCenter from './NotificationCenter.jsx';", "import NotificationCenter from './NotificationCenter.jsx';\nimport ChartTerminal from './ChartTerminal.jsx';")
           old="const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','DeFi & actions',Layers3],['perps','Perpetuals',Zap],['drops','Airdrops & faucets',Rocket],['activity','History',History],['profile','Profile',CircleUserRound]];"
           new="const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',BarChart3],['perps','Perpetuals',Zap],['activity','History',History],['profile','Profile',CircleUserRound]];"
-          if old not in s: raise SystemExit('expected nav definition not found')
-          s=s.replace(old,new)
-          old_routes="{page==='home'&&<HomePage go={go} wallet={wallet}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='defi'&&<DeFiPage prepare={prepare}/>} {page==='perps'&&<PerpetualsPage user={user} wallet={wallet} connectWallet={connectWallet}/>} {page==='drops'&&<DropsPage prepare={prepare} wallet={wallet}/>} {page==='activity'&&<SignalHistory/>} {page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>};"
-          new_routes="{page==='home'&&<HomePage go={go} wallet={wallet}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='defi'&&<ChartTerminal/>} {page==='perps'&&<PerpetualsPage user={user} wallet={wallet} connectWallet={connectWallet}/>} {page==='activity'&&<SignalHistory/>} {page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>};"
-          if old_routes not in s: raise SystemExit('expected route block not found')
-          s=s.replace(old_routes,new_routes)
+          if old in s: s=s.replace(old,new)
+          old_routes="{page==='home'&&<HomePage go={go} wallet={wallet}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='defi'&&<DeFiPage prepare={prepare}/>} {page==='perps'&&<PerpetualsPage user={user} wallet={wallet} connectWallet={connectWallet}/>} {page==='drops'&&<DropsPage prepare={prepare} wallet={wallet}/>} {page==='activity'&&<SignalHistory/>} {page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>}"
+          new_routes="{page==='home'&&<HomePage go={go} wallet={wallet}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='defi'&&<ChartTerminal/>} {page==='perps'&&<PerpetualsPage user={user} wallet={wallet} connectWallet={connectWallet}/>} {page==='activity'&&<SignalHistory/>} {page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>}"
+          if old_routes in s: s=s.replace(old_routes,new_routes)
           p.write_text(s)
           p=Path('src/mobile-nav.css')
           s=p.read_text().replace('grid-template-columns:repeat(7,minmax(0,1fr));','grid-template-columns:repeat(6,minmax(0,1fr));')
