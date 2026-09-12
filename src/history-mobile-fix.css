@@ -1,0 +1,47 @@
+/* History page mount safety: keep the shared mobile workspace navigation present while History is active. */
+@media (max-width: 760px){
+  .kit-shell{padding-bottom:calc(96px + env(safe-area-inset-bottom))!important;}
+  .kit-main{min-width:0!important;width:100%!important;}
+  .kit-sidebar{
+    display:block!important;
+    visibility:visible!important;
+    position:fixed!important;
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    width:100%!important;
+    height:76px!important;
+    min-height:76px!important;
+    z-index:1000!important;
+  }
+  .kit-sidebar nav{
+    display:grid!important;
+    visibility:visible!important;
+    opacity:1!important;
+    width:100%!important;
+    height:100%!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  }
+  .kit-sidebar nav .side-link,
+  .kit-sidebar nav .side-link:nth-child(5){
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+  }
+  .kit-sidebar nav .side-link:nth-child(5) span,
+  .kit-sidebar nav .side-link:nth-child(5) svg{
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+  }
+  .kit-sidebar nav .side-link:nth-child(5){
+    color:#cfc0ff!important;
+    background:transparent!important;
+  }
+  .kit-sidebar nav .side-link:nth-child(5).selected{
+    color:#b8efff!important;
+    background:linear-gradient(180deg,rgba(37,214,208,.13),rgba(37,214,208,.035))!important;
+    border-color:rgba(37,214,208,.2)!important;
+  }
+  .content{padding-bottom:92px!important;}
+}
