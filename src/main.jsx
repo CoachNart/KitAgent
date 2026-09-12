@@ -67,3 +67,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 
 // Restore to the known-good pre-CEX-patch application state.
+// Deployment trigger after consolidating MEXC data into the existing CEX function.
