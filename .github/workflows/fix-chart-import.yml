@@ -1,0 +1,33 @@
+name: Fix chart terminal import
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-chart-import.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove duplicate ChartTerminal import
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/App.jsx')
+          s=p.read_text()
+          s=s.replace("import ChartTerminal from './ChartTerminal.jsx';\n", '')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git commit -m 'fix: avoid duplicate chart terminal import'
+          git push
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          rm -f .github/workflows/fix-chart-import.yml
+          git add .github/workflows/fix-chart-import.yml
+          git commit -m 'chore: remove temporary chart import workflow'
+          git push
