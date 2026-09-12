@@ -145,7 +145,7 @@ export default async function handler(req, res) {
         leverage: body.leverage ? Number(body.leverage) : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      return json(res, 200, await privatePost(key, secret, '/api/v1/private/planorder/place', payload));
+      return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/place', payload));
     }
 
     if (action === 'placeStopLimit') {
