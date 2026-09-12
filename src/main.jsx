@@ -20,6 +20,7 @@ import './contentProtection.js';
 import './cexIntegratedEnhancements.js';
 import './cexTerminal.js';
 import './cexStableInteractionPatch.js';
+import './cexMexcDataPatch.js';
 import { startMarketAlerts } from './marketAlerts.js';
 
 startMarketAlerts();
