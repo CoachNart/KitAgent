@@ -1,4 +1,4 @@
-# trigger KitAgent product polish
+# deploy polished KitAgent UI
 name: Build KitAgent
 on:
   push:
