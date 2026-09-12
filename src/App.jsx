@@ -7,7 +7,6 @@ import AccountPageComponent from './AccountPage.jsx';
 import AccessGateComponent from './AccessGate.jsx';
 import LiveMarketComponent from './LiveMarketPage.jsx';
 import NotificationCenter from './NotificationCenter.jsx';
-import ChartTerminal from './ChartTerminal.jsx';
 import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, Wallet, X, Zap } from 'lucide-react';
 
 const ROBINHOOD_CHAIN={name:'Robinhood Chain',chainId:4663,hex:'0x1237',rpcUrl:'https://rpc.mainnet.chain.robinhood.com',explorer:'https://robinhoodchain.blockscout.com',nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18}};
