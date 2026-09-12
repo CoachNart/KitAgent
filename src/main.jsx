@@ -17,12 +17,6 @@ import './account-page.css';
 import './signal-history.css';
 import './protected-pages.css';
 import './contentProtection.js';
-import './cexIntegratedEnhancements.js';
-import './cexTerminal.js';
-import './cexStableInteractionPatch.js';
-import './cexInputGuardPatch.js';
-import './cexOrderInputBridge.js';
-import './cexMexcDataPatch.js';
 import { startMarketAlerts } from './marketAlerts.js';
 
 startMarketAlerts();
@@ -67,6 +61,3 @@ function Root(){
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><Root /></React.StrictMode>
 );
-
-// Restore to the known-good pre-CEX-patch application state.
-// Deployment trigger after consolidating MEXC data into the existing CEX function.
