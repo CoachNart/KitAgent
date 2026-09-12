@@ -18,6 +18,7 @@ import './signal-history.css';
 import './protected-pages.css';
 import './mobile-nav.css';
 import './pnl-visual.css';
+import './pnl-share-runtime.js';
 import './contentProtection.js';
 import { startMarketAlerts } from './marketAlerts.js';
 
