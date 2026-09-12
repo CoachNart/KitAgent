@@ -108,6 +108,7 @@ export default async function handler(req, res) {
     if (action === 'balance') return json(res, 200, await privateGet(key, secret, '/api/v1/private/account/assets'));
     if (action === 'positions') return json(res, 200, await privateGet(key, secret, '/api/v1/private/position/open_positions', { symbol }));
     if (action === 'orders') return json(res, 200, await privateGet(key, secret, '/api/v1/private/order/list/open_orders', { page_num: 1, page_size: 100 }));
+    if (action === 'stopOrders') return json(res, 200, await privateGet(key, secret, '/api/v1/private/stoporder/open_orders', { symbol }));
     if (action === 'history') return json(res, 200, await privateGet(key, secret, '/api/v1/private/order/list/history_orders', { page_num: 1, page_size: 100, symbol }));
     if (action === 'positionHistory') return json(res, 200, await privateGet(key, secret, '/api/v1/private/position/list/history_positions', { page_num: 1, page_size: 100, symbol }));
     if (action === 'fundingDetails') return json(res, 200, await privateGet(key, secret, '/api/v1/private/position/funding_records', { page_num: 1, page_size: 100, symbol }));
@@ -126,6 +127,59 @@ export default async function handler(req, res) {
       };
       return json(res, 200, await privatePost(key, secret, '/api/v1/private/position/change_leverage', payload));
     }
+
+    if (action === 'placeStopOrder') {
+      const positionType = Number(body.positionType || 1);
+      const closeSide = positionType === 1 ? 4 : 2;
+      const payload = {
+        symbol,
+        vol: Number(body.volume),
+        side: closeSide,
+        openType: body.marginMode === 'isolated' ? 1 : 2,
+        triggerPrice: Number(body.triggerPrice),
+        triggerType: Number(body.triggerType),
+        executeCycle: 2,
+        orderType: 5,
+        trend: Number(body.trend || 1),
+        positionId: body.positionId ? Number(body.positionId) : undefined,
+        leverage: body.leverage ? Number(body.leverage) : undefined
+      };
+      Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
+      return json(res, 200, await privatePost(key, secret, '/api/v1/private/planorder/place', payload));
+    }
+
+    if (action === 'placeStopLimit') {
+      const positionType = Number(body.positionType || 1);
+      const closeSide = positionType === 1 ? 4 : 2;
+      const payload = {
+        symbol,
+        vol: Number(body.volume),
+        side: closeSide,
+        openType: body.marginMode === 'isolated' ? 1 : 2,
+        triggerPrice: Number(body.triggerPrice),
+        triggerType: Number(body.triggerType),
+        executeCycle: 2,
+        orderType: 5,
+        trend: Number(body.trend || 1),
+        positionId: body.positionId ? Number(body.positionId) : undefined,
+        leverage: body.leverage ? Number(body.leverage) : undefined
+      };
+      Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
+      return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/place', payload));
+    }
+
+    if (action === 'changeStopOrder') {
+      const payload = {
+        stopPlanOrderId: Number(body.stopPlanOrderId),
+        stopLossPrice: body.stopLoss ? Number(body.stopLoss) : undefined,
+        takeProfitPrice: body.takeProfit ? Number(body.takeProfit) : undefined
+      };
+      Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
+      return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/change_plan_price', payload));
+    }
+
+    if (action === 'cancelStopOrder') return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/cancel', [{ stopPlanOrderId: Number(body.stopPlanOrderId) }]));
+    if (action === 'cancelStopAll') return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/cancel_all', { positionId: body.positionId ? Number(body.positionId) : undefined, symbol }));
 
     if (action === 'order') {
       const opening = body.intent !== 'close';
