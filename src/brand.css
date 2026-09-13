@@ -2,3 +2,4 @@
 
 /* New KitSetups mark: keeps the existing auth/loader/header DOM intact while replacing the legacy image source visually. */
 .auth-brand img,.kit-logo-img,.header-brand img,.loader-logo{content:url('https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png');object-fit:contain}
+.pnl-card-brand .mexc-logo{width:34px;height:34px;font-size:0;background:url('https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png') center/contain no-repeat;background-color:transparent;border:0}
