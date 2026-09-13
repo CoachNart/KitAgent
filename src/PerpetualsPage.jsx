@@ -162,28 +162,59 @@ export default function PerpetualsPage({ user }) {
   const cancelAll = async () => { setBusy(true); setError(''); try { await api('cancelAll', state); await loadAccount(); } catch (e) { setError(e.message || 'Cancel-all failed.'); } finally { setBusy(false); } };
   const closePosition = async p => { const pSide = n(p.positionType) === 1 ? 'sell' : 'buy'; setBusy(true); setError(''); try { await api('order', state, { side: pSide, intent: 'close', type: 5, marginMode: n(p.openType) === 1 ? 'isolated' : 'cross', leverage: n(p.leverage) || leverage, volume: n(p.holdVol), price: last, positionId: p.positionId }); await loadAccount(); } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); } };
 
-  const sharePnl = async p => {
+  const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  const buildPnlSvg = p => {
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
     const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
-    const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
-    const text = `${profileName} · KitSetups Futures\n${displaySymbol(p.symbol)} · ${sideText}\nPnL: ${fmt(pnl, 4)} USDT\nEntry: ${fmt(entry)} · Mark: ${fmt(last)}\nLeverage: ${fmt(p.leverage, 0)}x`;
-    try {
-      if (navigator.share) await navigator.share({ title: 'KitSetups Futures PnL', text });
-      else if (navigator.clipboard) await navigator.clipboard.writeText(text);
-    } catch (e) { if (e?.name !== 'AbortError') setError('Share was not available on this device.'); }
+    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
+    const margin = n(p.im);
+    const sideText = n(p.positionType) === 1 ? 'LONG' : 'SHORT';
+    const pnlColor = pnl >= 0 ? '#22c7a5' : '#f05b6b';
+    const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
+    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : 'Not set';
+    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : 'Not set';
+    const initials = escapeSvg(profileName.slice(0, 1).toUpperCase());
+    const avatar = profileAvatar ? `<image href="${escapeSvg(profileAvatar)}" x="88" y="205" width="76" height="76" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatarClip)"/>` : `<circle cx="126" cy="243" r="38" fill="#14222d"/><text x="126" y="255" text-anchor="middle" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b10"/><stop offset="1" stop-color="#0d1821"/></linearGradient><radialGradient id="glow" cx="78%" cy="12%" r="62%"><stop offset="0" stop-color="${pnlColor}" stop-opacity=".26"/><stop offset="1" stop-color="${pnlColor}" stop-opacity="0"/></radialGradient><clipPath id="avatarClip"><circle cx="126" cy="243" r="38"/></clipPath></defs><rect width="1080" height="1350" rx="48" fill="url(#bg)"/><rect x="34" y="34" width="1012" height="1282" rx="40" fill="none" stroke="#253340"/><circle cx="850" cy="170" r="420" fill="url(#glow)"/><text x="76" y="94" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800">KITSETUPS</text><text x="76" y="126" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16" letter-spacing="2">FUTURES POSITION</text>${avatar}<text x="188" y="234" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${escapeSvg(profileName)}</text><text x="188" y="266" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="18">${escapeSvg(displaySymbol(p.symbol))} · ${sideText}</text><rect x="76" y="330" width="928" height="260" rx="30" fill="#0a1118" stroke="#202d39"/><text x="112" y="378" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="17" letter-spacing="1.4">UNREALIZED PNL</text><text x="112" y="482" fill="${pnlColor}" font-family="Arial,Helvetica,sans-serif" font-size="78" font-weight="800">${pnl >= 0 ? '+' : ''}${escapeSvg(fmt(pnl, 4))}</text><text x="112" y="520" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="18">USDT</text><rect x="76" y="626" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="626" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="668" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">ENTRY</text><text x="108" y="708" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(entry))}</text><text x="596" y="668" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">MARK</text><text x="596" y="708" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(mark))}</text><rect x="76" y="766" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="766" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="808" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">SIZE</text><text x="108" y="848" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(p.holdVol))}</text><text x="596" y="808" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">LEVERAGE</text><text x="596" y="848" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(p.leverage, 0))}x</text><rect x="76" y="906" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="906" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="948" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">LIQUIDATION</text><text x="108" y="988" fill="#ff8b98" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(liq))}</text><text x="596" y="948" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">MARGIN</text><text x="596" y="988" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(margin, 4))} USDT</text><rect x="76" y="1046" width="928" height="164" rx="26" fill="#0a1118" stroke="#202d39"/><text x="108" y="1090" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700">RISK MANAGEMENT</text><text x="108" y="1130" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="16">STOP LOSS</text><text x="108" y="1164" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">${escapeSvg(sl)}</text><text x="550" y="1130" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="16">TAKE PROFIT</text><text x="550" y="1164" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">${escapeSvg(tp)}</text><text x="76" y="1272" fill="#647387" font-family="Arial,Helvetica,sans-serif" font-size="15">${escapeSvg(new Date().toLocaleString())}</text><text x="1004" y="1272" text-anchor="end" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700">kitsetups.xyz</text></svg>`;
   };
 
-  const downloadPnl = p => {
-    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
-    const entry = n(p.holdAvgPrice || p.openAvgPrice);
-    const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
-    const sideText = n(p.positionType) === 1 ? 'LONG' : 'SHORT';
-    const pnlIcon = pnl >= 0 ? '↗' : '↘';
-    const safe = value => String(value).replace(/[<>&]/g, c => ({ '<':'&lt;', '>':'&gt;', '&':'&amp;' }[c]));
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070a0f"/><stop offset="1" stop-color="#0d1720"/></linearGradient><radialGradient id="glow"><stop offset="0" stop-color="${pnl >= 0 ? '#25d6d0' : '#ff5266'}" stop-opacity=".28"/><stop offset="1" stop-color="${pnl >= 0 ? '#25d6d0' : '#ff5266'}" stop-opacity="0"/></radialGradient></defs><rect width="1080" height="1920" rx="58" fill="url(#bg)"/><circle cx="850" cy="210" r="430" fill="url(#glow)"/><rect x="48" y="48" width="984" height="1824" rx="46" fill="none" stroke="#263141"/><text x="88" y="126" fill="#25d6d0" font-family="Arial" font-size="30" font-weight="700">KITSETUPS</text><text x="88" y="166" fill="#66768a" font-family="Arial" font-size="18">FUTURES POSITION</text><circle cx="92" cy="250" r="48" fill="#111c25" stroke="#25d6d0"/><text x="92" y="264" text-anchor="middle" fill="#eef3f9" font-family="Arial" font-size="32" font-weight="700">${safe(profileName.slice(0,1).toUpperCase())}</text><text x="160" y="248" fill="#eef3f9" font-family="Arial" font-size="28" font-weight="700">${safe(profileName)}</text><text x="160" y="282" fill="#66768a" font-family="Arial" font-size="18">${safe(displaySymbol(p.symbol))} · ${sideText}</text><text x="88" y="430" fill="#66768a" font-family="Arial" font-size="20">UNREALIZED PNL</text><text x="88" y="530" fill="${pnl >= 0 ? '#25d6d0' : '#ff5266'}" font-family="Arial" font-size="86" font-weight="800">${pnlIcon} ${safe(fmt(pnl, 4))}</text><text x="88" y="570" fill="#8b99aa" font-family="Arial" font-size="20">USDT</text><rect x="88" y="650" width="904" height="2" fill="#202c38"/><text x="88" y="730" fill="#66768a" font-family="Arial" font-size="18">ENTRY</text><text x="88" y="770" fill="#eef3f9" font-family="Arial" font-size="28" font-weight="700">${safe(fmt(entry))}</text><text x="540" y="730" fill="#66768a" font-family="Arial" font-size="18">MARK</text><text x="540" y="770" fill="#eef3f9" font-family="Arial" font-size="28" font-weight="700">${safe(fmt(last))}</text><text x="88" y="860" fill="#66768a" font-family="Arial" font-size="18">SIZE</text><text x="88" y="900" fill="#eef3f9" font-family="Arial" font-size="28" font-weight="700">${safe(fmt(p.holdVol))}</text><text x="540" y="860" fill="#66768a" font-family="Arial" font-size="18">LEVERAGE</text><text x="540" y="900" fill="#eef3f9" font-family="Arial" font-size="28" font-weight="700">${safe(fmt(p.leverage, 0))}x</text><text x="88" y="990" fill="#66768a" font-family="Arial" font-size="18">LIQUIDATION</text><text x="88" y="1030" fill="#ff8a96" font-family="Arial" font-size="28" font-weight="700">${safe(fmt(liq))}</text><text x="540" y="990" fill="#66768a" font-family="Arial" font-size="18">MARGIN</text><text x="540" y="1030" fill="#eef3f9" font-family="Arial" font-size="28" font-weight="700">${safe(fmt(p.im, 4))} USDT</text><rect x="88" y="1110" width="904" height="250" rx="28" fill="#0b121a" stroke="#202c38"/><text x="124" y="1170" fill="#25d6d0" font-family="Arial" font-size="18" font-weight="700">RISK MANAGEMENT</text><text x="124" y="1220" fill="#aab6c7" font-family="Arial" font-size="21">Stop Loss</text><text x="124" y="1260" fill="#eef3f9" font-family="Arial" font-size="27" font-weight="700">${safe((stopOrders.find(o => String(o.positionId) === String(p.positionId))?.stopLossPrice) || 'Not set')}</text><text x="540" y="1220" fill="#aab6c7" font-family="Arial" font-size="21">Take Profit</text><text x="540" y="1260" fill="#eef3f9" font-family="Arial" font-size="27" font-weight="700">${safe((stopOrders.find(o => String(o.positionId) === String(p.positionId))?.takeProfitPrice) || 'Not set')}</text><text x="124" y="1315" fill="#66768a" font-family="Arial" font-size="17">Protective orders can be adjusted while the position is open.</text><text x="88" y="1780" fill="#66768a" font-family="Arial" font-size="18">${safe(new Date().toLocaleString())}</text><text x="88" y="1820" fill="#25d6d0" font-family="Arial" font-size="18" font-weight="700">kitsetups.xyz</text></svg>`;
+  const svgToPngFile = async (svg, filename) => {
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.svg`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    try {
+      const img = new Image();
+      img.decoding = 'async';
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080; canvas.height = 1350;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1));
+      if (!pngBlob) throw new Error('Could not render the PnL image.');
+      return new File([pngBlob], filename, { type: 'image/png' });
+    } finally { URL.revokeObjectURL(url); }
+  };
+
+  const sharePnl = async p => {
+    try {
+      const file = await svgToPngFile(buildPnlSvg(p), `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`);
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        await navigator.share({ title: 'KitSetups Futures PnL', text: `${profileName} · ${displaySymbol(p.symbol)} ${n(p.positionType) === 1 ? 'Long' : 'Short'}`, files: [file] });
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      try { await navigator.clipboard?.writeText(`${profileName} · ${displaySymbol(p.symbol)} · PnL ${fmt(n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl), 4)} USDT`); } finally { URL.revokeObjectURL(url); }
+    } catch (e) { if (e?.name !== 'AbortError') setError('Could not prepare the PnL image for sharing.'); }
+  };
+
+  const downloadPnl = async p => {
+    try {
+      const file = await svgToPngFile(buildPnlSvg(p), `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`);
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { setError('Could not generate the PnL image.'); }
   };
 
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
