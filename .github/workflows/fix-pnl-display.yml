@@ -53,3 +53,4 @@ jobs:
           git add src/PerpetualsPage.jsx
           git commit -m "fix: remove pnl margin and usdt display"
           git push
+          # trigger-marker
