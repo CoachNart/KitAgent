@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
-import { authenticate, requireActiveAccess } from './_access.js';
+import { authenticate, requireActiveAccess } from '../server/access.js';
 
 function getAdmin() {
   if (admin.apps.length) return admin;
