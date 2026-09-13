@@ -17,6 +17,7 @@ import './signal-history.css';
 import './protected-pages.css';
 import './mobile-nav.css';
 import './pnl-visual.css';
+import './pnl-card-fix.js';
 import './contentProtection.js';
 import './route-runtime.js';
 import { startMarketAlerts } from './marketAlerts.js';
