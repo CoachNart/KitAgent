@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from 'react';
-import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Wallet,Zap} from 'lucide-react';
+import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Zap} from 'lucide-react';
 
 const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT'];
 const api=(op,p={})=>fetch(`/api/bybit?${new URLSearchParams({op,...p})}`,{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
@@ -29,7 +29,7 @@ export default function HomePage({go,wallet}){
   <section className="home-actions">
    <button onClick={()=>go('perps')}><span className="action-icon cyan"><Zap size={18}/></span><span><b>Perpetuals</b><small>Trade live crypto markets</small></span><ChevronRight size={16}/></button>
    <button onClick={()=>go('market')}><span className="action-icon"><BarChart3 size={18}/></span><span><b>Market analysis</b><small>Read the setup before you trade</small></span><ChevronRight size={16}/></button>
-   <button onClick={()=>go('activity')}><span className="action-icon"><Clock3 size={18}/></span><span><b>Activity</b><small>Review your recent actions</small></span><ChevronRight size={16}/></button>
+   <button onClick={()=>go('history')}><span className="action-icon"><Clock3 size={18}/></span><span><b>Activity</b><small>Review your recent actions</small></span><ChevronRight size={16}/></button>
   </section>
   <section className="home-strip"><div className="strip-icon"><TrendingUp size={18}/></div><div><b>Built for the market first</b><p>Live prices, execution and intelligence in one focused workspace.</p></div></section>
  </div>
