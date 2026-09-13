@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 
-const PAYMENT_ADDRESS='0x1c35bf9d920e1b5d7e7e37ce1d15a1b9500f8474'.toLowerCase();
+const PAYMENT_ADDRESS='0x046b97b07c13c4ad5e61599d98fcb52f1246247d'.toLowerCase();
 const USDT_BSC='0x55d398326f99059ff775485246999027b3197955'.toLowerCase();
 const BSC_RPC=process.env.BSC_RPC_URL||'https://bsc-dataseed.binance.org';
 const PRICE_USDT=20n*10n**18n;
@@ -27,7 +27,7 @@ export default async function handler(req,res){
   const sender=String(tx.from||'').toLowerCase();
   if(!/^0x[a-f0-9]{40}$/.test(sender))return json(res,422,{error:'The transaction sender could not be resolved.'});
   const matching=(receipt.logs||[]).find(log=>{const topics=log.topics||[];return String(log.address||'').toLowerCase()===USDT_BSC&&String(topics[0]||'').toLowerCase()===TRANSFER_TOPIC&&normalizeAddress(topics[2])===PAYMENT_ADDRESS&&parseAmount(log.data)>=PRICE_USDT});
-  if(!matching)return json(res,422,{error:'No valid payment of at least 20 USDT to the KitSetuop payment address was found in this transaction.'});
+  if(!matching)return json(res,422,{error:'No valid payment of at least 20 USDT to the KitSetups payment address was found in this transaction.'});
   const amount=parseAmount(matching.data),amountUsdt=Number(amount)/1e18,verificationRef=userRef.collection('paymentVerifications').doc();
   let earned=0;
   await db.runTransaction(async transaction=>{
@@ -46,6 +46,6 @@ export default async function handler(req,res){
     }
    }
   });
-  return json(res,200,{verified:true,status:'verified',amount:amountUsdt,accessDays:30,affiliateCommission:earned,payoutSchedule:'monthly'});
- }catch(error){if(error?.code==='PAYMENT_ALREADY_USED')return json(res,409,{error:'This transaction has already been used for a KitSetuop Premium activation.'});if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_MISSING')return json(res,500,{error:'Firebase Admin credentials are missing.'});console.error('verify-payment failed',error);return json(res,500,{error:'Payment verification could not be completed.'})}
+  return json(res,200,{verified:true,status:'verified',amount:amountUsdt,accessDays:30,affiliateCommission:earned,payoutSchedule:'monthly',paymentAddress:PAYMENT_ADDRESS});
+ }catch(error){if(error?.code==='PAYMENT_ALREADY_USED')return json(res,409,{error:'This transaction has already been used for a KitSetups Premium activation.'});if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_MISSING')return json(res,500,{error:'Firebase Admin credentials are missing.'});console.error('verify-payment failed',error);return json(res,500,{error:'Payment verification could not be completed.'})}
 }
