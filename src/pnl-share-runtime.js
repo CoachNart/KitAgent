@@ -13,6 +13,7 @@
     const title = String(dialog.querySelector('.pnl-share-card h3')?.textContent || '').trim();
     const [symbolRaw, sideRaw] = title.split('·').map(v=>v.trim());
     const profile = String(dialog.querySelector('.pnl-card-brand b')?.textContent || 'KitSetups Trader').trim();
+    const avatar = dialog.querySelector('.pnl-card-avatar');
     const side = /short/i.test(sideRaw) ? 'short' : 'long';
     const symbol = symbolRaw || 'BTC/USDT';
     const meta = Array.from(dialog.querySelectorAll('.pnl-meta p'));
@@ -25,7 +26,40 @@
     const leverage = number(valueFor('Leverage'));
     if(!entry || !mark) throw new Error('Could not read Entry and Mark from the PnL card');
     const percentage = ((mark-entry)/entry*100) * (side === 'short' ? -1 : 1);
-    return {profile,symbol,side,entry,mark,leverage,percentage};
+    return {profile,symbol,side,entry,mark,leverage,percentage,avatar};
+  }
+
+  function drawRocket(ctx,x,y,scale,accent){
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.scale(scale,scale);
+    ctx.rotate(-0.38);
+    ctx.fillStyle=accent;
+    ctx.beginPath();
+    ctx.moveTo(0,-54); ctx.bezierCurveTo(28,-35,31,-5,24,24); ctx.lineTo(0,48); ctx.lineTo(-24,24); ctx.bezierCurveTo(-31,-5,-28,-35,0,-54); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#071015';
+    ctx.beginPath(); ctx.arc(0,-15,8,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=accent;
+    ctx.beginPath(); ctx.moveTo(-18,25); ctx.lineTo(-34,42); ctx.lineTo(-12,39); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(18,25); ctx.lineTo(34,42); ctx.lineTo(12,39); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ffb84d';
+    ctx.beginPath(); ctx.moveTo(-9,43); ctx.quadraticCurveTo(0,67,9,43); ctx.quadraticCurveTo(0,50,-9,43); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawAvatar(ctx,avatar,x,y,size,profile,accent){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x+size/2,y+size/2,size/2,0,Math.PI*2); ctx.clip();
+    if(avatar?.tagName==='IMG' && avatar.complete && avatar.naturalWidth){
+      try { ctx.drawImage(avatar,x,y,size,size); }
+      catch { ctx.fillStyle='#15212b'; ctx.fillRect(x,y,size,size); }
+    } else {
+      ctx.fillStyle='#15212b'; ctx.fillRect(x,y,size,size);
+      ctx.fillStyle=accent; ctx.font='800 52px Arial,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(profile.slice(0,1).toUpperCase(),x+size/2,y+size/2);
+    }
+    ctx.restore();
+    ctx.strokeStyle='rgba(37,214,208,.55)'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(x+size/2,y+size/2,size/2,0,Math.PI*2); ctx.stroke();
   }
 
   function makePngFile(p){
@@ -37,37 +71,30 @@
     const positive=p.percentage>=0;
     const accent=positive?'#25d6d0':'#ff5266';
     const bg=ctx.createLinearGradient(0,0,1080,1350);
-    bg.addColorStop(0,'#060a10');
-    bg.addColorStop(.58,'#0b151e');
-    bg.addColorStop(1,'#071015');
+    bg.addColorStop(0,'#060a10'); bg.addColorStop(.58,'#0b151e'); bg.addColorStop(1,'#071015');
     ctx.fillStyle=bg; ctx.fillRect(0,0,1080,1350);
 
     const glow=ctx.createRadialGradient(875,185,0,875,185,460);
-    glow.addColorStop(0,positive?'rgba(37,214,208,.22)':'rgba(255,82,102,.22)');
-    glow.addColorStop(1,'rgba(0,0,0,0)');
+    glow.addColorStop(0,positive?'rgba(37,214,208,.22)':'rgba(255,82,102,.22)'); glow.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=glow; ctx.fillRect(0,0,1080,650);
 
     ctx.strokeStyle='#263141'; ctx.lineWidth=2; ctx.strokeRect(48,48,984,1254);
-    const text=(value,x,y,size,fill='#eef3f9',weight='400')=>{
-      ctx.fillStyle=fill;
-      ctx.font=`${weight} ${size}px Arial,sans-serif`;
-      ctx.fillText(String(value),x,y);
-    };
+    const text=(value,x,y,size,fill='#eef3f9',weight='400')=>{ctx.fillStyle=fill;ctx.font=`${weight} ${size}px Arial,sans-serif`;ctx.fillText(String(value),x,y);};
 
-    text('KITSETUPS',88,128,30,accent,'800');
-    text('FUTURES POSITION',88,168,18,'#66768a','700');
+    drawAvatar(ctx,p.avatar,88,86,92,p.profile,accent);
+    text('KITSETUPS',200,118,30,accent,'800');
+    text('FUTURES POSITION',200,158,18,'#66768a','700');
+    drawRocket(ctx,932,116,.62,accent);
+
     text(`${p.profile} · KitSetups Futures`,88,292,34,'#eef3f9','800');
     text(`${p.symbol} · ${p.side}`,88,340,24,'#738398','600');
     text('PNL',88,480,20,'#66768a','700');
     text(`${p.percentage>=0?'+':''}${fmt(p.percentage,4)}%`,88,610,104,accent,'900');
 
     ctx.fillStyle='#202c38'; ctx.fillRect(88,710,904,2);
-    text('ENTRY',88,790,18,'#66768a','700');
-    text(fmt(p.entry,8),88,838,32,'#eef3f9','700');
-    text('MARK',540,790,18,'#66768a','700');
-    text(fmt(p.mark,8),540,838,32,'#eef3f9','700');
-    text('LEVERAGE',88,955,18,'#66768a','700');
-    text(`${fmt(p.leverage,0)}x`,88,1003,32,'#eef3f9','700');
+    text('ENTRY',88,790,18,'#66768a','700'); text(fmt(p.entry,8),88,838,32,'#eef3f9','700');
+    text('MARK',540,790,18,'#66768a','700'); text(fmt(p.mark,8),540,838,32,'#eef3f9','700');
+    text('LEVERAGE',88,955,18,'#66768a','700'); text(`${fmt(p.leverage,0)}x`,88,1003,32,'#eef3f9','700');
 
     text('kitsetups.xyz',88,1230,19,accent,'800');
     text(`${p.symbol} · ${p.side.toUpperCase()}`,760,1230,18,'#66768a','700');
@@ -81,48 +108,26 @@
   }
 
   function downloadFile(file){
-    const url=URL.createObjectURL(file);
-    const a=document.createElement('a');
-    a.href=url; a.download=file.name; a.rel='noopener';
-    a.style.position='fixed'; a.style.left='-9999px';
-    document.body.appendChild(a); a.click();
+    const url=URL.createObjectURL(file); const a=document.createElement('a'); a.href=url; a.download=file.name; a.rel='noopener';
+    a.style.position='fixed'; a.style.left='-9999px'; document.body.appendChild(a); a.click();
     setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},1500);
   }
 
   async function handleClick(event){
-    const button=event.target?.closest?.('.pnl-share-actions button');
-    if(!button) return;
-    const label=String(button.textContent||'').trim().toLowerCase();
-    if(label!=='share' && label!=='download') return;
-    const dialog=button.closest('.pnl-share-dialog');
-    if(!dialog) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
-
+    const button=event.target?.closest?.('.pnl-share-actions button'); if(!button) return;
+    const label=String(button.textContent||'').trim().toLowerCase(); if(label!=='share' && label!=='download') return;
+    const dialog=button.closest('.pnl-share-dialog'); if(!dialog) return;
+    event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     try{
-      const position=readModal(dialog);
-      const file=makePngFile(position);
+      const position=readModal(dialog); const file=makePngFile(position);
       if(label==='share' && typeof navigator.share==='function'){
         try{
-          const payload={
-            title:'KitSetups Futures PnL',
-            text:`${position.symbol} · ${position.side} · ${position.percentage>=0?'+':''}${fmt(position.percentage,4)}%`,
-            files:[file]
-          };
-          if(typeof navigator.canShare!=='function' || navigator.canShare({files:[file]})){
-            await navigator.share(payload);
-            return;
-          }
-        }catch(error){
-          if(error?.name==='AbortError') return;
-        }
+          const payload={title:'KitSetups Futures PnL',text:`${position.symbol} · ${position.side} · ${position.percentage>=0?'+':''}${fmt(position.percentage,4)}%`,files:[file]};
+          if(typeof navigator.canShare!=='function' || navigator.canShare({files:[file]})){await navigator.share(payload);return;}
+        }catch(error){if(error?.name==='AbortError') return;}
       }
       downloadFile(file);
-    }catch(error){
-      console.error('KitSetups PnL image action failed:',error);
-    }
+    }catch(error){console.error('KitSetups PnL image action failed:',error);}
   }
 
   document.addEventListener('click',handleClick,true);
