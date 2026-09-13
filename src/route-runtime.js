@@ -10,7 +10,6 @@
     const button=find(label);
     if(button&&!button.classList.contains('selected'))button.click();
   };
-  const hideHome=()=>{const button=find('Home');if(button)button.style.display='none';};
   document.addEventListener('click',e=>{
     const button=e.target.closest?.('.kit-sidebar nav .side-link');
     if(!button)return;
@@ -19,13 +18,11 @@
   },true);
   addEventListener('popstate',sync);
   const bootObserver=new MutationObserver(()=>{
-    hideHome();
     if(find(routes[path()])){
       sync();
       bootObserver.disconnect();
     }
   });
   bootObserver.observe(document.documentElement,{childList:true,subtree:true});
-  hideHome();
-  setTimeout(()=>{hideHome();sync();},2500);
+  setTimeout(sync,2500);
 })();
