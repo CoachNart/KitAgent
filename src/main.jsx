@@ -19,6 +19,7 @@ import './protected-pages.css';
 import './mobile-nav.css';
 import './pnl-visual.css';
 import './contentProtection.js';
+import './route-runtime.js';
 import { startMarketAlerts } from './marketAlerts.js';
 
 startMarketAlerts();
