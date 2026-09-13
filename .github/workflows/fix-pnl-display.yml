@@ -1,0 +1,55 @@
+name: Fix PnL display
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'fix: remove pnl margin and usdt display'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update PnL display
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/PerpetualsPage.jsx')
+          s=p.read_text()
+          s=s.replace("const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);", "const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);\nconst positionPnlPercent = p => { const pnl = n(p?.unRealizedPnl ?? p?.unrealizedPnl ?? p?.unrealisedPnl); const margin = n(p?.im); return margin > 0 ? (pnl / margin) * 100 : 0; };")
+          start=s.index('  const escapeSvg = value =>')
+          end=s.index('  const svgToPngFile = async', start)
+          new='''  const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\\"/g, '&quot;').replace(/'/g, '&apos;');
+  const buildPnlSvg = p => {
+    const entry = n(p.holdAvgPrice || p.openAvgPrice);
+    const pnlPercent = positionPnlPercent(p);
+    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
+    const sideText = n(p.positionType) === 1 ? 'LONG' : 'SHORT';
+    const pnlColor = pnlPercent >= 0 ? '#22c7a5' : '#f05b6b';
+    const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
+    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : 'Not set';
+    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : 'Not set';
+    const initials = escapeSvg(profileName.slice(0, 1).toUpperCase());
+    const avatar = profileAvatar ? `<image href="${escapeSvg(profileAvatar)}" x="88" y="205" width="76" height="76" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatarClip)"/>` : `<circle cx="126" cy="243" r="38" fill="#14222d"/><text x="126" y="255" text-anchor="middle" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b10"/><stop offset="1" stop-color="#0d1821"/></linearGradient><radialGradient id="glow" cx="78%" cy="12%" r="62%"><stop offset="0" stop-color="${pnlColor}" stop-opacity=".26"/><stop offset="1" stop-color="${pnlColor}" stop-opacity="0"/></radialGradient><clipPath id="avatarClip"><circle cx="126" cy="243" r="38"/></clipPath></defs><rect width="1080" height="1350" rx="48" fill="url(#bg)"/><rect x="34" y="34" width="1012" height="1282" rx="40" fill="none" stroke="#253340"/><circle cx="850" cy="170" r="420" fill="url(#glow)"/><text x="76" y="94" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800">KITSETUPS</text><text x="76" y="126" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16" letter-spacing="2">FUTURES POSITION</text>${avatar}<text x="188" y="234" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${escapeSvg(profileName)}</text><text x="188" y="266" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="18">${escapeSvg(displaySymbol(p.symbol))} · ${sideText}</text><rect x="76" y="330" width="928" height="260" rx="30" fill="#0a1118" stroke="#202d39"/><text x="112" y="378" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="17" letter-spacing="1.4">PROFIT &amp; LOSS</text><text x="112" y="482" fill="${pnlColor}" font-family="Arial,Helvetica,sans-serif" font-size="78" font-weight="800">${pnlPercent >= 0 ? '+' : ''}${escapeSvg(pnlPercent.toFixed(2))}%</text><text x="112" y="520" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="18">ROI</text><rect x="76" y="626" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="626" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="668" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">ENTRY</text><text x="108" y="708" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(entry))}</text><text x="596" y="668" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">MARK</text><text x="596" y="708" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(mark))}</text><rect x="76" y="766" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="766" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="808" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">SIZE</text><text x="108" y="848" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(p.holdVol))}</text><text x="596" y="808" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">LEVERAGE</text><text x="596" y="848" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(p.leverage, 0))}x</text><rect x="76" y="906" width="928" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="948" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">LIQUIDATION</text><text x="108" y="988" fill="#ff8b98" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(liq))}</text><rect x="76" y="1046" width="928" height="164" rx="26" fill="#0a1118" stroke="#202d39"/><text x="108" y="1090" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700">RISK MANAGEMENT</text><text x="108" y="1130" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="16">STOP LOSS</text><text x="108" y="1164" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">${escapeSvg(sl)}</text><text x="550" y="1130" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="16">TAKE PROFIT</text><text x="550" y="1164" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">${escapeSvg(tp)}</text><text x="76" y="1272" fill="#647387" font-family="Arial,Helvetica,sans-serif" font-size="15">${escapeSvg(new Date().toLocaleString())}</text><text x="1004" y="1272" text-anchor="end" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700">kitsetups.xyz</text></svg>`;
+  };
+
+'''
+          s=s[:start]+new+s[end:]
+          old="""      const url = URL.createObjectURL(file);\n      try { await navigator.clipboard?.writeText(`${profileName} · ${displaySymbol(p.symbol)} · PnL ${fmt(n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl), 4)} USDT`); } finally { URL.revokeObjectURL(url); }"""
+          fallback="""      const url = URL.createObjectURL(file);\n      const a = document.createElement('a');\n      a.href = url;\n      a.download = file.name;\n      document.body.appendChild(a);\n      a.click();\n      a.remove();\n      setTimeout(() => URL.revokeObjectURL(url), 1000);"""
+          s=s.replace(old,fallback)
+          old_modal="""<strong className={n(pnlSharePosition.unRealizedPnl ?? pnlSharePosition.unrealizedPnl) >= 0 ? 'positive-text' : 'negative-text'}>{n(pnlSharePosition.unRealizedPnl ?? pnlSharePosition.unrealizedPnl) >= 0 ? '↗' : '↘'} {fmt(pnlSharePosition.unRealizedPnl ?? pnlSharePosition.unrealizedPnl, 4)} USDT</strong><span>Unrealized PnL</span><div className=\"pnl-meta\"><p>Entry <b>{fmt(pnlSharePosition.holdAvgPrice)}</b></p><p>Mark <b>{fmt(last)}</b></p><p>Size <b>{fmt(pnlSharePosition.holdVol)}</b></p><p>Leverage <b>{fmt(pnlSharePosition.leverage, 0)}x</b></p><p>Liquidation <b>{fmt(pnlSharePosition.liquidatePrice ?? pnlSharePosition.liquidationPrice ?? pnlSharePosition.liqPrice)}</b></p><p>Margin <b>{fmt(pnlSharePosition.im, 4)} USDT</b></p></div>"""
+          new_modal="""<strong className={positionPnlPercent(pnlSharePosition) >= 0 ? 'positive-text' : 'negative-text'}>{positionPnlPercent(pnlSharePosition) >= 0 ? '↗' : '↘'} {positionPnlPercent(pnlSharePosition).toFixed(2)}%</strong><span>Profit &amp; Loss</span><div className=\"pnl-meta\"><p>Entry <b>{fmt(pnlSharePosition.holdAvgPrice)}</b></p><p>Mark <b>{fmt(last)}</b></p><p>Size <b>{fmt(pnlSharePosition.holdVol)}</b></p><p>Leverage <b>{fmt(pnlSharePosition.leverage, 0)}x</b></p><p>Liquidation <b>{fmt(pnlSharePosition.liquidatePrice ?? pnlSharePosition.liquidationPrice ?? pnlSharePosition.liqPrice)}</b></p></div>"""
+          if old_modal not in s: raise SystemExit('modal pattern not found')
+          s=s.replace(old_modal,new_modal)
+          p.write_text(s)
+          PY
+          git config user.name "kitsetups-bot"
+          git config user.email "actions@github.com"
+          git add src/PerpetualsPage.jsx
+          git commit -m "fix: remove pnl margin and usdt display"
+          git push
