@@ -6,7 +6,8 @@ const USDT_BSC='0x55d398326f99059ff775485246999027b3197955'.toLowerCase();
 const BSC_RPC=process.env.BSC_RPC_URL||'https://bsc-dataseed.binance.org';
 const PRICE_USDT=20n*10n**18n;
 const DEFAULT_COMMISSION_BPS=1000;
-const TRANSFER_TOPIC='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55aeb5b8a8a39';
+// ERC-20 Transfer(address,address,uint256) event topic.
+const TRANSFER_TOPIC='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 function getAdmin(){if(admin.apps.length)return admin;const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON,credentialPath=process.env.GOOGLE_APPLICATION_CREDENTIALS;if(raw){try{admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['\"]|['\"]$/g,'')))});return admin}catch{}}if(credentialPath&&fs.existsSync(credentialPath)){admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath,'utf8')))});return admin}const e=new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING');e.code=e.message;throw e}
 function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body))}
 async function rpc(method,params){const response=await fetch(BSC_RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:Date.now(),method,params})});const data=await response.json();if(!response.ok||data.error)throw new Error(data.error?.message||'BSC RPC request failed');return data.result}
@@ -26,6 +27,9 @@ export default async function handler(req,res){
   const receipt=await rpc('eth_getTransactionReceipt',[hash]);if(!receipt||receipt.status!=='0x1')return json(res,422,{error:'Payment transaction is not confirmed successfully yet.'});
   const sender=String(tx.from||'').toLowerCase();
   if(!/^0x[a-f0-9]{40}$/.test(sender))return json(res,422,{error:'The transaction sender could not be resolved.'});
+  // Match the actual ERC-20 Transfer event emitted by the BSC USDT contract.
+  // This accepts the user's current transaction when it contains a direct USDT transfer
+  // of exactly 20 USDT (or more) to the current KitSetups payment wallet.
   const matching=(receipt.logs||[]).find(log=>{const topics=log.topics||[];return String(log.address||'').toLowerCase()===USDT_BSC&&String(topics[0]||'').toLowerCase()===TRANSFER_TOPIC&&normalizeAddress(topics[2])===PAYMENT_ADDRESS&&parseAmount(log.data)>=PRICE_USDT});
   if(!matching)return json(res,422,{error:'No valid payment of at least 20 USDT to the KitSetups payment address was found in this transaction.'});
   const amount=parseAmount(matching.data),amountUsdt=Number(amount)/1e18,verificationRef=userRef.collection('paymentVerifications').doc();
