@@ -26,7 +26,11 @@
   }
   .kit-sidebar nav > .side-link:nth-child(6) { grid-column: 6 !important; }
 
-  /* Never allow another stylesheet to blank History's icon or label. */
+  /* Icons only on mobile. Keep every page slot; hide all button text. */
+  .kit-sidebar nav > .side-link span {
+    display: none !important;
+  }
+
   .kit-sidebar nav > .side-link:nth-child(5) svg {
     display: block !important;
     visibility: visible !important;
@@ -35,19 +39,5 @@
     height: 20px !important;
     min-width: 20px !important;
     color: #c18dff !important;
-  }
-
-  .kit-sidebar nav > .side-link:nth-child(5) span {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    text-align: center !important;
-    white-space: nowrap !important;
-    overflow: visible !important;
-    color: inherit !important;
-    font-size: 8px !important;
-    line-height: 1 !important;
   }
 }
