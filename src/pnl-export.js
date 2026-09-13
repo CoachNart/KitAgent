@@ -1,56 +1,59 @@
 const clean = value => String(value ?? '').trim();
 
+function collectStyles() {
+  const chunks = [];
+  for (const sheet of [...document.styleSheets]) {
+    try {
+      const rules = [...sheet.cssRules].map(rule => rule.cssText).join('\n');
+      if (rules) chunks.push(rules);
+    } catch { /* Ignore inaccessible third-party stylesheets. */ }
+  }
+  return chunks.join('\n').replace(/<\/style/gi, '<\\/style');
+}
+
 async function captureVisibleCard(card) {
   const rect = card.getBoundingClientRect();
   const width = Math.max(1, Math.round(rect.width));
   const height = Math.max(1, Math.round(rect.height));
   const scale = Math.min(4, Math.max(2, 1080 / width));
-
-  // Capture the actual rendered card instead of maintaining a second canvas/SVG design.
-  // The export therefore stays pixel-for-pixel aligned with the card the user sees.
+  const styles = collectStyles();
   const clone = card.cloneNode(true);
+
   clone.querySelectorAll('button, .pnl-share-actions').forEach(node => node.remove());
   clone.style.width = `${width}px`;
   clone.style.height = `${height}px`;
   clone.style.maxWidth = 'none';
   clone.style.maxHeight = 'none';
-  clone.style.position = 'fixed';
-  clone.style.left = '-100000px';
-  clone.style.top = '0';
   clone.style.margin = '0';
   clone.style.transform = 'none';
   clone.style.animation = 'none';
   clone.style.transition = 'none';
   clone.style.overflow = 'hidden';
-  clone.style.zIndex = '-1';
-  document.body.appendChild(clone);
+
+  // The stylesheet is embedded with the clone so pseudo-elements, gradients,
+  // grid layout, responsive rules and all the little visual details survive export.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(width * scale)}" height="${Math.round(height * scale)}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden"><style>${styles}</style>${clone.outerHTML}</div></foreignObject></svg>`;
+  const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
 
   try {
-    const computed = getComputedStyle(card);
-    const background = computed.backgroundColor;
-    if (background && background !== 'rgba(0, 0, 0, 0)') clone.style.backgroundColor = background;
-
-    const foreignObject = `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">${clone.outerHTML}</div>`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(width * scale)}" height="${Math.round(height * scale)}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${foreignObject}</foreignObject></svg>`;
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    try {
-      const img = new Image();
-      img.decoding = 'async';
-      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(width * scale);
-      canvas.height = Math.round(height * scale);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas unavailable.');
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1));
-      if (!pngBlob) throw new Error('Could not render the PnL image.');
-      return pngBlob;
-    } finally { URL.revokeObjectURL(url); }
-  } finally { clone.remove(); }
+    const img = new Image();
+    img.decoding = 'async';
+    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas unavailable.');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1));
+    if (!pngBlob) throw new Error('Could not render the PnL image.');
+    return pngBlob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function exportPnl(action) {
