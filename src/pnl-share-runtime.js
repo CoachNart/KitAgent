@@ -1,85 +1,128 @@
-/* Browser-safe PnL image actions. Scoped to KitSetups Futures position rows. */
+/* PnL PNG actions scoped only to the open KitSetups Futures share modal. */
 (function installPnlShareRuntime(){
   if(typeof window === 'undefined' || window.__kitPnlShareRuntimeInstalled) return;
   window.__kitPnlShareRuntimeInstalled = true;
 
-  const n = value => Number.isFinite(Number(value)) ? Number(value) : 0;
-  const fmt = (value, digits=4) => n(value).toLocaleString(undefined,{maximumFractionDigits:digits});
-  const clean = value => String(value || '').replace(/,/g,'').trim();
+  const number = value => {
+    const parsed = Number(String(value ?? '').replace(/,/g,'').replace(/[^0-9.+-]/g,''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const fmt = (value,digits=4) => Number(value).toLocaleString(undefined,{maximumFractionDigits:digits});
 
-  function parsePosition(row){
-    const cells = Array.from(row?.cells || []).map(cell => String(cell.textContent || '').trim());
-    if(cells.length < 8) throw new Error('Could not read the futures position row');
-    const symbol = (cells[0] || 'BTCUSDT').replace('_USDT','/USDT').replace(/USDT$/,'/USDT');
-    const side = /short/i.test(cells[1]) ? 'short' : 'long';
-    const entry = n(clean(cells[3]));
-    const mark = n(clean(cells[4]));
-    const leverage = (cells[7] || '').replace(/x.*$/i,'').trim() || '—';
-    if(!entry || !mark) throw new Error('Could not read Entry and Mark from the position row');
+  function readModal(dialog){
+    const title = String(dialog.querySelector('.pnl-share-card h3')?.textContent || '').trim();
+    const [symbolRaw, sideRaw] = title.split('·').map(v=>v.trim());
+    const profile = String(dialog.querySelector('.pnl-card-brand b')?.textContent || 'KitSetups Trader').trim();
+    const side = /short/i.test(sideRaw) ? 'short' : 'long';
+    const symbol = symbolRaw || 'BTC/USDT';
+    const meta = Array.from(dialog.querySelectorAll('.pnl-meta p'));
+    const valueFor = label => {
+      const row = meta.find(p=>String(p.textContent||'').trim().toLowerCase().startsWith(label.toLowerCase()));
+      return String(row?.querySelector('b')?.textContent || '').trim();
+    };
+    const entry = number(valueFor('Entry'));
+    const mark = number(valueFor('Mark'));
+    const leverage = number(valueFor('Leverage'));
+    if(!entry || !mark) throw new Error('Could not read Entry and Mark from the PnL card');
     const percentage = ((mark-entry)/entry*100) * (side === 'short' ? -1 : 1);
-    return {symbol,side,entry,mark,leverage,percentage};
+    return {profile,symbol,side,entry,mark,leverage,percentage};
   }
 
   function makePngFile(p){
-    return new Promise((resolve,reject)=>{
-      try{
-        const canvas=document.createElement('canvas'); canvas.width=1080; canvas.height=1920;
-        const ctx=canvas.getContext('2d'); if(!ctx) throw new Error('Canvas unavailable');
-        const positive=p.percentage>=0, accent=positive?'#25d6d0':'#ff5266';
-        const bg=ctx.createLinearGradient(0,0,1080,1920);
-        bg.addColorStop(0,'#060a10'); bg.addColorStop(.55,'#0b151e'); bg.addColorStop(1,'#071015');
-        ctx.fillStyle=bg; ctx.fillRect(0,0,1080,1920);
-        ctx.strokeStyle='#263141'; ctx.lineWidth=2; ctx.strokeRect(48,48,984,1824);
-        const text=(value,x,y,size,fill='#eef3f9',weight='400')=>{ctx.fillStyle=fill;ctx.font=`${weight} ${size}px Arial,sans-serif`;ctx.fillText(String(value),x,y)};
-        text('KITSETUPS',88,126,30,accent,'800');
-        text(`FUTURES POSITION · ${p.side.toUpperCase()}`,88,166,18,'#66768a','700');
-        text('KitSetups Trader',88,310,38,'#eef3f9','800');
-        text(p.symbol,88,355,24,'#738398');
-        text('PNL PERFORMANCE',88,480,20,'#66768a','700');
-        text(`${p.percentage>=0?'+':''}${fmt(p.percentage,4)}%`,88,600,96,accent,'900');
-        ctx.fillStyle='#202c38'; ctx.fillRect(88,710,904,2);
-        text('ENTRY',88,790,18,'#66768a','700'); text(fmt(p.entry,8),88,832,30,'#eef3f9','700');
-        text('MARK',540,790,18,'#66768a','700'); text(fmt(p.mark,8),540,832,30,'#eef3f9','700');
-        text('LEVERAGE',88,920,18,'#66768a','700'); text(`${p.leverage}x`,88,962,30,'#eef3f9','700');
-        text(`KitSetups Futures · ${p.symbol} · ${p.side}`,88,1780,18,'#66768a');
-        text('kitsetups.xyz',88,1820,18,accent,'800');
-        canvas.toBlob(blob=>blob?resolve(new File([blob],'kitsetups-futures-pnl.png',{type:'image/png'})):reject(new Error('PNG conversion failed')),'image/png');
-      }catch(error){reject(error)}
-    });
+    const canvas=document.createElement('canvas');
+    canvas.width=1080; canvas.height=1350;
+    const ctx=canvas.getContext('2d');
+    if(!ctx) throw new Error('Canvas unavailable');
+
+    const positive=p.percentage>=0;
+    const accent=positive?'#25d6d0':'#ff5266';
+    const bg=ctx.createLinearGradient(0,0,1080,1350);
+    bg.addColorStop(0,'#060a10');
+    bg.addColorStop(.58,'#0b151e');
+    bg.addColorStop(1,'#071015');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,1080,1350);
+
+    const glow=ctx.createRadialGradient(875,185,0,875,185,460);
+    glow.addColorStop(0,positive?'rgba(37,214,208,.22)':'rgba(255,82,102,.22)');
+    glow.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=glow; ctx.fillRect(0,0,1080,650);
+
+    ctx.strokeStyle='#263141'; ctx.lineWidth=2; ctx.strokeRect(48,48,984,1254);
+    const text=(value,x,y,size,fill='#eef3f9',weight='400')=>{
+      ctx.fillStyle=fill;
+      ctx.font=`${weight} ${size}px Arial,sans-serif`;
+      ctx.fillText(String(value),x,y);
+    };
+
+    text('KITSETUPS',88,128,30,accent,'800');
+    text('FUTURES POSITION',88,168,18,'#66768a','700');
+    text(`${p.profile} · KitSetups Futures`,88,292,34,'#eef3f9','800');
+    text(`${p.symbol} · ${p.side}`,88,340,24,'#738398','600');
+    text('PNL',88,480,20,'#66768a','700');
+    text(`${p.percentage>=0?'+':''}${fmt(p.percentage,4)}%`,88,610,104,accent,'900');
+
+    ctx.fillStyle='#202c38'; ctx.fillRect(88,710,904,2);
+    text('ENTRY',88,790,18,'#66768a','700');
+    text(fmt(p.entry,8),88,838,32,'#eef3f9','700');
+    text('MARK',540,790,18,'#66768a','700');
+    text(fmt(p.mark,8),540,838,32,'#eef3f9','700');
+    text('LEVERAGE',88,955,18,'#66768a','700');
+    text(`${fmt(p.leverage,0)}x`,88,1003,32,'#eef3f9','700');
+
+    text('kitsetups.xyz',88,1230,19,accent,'800');
+    text(`${p.symbol} · ${p.side.toUpperCase()}`,760,1230,18,'#66768a','700');
+
+    const dataUrl=canvas.toDataURL('image/png');
+    const base64=dataUrl.split(',')[1] || '';
+    const binary=atob(base64);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    return new File([bytes],`kitsetups-${p.symbol.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-pnl.png`,{type:'image/png'});
   }
 
   function downloadFile(file){
-    const url=URL.createObjectURL(file), a=document.createElement('a');
-    a.href=url; a.download=file.name; a.rel='noopener'; a.style.position='fixed'; a.style.left='-9999px';
+    const url=URL.createObjectURL(file);
+    const a=document.createElement('a');
+    a.href=url; a.download=file.name; a.rel='noopener';
+    a.style.position='fixed'; a.style.left='-9999px';
     document.body.appendChild(a); a.click();
     setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},1500);
   }
 
-  async function runAction(row,share){
-    const p=parsePosition(row), file=await makePngFile(p);
-    if(share && typeof navigator.share==='function'){
-      try{
-        if(typeof navigator.canShare==='function' && !navigator.canShare({files:[file]})) throw new Error('File sharing is not supported');
-        await navigator.share({title:'KitSetups Futures',text:`${p.symbol} · ${p.side} · ${p.percentage>=0?'+':''}${fmt(p.percentage,4)}%`,files:[file]});
-        return;
-      }catch(error){if(error?.name==='AbortError') return;}
-    }
-    downloadFile(file);
-  }
-
-  function isAction(target){
-    const el=target?.closest?.('button,a,[role="button"]'); if(!el) return '';
-    const label=[el.getAttribute('aria-label'),el.getAttribute('title'),el.getAttribute('data-action'),el.textContent].filter(Boolean).join(' ');
-    if(/\bshare\b/i.test(label)) return 'share';
-    if(/\bdownload\b/i.test(label)) return 'download';
-    return '';
-  }
-
   async function handleClick(event){
-    const action=isAction(event.target); if(!action) return;
-    const row=event.target?.closest?.('tr'); if(!row || row.closest('table')?.querySelector('thead')?.textContent?.indexOf('Contract') < 0) return;
-    event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
-    try{await runAction(row,action==='share')}catch(error){console.error('KitSetups PnL image action failed:',error)}
+    const button=event.target?.closest?.('.pnl-share-actions button');
+    if(!button) return;
+    const label=String(button.textContent||'').trim().toLowerCase();
+    if(label!=='share' && label!=='download') return;
+    const dialog=button.closest('.pnl-share-dialog');
+    if(!dialog) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    try{
+      const position=readModal(dialog);
+      const file=makePngFile(position);
+      if(label==='share' && typeof navigator.share==='function'){
+        try{
+          const payload={
+            title:'KitSetups Futures PnL',
+            text:`${position.symbol} · ${position.side} · ${position.percentage>=0?'+':''}${fmt(position.percentage,4)}%`,
+            files:[file]
+          };
+          if(typeof navigator.canShare!=='function' || navigator.canShare({files:[file]})){
+            await navigator.share(payload);
+            return;
+          }
+        }catch(error){
+          if(error?.name==='AbortError') return;
+        }
+      }
+      downloadFile(file);
+    }catch(error){
+      console.error('KitSetups PnL image action failed:',error);
+    }
   }
 
   document.addEventListener('click',handleClick,true);
