@@ -1,1 +1,53 @@
-/* Navigation styles live in nav-polish.css. This file is intentionally inert. */
+/* Final mobile navigation safety net.
+   nav-polish.css owns the overall nav design; these rules only guarantee
+   the required six-slot mobile layout and keep History visible in slot 5. */
+@media (max-width: 760px) {
+  .kit-sidebar nav {
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    grid-template-rows: 1fr !important;
+  }
+
+  .kit-sidebar nav > .side-link:nth-child(1) { grid-column: 1 !important; }
+  .kit-sidebar nav > .side-link:nth-child(2) { grid-column: 2 !important; }
+  .kit-sidebar nav > .side-link:nth-child(3) { grid-column: 3 !important; }
+  .kit-sidebar nav > .side-link:nth-child(4) { grid-column: 4 !important; }
+  .kit-sidebar nav > .side-link:nth-child(5) {
+    grid-column: 5 !important;
+    grid-row: 1 !important;
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    position: relative !important;
+    z-index: 30 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .kit-sidebar nav > .side-link:nth-child(6) { grid-column: 6 !important; }
+
+  /* Never allow another stylesheet to blank History's icon or label. */
+  .kit-sidebar nav > .side-link:nth-child(5) svg {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    color: #c18dff !important;
+  }
+
+  .kit-sidebar nav > .side-link:nth-child(5) span {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    color: inherit !important;
+    font-size: 8px !important;
+    line-height: 1 !important;
+  }
+}
