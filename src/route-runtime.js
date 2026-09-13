@@ -1,1 +1,31 @@
-(function(){if(typeof window==='undefined'||window.__kitRoutesInstalled)return;window.__kitRoutesInstalled=true;const routes={'/app/market':'Market analysis','/app/chart-terminal':'Chart terminal','/app/perpetuals':'Perpetuals','/app/history':'History','/app/profile':'Profile'};const path=()=>window.location.pathname.replace(/\/+$/,'')||'/';const find=label=>[...document.querySelectorAll('.kit-sidebar nav .side-link')].find(b=>b.textContent.trim().toLowerCase()===label.toLowerCase());const sync=()=>{const p=path(),label=routes[p],b=label&&find(label);if(b)b.click()};document.addEventListener('click',e=>{const b=e.target.closest?.('.kit-sidebar nav .side-link');if(!b)return;const p=Object.keys(routes).find(x=>routes[x]===b.textContent.trim());if(p&&path()!==p)history.pushState({kitRoute:true},'',p)},true);addEventListener('popstate',sync);new MutationObserver(sync).observe(document.documentElement,{childList:true,subtree:true});const hide=()=>{const b=find('Home');if(b)b.style.display='none'};new MutationObserver(hide).observe(document.documentElement,{childList:true,subtree:true});hide();setTimeout(sync,0);setTimeout(sync,150)})();
+(function(){
+  if(typeof window==='undefined'||window.__kitRoutesInstalled)return;
+  window.__kitRoutesInstalled=true;
+  const routes={'/app/market':'Market analysis','/app/chart-terminal':'Chart terminal','/app/perpetuals':'Perpetuals','/app/history':'History','/app/profile':'Profile'};
+  const path=()=>window.location.pathname.replace(/\/+$/,'')||'/';
+  const find=label=>[...document.querySelectorAll('.kit-sidebar nav .side-link')].find(b=>b.textContent.trim().toLowerCase()===label.toLowerCase());
+  const sync=()=>{
+    const label=routes[path()];
+    if(!label)return;
+    const button=find(label);
+    if(button&&!button.classList.contains('selected'))button.click();
+  };
+  const hideHome=()=>{const button=find('Home');if(button)button.style.display='none';};
+  document.addEventListener('click',e=>{
+    const button=e.target.closest?.('.kit-sidebar nav .side-link');
+    if(!button)return;
+    const target=Object.keys(routes).find(key=>routes[key]===button.textContent.trim());
+    if(target&&path()!==target)history.pushState({kitRoute:true},'',target);
+  },true);
+  addEventListener('popstate',sync);
+  const bootObserver=new MutationObserver(()=>{
+    hideHome();
+    if(find(routes[path()])){
+      sync();
+      bootObserver.disconnect();
+    }
+  });
+  bootObserver.observe(document.documentElement,{childList:true,subtree:true});
+  hideHome();
+  setTimeout(()=>{hideHome();sync();},2500);
+})();
