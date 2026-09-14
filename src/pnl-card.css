@@ -15,7 +15,7 @@
 .pnl-share-card>strong{position:absolute;left:26.7%;top:45.8%;margin:0;font-size:174px;line-height:.92;letter-spacing:-.055em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pnl-share-card.profit>strong{color:#4f7dff}
 .pnl-share-card.loss>strong{color:#ff5266}
-.pnl-share-card>span{position:absolute;left:7.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em}
+.pnl-share-card>span:not(.pnl-arrow){position:absolute;left:7.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em}
 .pnl-share-card .pnl-meta{position:absolute;left:7.4%;right:7.4%;bottom:4.2%;height:14%;display:grid;grid-template-columns:repeat(5,1fr);border-top:2px solid #242829;border-bottom:2px solid #242829}
 .pnl-share-card .pnl-meta p{margin:0;padding:8% 12px 0 0;border-right:2px solid #242829;min-width:0}
 .pnl-share-card .pnl-meta p:last-child{border-right:0}
@@ -37,10 +37,12 @@
   .pnl-card-avatar{width:70px;height:70px;right:8.6%;top:13.1%}
   .pnl-share-card h3{font-size:30px}
   .pnl-share-card>strong{font-size:88px;left:25.5%}
-  .pnl-share-card>span{font-size:13px;top:73%}
+  .pnl-share-card>span:not(.pnl-arrow){font-size:13px;top:73%}.pnl-share-card .pnl-arrow{font-size:44px;top:49%;left:9.5%}
   .pnl-share-card .pnl-meta{height:16%;bottom:4.3%}
   .pnl-share-card .pnl-meta p{padding:9% 5px 0 0}
   .pnl-share-card .pnl-meta small{font-size:10px}
   .pnl-share-card .pnl-meta b{font-size:13px;margin-top:8px}
   .pnl-card-foot{font-size:8px}
 }
+
+.pnl-share-card .pnl-arrow{position:absolute;left:10%;top:48.5%;margin:0;color:inherit;font-size:86px;line-height:1;font-weight:400}.pnl-share-card.profit .pnl-arrow{color:#4f7dff}.pnl-share-card.loss .pnl-arrow{color:#ff5266}
