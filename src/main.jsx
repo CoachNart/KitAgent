@@ -16,7 +16,6 @@ import './signal-history.css';
 import './protected-pages.css';
 import './mobile-nav.css';
 import './pnl-visual.css';
-import './pnl-card-fix.js';
 import './pnl-export.js';
 import './mexc-session-persistence.js';
 import './contentProtection.js';
