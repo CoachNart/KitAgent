@@ -330,26 +330,28 @@ export default function PerpetualsPage({ user }) {
       const mark = n(pnlSharePosition.markPrice || pnlSharePosition.markPricePrice || pnlSharePosition.fairPrice || pnlSharePosition.lastPrice) || last;
       const lev = n(pnlSharePosition.leverage || pnlSharePosition.leverageRatio) || 1;
       return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
-        <div className="pnl-share-dialog">
+        <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
           <div className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
+            <div className="pnl-card-inner" aria-hidden="true" />
             <div className="pnl-card-brand"><span className="mexc-logo">K</span><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
+            <span className="pnl-arrow" aria-hidden="true">{positive ? '↗' : '↘'}</span>
             <strong>{positive ? '+' : ''}{roi.toFixed(2)}%</strong>
             <span>UNREALIZED PNL</span>
             <div className="pnl-meta">
               <p><small>ENTRY</small><b>{fmt(entry)}</b></p>
               <p><small>MARK</small><b>{fmt(mark)}</b></p>
               <p><small>LEVERAGE</small><b>{fmt(lev,0)}x</b></p>
-              <p><small>SL</small><b>{risk?.stopLossPrice ? fmt(risk.stopLossPrice) : 'Not set'}</b></p>
-              <p><small>TP</small><b>{risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : 'Not set'}</b></p>
-              <p><small>SIZE</small><b>{fmt(pnlSharePosition.holdVol)}</b></p>
-              <p><small>LIQUIDATION</small><b>{fmt(pnlSharePosition.liquidatePrice ?? pnlSharePosition.liquidationPrice ?? pnlSharePosition.liqPrice)}</b></p>
-              <p><small>MARGIN</small><b>{fmt(pnlSharePosition.im,4)} USDT</b></p>
+              <p><small>SL</small><b>{risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—'}</b></p>
+              <p><small>TP</small><b>{risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—'}</b></p>
             </div>
-            <div className="pnl-card-foot"><span>{new Date().toLocaleString()}</span><b>KITSETUPS</b></div>
           </div>
-          <div className="pnl-share-actions"><button onClick={() => sharePnl(pnlSharePosition)}>Share</button><button onClick={() => downloadPnl(pnlSharePosition)}>Download</button><button className="ghost" onClick={() => setPnlSharePosition(null)}>Close</button></div>
+          <div className="pnl-share-actions">
+            <button type="button" onClick={() => void sharePnl(pnlSharePosition)}>Share</button>
+            <button type="button" onClick={() => void downloadPnl(pnlSharePosition)}>Download</button>
+            <button type="button" className="ghost" onClick={() => setPnlSharePosition(null)}>Close</button>
+          </div>
         </div>
       </div>;
     })()}
