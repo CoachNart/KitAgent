@@ -11,7 +11,60 @@ function collectStyles() {
   return chunks.join('\n').replace(/<\/style/gi, '<\\/style');
 }
 
+function numberFromText(value) {
+  const match = clean(value).replace(/,/g, '').match(/[-+]?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : NaN;
+}
+
+function findMetaValue(card, labels) {
+  const wanted = labels.map(x => x.toLowerCase());
+  for (const item of card.querySelectorAll('.pnl-meta > *')) {
+    const label = clean(item.querySelector('small')?.textContent).toLowerCase();
+    if (wanted.some(x => label.includes(x))) {
+      return numberFromText(item.querySelector('b')?.textContent);
+    }
+  }
+  return NaN;
+}
+
+function calculateRoi(card) {
+  const pnl = numberFromText(card.querySelector(':scope > strong')?.textContent);
+  const margin = findMetaValue(card, ['margin', 'initial margin']);
+  if (Number.isFinite(pnl) && Number.isFinite(margin) && margin > 0) return (pnl / margin) * 100;
+
+  const entry = findMetaValue(card, ['entry']);
+  const mark = findMetaValue(card, ['mark', 'exit', 'last']);
+  const leverage = findMetaValue(card, ['leverage']);
+  if (Number.isFinite(entry) && entry > 0 && Number.isFinite(mark) && mark > 0 && Number.isFinite(leverage)) {
+    const side = clean(card.textContent).toUpperCase().includes('SHORT') ? -1 : 1;
+    return ((mark - entry) / entry) * leverage * 100 * side;
+  }
+  return NaN;
+}
+
+function applyPrivatePnlDisplay(card) {
+  const strong = card?.querySelector(':scope > strong');
+  if (!strong) return;
+  const roi = calculateRoi(card);
+  if (!Number.isFinite(roi)) return;
+  const sign = roi > 0 ? '+' : '';
+  strong.textContent = `${sign}${roi.toFixed(2)}%`;
+  strong.dataset.kitsetupsRoi = 'true';
+  strong.setAttribute('aria-label', `${sign}${roi.toFixed(2)} percent ROI`);
+}
+
+function protectPnlActions() {
+  const style = document.createElement('style');
+  style.id = 'kitsetups-pnl-actions-fix';
+  style.textContent = `
+    .pnl-share-actions { position:relative !important; z-index:99999 !important; pointer-events:auto !important; }
+    .pnl-share-actions button { position:relative !important; z-index:100000 !important; pointer-events:auto !important; touch-action:manipulation !important; cursor:pointer !important; }
+  `;
+  if (!document.getElementById(style.id)) document.head.appendChild(style);
+}
+
 async function captureVisibleCard(card) {
+  applyPrivatePnlDisplay(card);
   const rect = card.getBoundingClientRect();
   const width = Math.max(1, Math.round(rect.width));
   const height = Math.max(1, Math.round(rect.height));
@@ -30,9 +83,6 @@ async function captureVisibleCard(card) {
   clone.style.transition = 'none';
   clone.style.overflow = 'hidden';
 
-  // Render the foreignObject at the same CSS-pixel size as the visible card.
-  // Media queries therefore resolve exactly like the live mobile/desktop card;
-  // the canvas is only enlarged afterwards for a crisp PNG.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden"><style>${styles}</style>${clone.outerHTML}</div></foreignObject></svg>`;
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -60,6 +110,7 @@ async function captureVisibleCard(card) {
 async function exportPnl(action) {
   const card = document.querySelector('.pnl-share-card');
   if (!card) throw new Error('PnL card is not open.');
+  applyPrivatePnlDisplay(card);
   const blob = await captureVisibleCard(card);
   const symbol = clean(card.querySelector('h3')?.textContent || 'position').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
   const file = new File([blob], `kitsetups-${symbol || 'position'}-pnl.png`, { type: 'image/png' });
@@ -86,6 +137,14 @@ async function exportPnl(action) {
   link.click();
   setTimeout(() => { link.remove(); URL.revokeObjectURL(url); }, 1200);
 }
+
+protectPnlActions();
+
+const observer = new MutationObserver(() => {
+  const card = document.querySelector('.pnl-share-card');
+  if (card) applyPrivatePnlDisplay(card);
+});
+observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
 
 document.addEventListener('click', event => {
   const button = event.target.closest('.pnl-share-actions button');
