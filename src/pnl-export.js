@@ -19,24 +19,30 @@ function numberFromText(value) {
 function findMetaValue(card, labels) {
   const wanted = labels.map(x => x.toLowerCase());
   for (const item of card.querySelectorAll('.pnl-meta > *')) {
-    const label = clean(item.querySelector('small')?.textContent).toLowerCase();
-    if (wanted.some(x => label.includes(x))) {
-      return numberFromText(item.querySelector('b')?.textContent);
-    }
+    const labelText = clean(item.querySelector('small')?.textContent || item.childNodes[0]?.textContent || item.textContent).toLowerCase();
+    const label = wanted.find(x => labelText.includes(x));
+    if (!label) continue;
+    const valueNode = item.querySelector('b') || item.lastElementChild;
+    const value = numberFromText(valueNode?.textContent || '');
+    if (Number.isFinite(value)) return value;
   }
   return NaN;
 }
 
 function calculateRoi(card) {
-  const pnl = numberFromText(card.querySelector(':scope > strong')?.textContent);
-  const margin = findMetaValue(card, ['margin', 'initial margin']);
+  const strong = card.querySelector(':scope > strong');
+  const raw = clean(strong?.textContent);
+  if (strong?.dataset.kitsetupsRoi === 'true' && /%/.test(raw)) return numberFromText(raw);
+
+  const pnl = numberFromText(raw);
+  const margin = findMetaValue(card, ['margin']);
   if (Number.isFinite(pnl) && Number.isFinite(margin) && margin > 0) return (pnl / margin) * 100;
 
   const entry = findMetaValue(card, ['entry']);
   const mark = findMetaValue(card, ['mark', 'exit', 'last']);
   const leverage = findMetaValue(card, ['leverage']);
   if (Number.isFinite(entry) && entry > 0 && Number.isFinite(mark) && mark > 0 && Number.isFinite(leverage)) {
-    const side = clean(card.textContent).toUpperCase().includes('SHORT') ? -1 : 1;
+    const side = clean(card.querySelector('h3')?.textContent).toUpperCase().includes('SHORT') ? -1 : 1;
     return ((mark - entry) / entry) * leverage * 100 * side;
   }
   return NaN;
@@ -44,7 +50,7 @@ function calculateRoi(card) {
 
 function applyPrivatePnlDisplay(card) {
   const strong = card?.querySelector(':scope > strong');
-  if (!strong) return;
+  if (!strong || strong.dataset.kitsetupsRoi === 'true') return;
   const roi = calculateRoi(card);
   if (!Number.isFinite(roi)) return;
   const sign = roi > 0 ? '+' : '';
@@ -147,11 +153,12 @@ const observer = new MutationObserver(() => {
 observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
 
 document.addEventListener('click', event => {
-  const button = event.target.closest('.pnl-share-actions button');
+  const button = event.target.closest?.('.pnl-share-actions button');
   if (!button) return;
   const label = clean(button.textContent).toLowerCase();
   if (label !== 'share' && label !== 'download') return;
   event.preventDefault();
+  event.stopPropagation();
   event.stopImmediatePropagation();
   exportPnl(label).catch(error => console.error('KitSetups PnL export failed:', error));
 }, true);
