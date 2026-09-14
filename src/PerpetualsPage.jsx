@@ -342,8 +342,8 @@ export default function PerpetualsPage({ user }) {
             </div>
           </div>
           <div className="pnl-share-actions">
-            <button type="button" onClick={() => void sharePnl(pnlSharePosition)}>Share</button>
-            <button type="button" onClick={() => void downloadPnl(pnlSharePosition)}>Download</button>
+            <button type="button" disabled={!pnlShareFile || pnlShareBusy} onClick={() => void sharePnl(pnlSharePosition)}>{pnlShareBusy ? 'Preparing…' : 'Share'}</button>
+            <button type="button" disabled={!pnlShareFile || pnlShareBusy} onClick={() => downloadPnl(pnlSharePosition)}>Download</button>
             <button type="button" className="ghost" onClick={() => setPnlSharePosition(null)}>Close</button>
           </div>
         </div>
