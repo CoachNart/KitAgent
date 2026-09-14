@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import './mexcFutures.css';
+import './pnl-card.css';
 
 const n = v => Number.isFinite(Number(v)) ? Number(v) : 0;
 const fmt = (v, digits = 8) => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, { maximumFractionDigits: digits }) : '—';
