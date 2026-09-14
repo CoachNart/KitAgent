@@ -255,7 +255,7 @@ const pnlDomToPngFile = async (filename) => {
       const lev = n(pnlSharePosition.leverage || pnlSharePosition.leverageRatio) || 1;
       return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
-          <div className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
+          <div ref={pnlCardRef} className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
             <div className="pnl-card-inner" aria-hidden="true" />
             <div className="pnl-card-brand"><span className="mexc-logo">K</span><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
