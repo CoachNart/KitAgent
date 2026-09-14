@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
 :root{--red:#ff4d61}
 .kit-logo-img{width:28px;height:28px}
 /* Fixed header: avoids nested-scroll/sticky containment issues. */
@@ -104,4 +106,27 @@
 @media(max-width:760px){
   .live-market .liquidity-card small { font-size: 10px !important; line-height: 1.6 !important; }
   .live-market .breakdown-item > small { font-size: 9px !important; line-height: 1.55 !important; }
+}
+
+
+/* Final typography pass: DM Sans replaces the rough condensed/monospace treatment. */
+.live-market,
+.live-market button,
+.live-market input,
+.live-market select,
+.live-market textarea,
+.live-market .analysis-result,
+.live-market .analysis-result *,
+.live-market .liquidity-card,
+.live-market .liquidity-card *,
+.live-market .breakdown,
+.live-market .breakdown * {
+  font-family: "DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-style: normal;
+}
+.live-market .liquidity-card small,
+.live-market .breakdown-item > small {
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  word-spacing: normal;
 }
