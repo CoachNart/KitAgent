@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import './mexcFutures.css';
+import './pnl-card.css';
 
 const n = v => Number.isFinite(Number(v)) ? Number(v) : 0;
 const fmt = (v, digits = 8) => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, { maximumFractionDigits: digits }) : '—';
@@ -163,20 +164,81 @@ export default function PerpetualsPage({ user }) {
   const closePosition = async p => { const pSide = n(p.positionType) === 1 ? 'sell' : 'buy'; setBusy(true); setError(''); try { await api('order', state, { side: pSide, intent: 'close', type: 5, marginMode: n(p.openType) === 1 ? 'isolated' : 'cross', leverage: n(p.leverage) || leverage, volume: n(p.holdVol), price: last, positionId: p.positionId }); await loadAccount(); } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); } };
 
   const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  const pnlPercent = p => {
+    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
+    const margin = n(p.im);
+    if (margin > 0) return (pnl / margin) * 100;
+    const entry = n(p.holdAvgPrice || p.openAvgPrice);
+    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const lev = n(p.leverage || p.leverageRatio) || 1;
+    if (!entry || !mark) return 0;
+    const direction = n(p.positionType) === 1 ? 1 : -1;
+    return ((mark - entry) / entry) * lev * 100 * direction;
+  };
+
   const buildPnlSvg = p => {
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
-    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
     const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const lev = n(p.leverage || p.leverageRatio) || 1;
     const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
     const margin = n(p.im);
-    const sideText = n(p.positionType) === 1 ? 'LONG' : 'SHORT';
-    const pnlColor = pnl >= 0 ? '#22c7a5' : '#f05b6b';
+    const roi = pnlPercent(p);
+    const positive = roi >= 0;
+    const pnlColor = positive ? '#4f7dff' : '#ff5266';
+    const arrow = positive ? '↗' : '↘';
+    const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
     const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
     const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : 'Not set';
     const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : 'Not set';
     const initials = escapeSvg(profileName.slice(0, 1).toUpperCase());
-    const avatar = profileAvatar ? `<image href="${escapeSvg(profileAvatar)}" x="88" y="205" width="76" height="76" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatarClip)"/>` : `<circle cx="126" cy="243" r="38" fill="#14222d"/><text x="126" y="255" text-anchor="middle" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b10"/><stop offset="1" stop-color="#0d1821"/></linearGradient><radialGradient id="glow" cx="78%" cy="12%" r="62%"><stop offset="0" stop-color="${pnlColor}" stop-opacity=".26"/><stop offset="1" stop-color="${pnlColor}" stop-opacity="0"/></radialGradient><clipPath id="avatarClip"><circle cx="126" cy="243" r="38"/></clipPath></defs><rect width="1080" height="1350" rx="48" fill="url(#bg)"/><rect x="34" y="34" width="1012" height="1282" rx="40" fill="none" stroke="#253340"/><circle cx="850" cy="170" r="420" fill="url(#glow)"/><text x="76" y="94" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800">KITSETUPS</text><text x="76" y="126" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16" letter-spacing="2">FUTURES POSITION</text>${avatar}<text x="188" y="234" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${escapeSvg(profileName)}</text><text x="188" y="266" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="18">${escapeSvg(displaySymbol(p.symbol))} · ${sideText}</text><rect x="76" y="330" width="928" height="260" rx="30" fill="#0a1118" stroke="#202d39"/><text x="112" y="378" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="17" letter-spacing="1.4">UNREALIZED PNL</text><text x="112" y="482" fill="${pnlColor}" font-family="Arial,Helvetica,sans-serif" font-size="78" font-weight="800">${pnl >= 0 ? '+' : ''}${escapeSvg(fmt(pnl, 4))}</text><text x="112" y="520" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="18">USDT</text><rect x="76" y="626" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="626" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="668" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">ENTRY</text><text x="108" y="708" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(entry))}</text><text x="596" y="668" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">MARK</text><text x="596" y="708" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(mark))}</text><rect x="76" y="766" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="766" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="808" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">SIZE</text><text x="108" y="848" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(p.holdVol))}</text><text x="596" y="808" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">LEVERAGE</text><text x="596" y="848" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(p.leverage, 0))}x</text><rect x="76" y="906" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><rect x="564" y="906" width="440" height="112" rx="22" fill="#0a1118" stroke="#202d39"/><text x="108" y="948" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">LIQUIDATION</text><text x="108" y="988" fill="#ff8b98" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(liq))}</text><text x="596" y="948" fill="#718094" font-family="Arial,Helvetica,sans-serif" font-size="16">MARGIN</text><text x="596" y="988" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700">${escapeSvg(fmt(margin, 4))} USDT</text><rect x="76" y="1046" width="928" height="164" rx="26" fill="#0a1118" stroke="#202d39"/><text x="108" y="1090" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700">RISK MANAGEMENT</text><text x="108" y="1130" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="16">STOP LOSS</text><text x="108" y="1164" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">${escapeSvg(sl)}</text><text x="550" y="1130" fill="#8c9aab" font-family="Arial,Helvetica,sans-serif" font-size="16">TAKE PROFIT</text><text x="550" y="1164" fill="#eef3f9" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">${escapeSvg(tp)}</text><text x="76" y="1272" fill="#647387" font-family="Arial,Helvetica,sans-serif" font-size="15">${escapeSvg(new Date().toLocaleString())}</text><text x="1004" y="1272" text-anchor="end" fill="#22c7a5" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700">kitsetups.xyz</text></svg>`;
+    const avatar = profileAvatar
+      ? `<image href="${escapeSvg(profileAvatar)}" x="807" y="170" width="116" height="116" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatarClip)"/>`
+      : `<circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/><text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>`;
+    const safe = v => escapeSvg(v);
+    const pnlText = `${positive ? '+' : ''}${roi.toFixed(2)}%`;
+    const vals = [
+      ['Entry', fmt(entry)],
+      ['Mark', fmt(mark)],
+      ['Leverage', `${fmt(lev, 0)}x`],
+      ['SL', sl],
+      ['TP', tp]
+    ];
+    const cells = vals.map((item, i) => {
+      const x = 156 + i * 153.6;
+      return `<text x="${x}" y="1080" fill="#f1f3f5" font-family="Arial,Helvetica,sans-serif" font-size="22">${safe(item[0])}</text><text x="${x}" y="1152" fill="#eef0f2" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700">${safe(item[1])}</text>`;
+    }).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1277" viewBox="0 0 1080 1277">
+      <defs>
+        <radialGradient id="glow" cx="72%" cy="53%" r="52%"><stop offset="0" stop-color="#0b3b37" stop-opacity=".62"/><stop offset=".42" stop-color="#06221f" stop-opacity=".26"/><stop offset="1" stop-color="#050708" stop-opacity="0"/></radialGradient>
+        <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b5d60"/><stop offset=".5" stop-color="#12373a"/><stop offset="1" stop-color="#071d20"/></linearGradient>
+        <clipPath id="avatarClip"><circle cx="865" cy="228" r="58"/></clipPath>
+      </defs>
+      <rect width="1080" height="1277" fill="#050708"/>
+      <rect x="57" y="16" width="966" height="1245" rx="50" fill="#050708" stroke="url(#edge)" stroke-width="2.5"/>
+      <rect x="84" y="43" width="913" height="1214" rx="3" fill="url(#glow)" stroke="#0b3538" stroke-width="2"/>
+      <circle cx="807" cy="630" r="408" fill="none" stroke="#0b4548" stroke-opacity=".78" stroke-width="2"/>
+      <path d="M397 628 A410 410 0 0 1 997 266" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
+      <path d="M407 628 A407 407 0 0 0 997 994" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
+      <rect x="156" y="288" width="94" height="94" rx="22" fill="#27c9c2"/>
+      <text x="203" y="351" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="700" fill="#071112">K</text>
+      <text x="275" y="311" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" letter-spacing="3.5" fill="#27d1c7">KITSETUPS FUTURES</text>
+      <text x="275" y="367" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="600" fill="#f4f5f6">${safe(profileName)}</text>
+      ${avatar}
+      <text x="156" y="518" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="700" letter-spacing="-2.2" fill="#f6f7f8">${safe(displaySymbol(p.symbol))} · ${sideText}</text>
+      <text x="179" y="722" font-family="Arial,Helvetica,sans-serif" font-size="86" fill="${pnlColor}">${arrow}</text>
+      <text x="306" y="732" font-family="Arial,Helvetica,sans-serif" font-size="174" font-weight="800" letter-spacing="-5" fill="${pnlColor}">${safe(pnlText)}</text>
+      <text x="156" y="861" font-family="Arial,Helvetica,sans-serif" font-size="108" font-weight="800" letter-spacing="-4" fill="${pnlColor}">PNL</text>
+      <text x="156" y="948" font-family="Arial,Helvetica,sans-serif" font-size="24" letter-spacing="4.2" fill="#84919f">UNREALIZED PNL</text>
+      <line x1="156" y1="1027" x2="924" y2="1027" stroke="#242829" stroke-width="2"/>
+      <line x1="309.6" y1="1027" x2="309.6" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="463.2" y1="1027" x2="463.2" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="616.8" y1="1027" x2="616.8" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="770.4" y1="1027" x2="770.4" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="156" y1="1205" x2="924" y2="1205" stroke="#242829" stroke-width="2"/>
+      ${cells}
+      <text x="156" y="1238" font-family="Arial,Helvetica,sans-serif" font-size="13" fill="#66727f">${safe(`${sideText.toUpperCase()} · ${margin ? fmt(margin,4)+' USDT MARGIN' : 'POSITION'}`)}</text>
+      <text x="924" y="1238" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="13" fill="#66727f">KITSETUPS</text>
+    </svg>`;
   };
 
   const svgToPngFile = async (svg, filename) => {
@@ -236,7 +298,37 @@ export default function PerpetualsPage({ user }) {
     <section className="mexc-account-bar"><Metric label="Wallet Balance" value={`${fmt(usdt.cashBalance ?? usdt.equity)} USDT`} /><Metric label="Available" value={`${fmt(usdt.availableBalance)} USDT`} /><Metric label="Position Margin" value={`${fmt(usdt.positionMargin)} USDT`} /><Metric label="Unrealized PnL" value={`${fmt(usdt.unrealized)}`} /><Metric label="Equity" value={`${fmt(usdt.equity)} USDT`} /></section>
     <section className="mexc-bottom"><div className="mexc-tabs">{[['positions','Positions'],['orders','Open Orders'],['history','Order History'],['positionHistory','Position History'],['funding','Funding'],['risk','Risk / Fees']].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'positions' && positions.length ? ` (${positions.length})` : ''}{id === 'orders' && openOrders.length ? ` (${openOrders.length})` : ''}</button>)}{tab === 'orders' && openOrders.length > 0 && <button className="cancel-all" onClick={cancelAll} disabled={busy}>Cancel All</button>}</div><div className="mexc-table-wrap">{tab === 'positions' && <Positions rows={positions} stopOrders={stopOrders} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} />}{tab === 'orders' && <Orders rows={openOrders} onCancel={cancel} />}{tab === 'history' && <Orders rows={account.history} history />}{tab === 'positionHistory' && <PositionHistory rows={account.positionHistory} />}{tab === 'funding' && <Funding rows={account.funding} />}{tab === 'risk' && <Risk risk={account.risk} fee={account.fee} positionMode={account.positionMode} contract={contract} />}</div></section>
     {error && <div className="mexc-error"><span>{error}</span><button onClick={() => setError('')}>×</button></div>}
-    {pnlSharePosition && <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}><div className="pnl-share-dialog"><div className="pnl-share-card"><div className="pnl-card-brand"><span className="mexc-logo">K</span><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>{profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}<h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3><strong className={n(pnlSharePosition.unRealizedPnl ?? pnlSharePosition.unrealizedPnl) >= 0 ? 'positive-text' : 'negative-text'}>{n(pnlSharePosition.unRealizedPnl ?? pnlSharePosition.unrealizedPnl) >= 0 ? '↗' : '↘'} {fmt(pnlSharePosition.unRealizedPnl ?? pnlSharePosition.unrealizedPnl, 4)} USDT</strong><span>Unrealized PnL</span><div className="pnl-meta"><p>Entry <b>{fmt(pnlSharePosition.holdAvgPrice)}</b></p><p>Mark <b>{fmt(last)}</b></p><p>Size <b>{fmt(pnlSharePosition.holdVol)}</b></p><p>Leverage <b>{fmt(pnlSharePosition.leverage, 0)}x</b></p><p>Liquidation <b>{fmt(pnlSharePosition.liquidatePrice ?? pnlSharePosition.liquidationPrice ?? pnlSharePosition.liqPrice)}</b></p><p>Margin <b>{fmt(pnlSharePosition.im, 4)} USDT</b></p></div><div className="pnl-risk-strip"><span>SL <b>{fmt(stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId))?.stopLossPrice) || 'Not set'}</b></span><span>TP <b>{fmt(stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId))?.takeProfitPrice) || 'Not set'}</b></span></div><small className="pnl-card-foot">{new Date().toLocaleString()} · kitsetups.xyz</small></div><div className="pnl-share-actions"><button onClick={() => sharePnl(pnlSharePosition)}>Share</button><button onClick={() => downloadPnl(pnlSharePosition)}>Download</button><button className="ghost" onClick={() => setPnlSharePosition(null)}>Close</button></div></div></div>}
+    {pnlSharePosition && (() => {
+      const roi = pnlPercent(pnlSharePosition);
+      const positive = roi >= 0;
+      const risk = stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId));
+      const entry = n(pnlSharePosition.holdAvgPrice || pnlSharePosition.openAvgPrice);
+      const mark = n(pnlSharePosition.markPrice || pnlSharePosition.markPricePrice || pnlSharePosition.fairPrice || pnlSharePosition.lastPrice) || last;
+      const lev = n(pnlSharePosition.leverage || pnlSharePosition.leverageRatio) || 1;
+      return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
+        <div className="pnl-share-dialog">
+          <div className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
+            <div className="pnl-card-brand"><span className="mexc-logo">K</span><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
+            {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
+            <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
+            <strong>{positive ? '+' : ''}{roi.toFixed(2)}%</strong>
+            <span>UNREALIZED PNL</span>
+            <div className="pnl-meta">
+              <p><small>ENTRY</small><b>{fmt(entry)}</b></p>
+              <p><small>MARK</small><b>{fmt(mark)}</b></p>
+              <p><small>LEVERAGE</small><b>{fmt(lev,0)}x</b></p>
+              <p><small>SL</small><b>{risk?.stopLossPrice ? fmt(risk.stopLossPrice) : 'Not set'}</b></p>
+              <p><small>TP</small><b>{risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : 'Not set'}</b></p>
+              <p><small>SIZE</small><b>{fmt(pnlSharePosition.holdVol)}</b></p>
+              <p><small>LIQUIDATION</small><b>{fmt(pnlSharePosition.liquidatePrice ?? pnlSharePosition.liquidationPrice ?? pnlSharePosition.liqPrice)}</b></p>
+              <p><small>MARGIN</small><b>{fmt(pnlSharePosition.im,4)} USDT</b></p>
+            </div>
+            <div className="pnl-card-foot"><span>{new Date().toLocaleString()}</span><b>KITSETUPS</b></div>
+          </div>
+          <div className="pnl-share-actions"><button onClick={() => sharePnl(pnlSharePosition)}>Share</button><button onClick={() => downloadPnl(pnlSharePosition)}>Download</button><button className="ghost" onClick={() => setPnlSharePosition(null)}>Close</button></div>
+        </div>
+      </div>;
+    })()}
     {riskPosition && <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setRiskPosition(null)}><form className="mexc-dialog risk-dialog" onSubmit={saveRisk}><div className="dialog-head"><div><h3>Manage Position Risk</h3><p>{displaySymbol(riskPosition.symbol)} · {n(riskPosition.positionType) === 1 ? 'Long' : 'Short'} · Entry {fmt(riskPosition.holdAvgPrice)}</p></div><button type="button" onClick={() => setRiskPosition(null)}>×</button></div><div className="risk-live-warning"><b>Protective exits are live.</b><span>These orders close the existing position when their trigger is reached. Adjust them any time while the position remains open.</span></div><Field label="Stop Loss" value={riskSl} onChange={setRiskSl} placeholder={n(riskPosition.positionType) === 1 ? 'Below entry' : 'Above entry'} /><Field label="Take Profit" value={riskTp} onChange={setRiskTp} placeholder={n(riskPosition.positionType) === 1 ? 'Above entry' : 'Below entry'} /><div className="risk-dialog-stats"><Metric label="Current Mark" value={fmt(last)} /><Metric label="Liquidation" value={fmt(riskPosition.liquidatePrice)} /><Metric label="Size" value={fmt(riskPosition.holdVol)} /><Metric label="Leverage" value={`${fmt(riskPosition.leverage, 0)}x`} /></div><div className="risk-dialog-actions"><button type="button" className="danger-outline" onClick={removeRisk} disabled={busy}>Remove protection</button><button className="submit connect-submit" disabled={busy}>{busy ? 'Updating…' : 'Save protection'}</button></div></form></div>}
     {credentialsOpen && <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setCredentialsOpen(false)}><form className="mexc-dialog" onSubmit={connect}><div className="dialog-head"><div><h3>Connect Futures Account</h3><p>Use your exchange API key with Futures permissions. Credentials stay in this browser session and are sent only to the KitSetups API route.</p></div><button type="button" onClick={() => setCredentialsOpen(false)}>×</button></div><Field label="Access Key" value={key} onChange={setKey} placeholder="Access Key" /><div className="field"><label>Secret Key</label><input type="password" value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret Key" autoComplete="off" /></div><button className="submit connect-submit" disabled={busy}>{busy ? 'Connecting…' : 'Connect Futures'}</button></form></div>}
   </div>;
