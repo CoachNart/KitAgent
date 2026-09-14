@@ -1,7 +1,6 @@
 import { getApps, getApp, initializeApp } from 'firebase/app';
-import { getAuth, initializeRecaptchaConfig } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { Capacitor } from '@capacitor/core';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,17 +16,7 @@ const app = firebaseConfigured ? (getApps().length ? getApp() : initializeApp(co
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
 
-const isNativeApp = Capacitor.isNativePlatform();
-
 // Firebase App Check is intentionally disabled for KitSetups.
 // Authentication, backend authorization, device binding and Firestore rules
 // remain responsible for application security.
 export const appCheck = null;
-
-// Keep Firebase Auth's reCAPTCHA configuration available on web only.
-// Native Android does not initialize the web reCAPTCHA configuration.
-if (auth && !isNativeApp) {
-  initializeRecaptchaConfig(auth).catch(error => {
-    console.warn('KitSetups Firebase reCAPTCHA configuration could not be loaded:', error);
-  });
-}
