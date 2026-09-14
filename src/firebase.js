@@ -1,8 +1,9 @@
 import { getApps, getApp, initializeApp } from 'firebase/app';
 import { getAuth, initializeRecaptchaConfig } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, CustomProvider } from 'firebase/app-check';
 import { Capacitor } from '@capacitor/core';
+import { FirebaseAppCheck } from '@capacitor-firebase/app-check';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -21,16 +22,36 @@ export const db = app ? getFirestore(app) : null;
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || '';
 const isNativeApp = Capacitor.isNativePlatform();
 
-// The Firebase JS App Check reCAPTCHA Enterprise provider is a web provider.
-// KitSetups Android is a Capacitor app, so do not initialize the web provider
-// inside the native WebView. This prevents the Web reCAPTCHA key from being
-// evaluated against the Android app and producing "Invalid site key".
-export const appCheck = app && appCheckSiteKey && !isNativeApp
-  ? initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
-      isTokenAutoRefreshEnabled: true,
-    })
-  : null;
+let nativeAppCheckReady = null;
+
+// Web uses Firebase JS App Check + reCAPTCHA Enterprise.
+// Native Android uses the Capacitor Firebase App Check plugin, which uses
+// Firebase's Play Integrity provider. The native token is bridged into the
+// Firebase JS SDK so Firestore/Auth requests from the WebView can use it.
+if (app && isNativeApp) {
+  nativeAppCheckReady = FirebaseAppCheck.initialize();
+
+  const nativeProvider = new CustomProvider({
+    getToken: async () => {
+      await nativeAppCheckReady;
+      return FirebaseAppCheck.getToken({ forceRefresh: false });
+    },
+  });
+
+  initializeAppCheck(app, {
+    provider: nativeProvider,
+    isTokenAutoRefreshEnabled: true,
+  });
+} else if (app && appCheckSiteKey) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
+
+export const appCheck = app && isNativeApp
+  ? nativeAppCheckReady
+  : (app && appCheckSiteKey ? true : null);
 
 if (auth) {
   initializeRecaptchaConfig(auth).catch(error => {
