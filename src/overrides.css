@@ -81,3 +81,27 @@
 }
 
 /* Keep the latest wallet provider hardening deployment-coupled. */
+
+/* Market analysis typography cleanup — readable UI font, no scattered monospace copy. */
+.live-market .liquidity-card,
+.live-market .liquidity-card *,
+.live-market .breakdown,
+.live-market .breakdown * {
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  letter-spacing: normal;
+}
+.live-market .liquidity-card { padding: 18px 20px; }
+.live-market .liquidity-card > div { min-width: 0; }
+.live-market .liquidity-card span { font-size: 9px; line-height: 1.3; letter-spacing: .06em; }
+.live-market .liquidity-card b { font-size: 13px; line-height: 1.35; margin-top: 5px; overflow-wrap:anywhere; }
+.live-market .liquidity-card small { font-size: 11px !important; line-height: 1.65 !important; color: #82939a !important; margin-top: 12px; white-space: normal !important; overflow-wrap:anywhere; }
+.live-market .breakdown-head .tiny-label { font-size: 9px; letter-spacing: .08em; }
+.live-market .breakdown-head b { font-size: 12px; line-height: 1.35; }
+.live-market .breakdown-item { min-width: 0; }
+.live-market .breakdown-item > span { font-size: 9px; line-height: 1.35; letter-spacing: .04em; }
+.live-market .breakdown-item > b { font-size: 12px; line-height: 1.4; margin-top: 6px; overflow-wrap:anywhere; }
+.live-market .breakdown-item > small { font-size: 10px !important; line-height: 1.6 !important; color: #7b8d94 !important; margin-top: 7px; white-space: normal; overflow-wrap:anywhere; }
+@media(max-width:760px){
+  .live-market .liquidity-card small { font-size: 10px !important; line-height: 1.6 !important; }
+  .live-market .breakdown-item > small { font-size: 9px !important; line-height: 1.55 !important; }
+}
