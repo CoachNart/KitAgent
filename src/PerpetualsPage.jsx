@@ -237,27 +237,32 @@ export default function PerpetualsPage({ user }) {
   };
 
   const svgToPngFile = async (svg, filename) => {
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    try {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = url;
-      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('Could not render the PnL card.')); });
-      const canvas = document.createElement('canvas');
-      canvas.width = 1080;
-      canvas.height = 1277;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas is unavailable.');
-      ctx.fillStyle = '#050708';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1));
-      if (!pngBlob) throw new Error('Could not create the PnL image.');
-      return new File([pngBlob], filename, { type: 'image/png' });
-    } finally {
-      URL.revokeObjectURL(url);
+    // Rasterize the artwork into a real PNG. The SVG exists only as an
+    // intermediate renderer and is never exposed as the downloadable file.
+    const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    const img = new Image();
+    img.decoding = 'async';
+    const loaded = new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('PNL image renderer failed.'));
+    });
+    img.src = encoded;
+    await loaded;
+    if (img.decode) {
+      try { await img.decode(); } catch {}
     }
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1277;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Canvas is unavailable in this browser.');
+    ctx.fillStyle = '#050708';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, 1080, 1277);
+    const pngBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Browser could not create the PNG.')), 'image/png');
+    });
+    return new File([pngBlob], filename, { type: 'image/png' });
   };
 
   const triggerPnlDownload = file => {
@@ -387,8 +392,8 @@ export default function PerpetualsPage({ user }) {
             </div>
           </div>
           <div className="pnl-share-actions">
-            <button type="button" disabled={pnlShareBusy || !pnlShareFile} onClick={() => void sharePnl(pnlSharePosition)}>{pnlShareBusy ? 'Preparing…' : 'Share'}</button>
-            <button type="button" disabled={pnlShareBusy || !pnlShareFile} onClick={() => void downloadPnl(pnlSharePosition)}>Download</button>
+            <button type="button" onClick={() => void sharePnl(pnlSharePosition)}>{pnlShareBusy ? 'Preparing…' : 'Share'}</button>
+            <button type="button" onClick={() => void downloadPnl(pnlSharePosition)}>Download</button>
             <button type="button" className="ghost" onClick={() => setPnlSharePosition(null)}>Close</button>
           </div>
         </div>
