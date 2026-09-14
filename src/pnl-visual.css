@@ -26,8 +26,8 @@
 .pnl-share-card .pnl-risk-strip span+span{padding-left:20px!important;border-left:1px solid rgba(255,255,255,.12)!important}
 .pnl-share-card .pnl-risk-strip b{display:block!important;margin-top:5px!important;color:#eef3f8!important;font-size:14px!important;letter-spacing:0!important;text-transform:none!important}
 .pnl-share-card .pnl-card-foot{grid-column:1/-1!important;align-self:end!important;display:flex!important;justify-content:space-between!important;gap:12px!important;margin:18px 0 0!important;color:#607080!important;font-size:8px!important;letter-spacing:.06em!important}
-.pnl-share-actions{position:relative!important;z-index:5!important;display:flex!important;gap:6px!important;margin-top:8px!important}
-.pnl-share-actions button{flex:1!important;height:40px!important;border:1px solid #263141!important;background:#111721!important;color:#e7edf7!important;border-radius:8px!important;font-weight:800!important;cursor:pointer!important}
+.pnl-share-actions{position:relative!important;z-index:99999!important;display:flex!important;gap:6px!important;margin-top:8px!important;pointer-events:auto!important}
+.pnl-share-actions button{position:relative!important;z-index:100000!important;flex:1!important;height:40px!important;border:1px solid #263141!important;background:#111721!important;color:#e7edf7!important;border-radius:8px!important;font-weight:800!important;cursor:pointer!important;pointer-events:auto!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important}
 .pnl-share-actions button:first-child{background:#22d3c5!important;color:#03100e!important;border-color:#22d3c5!important}
 .pnl-share-actions .ghost{color:#718097!important;background:transparent!important}
 .pnl-share-card:has(.negative-text){border-color:rgba(255,82,102,.22)!important}
