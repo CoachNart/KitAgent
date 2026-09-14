@@ -10,38 +10,22 @@ function price(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number
 async function persistSignal(body){const user=auth?.currentUser;if(!user||!body?.setup)return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;return await response.json();}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
 export default function LiveMarketPage(){const [market,setMarket]=useState('forex'),[pair,setPair]=useState(FOREX[0]),[timeframe,setTimeframe]=useState('1H'),[loading,setLoading]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null),[savedSignal,setSavedSignal]=useState(null);const pairs=useMemo(()=>market==='forex'?FOREX:CRYPTO,[market]);useEffect(()=>{setPair(pairs[0]);setResult(null);setSavedSignal(null);setError('')},[market,pairs]);const analyze=async()=>{setLoading(true);setError('');setResult(null);setSavedSignal(null);try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired.')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));const saved=await persistSignal(body);if(saved?.signal)setSavedSignal(saved.signal);}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};return <div className="live-market page-wrap"><div className="live-market-head"><div><span className="tiny-label">INTELLIGENCE LAYER</span><h2>Market analysis</h2><p>Live market data, multi-timeframe confluence and a read-only setup engine.</p></div><span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span></div><section className="live-market-card"><div className="live-tabs" role="tablist">{MARKET_TABS.map(([id,label])=><button key={id} className={market===id?'active':''} onClick={()=>setMarket(id)}>{label}</button>)}</div><div className="live-controls"><label className="live-field"><span>MARKET</span><div><select value={pair} onChange={e=>{setPair(e.target.value);setResult(null)}}>{pairs.map(x=><option key={x}>{x}</option>)}</select><ChevronDown/></div></label><label className="live-field timeframe"><span>TIMEFRAME</span><div><select value={timeframe} onChange={e=>{setTimeframe(e.target.value);setResult(null)}}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select><ChevronDown/></div></label><button className="live-analyze" onClick={analyze} disabled={loading}>{loading?<><RefreshCw className="spin"/> Reading market</>:<><BarChart3/> Analyze pair</>}</button></div>{error&&<div className="live-error">{error}<button onClick={analyze}>Retry</button></div>}{!result&&!loading&&!error&&<div className="live-empty"><ScanSearch/><b>Ready to analyze {pair}</b><span>The engine fetches fresh candles and calculates trend, RSI, EMA, ATR, swing structure, internal liquidity and multi-timeframe confluence.</span></div>}{loading&&<div className="live-loading"><span className="loading-orb"/><b>Reading live market data</b><small>Calculating setup across {timeframe}, 1H, 4H and 1D.</small></div>}{result&&<AnalysisResult result={result} savedSignal={savedSignal}/>}</section></div>}
 function AnalysisResult({result,savedSignal}){
-  const s=result.setup,long=s.bias==='LONG',short=s.bias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:TrendingDown;
-  const direction=long?'LONG':short?'SHORT':'WAIT';
-  const tone=long?'long':short?'short':'wait';
-  const trend=long?'Bullish structure':short?'Bearish structure':'Neutral / mixed structure';
-  const momentum=s.rsi>55?'Bullish':s.rsi<45?'Bearish':'Balanced';
-  const emaState=s.price>s.ema20&&s.ema20>s.ema50?'Bullish alignment':s.price<s.ema20&&s.ema20<s.ema50?'Bearish alignment':'Mixed EMA structure';
-  const targetLabel=s.liquidityType||'No confirmed target';
+  const s=result.setup,long=s.bias==='LONG',short=s.bias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:short?TrendingDown:Clock;
+  const direction=long?'LONG':short?'SHORT':'WAIT',tone=long?'long':short?'short':'wait';
   return <div className="live-result">
-    <div className="setup-card">
-      <div className="setup-card-top">
-        <div className={`setup-direction ${tone}`}>{!wait&&<Icon size={17}/>}<span>{direction}</span></div>
-        <div className="setup-title"><span>{result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'CRYPTO'} · {result.timeframe}</span><h3>{result.market==='forex'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div>
-        <div className="setup-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div>
-      </div>
+    <div className={`setup-card-v2 ${tone}`}>
+      <div className="setup-v2-head"><div className="setup-v2-symbol"><span>{result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'CRYPTO'} · {result.timeframe}</span><h3>{result.market==='forex'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div><div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div><div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div></div>
       {savedSignal&&<div className="signal-saved"><ShieldCheck size={14}/><span>Signal recorded · {savedSignal.signalId}</span></div>}
-      <div className={`setup-status ${wait?'wait':'ready'}`}><span>{wait?'WAITING FOR BETTER PRICE':'TRADE READY'}</span><b>{wait?'No forced trade':'Live setup'}</b><small>{s.setupReason}</small></div>
-      {!wait&&<div className="setup-levels">
-        <div className="level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
-        <div className="level stop"><span>STOP LOSS</span><b>{price(s.stopLoss)}</b><small>Risk {s.riskPercent}%</small></div>
-        <div className="level target"><span>TAKE PROFIT 1</span><b>{price(s.takeProfit1)}</b><small>Primary target</small></div>
-        <div className="level target"><span>TAKE PROFIT 2</span><b>{price(s.takeProfit2)}</b><small>{s.takeProfit2?'Extended target':'No second structural target'}</small></div>
-        <div className="level rr"><span>RISK / REWARD</span><b>{s.riskReward}</b><small>{s.quality}</small></div>
+      <div className={`setup-v2-banner ${wait?'wait':'ready'}`}><div><b>{wait?'WATCHING FOR ENTRY':(s.orderType==='LIMIT'?'LIMIT SETUP':'LIVE ENTRY')}</b><span>{wait?'No clean entry yet — no forced levels.':s.orderType==='LIMIT'?'Wait for the planned pullback.':'Current price is offering the setup.'}</span></div>{!wait&&<strong>{s.riskReward}</strong>}</div>
+      {!wait&&<div className="setup-v2-levels">
+        <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Now {price(s.marketEntry)}</small>}</div>
+        <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b></div>
+        <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>
+        <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>
       </div>}
-      <div className="setup-footer">
-        <div><span>MARKET VIEW</span><b>{trend}</b></div>
-        <div><span>LIQUIDITY</span><b>{targetLabel}</b></div>
-        <div><span>MOMENTUM</span><b>{momentum} · RSI {s.rsi}</b></div>
-        <div><span>EMA STRUCTURE</span><b>{emaState}</b></div>
-      </div>
-      <div className="setup-note"><span>WHY THIS SETUP</span><p>{s.liquidityReason||s.setupReason}</p></div>
+      <div className="setup-v2-meta">{!wait&&<div><span>RR</span><b>{s.riskReward}</b></div>}<div><span>PRICE</span><b>{price(s.marketEntry)}</b></div><div><span>STRUCTURE</span><b>{s.marketStructure}</b></div><div><span>TARGET</span><b>{s.liquidityType||'—'}</b></div></div>
+      <div className="setup-v2-footer"><span>{wait?s.setupReason:'Target is based on the available market structure/liquidity; no synthetic TP is used.'}</span>{wait&&s.limitEntry&&<b>LIMIT WATCH · {price(s.limitEntry)}</b>}</div>
     </div>
-    <div className="compact-confluence"><span>TIMEFRAME CONFLUENCE</span><b>{result.aligned}/{result.totalTimeframes} aligned</b><div>{result.confluence.map(x=><i key={x.timeframe} className={x.bias===s.bias&&s.bias!=='WAIT'?'aligned':''} title={`${x.timeframe}: ${x.bias}`}/>)}</div></div>
   </div>
 }
 function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
