@@ -2,6 +2,7 @@ import { getApps, getApp, initializeApp } from 'firebase/app';
 import { getAuth, initializeRecaptchaConfig } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import { Capacitor } from '@capacitor/core';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -18,7 +19,13 @@ export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
 
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || '';
-export const appCheck = app && appCheckSiteKey
+const isNativeApp = Capacitor.isNativePlatform();
+
+// The Firebase JS App Check reCAPTCHA Enterprise provider is a web provider.
+// KitSetups Android is a Capacitor app, so do not initialize the web provider
+// inside the native WebView. This prevents the Web reCAPTCHA key from being
+// evaluated against the Android app and producing "Invalid site key".
+export const appCheck = app && appCheckSiteKey && !isNativeApp
   ? initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
       isTokenAutoRefreshEnabled: true,
