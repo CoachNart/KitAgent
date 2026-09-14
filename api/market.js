@@ -19,5 +19,62 @@ function pivotLow(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;
 function liquidityCandidates(c,bias,entry,atrValue){const start=Math.max(2,c.length-140),out=[],minDistance=Math.max(.001,Math.min(.004,(atrValue/entry)*.45)),maxDistance=Math.min(.10,Math.max(.015,(atrValue/entry)*8));for(let i=start;i<c.length-2;i++){if(bias==='LONG'&&pivotHigh(c,i)){const level=c[i].high;if(level<=entry)continue;const distance=(level-entry)/entry;if(distance<minDistance||distance>maxDistance)continue;let touches=1;for(let j=Math.max(start,i-20);j<i;j++)if(Math.abs(c[j].high-level)<=Math.max((c[j].high-c[j].low)*.25,entry*.00035))touches++;out.push({level,type:touches>=2?'Equal/clustered highs':'Internal swing high',touches,distance,index:i})}if(bias==='SHORT'&&pivotLow(c,i)){const level=c[i].low;if(level>=entry)continue;const distance=(entry-level)/entry;if(distance<minDistance||distance>maxDistance)continue;let touches=1;for(let j=Math.max(start,i-20);j<i;j++)if(Math.abs(c[j].low-level)<=Math.max((c[j].high-c[j].low)*.25,entry*.00035))touches++;out.push({level,type:touches>=2?'Equal/clustered lows':'Internal swing low',touches,distance,index:i})}}return out.sort((a,b)=>((b.touches-a.touches)*.35)+(a.distance-b.distance)*12-(b.index-a.index)*.0005)}
 function chooseLiquidityTarget(c,bias,entry,a){const candidates=liquidityCandidates(c,bias,entry,a);if(!candidates.length)return null;const chosen=candidates[0],buffer=Math.max(a*.08,entry*.00015),target=bias==='LONG'?chosen.level-buffer:chosen.level+buffer;if((bias==='LONG'&&target<=entry)||(bias==='SHORT'&&target>=entry))return null;return{target,type:chosen.type,liquidityLevel:chosen.level,touches:chosen.touches,distancePct:Number((chosen.distance*100).toFixed(2)),reason:`Targeting ${chosen.type.toLowerCase()} at ${roundPrice(chosen.level)}; TP is placed just before the liquidity to account for reaction.`}}
 function protectiveStop(c,bias,entry,a){const recent=c.slice(-12),recentLow=Math.min(...recent.map(x=>x.low)),recentHigh=Math.max(...recent.map(x=>x.high)),d=Math.max(a*.85,entry*.0015);let stop=bias==='LONG'?Math.min(recentLow,entry-d):Math.max(recentHigh,entry+d);const maxRisk=Math.max(entry*.025,a*1.6);if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);if(bias==='LONG'&&stop>=entry)stop=entry-Math.min(d,maxRisk);if(bias==='SHORT'&&stop<=entry)stop=entry+Math.min(d,maxRisk);return stop}
-function analyzeCandles(c,forcedBias=null){if(c.length<60)throw new Error(`Not enough candles for a reliable setup (${c.length} received)`);const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');const recent=c.slice(-30),hi=Math.max(...recent.map(x=>x.high)),lo=Math.min(...recent.map(x=>x.low));const score=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0),engineBias=score>=2?'LONG':score<=-2?'SHORT':'WAIT',bias=forcedBias||engineBias;let entry=last.close,stop=entry,target1=null,target2=null,liquidity=null,risk=0;if(bias!=='WAIT'){stop=protectiveStop(c,bias,entry,a);risk=Math.abs(entry-stop);liquidity=chooseLiquidityTarget(c,bias,entry,a);if(liquidity){target1=liquidity.target;const pools=liquidityCandidates(c,bias,entry,a).filter(x=>Math.abs(x.level-liquidity.liquidityLevel)>a*.25);if(pools[0])target2=bias==='LONG'?pools[0].level-Math.max(a*.05,entry*.0001):pools[0].level+Math.max(a*.05,entry*.0001);if(target2!=null&&((bias==='LONG'&&target2<=target1)||(bias==='SHORT'&&target2>=target1)))target2=null}}const confidence=Math.min(92,Math.max(42,Math.round(50+Math.abs(score)*7+(r>55||r<45?5:0)+(last.close>e20&&e20>e50||last.close<e20&&e20<e50?5:0)))),riskPct=entry>0?(risk/entry)*100:0,targetRisk=target1!=null&&risk>0?Math.abs(target1-entry)/risk:null;return{bias,engineBias,confidence,entry:roundPrice(entry),stopLoss:roundPrice(stop),takeProfit1:roundPrice(target1),takeProfit2:roundPrice(target2),riskReward:targetRisk!=null?`1:${targetRisk.toFixed(2)}`:'—',riskPercent:Number(riskPct.toFixed(2)),tradeReady:bias!=='WAIT'&&target1!=null,rsi:Number(r.toFixed(2)),ema20:roundPrice(e20),ema50:roundPrice(e50),atr:roundPrice(a),price:roundPrice(last.close),swingHigh:roundPrice(hi),swingLow:roundPrice(lo),liquidityTarget:liquidity?roundPrice(liquidity.liquidityLevel):null,liquidityType:liquidity?.type||'No valid internal liquidity',liquidityTouches:liquidity?.touches||0,liquidityDistancePct:liquidity?.distancePct||null,liquidityReason:liquidity?.reason||'No meaningful internal liquidity pool is available beyond the entry. No TP is fabricated.',timestamp:last.time}}
+function structuralEntry(c,bias,current,a){
+  const e20=ema(c.map(x=>x.close),20);
+  const recent=c.slice(-8);
+  const recentLow=Math.min(...recent.map(x=>x.low)),recentHigh=Math.max(...recent.map(x=>x.high));
+  const pullback=bias==='LONG'?Math.min(current,e20??current):Math.max(current,e20??current);
+  const maxPullback=Math.max(a*.9,current*.006);
+  const limit=bias==='LONG'?Math.max(recentLow,current-maxPullback):Math.min(recentHigh,current+maxPullback);
+  if(!Number.isFinite(limit))return current;
+  if(bias==='LONG'&&limit>=current)return current;
+  if(bias==='SHORT'&&limit<=current)return current;
+  return limit;
+}
+function stopForEntry(c,bias,entry,a){
+  const recent=c.slice(-16),low=Math.min(...recent.map(x=>x.low)),high=Math.max(...recent.map(x=>x.high));
+  const buffer=Math.max(a*.35,entry*.001);
+  let stop=bias==='LONG'?low-buffer:high+buffer;
+  const maxRisk=Math.max(entry*.035,a*2.2);
+  if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);
+  return stop;
+}
+function targetPool(c,bias,entry,a){
+  return liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite).sort((x,y)=>bias==='LONG'?x-y:y-x);
+}
+function evaluateTrade(c,bias,entry,a){
+  const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop);
+  const pools=targetPool(c,bias,entry,a);
+  const scored=pools.map(level=>({level,rr:Math.abs(level-entry)/risk})).filter(x=>x.rr>=1.8);
+  const chosen=scored.sort((x,y)=>Math.abs(x.rr-2.5)-Math.abs(y.rr-2.5))[0]||null;
+  return {entry,stop,risk,target:chosen?.level??null,rr:chosen?.rr??null};
+}
+function analyzeCandles(c,forcedBias=null){
+  if(c.length<60)throw new Error(`Not enough candles for a reliable setup (${c.length} received)`);
+  const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);
+  if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
+  const recent=c.slice(-30),hi=Math.max(...recent.map(x=>x.high)),lo=Math.min(...recent.map(x=>x.low));
+  const score=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0),engineBias=score>=2?'LONG':score<=-2?'SHORT':'WAIT',bias=forcedBias||engineBias;
+  let entry=last.close,stop=entry,target1=null,target2=null,liquidity=null,limitEntry=null,limitTrade=null;
+  if(bias!=='WAIT'){
+    const marketTrade=evaluateTrade(c,bias,entry,a);
+    if(marketTrade.target){
+      stop=marketTrade.stop;target1=marketTrade.target;
+      const pools=targetPool(c,bias,entry,a).filter(x=>Math.abs(x-target1)>a*.25);
+      if(pools[0])target2=pools[0];
+    } else {
+      const candidate=structuralEntry(c,bias,entry,a), limitEval=candidate!==entry?evaluateTrade(c,bias,candidate,a):null;
+      if(limitEval?.target&&limitEval.rr>=1.8){limitEntry=candidate;limitTrade=limitEval;stop=limitEval.stop;target1=limitEval.target;entry=candidate}
+      else {stop=marketTrade.stop}
+    }
+    liquidity=chooseLiquidityTarget(c,bias,entry,a);
+    if(!liquidity&&limitTrade)liquidity=chooseLiquidityTarget(c,bias,limitEntry,a);
+  }
+  const confidence=Math.min(92,Math.max(42,Math.round(50+Math.abs(score)*7+(r>55||r<45?5:0)+(last.close>e20&&e20>e50||last.close<e20&&e20<e50?5:0))));
+  const risk=Math.abs(entry-stop),riskPct=entry>0?(risk/entry)*100:0,targetRisk=target1!=null&&risk>0?Math.abs(target1-entry)/risk:null;
+  const tradeReady=bias!=='WAIT'&&target1!=null&&targetRisk>=1.8;
+  const orderType=limitEntry!=null?'LIMIT':'MARKET';
+  const status=tradeReady?(targetRisk>=2.5?'A-GRADE':targetRisk>=2?'QUALITY':'ACCEPTABLE'):'WAIT';
+  return {bias,engineBias,confidence,entry:roundPrice(entry),marketEntry:roundPrice(last.close),limitEntry:roundPrice(limitEntry),orderType,stopLoss:roundPrice(stop),takeProfit1:roundPrice(target1),takeProfit2:roundPrice(target2),riskReward:targetRisk!=null?`1:${targetRisk.toFixed(2)}`:'—',riskPercent:Number(riskPct.toFixed(2)),tradeReady,riskRewardValue:targetRisk!=null?Number(targetRisk.toFixed(2)):null,quality:status,setupStatus:tradeReady?'TRADE READY':'WAIT',rsi:Number(r.toFixed(2)),ema20:roundPrice(e20),ema50:roundPrice(e50),atr:roundPrice(a),price:roundPrice(last.close),swingHigh:roundPrice(hi),swingLow:roundPrice(lo),liquidityTarget:liquidity?roundPrice(liquidity.liquidityLevel):null,liquidityType:liquidity?.type||'No valid internal liquidity',liquidityTouches:liquidity?.touches||0,liquidityDistancePct:liquidity?.distancePct||null,liquidityReason:liquidity?.reason||'No meaningful internal liquidity pool is available beyond the entry. No TP is fabricated.',timestamp:last.time}
+}
 export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(!['forex','crypto','perpetual'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});const current=await candlesFor(market,symbol,timeframe),setup=analyzeCandles(current),confluence=await Promise.all(CONFLUENCE.map(async tf=>{try{const a=analyzeCandles(await candlesFor(market,symbol,tf));return{timeframe:tf,bias:a.bias,confidence:a.confidence}}catch(e){return{timeframe:tf,bias:'UNAVAILABLE',confidence:0,error:e?.message||'Unavailable'}}}));const directional=confluence.filter(x=>x.bias==='LONG'||x.bias==='SHORT'),longVotes=directional.filter(x=>x.bias==='LONG').length,shortVotes=directional.filter(x=>x.bias==='SHORT').length,inferred=longVotes>shortVotes?'LONG':shortVotes>longVotes?'SHORT':'WAIT',finalBias=setup.bias!=='WAIT'?setup.bias:inferred,aligned=confluence.filter(x=>x.bias===finalBias&&finalBias!=='WAIT').length,finalConfidence=Math.min(95,Math.max(35,Math.round(setup.confidence+aligned*4-(setup.bias==='WAIT'?4:0)))),finalSetup=finalBias===setup.bias?setup:(finalBias==='WAIT'?{...setup,bias:'WAIT',confidence:finalConfidence}:analyzeCandles(current,finalBias));return json(res,200,{ok:true,market,symbol,timeframe,setup:{...finalSetup,confidence:finalConfidence},confluence,aligned,totalTimeframes:4,source:market==='forex'?'Yahoo Finance chart data':market==='perpetual'?'Binance USD-M futures with Bybit linear fallback':'Binance spot klines',generatedAt:new Date().toISOString()})}catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
