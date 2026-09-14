@@ -52,6 +52,8 @@ export default function PerpetualsPage({ user }) {
   const [reduceOnly, setReduceOnly] = useState(false);
   const [tab, setTab] = useState('positions');
   const [pnlSharePosition, setPnlSharePosition] = useState(null);
+  const [pnlShareFile, setPnlShareFile] = useState(null);
+  const [pnlShareBusy, setPnlShareBusy] = useState(false);
   const [riskPosition, setRiskPosition] = useState(null);
   const [riskTp, setRiskTp] = useState('');
   const [riskSl, setRiskSl] = useState('');
@@ -271,60 +273,29 @@ export default function PerpetualsPage({ user }) {
   };
 
   const sharePnl = async p => {
-    const svg = buildPnlSvg(p);
-    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+    const file = pnlShareFile;
     const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
-
-    // IMPORTANT: Chrome requires navigator.share() to run directly from the
-    // original click's transient user activation. Do not await image rendering
-    // before calling it.
+    if (!file) return;
     try {
-      const svgFile = new File([svg], `${safeName}.svg`, { type: 'image/svg+xml' });
       if (typeof navigator.share === 'function') {
-        const shareData = { title: 'KitSetups Futures PnL', text, files: [svgFile] };
-        let canShareFiles = false;
-        try {
-          canShareFiles = typeof navigator.canShare === 'function' && navigator.canShare({ files: [svgFile] });
-        } catch {}
-        if (canShareFiles) {
-          try {
-            await navigator.share(shareData);
-            return;
-          } catch (e) {
-            if (e?.name === 'AbortError') return;
-          }
-        } else {
-          try {
-            await navigator.share({ title: 'KitSetups Futures PnL', text });
-            return;
-          } catch (e) {
-            if (e?.name === 'AbortError') return;
-          }
+        let shareable = false;
+        try { shareable = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] }); } catch {}
+        if (shareable) {
+          try { await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] }); return; }
+          catch (e) { if (e?.name === 'AbortError') return; }
         }
+        try { await navigator.share({ title: 'KitSetups Futures PnL', text }); return; }
+        catch (e) { if (e?.name === 'AbortError') return; }
       }
-
-      // Browser has no native share target: produce the PNG and download it.
-      const file = await svgToPngFile(svg, `${safeName}.png`);
       triggerPnlDownload(file);
     } catch (e) {
-      try {
-        triggerPnlDownload(new File([svg], `${safeName}.svg`, { type: 'image/svg+xml' }));
-      } catch {
-        setError(e?.message || 'Could not share or download the PnL card.');
-      }
+      setError(e?.message || 'Could not share the PnL card.');
     }
   };
 
-  const downloadPnl = async p => {
-    const svg = buildPnlSvg(p);
-    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
-    try {
-      const file = await svgToPngFile(svg, `${safeName}.png`);
-      triggerPnlDownload(file);
-    } catch {
-      // SVG is the same exact card artwork and is a reliable Chrome fallback.
-      triggerPnlDownload(new File([svg], `${safeName}.svg`, { type: 'image/svg+xml' }));
-    }
+  const downloadPnl = p => {
+    if (pnlShareFile) triggerPnlDownload(pnlShareFile);
+    else setError('Preparing the PnL card — please tap Download again in a moment.');
   };
 
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
