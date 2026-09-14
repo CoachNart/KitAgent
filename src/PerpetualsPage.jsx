@@ -306,6 +306,7 @@ export default function PerpetualsPage({ user }) {
     }
     setPnlShareBusy(true);
     const filename = `kitsetups-${String(pnlSharePosition.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`;
+    // Prepare the PNG before the user presses Share/Download.
     void svgToPngFile(buildPnlSvg(pnlSharePosition), filename)
       .then(file => { if (!cancelled) setPnlShareFile(file); })
       .catch(error => {
