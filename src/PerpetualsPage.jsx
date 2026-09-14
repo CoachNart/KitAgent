@@ -52,6 +52,8 @@ export default function PerpetualsPage({ user }) {
   const [reduceOnly, setReduceOnly] = useState(false);
   const [tab, setTab] = useState('positions');
   const [pnlSharePosition, setPnlSharePosition] = useState(null);
+  const [pnlShareFile, setPnlShareFile] = useState(null);
+  const [pnlShareBusy, setPnlShareBusy] = useState(false);
   const [riskPosition, setRiskPosition] = useState(null);
   const [riskTp, setRiskTp] = useState('');
   const [riskSl, setRiskSl] = useState('');
@@ -235,27 +237,26 @@ export default function PerpetualsPage({ user }) {
   };
 
   const svgToPngFile = async (svg, filename) => {
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    try {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = url;
-      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('Could not render the PnL card.')); });
-      const canvas = document.createElement('canvas');
-      canvas.width = 1080;
-      canvas.height = 1277;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas is unavailable.');
-      ctx.fillStyle = '#050708';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1));
-      if (!pngBlob) throw new Error('Could not create the PnL image.');
-      return new File([pngBlob], filename, { type: 'image/png' });
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = encoded;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('Could not render the PnL card.'));
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = 2160;
+    canvas.height = 2554;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Canvas is unavailable.');
+    ctx.fillStyle = '#050708';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const pngBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not create the PnL image.')), 'image/png');
+    });
+    return new File([pngBlob], filename, { type: 'image/png' });
   };
 
   const triggerPnlDownload = file => {
@@ -271,60 +272,29 @@ export default function PerpetualsPage({ user }) {
   };
 
   const sharePnl = async p => {
-    const svg = buildPnlSvg(p);
-    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+    const file = pnlShareFile;
     const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
-
-    // IMPORTANT: Chrome requires navigator.share() to run directly from the
-    // original click's transient user activation. Do not await image rendering
-    // before calling it.
+    if (!file) return;
     try {
-      const svgFile = new File([svg], `${safeName}.svg`, { type: 'image/svg+xml' });
       if (typeof navigator.share === 'function') {
-        const shareData = { title: 'KitSetups Futures PnL', text, files: [svgFile] };
-        let canShareFiles = false;
-        try {
-          canShareFiles = typeof navigator.canShare === 'function' && navigator.canShare({ files: [svgFile] });
-        } catch {}
-        if (canShareFiles) {
-          try {
-            await navigator.share(shareData);
-            return;
-          } catch (e) {
-            if (e?.name === 'AbortError') return;
-          }
-        } else {
-          try {
-            await navigator.share({ title: 'KitSetups Futures PnL', text });
-            return;
-          } catch (e) {
-            if (e?.name === 'AbortError') return;
-          }
+        let shareable = false;
+        try { shareable = typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] }); } catch {}
+        if (shareable) {
+          try { await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] }); return; }
+          catch (e) { if (e?.name === 'AbortError') return; }
         }
+        try { await navigator.share({ title: 'KitSetups Futures PnL', text }); return; }
+        catch (e) { if (e?.name === 'AbortError') return; }
       }
-
-      // Browser has no native share target: produce the PNG and download it.
-      const file = await svgToPngFile(svg, `${safeName}.png`);
       triggerPnlDownload(file);
     } catch (e) {
-      try {
-        triggerPnlDownload(new File([svg], `${safeName}.svg`, { type: 'image/svg+xml' }));
-      } catch {
-        setError(e?.message || 'Could not share or download the PnL card.');
-      }
+      setError(e?.message || 'Could not share the PnL card.');
     }
   };
 
-  const downloadPnl = async p => {
-    const svg = buildPnlSvg(p);
-    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
-    try {
-      const file = await svgToPngFile(svg, `${safeName}.png`);
-      triggerPnlDownload(file);
-    } catch {
-      // SVG is the same exact card artwork and is a reliable Chrome fallback.
-      triggerPnlDownload(new File([svg], `${safeName}.svg`, { type: 'image/svg+xml' }));
-    }
+  const downloadPnl = p => {
+    if (pnlShareFile) triggerPnlDownload(pnlShareFile);
+    else setError('Preparing the PnL card — please tap Download again in a moment.');
   };
 
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
@@ -372,8 +342,8 @@ export default function PerpetualsPage({ user }) {
             </div>
           </div>
           <div className="pnl-share-actions">
-            <button type="button" onClick={() => void sharePnl(pnlSharePosition)}>Share</button>
-            <button type="button" onClick={() => void downloadPnl(pnlSharePosition)}>Download</button>
+            <button type="button" disabled={!pnlShareFile || pnlShareBusy} onClick={() => void sharePnl(pnlSharePosition)}>{pnlShareBusy ? 'Preparing…' : 'Share'}</button>
+            <button type="button" disabled={!pnlShareFile || pnlShareBusy} onClick={() => downloadPnl(pnlSharePosition)}>Download</button>
             <button type="button" className="ghost" onClick={() => setPnlSharePosition(null)}>Close</button>
           </div>
         </div>
