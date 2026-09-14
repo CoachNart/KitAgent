@@ -180,20 +180,14 @@ export default function PerpetualsPage({ user }) {
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
     const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
     const lev = n(p.leverage || p.leverageRatio) || 1;
-    const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
-    const margin = n(p.im);
     const roi = pnlPercent(p);
     const positive = roi >= 0;
     const pnlColor = positive ? '#4f7dff' : '#ff5266';
     const arrow = positive ? '↗' : '↘';
     const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
     const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
-    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : 'Not set';
-    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : 'Not set';
-    const initials = escapeSvg(profileName.slice(0, 1).toUpperCase());
-    const avatar = profileAvatar
-      ? `<image href="${escapeSvg(profileAvatar)}" x="807" y="170" width="116" height="116" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatarClip)"/>`
-      : `<circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/><text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>`;
+    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—';
+    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—';
     const safe = v => escapeSvg(v);
     const pnlText = `${positive ? '+' : ''}${roi.toFixed(2)}%`;
     const vals = [
@@ -204,14 +198,14 @@ export default function PerpetualsPage({ user }) {
       ['TP', tp]
     ];
     const cells = vals.map((item, i) => {
-      const x = 156 + i * 153.6;
+      const x = 80 + i * 184;
       return `<text x="${x}" y="1080" fill="#f1f3f5" font-family="Arial,Helvetica,sans-serif" font-size="22">${safe(item[0])}</text><text x="${x}" y="1152" fill="#eef0f2" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700">${safe(item[1])}</text>`;
     }).join('');
+    const initials = safe(profileName.slice(0, 1).toUpperCase());
     return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1277" viewBox="0 0 1080 1277">
       <defs>
         <radialGradient id="glow" cx="72%" cy="53%" r="52%"><stop offset="0" stop-color="#0b3b37" stop-opacity=".62"/><stop offset=".42" stop-color="#06221f" stop-opacity=".26"/><stop offset="1" stop-color="#050708" stop-opacity="0"/></radialGradient>
         <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b5d60"/><stop offset=".5" stop-color="#12373a"/><stop offset="1" stop-color="#071d20"/></linearGradient>
-        <clipPath id="avatarClip"><circle cx="865" cy="228" r="58"/></clipPath>
       </defs>
       <rect width="1080" height="1277" fill="#050708"/>
       <rect x="57" y="16" width="966" height="1245" rx="50" fill="#050708" stroke="url(#edge)" stroke-width="2.5"/>
@@ -223,21 +217,20 @@ export default function PerpetualsPage({ user }) {
       <text x="203" y="351" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="700" fill="#071112">K</text>
       <text x="275" y="311" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" letter-spacing="3.5" fill="#27d1c7">KITSETUPS FUTURES</text>
       <text x="275" y="367" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="600" fill="#f4f5f6">${safe(profileName)}</text>
-      ${avatar}
+      <circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/>
+      <text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>
       <text x="156" y="518" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="700" letter-spacing="-2.2" fill="#f6f7f8">${safe(displaySymbol(p.symbol))} · ${sideText}</text>
       <text x="179" y="722" font-family="Arial,Helvetica,sans-serif" font-size="86" fill="${pnlColor}">${arrow}</text>
       <text x="306" y="732" font-family="Arial,Helvetica,sans-serif" font-size="174" font-weight="800" letter-spacing="-5" fill="${pnlColor}">${safe(pnlText)}</text>
       <text x="156" y="861" font-family="Arial,Helvetica,sans-serif" font-size="108" font-weight="800" letter-spacing="-4" fill="${pnlColor}">PNL</text>
       <text x="156" y="948" font-family="Arial,Helvetica,sans-serif" font-size="24" letter-spacing="4.2" fill="#84919f">UNREALIZED PNL</text>
       <line x1="156" y1="1027" x2="924" y2="1027" stroke="#242829" stroke-width="2"/>
-      <line x1="309.6" y1="1027" x2="309.6" y2="1205" stroke="#242829" stroke-width="2"/>
-      <line x1="463.2" y1="1027" x2="463.2" y2="1205" stroke="#242829" stroke-width="2"/>
-      <line x1="616.8" y1="1027" x2="616.8" y2="1205" stroke="#242829" stroke-width="2"/>
-      <line x1="770.4" y1="1027" x2="770.4" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="340" y1="1027" x2="340" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="524" y1="1027" x2="524" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="708" y1="1027" x2="708" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="892" y1="1027" x2="892" y2="1205" stroke="#242829" stroke-width="2"/>
       <line x1="156" y1="1205" x2="924" y2="1205" stroke="#242829" stroke-width="2"/>
       ${cells}
-      <text x="156" y="1238" font-family="Arial,Helvetica,sans-serif" font-size="13" fill="#66727f">${safe(`${sideText.toUpperCase()} · ${margin ? fmt(margin,4)+' USDT MARGIN' : 'POSITION'}`)}</text>
-      <text x="924" y="1238" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="13" fill="#66727f">KITSETUPS</text>
     </svg>`;
   };
 
@@ -247,36 +240,67 @@ export default function PerpetualsPage({ user }) {
     try {
       const img = new Image();
       img.decoding = 'async';
-      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+      img.src = url;
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('Could not render the PnL card.')); });
       const canvas = document.createElement('canvas');
-      canvas.width = 1080; canvas.height = 1350;
+      canvas.width = 1080;
+      canvas.height = 1277;
       const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas is unavailable.');
+      ctx.fillStyle = '#050708';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1));
-      if (!pngBlob) throw new Error('Could not render the PnL image.');
+      if (!pngBlob) throw new Error('Could not create the PnL image.');
       return new File([pngBlob], filename, { type: 'image/png' });
-    } finally { URL.revokeObjectURL(url); }
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const triggerPnlDownload = file => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   };
 
   const sharePnl = async p => {
     try {
       const file = await svgToPngFile(buildPnlSvg(p), `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`);
-      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-        await navigator.share({ title: 'KitSetups Futures PnL', text: `${profileName} · ${displaySymbol(p.symbol)} ${n(p.positionType) === 1 ? 'Long' : 'Short'}`, files: [file] });
-        return;
+      const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
+      if (typeof navigator.share === 'function') {
+        const data = { title: 'KitSetups Futures PnL', text };
+        if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) data.files = [file];
+        try {
+          await navigator.share(data);
+          return;
+        } catch (e) {
+          if (e?.name === 'AbortError') return;
+        }
       }
-      const url = URL.createObjectURL(file);
-      try { await navigator.clipboard?.writeText(`${profileName} · ${displaySymbol(p.symbol)} · PnL ${fmt(n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl), 4)} USDT`); } finally { URL.revokeObjectURL(url); }
-    } catch (e) { if (e?.name !== 'AbortError') setError('Could not prepare the PnL image for sharing.'); }
+      triggerPnlDownload(file);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text).catch(() => {});
+      }
+      setError('Share is not available in this browser, so the card was downloaded instead.');
+    } catch (e) {
+      setError(e?.message || 'Could not prepare the PnL card.');
+    }
   };
 
   const downloadPnl = async p => {
     try {
       const file = await svgToPngFile(buildPnlSvg(p), `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`);
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (e) { setError('Could not generate the PnL image.'); }
+      triggerPnlDownload(file);
+    } catch (e) {
+      setError(e?.message || 'Could not generate the PnL card.');
+    }
   };
 
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
