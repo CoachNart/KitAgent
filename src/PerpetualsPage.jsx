@@ -98,25 +98,254 @@ export default function PerpetualsPage({ user }) {
     if (firstError) setError(firstError.reason?.message || 'One account feed failed.');
   }, [connected, key, secret, state]);
 
+  useEffect(() => { loadMarket(true); }, []);
+  useEffect(() => { if (!pairs.length) return; localStorage.setItem('kitsetups_symbol', symbol); loadMarket(false); }, [symbol, interval]);
+  useEffect(() => { if (!connected) return undefined; loadAccount(); const timer = setInterval(loadAccount, 2500); return () => clearInterval(timer); }, [connected, loadAccount]);
+  useEffect(() => { const timer = setInterval(() => loadMarket(false), 2500); return () => clearInterval(timer); }, [loadMarket]);
+
+  const connect = async e => { e?.preventDefault(); if (!key || !secret) { setError('Enter your exchange Access Key and Secret Key.'); return; } setBusy(true); setError(''); try { await api('connect', state); setConnected(true); setCredentialsOpen(false); } catch (e) { setConnected(false); setError(e.message || 'Account connection failed.'); } finally { setBusy(false); } };
+  const disconnect = () => { setConnected(false); setAccount({ assets: [], positions: [], orders: [], stopOrders: [], history: [], positionHistory: [], funding: [], risk: null, fee: null, positionMode: null }); };
+  const choosePair = value => { setSymbol(value.replace('_USDT', 'USDT')); setPairQuery(''); setPairOpen(false); };
+
+  const placeOrder = async e => {
+    e.preventDefault();
+    if (!connected) { setCredentialsOpen(true); return; }
+    const vol = n(volume); if (!vol || vol <= 0) { setError('Enter the contract quantity in the Size field.'); return; }
+    if (leverage < 1 || leverage > maxLeverage) { setError(`Leverage must be between 1x and ${maxLeverage}x for ${displaySymbol(symbol)}.`); return; }
+    const price = orderType === 'market' ? last : n(limitPrice); if (!price) { setError('Enter a valid order price.'); return; }
+    if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
+    setBusy(true); setError('');
+    try { await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined }); setVolume(''); await loadAccount(); }
+    catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
+  };
+
+  const openRiskManager = p => {
+    const existing = stopOrders.find(o => String(o.positionId) === String(p.positionId));
+    setRiskPosition(p);
+    setRiskTp(existing?.takeProfitPrice ? String(existing.takeProfitPrice) : '');
+    setRiskSl(existing?.stopLossPrice ? String(existing.stopLossPrice) : '');
+  };
+
+  const saveRisk = async e => {
+    e?.preventDefault();
+    if (!riskPosition) return;
+    const tp = n(riskTp), sl = n(riskSl), positionType = n(riskPosition.positionType);
+    const entry = n(riskPosition.holdAvgPrice || riskPosition.openAvgPrice);
+    if (!tp && !sl) { setError('Set at least a Stop Loss or Take Profit.'); return; }
+    if (positionType === 1 && ((sl && sl >= entry) || (tp && tp <= entry))) { setError('For a Long position, Stop Loss must be below entry and Take Profit above entry.'); return; }
+    if (positionType === 2 && ((sl && sl <= entry) || (tp && tp >= entry))) { setError('For a Short position, Stop Loss must be above entry and Take Profit below entry.'); return; }
+    setBusy(true); setError('');
+    try {
+      const existing = stopOrders.find(o => String(o.positionId) === String(riskPosition.positionId));
+      if (existing?.id || existing?.stopPlanOrderId) {
+        await api('changeStopOrder', state, { stopPlanOrderId: existing.id || existing.stopPlanOrderId, stopLoss: sl || undefined, takeProfit: tp || undefined });
+      } else {
+        const openType = n(riskPosition.openType) === 1 ? 'isolated' : 'cross';
+        const common = { positionId: riskPosition.positionId, positionType, marginMode: openType, volume: n(riskPosition.holdVol), leverage: n(riskPosition.leverage) || leverage, trend: 1 };
+        if (sl) await api('placeStopOrder', state, { ...common, triggerPrice: sl, triggerType: positionType === 1 ? 2 : 1 });
+        if (tp) await api('placeStopOrder', state, { ...common, triggerPrice: tp, triggerType: positionType === 1 ? 1 : 2 });
+      }
+      await loadAccount();
+      setRiskPosition(null);
+    } catch (e) { setError(e.message || 'Could not update position protection.'); }
+    finally { setBusy(false); }
+  };
+
+  const removeRisk = async () => {
+    if (!riskPosition) return;
+    const existing = stopOrders.find(o => String(o.positionId) === String(riskPosition.positionId));
+    if (!existing?.id && !existing?.stopPlanOrderId) { setRiskPosition(null); return; }
+    setBusy(true); setError('');
+    try { await api('cancelStopOrder', state, { stopPlanOrderId: existing.id || existing.stopPlanOrderId }); await loadAccount(); setRiskPosition(null); }
+    catch (e) { setError(e.message || 'Could not remove protection.'); }
+    finally { setBusy(false); }
+  };
+
+  const cancel = async orderId => { setBusy(true); setError(''); try { await api('cancel', state, { orderIds: [orderId] }); await loadAccount(); } catch (e) { setError(e.message || 'Cancel failed.'); } finally { setBusy(false); } };
+  const cancelAll = async () => { setBusy(true); setError(''); try { await api('cancelAll', state); await loadAccount(); } catch (e) { setError(e.message || 'Cancel-all failed.'); } finally { setBusy(false); } };
+  const closePosition = async p => { const pSide = n(p.positionType) === 1 ? 'sell' : 'buy'; setBusy(true); setError(''); try { await api('order', state, { side: pSide, intent: 'close', type: 5, marginMode: n(p.openType) === 1 ? 'isolated' : 'cross', leverage: n(p.leverage) || leverage, volume: n(p.holdVol), price: last, positionId: p.positionId }); await loadAccount(); } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); } };
+
+  const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  const pnlPercent = p => {
+    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
+    const margin = n(p.im);
+    if (margin > 0) return (pnl / margin) * 100;
+    const entry = n(p.holdAvgPrice || p.openAvgPrice);
+    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const lev = n(p.leverage || p.leverageRatio) || 1;
+    if (!entry || !mark) return 0;
+    const direction = n(p.positionType) === 1 ? 1 : -1;
+    return ((mark - entry) / entry) * lev * 100 * direction;
+  };
+
+  const buildPnlSvg = p => {
+    const entry = n(p.holdAvgPrice || p.openAvgPrice);
+    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const lev = n(p.leverage || p.leverageRatio) || 1;
+    const roi = pnlPercent(p);
+    const positive = roi >= 0;
+    const pnlColor = positive ? '#4f7dff' : '#ff5266';
+    const arrow = positive ? '↗' : '↘';
+    const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
+    const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
+    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—';
+    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—';
+    const safe = v => escapeSvg(v);
+    const pnlText = `${positive ? '+' : ''}${roi.toFixed(2)}%`;
+    const vals = [
+      ['Entry', fmt(entry)],
+      ['Mark', fmt(mark)],
+      ['Leverage', `${fmt(lev, 0)}x`],
+      ['SL', sl],
+      ['TP', tp]
+    ];
+    const cells = vals.map((item, i) => {
+      const x = 80 + i * 184;
+      return `<text x="${x}" y="1080" fill="#f1f3f5" font-family="Arial,Helvetica,sans-serif" font-size="22">${safe(item[0])}</text><text x="${x}" y="1152" fill="#eef0f2" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700">${safe(item[1])}</text>`;
+    }).join('');
+    const initials = safe(profileName.slice(0, 1).toUpperCase());
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1277" viewBox="0 0 1080 1277">
+      <defs>
+        <radialGradient id="glow" cx="72%" cy="53%" r="52%"><stop offset="0" stop-color="#0b3b37" stop-opacity=".62"/><stop offset=".42" stop-color="#06221f" stop-opacity=".26"/><stop offset="1" stop-color="#050708" stop-opacity="0"/></radialGradient>
+        <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b5d60"/><stop offset=".5" stop-color="#12373a"/><stop offset="1" stop-color="#071d20"/></linearGradient>
+      </defs>
+      <rect width="1080" height="1277" fill="#050708"/>
+      <rect x="57" y="16" width="966" height="1245" rx="50" fill="#050708" stroke="url(#edge)" stroke-width="2.5"/>
+      <rect x="84" y="43" width="913" height="1214" rx="3" fill="url(#glow)" stroke="#0b3538" stroke-width="2"/>
+      <circle cx="807" cy="630" r="408" fill="none" stroke="#0b4548" stroke-opacity=".78" stroke-width="2"/>
+      <path d="M397 628 A410 410 0 0 1 997 266" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
+      <path d="M407 628 A407 407 0 0 0 997 994" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
+      <rect x="156" y="288" width="94" height="94" rx="22" fill="#27c9c2"/>
+      <text x="203" y="351" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="700" fill="#071112">K</text>
+      <text x="275" y="311" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" letter-spacing="3.5" fill="#27d1c7">KITSETUPS FUTURES</text>
+      <text x="275" y="367" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="600" fill="#f4f5f6">${safe(profileName)}</text>
+      <circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/>
+      <text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>
+      <text x="156" y="518" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="700" letter-spacing="-2.2" fill="#f6f7f8">${safe(displaySymbol(p.symbol))} · ${sideText}</text>
+      <text x="179" y="722" font-family="Arial,Helvetica,sans-serif" font-size="86" fill="${pnlColor}">${arrow}</text>
+      <text x="306" y="732" font-family="Arial,Helvetica,sans-serif" font-size="174" font-weight="800" letter-spacing="-5" fill="${pnlColor}">${safe(pnlText)}</text>
+      <text x="156" y="861" font-family="Arial,Helvetica,sans-serif" font-size="108" font-weight="800" letter-spacing="-4" fill="${pnlColor}">PNL</text>
+      <text x="156" y="948" font-family="Arial,Helvetica,sans-serif" font-size="24" letter-spacing="4.2" fill="#84919f">UNREALIZED PNL</text>
+      <line x1="156" y1="1027" x2="924" y2="1027" stroke="#242829" stroke-width="2"/>
+      <line x1="340" y1="1027" x2="340" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="524" y1="1027" x2="524" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="708" y1="1027" x2="708" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="892" y1="1027" x2="892" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="156" y1="1205" x2="924" y2="1205" stroke="#242829" stroke-width="2"/>
+      ${cells}
+    </svg>`;
+  };
+
+  const svgToPngFile = async (svg, filename) => {
+    // Rasterize the artwork into a real PNG. The SVG exists only as an
+    // intermediate renderer and is never exposed as the downloadable file.
+    const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    const img = new Image();
+    img.decoding = 'async';
+    const loaded = new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('PNL image renderer failed.'));
+    });
+    img.src = encoded;
+    await loaded;
+    if (img.decode) {
+      try { await img.decode(); } catch {}
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1277;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Canvas is unavailable in this browser.');
+    ctx.fillStyle = '#050708';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, 1080, 1277);
+    const pngBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Browser could not create the PNG.')), 'image/png');
+    });
+    return new File([pngBlob], filename, { type: 'image/png' });
+  };
+
+  const triggerPnlDownload = file => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  };
+
+  const sharePnl = async p => {
+    const svg = buildPnlSvg(p);
+    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+    const file = pnlShareFile;
+    if (!file) {
+      setError('PNL image is still preparing. Please tap Share again in a moment.');
+      return;
+    }
+    const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
+    try {
+      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
+          return;
+        } catch (e) {
+          if (e?.name === 'AbortError') return;
+        }
+      }
+      // Never share the SVG or text-only card. If this browser cannot share files,
+      // download the same PNG so the user gets the actual image artifact.
+      triggerPnlDownload(file);
+    } catch (e) {
+      setError(e?.message || 'Could not share the PnL image.');
+    }
+  };
+
+  const downloadPnl = async p => {
+    const file = pnlShareFile;
+    if (file) {
+      triggerPnlDownload(file);
+      return;
+    }
+    try {
+      const svg = buildPnlSvg(p);
+      const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+      const png = await svgToPngFile(svg, `${safeName}.png`);
+      triggerPnlDownload(png);
+    } catch (e) {
+      setError(e?.message || 'Could not create the PnL PNG.');
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     setPnlShareFile(null);
-    if (!pnlSharePosition) { setPnlShareBusy(false); return undefined; }
+    if (!pnlSharePosition) {
+      setPnlShareBusy(false);
+      return undefined;
+    }
     setPnlShareBusy(true);
-    void imageToDataUri(profileAvatar)
-      .then(avatarDataUri => {
-        if (cancelled) return null;
-        const svg = buildPnlSvg(pnlSharePosition, avatarDataUri);
-        const safeName = `kitsetups-${String(pnlSharePosition.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`;
-        return svgToPngFile(svg, safeName);
+    const svg = buildPnlSvg(pnlSharePosition);
+    const safeName = `kitsetups-${String(pnlSharePosition.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+    void svgToPngFile(svg, `${safeName}.png`)
+      .then(file => {
+        if (!cancelled) setPnlShareFile(file);
       })
-      .then(file => { if (!cancelled && file) setPnlShareFile(file); })
       .catch(error => {
-        if (!cancelled) { setPnlShareFile(null); setError(error?.message || 'Could not prepare the PnL PNG.'); }
+        if (!cancelled) {
+          setPnlShareFile(null);
+          setError(error?.message || 'Could not prepare the PnL PNG.');
+        }
       })
-      .finally(() => { if (!cancelled) setPnlShareBusy(false); });
-    return () => { cancelled = true; };
-  }, [pnlSharePosition, profileAvatar]);
+      .finally(() => {
+        if (!cancelled) setPnlShareBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pnlSharePosition]);
 
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
   const filteredPairs = pairs.filter(p => normalize(p.symbol).includes(normalize(pairQuery || symbol).replace('_USDT', ''))).slice(0, 80);
