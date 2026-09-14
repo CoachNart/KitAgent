@@ -30,9 +30,10 @@ async function captureVisibleCard(card) {
   clone.style.transition = 'none';
   clone.style.overflow = 'hidden';
 
-  // The stylesheet is embedded with the clone so pseudo-elements, gradients,
-  // grid layout, responsive rules and all the little visual details survive export.
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(width * scale)}" height="${Math.round(height * scale)}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden"><style>${styles}</style>${clone.outerHTML}</div></foreignObject></svg>`;
+  // Render the foreignObject at the same CSS-pixel size as the visible card.
+  // Media queries therefore resolve exactly like the live mobile/desktop card;
+  // the canvas is only enlarged afterwards for a crisp PNG.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden"><style>${styles}</style>${clone.outerHTML}</div></foreignObject></svg>`;
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
 
