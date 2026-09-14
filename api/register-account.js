@@ -9,14 +9,12 @@ function requestIp(req){const forwarded=String(req.headers['x-forwarded-for']||'
 function networkKey(ip){return crypto.createHash('sha256').update(`kitsetups-signup-v2:${ip}`).digest('hex')}
 function cleanReferralCode(v){return String(v||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24)}
 async function verifyAppCheck(a,req){const token=String(req.headers['x-firebase-appcheck']||'').trim();if(!token)return false;try{await a.appCheck().verifyToken(token);return true}catch(error){console.warn('Firebase App Check verification failed:',error?.message||error);return false}}
-async function verifyRecaptcha(token,ip){const secret=String(process.env.RECAPTCHA_SECRET_KEY||'').trim();if(!secret)return {ok:false,configured:false};if(!token)return {ok:false,configured:true};try{const body=new URLSearchParams({secret,response:token});if(ip)body.set('remoteip',ip);const response=await fetch('https://www.google.com/recaptcha/api/siteverify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});const result=await response.json();return {ok:Boolean(response.ok&&result.success),configured:true}}catch(error){console.warn('reCAPTCHA verification request failed:',error?.message||error);return {ok:false,configured:true}}}
 
 export default async function handler(req,res){
  if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
  try{
   const a=getAdmin();
   const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const email=String(body.email||'').trim().toLowerCase();const password=String(body.password||'');const ip=requestIp(req);const deviceId=String(body.deviceId||'').trim().toLowerCase();const referralCode=cleanReferralCode(body.referralCode);
-  const recaptcha=await verifyRecaptcha(String(body.recaptchaToken||'').trim(),ip);if(!recaptcha.configured)return json(res,500,{error:'reCAPTCHA is not configured.',code:'RECAPTCHA_NOT_CONFIGURED'});if(!recaptcha.ok)return json(res,403,{error:'Please complete the reCAPTCHA check and try again.',code:'RECAPTCHA_FAILED'});
   if(req.headers['x-firebase-appcheck'])await verifyAppCheck(a,req);
   if(!/^\S+@\S+\.\S+$/.test(email))return json(res,400,{error:'Enter a valid email address.',code:'INVALID_EMAIL'});if(password.length<6)return json(res,400,{error:'Use a stronger password (at least 6 characters).',code:'WEAK_PASSWORD'});if(!/^[a-f0-9]{64}$/.test(deviceId))return json(res,400,{error:'Invalid device binding.',code:'DEVICE_ID_INVALID'});
   const db=a.firestore();let affiliateRef=null;if(referralCode){const affiliateQuery=await db.collection('affiliates').where('referralCode','==',referralCode).limit(1).get();if(!affiliateQuery.empty){const candidate=affiliateQuery.docs[0];if(candidate.data()?.status==='active')affiliateRef={id:candidate.id,referralCode}}}
