@@ -297,6 +297,33 @@ export default function PerpetualsPage({ user }) {
     else setError('Preparing the PnL card — please tap Download again in a moment.');
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    setPnlShareFile(null);
+    if (!pnlSharePosition) {
+      setPnlShareBusy(false);
+      return undefined;
+    }
+    setPnlShareBusy(true);
+    const filename = `kitsetups-${String(pnlSharePosition.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`;
+    void svgToPngFile(buildPnlSvg(pnlSharePosition), filename)
+      .then(file => {
+        if (!cancelled) setPnlShareFile(file);
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setPnlShareFile(null);
+          setError(error?.message || 'Could not prepare the PnL card.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPnlShareBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pnlSharePosition]);
+
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
   const filteredPairs = pairs.filter(p => normalize(p.symbol).includes(normalize(pairQuery || symbol).replace('_USDT', ''))).slice(0, 80);
 
