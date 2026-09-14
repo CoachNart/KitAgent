@@ -60,6 +60,29 @@ function ensureRoi(card) {
   strong.setAttribute('aria-label', `${sign}${roi.toFixed(2)} percent ROI`);
 }
 
+async function inlineImages(root) {
+  const images = [...root.querySelectorAll('img')];
+  await Promise.all(images.map(async img => {
+    const src = img.getAttribute('src');
+    if (!src || src.startsWith('data:')) return;
+
+    try {
+      const response = await fetch(new URL(src, window.location.href).href, { mode: 'cors' });
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      img.setAttribute('src', dataUrl);
+    } catch {
+      // Keep the original image if the provider does not allow CORS.
+    }
+  }));
+}
+
 function prepareClone(card, width, height) {
   const clone = card.cloneNode(true);
   clone.querySelectorAll('.pnl-share-actions, button').forEach(node => node.remove());
@@ -83,10 +106,11 @@ async function renderExactCard(card) {
   const height = Math.max(1, Math.round(rect.height));
   const scale = Math.min(4, Math.max(2, 1080 / width));
   const clone = prepareClone(card, width, height);
+  await inlineImages(clone);
   const styles = collectStyles();
 
   // Export the rendered DOM itself. Do not create a second/custom PnL design here.
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden"><style>${styles}</style>${clone.outerHTML}</div></foreignObject></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * scale}" height="${height * scale}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden"><style>${styles}</style>${clone.outerHTML}</div></foreignObject></svg>`;
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const objectUrl = URL.createObjectURL(blob);
 
@@ -95,7 +119,7 @@ async function renderExactCard(card) {
     image.decoding = 'async';
     await new Promise((resolve, reject) => {
       image.onload = resolve;
-      image.onerror = reject;
+      image.onerror = () => reject(new Error('The PnL card could not be rendered on this browser.'));
       image.src = objectUrl;
     });
 
@@ -109,11 +133,24 @@ async function renderExactCard(card) {
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
     const png = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1));
-    if (!png) throw new Error('Could not render the PnL card.');
+    if (!png) throw new Error('Could not create the PnL image.');
     return png;
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+function getAction(button) {
+  const value = [
+    button.dataset?.action,
+    button.getAttribute('aria-label'),
+    button.getAttribute('title'),
+    button.textContent
+  ].map(clean).join(' ').toLowerCase();
+
+  if (value.includes('download')) return 'download';
+  if (value.includes('share')) return 'share';
+  return '';
 }
 
 async function exportPnl(action) {
@@ -127,7 +164,8 @@ async function exportPnl(action) {
 
   if (action === 'share' && typeof navigator.share === 'function') {
     try {
-      if (typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] })) {
+      const canShareFiles = typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] });
+      if (canShareFiles) {
         await navigator.share({
           title: 'KitSetups Futures PnL',
           text: title,
@@ -137,6 +175,7 @@ async function exportPnl(action) {
       }
     } catch (error) {
       if (error?.name === 'AbortError') return;
+      console.warn('KitSetups native share failed; falling back to download.', error);
     }
   }
 
@@ -166,21 +205,30 @@ function protectActions() {
   document.head.appendChild(style);
 }
 
+function bindActions() {
+  document.querySelectorAll('.pnl-share-actions button').forEach(button => {
+    if (button.dataset.kitsetupsExportBound === 'true') return;
+    button.dataset.kitsetupsExportBound = 'true';
+    button.type = 'button';
+    button.addEventListener('click', event => {
+      const action = getAction(button);
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      exportPnl(action).catch(error => {
+        console.error('KitSetups PnL export failed:', error);
+        button.dataset.exportError = 'true';
+      });
+    }, true);
+  });
+}
+
 protectActions();
+bindActions();
 
 const observer = new MutationObserver(() => {
   const card = document.querySelector('.pnl-share-card');
   if (card) ensureRoi(card);
+  bindActions();
 });
 observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
-
-document.addEventListener('click', event => {
-  const button = event.target.closest?.('.pnl-share-actions button');
-  if (!button) return;
-  const action = clean(button.textContent).toLowerCase();
-  if (action !== 'share' && action !== 'download') return;
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
-  exportPnl(action).catch(error => console.error('KitSetups PnL export failed:', error));
-}, true);
