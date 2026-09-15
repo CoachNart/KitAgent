@@ -12,7 +12,7 @@ const TIMEFRAME_GUIDE={
  '1D':{title:'Higher-timeframe structure',desc:'Establishes the daily structure and uses 4H to refine the setup.'},
  '1W':{title:'Market regime',desc:'Establishes the weekly directional context before looking for 1D structure.'}
 };
-const MARKET_TABS=[['forex','Forex'],['metals','Metals / CFD'],['perpetual','Perpetual']];
+const MARKET_TABS=[['forex','Forex'],['metals','Metal / CFD'],['perpetual','Perpetual']];
 function symbolFor(market,pair){return market==='forex'||market==='metals'?pair:pair.replace('/','');}
 function price(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)>=1000?2:Number(v)>=1?5:8});}
 async function persistSignal(body){const user=auth?.currentUser;if(!user||!body?.setup)return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;return await response.json();}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
