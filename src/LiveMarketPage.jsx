@@ -20,6 +20,8 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 function AnalysisResult({result,savedSignal}){
   const s=result.setup,long=s.bias==='LONG',short=s.bias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:short?TrendingDown:Clock;
   const direction=wait?'WAIT':(long?'LONG':short?'SHORT':'WAIT'),tone=wait?'wait':(long?'long':short?'short':'wait');
+  const role=TIMEFRAME_GUIDE[result.timeframe]||{title:'Market structure',desc:'Building the top-down market read.'};
+  const stage=s.orderType==='LIMIT'?'LIMIT READY':s.orderType==='MARKET'?'MARKET READY':s.entryAligned?'AWAITING EXECUTION':'AWAITING CONFIRMATION';
   return <div className="live-result">
     <div className={`setup-card-v2 ${tone}`}>
       <div className="setup-v2-head"><div className="setup-v2-symbol"><span>{result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'CRYPTO'} · {result.timeframe}</span><h3>{result.market==='forex'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div><div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div><div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div></div>
