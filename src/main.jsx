@@ -15,7 +15,6 @@ import './account-deletion.css';
 import './signal-history.css';
 import './protected-pages.css';
 import './mobile-nav.css';
-import './mexc-session-persistence.js';
 import './contentProtection.js';
 import './route-runtime.js';
 import { startMarketAlerts } from './marketAlerts.js';
