@@ -1,5 +1,4 @@
 {
-  "crons": [{ "path": "/api/signal-monitor", "schedule": "*/5 * * * *" }],
   "regions": [
     "lhr1"
   ],
