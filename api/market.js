@@ -36,16 +36,29 @@ function structuralEntryCandidates(c,bias,current,a){
   return [...new Set(raw.filter(Number.isFinite).map(Number))].filter(x=>bias==='LONG'?x<current:x>current);
 }
 function stopForEntry(c,bias,entry,a){
-  const recent=c.slice(-16),low=Math.min(...recent.map(x=>x.low)),high=Math.max(...recent.map(x=>x.high));
-  const buffer=Math.max(a*.35,entry*.001);
-  return bias==='LONG'?low-buffer:high+buffer;
+  // Stop must sit beyond a confirmed structural invalidation point, not merely
+  // a few ticks beyond the entry. This prevents meaningless "1:50+" RR caused
+  // by an artificially tiny risk distance.
+  const pivots=[];
+  for(let i=2;i<c.length-2;i++){
+    if(bias==='LONG'&&pivotLow(c,i)&&c[i].low<entry)pivots.push(c[i].low);
+    if(bias==='SHORT'&&pivotHigh(c,i)&&c[i].high>entry)pivots.push(c[i].high);
+  }
+  const structural=bias==='LONG'?Math.min(...pivots.slice(-5)):Math.max(...pivots.slice(-5));
+  const fallback=bias==='LONG'?Math.min(...c.slice(-20).map(x=>x.low)):Math.max(...c.slice(-20).map(x=>x.high));
+  const invalidation=Number.isFinite(structural)?structural:fallback;
+  const buffer=Math.max(a*.35,entry*.0005);
+  return bias==='LONG'?invalidation-buffer:invalidation+buffer;
 }
 function targetPool(c,bias,entry,a){
   return liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite).sort((x,y)=>bias==='LONG'?x-y:y-x);
 }
 function evaluateTrade(c,bias,entry,a,minRR=2.3){
   const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop);
-  if(!risk||!Number.isFinite(risk))return null;
+  // Reject entries whose structural invalidation is unrealistically close.
+  // The floor scales with ATR and prevents inflated RR from a microscopic stop.
+  const minimumRisk=Math.max(a*.55,entry*.001);
+  if(!risk||!Number.isFinite(risk)||risk<minimumRisk)return null;
   const pools=targetPool(c,bias,entry,a);
   const scored=pools.map(level=>({level,rr:Math.abs(level-entry)/risk})).filter(x=>x.rr>=minRR);
   if(!scored.length)return null;
