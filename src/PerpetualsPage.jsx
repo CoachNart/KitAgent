@@ -54,6 +54,8 @@ export default function PerpetualsPage({ user }) {
   const [reduceOnly, setReduceOnly] = useState(false);
   const [tab, setTab] = useState('positions');
   const [pnlSharePosition, setPnlSharePosition] = useState(null);
+  useEffect(() => { const open = e => setPnlSharePosition(e.detail); const dl = e => downloadPnl(e.detail); window.addEventListener('kitsetups:open-pnl', open); window.addEventListener('kitsetups:download-pnl', dl); return () => { window.removeEventListener('kitsetups:open-pnl', open); window.removeEventListener('kitsetups:download-pnl', dl); }; }, []);
+
   const [pnlShareFile, setPnlShareFile] = useState(null);
   const [pnlShareBusy, setPnlShareBusy] = useState(false);
   const [riskPosition, setRiskPosition] = useState(null);
