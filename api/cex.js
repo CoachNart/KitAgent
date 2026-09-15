@@ -74,7 +74,11 @@ export default async function handler(req, res) {
     const key = String(body.key || '');
     const secret = String(body.secret || '');
 
-    if (action === 'pairs') return json(res, 200, await publicGet('/api/v1/contract/detail'));
+    if (action === 'pairs') {
+      const result = await publicGet('/api/v1/contract/detail');
+      const data = Array.isArray(result?.data) ? result.data : [];
+      return json(res, 200, { ...result, data: data.filter(x => String(x?.state ?? x?.status ?? 0) === '0' || x?.state == null) });
+    }
     if (action === 'ticker') return json(res, 200, await publicGet(`/api/v1/contract/ticker?symbol=${encodeURIComponent(symbol)}`));
     if (action === 'book') return json(res, 200, await publicGet(`/api/v1/contract/depth/${encodeURIComponent(symbol)}?limit=50`));
     if (action === 'candles') {
