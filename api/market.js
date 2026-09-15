@@ -1,6 +1,16 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
 const TIMEFRAME_MAP={'1m':{forex:'5m',crypto:'1m'},'5m':{forex:'5m',crypto:'5m'},'15m':{forex:'15m',crypto:'15m'},'30m':{forex:'30m',crypto:'30m'},'1H':{forex:'1h',crypto:'1h'},'4H':{forex:'4h',crypto:'4h'},'1D':{forex:'1d',crypto:'1d'},'1W':{forex:'1wk',crypto:'1w'}};
-const CONFLUENCE=['1H','4H','1D'];const allowedIntervals=new Set(['1m','5m','15m','30m','4H','1H','1D','1W']);
+const TIMEFRAME_LADDER={
+  '1W':{bias:'1W',structure:'1D',entry:'4H'},
+  '1D':{bias:'1D',structure:'4H',entry:'1H'},
+  '4H':{bias:'1D',structure:'4H',entry:'1H'},
+  '1H':{bias:'4H',structure:'1H',entry:'15m'},
+  '30m':{bias:'4H',structure:'1H',entry:'15m'},
+  '15m':{bias:'1H',structure:'15m',entry:'5m'},
+  '5m':{bias:'1H',structure:'15m',entry:'5m'},
+  '1m':{bias:'15m',structure:'5m',entry:'1m'}
+};
+const allowedIntervals=new Set(['1m','5m','15m','30m','4H','1H','1D','1W']);
 function json(res,status,payload){res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store, max-age=0');res.end(JSON.stringify(payload))}
 function sma(v,n){if(v.length<n)return null;return v.slice(-n).reduce((a,b)=>a+b,0)/n}
 function ema(v,n){if(v.length<n)return null;let e=sma(v.slice(0,n),n),k=2/(n+1);for(let i=n;i<v.length;i++)e=v[i]*k+e*(1-k);return e}
@@ -49,7 +59,17 @@ function marketStructure(c){
   const h=highs.slice(-3),l=lows.slice(-3);
   const higherHigh=h.length>=2&&h.at(-1).p>h.at(-2).p, lowerHigh=h.length>=2&&h.at(-1).p<h.at(-2).p;
   const higherLow=l.length>=2&&l.at(-1).p>l.at(-2).p, lowerLow=l.length>=2&&l.at(-1).p<l.at(-2).p;
-  return {trend:higherHigh&&higherLow?'LONG':lowerHigh&&lowerLow?'SHORT':'RANGE',higherHigh,higherLow,lowerHigh,lowerLow,lastHigh:h.at(-1)?.p??null,lastLow:l.at(-1)?.p??null};
+  const trend=higherHigh&&higherLow?'LONG':lowerHigh&&lowerLow?'SHORT':'RANGE';
+  return {trend,higherHigh,higherLow,lowerHigh,lowerLow,lastHigh:h.at(-1)?.p??null,lastLow:l.at(-1)?.p??null};
+}
+function structureBias(st){return st.trend==='LONG'||st.trend==='SHORT'?st.trend:'WAIT'}
+function opposite(a,b){return (a==='LONG'&&b==='SHORT')||(a==='SHORT'&&b==='LONG')}
+function topDownDecision(htf,mtf,ltf){
+  const h=structureBias(htf),m=structureBias(mtf),l=structureBias(ltf);
+  const bias=h!=='WAIT'?h:m!=='WAIT'?m:l;
+  const conflict=(h!=='WAIT'&&m!=='WAIT'&&opposite(h,m))||(h!=='WAIT'&&l!=='WAIT'&&opposite(h,l));
+  const structureAligned=Boolean(bias!=='WAIT'&&m===bias&&l===bias);
+  return {bias,higherBias:h,middleBias:m,entryBias:l,conflict,structureAligned};
 }
 function setupQuality(c,bias,entry,trade,e20,e50,r){
   if(!trade)return {score:0,grade:'WAIT',structure:marketStructure(c)};
@@ -73,7 +93,8 @@ function analyzeCandles(c,forcedBias=null){
     const marketTrade=evaluateTrade(c,bias,last.close,a,2.3),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r);
     if(marketTrade&&marketQuality.score>=5){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Current price offers a valid structural entry with a real target and acceptable reward-to-risk.';}
     else {
-      const candidates=structuralEntryCandidates(c,bias,last.close,a); let candidate=null,limitTrade=null,limitQuality={score:0}; for(const x of candidates){const t=evaluateTrade(c,bias,x,a,2.3);const q=setupQuality(c,bias,x,t,e20,e50,r);if(t&&q.score>limitQuality.score){candidate=x;limitTrade=t;limitQuality=q;}}
+      const candidates=structuralEntryCandidates(c,bias,last.close,a);let candidate=null,limitTrade=null,limitQuality={score:0};
+      for(const x of candidates){const t=evaluateTrade(c,bias,x,a,2.3);const q=setupQuality(c,bias,x,t,e20,e50,r);if(t&&q.score>limitQuality.score){candidate=x;limitTrade=t;limitQuality=q}}
       if(limitTrade&&limitQuality.score>=5){trade=limitTrade;orderType='LIMIT';entry=candidate;limitEntry=candidate;setupReason='Current price is less attractive; a defined pullback entry offers cleaner structure and a real target.';}
       else setupReason='Directional bias exists, but price is not offering a clean market or limit entry with a legitimate target.';
     }
@@ -83,4 +104,23 @@ function analyzeCandles(c,forcedBias=null){
   const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.3&&q.score>=5),status=tradeReady?(targetRisk>=3?'A-GRADE':targetRisk>=2.5?'QUALITY':'ACCEPTABLE'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
   return {bias,engineBias,confidence,entry:roundPrice(tradeReady?entry:null),marketEntry:roundPrice(last.close),limitEntry:roundPrice(limitEntry),orderType:tradeReady?orderType:'WAIT',stopLoss:roundPrice(tradeReady?stop:null),takeProfit1:roundPrice(tradeReady?target1:null),takeProfit2:roundPrice(tradeReady?target2:null),riskReward:tradeReady?'1:'+targetRisk.toFixed(2):'—',riskPercent:tradeReady?Number(riskPct.toFixed(2)):null,tradeReady,riskRewardValue:tradeReady?Number(targetRisk.toFixed(2)):null,quality:status,qualityScore:q.score,marketStructure:q.structure?.trend||st.trend,setupStatus:tradeReady?'TRADE READY':'WAIT',setupReason,rsi:Number(r.toFixed(2)),ema20:roundPrice(e20),ema50:roundPrice(e50),atr:roundPrice(a),price:roundPrice(last.close),swingHigh:roundPrice(hi),swingLow:roundPrice(lo),liquidityTarget:liquidity?roundPrice(liquidity.liquidityLevel):null,liquidityType:liquidity?.type||'No confirmed target',liquidityTouches:liquidity?.touches||0,liquidityDistancePct:liquidity?.distancePct||null,liquidityReason:tradeReady?(liquidity?.reason||'Target is derived from a legitimate structural/liquidity level.'):'No target is shown because no quality trade is currently available.',timestamp:last.time};
 }
-export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(!['forex','crypto','perpetual'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});const current=await candlesFor(market,symbol,timeframe),setup=analyzeCandles(current),confluence=await Promise.all(CONFLUENCE.map(async tf=>{try{const a=analyzeCandles(await candlesFor(market,symbol,tf));return{timeframe:tf,bias:a.bias,confidence:a.confidence}}catch(e){return{timeframe:tf,bias:'UNAVAILABLE',confidence:0,error:e?.message||'Unavailable'}}}));const directional=confluence.filter(x=>x.bias==='LONG'||x.bias==='SHORT'),longVotes=directional.filter(x=>x.bias==='LONG').length,shortVotes=directional.filter(x=>x.bias==='SHORT').length,inferred=longVotes>shortVotes?'LONG':shortVotes>longVotes?'SHORT':'WAIT',finalBias=setup.bias!=='WAIT'?setup.bias:inferred,aligned=confluence.filter(x=>x.bias===finalBias&&finalBias!=='WAIT').length,finalConfidence=Math.min(95,Math.max(35,Math.round(setup.confidence+aligned*4-(setup.bias==='WAIT'?4:0)))),finalSetup=finalBias===setup.bias?setup:(finalBias==='WAIT'?{...setup,bias:'WAIT',confidence:finalConfidence}:analyzeCandles(current,finalBias));return json(res,200,{ok:true,market,symbol,timeframe,setup:{...finalSetup,confidence:finalConfidence},confluence,aligned,totalTimeframes:4,source:market==='forex'?'Yahoo Finance chart data':market==='perpetual'?'Binance USD-M futures with Bybit linear fallback':'Binance spot klines',generatedAt:new Date().toISOString()})}catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
+function buildTopDown(candlesByTf,ladder){
+  const htf=marketStructure(candlesByTf[ladder.bias]),mtf=marketStructure(candlesByTf[ladder.structure]),ltf=marketStructure(candlesByTf[ladder.entry]);
+  const d=topDownDecision(htf,mtf,ltf);
+  return {bias:d.bias,higherBias:d.higherBias,middleBias:d.middleBias,entryBias:d.entryBias,conflict:d.conflict,structureAligned:d.structureAligned,higherStructure:htf,middleStructure:mtf,entryStructure:ltf};
+}
+export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(!['forex','crypto','perpetual'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});
+  const ladder=TIMEFRAME_LADDER[timeframe]||TIMEFRAME_LADDER['1H'];
+  const needed=[...new Set([timeframe,ladder.bias,ladder.structure,ladder.entry])];
+  const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
+  const candlesByTf=Object.fromEntries(fetched);
+  const current=candlesByTf[timeframe],topDown=buildTopDown(candlesByTf,ladder);
+  let setup=analyzeCandles(current,topDown.bias);
+  const entryStructure=topDown.entryBias, middleStructure=topDown.middleBias;
+  const structureConflict=topDown.conflict;
+  const entryAligned=topDown.bias!=='WAIT'&&entryStructure===topDown.bias;
+  const canTrade=entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias;
+  if(!canTrade){setup={...setup,bias:topDown.bias==='WAIT'?'WAIT':topDown.bias,tradeReady:false,orderType:'WAIT',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'WAIT',setupStatus:'WAIT',setupReason:structureConflict?'Higher-timeframe structure conflicts with the lower-timeframe read; waiting for alignment.':'Higher-timeframe bias is established, but the entry timeframe has not confirmed it yet.'};}
+  const confidenceBase=setup.confidence,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase+(topDown.structureAligned?8:0)-(structureConflict?8:0))));
+  return json(res,200,{ok:true,market,symbol,timeframe,setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'?'Yahoo Finance chart data':market==='perpetual'?'Binance USD-M futures with Bybit linear fallback':'Binance spot klines',generatedAt:new Date().toISOString()})
+}catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
