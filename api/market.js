@@ -103,7 +103,7 @@ function setupQuality(c,bias,entry,trade,e20,e50,r){
   if(trade.rr>=2.5)score+=3; else if(trade.rr>=2)score+=2; else score+=1;
   return {score,grade:score>=8?'A':score>=6?'B':'C',structure:st};
 }
-function analyzeCandles(c,forcedBias=null){
+function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   if(c.length<60)throw new Error('Not enough candles for a reliable setup ('+c.length+' received)');
   const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);
   if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
@@ -126,7 +126,7 @@ function analyzeCandles(c,forcedBias=null){
   const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.3&&q.score>=5),status=tradeReady?(targetRisk>=3?'A-GRADE':targetRisk>=2.5?'QUALITY':'ACCEPTABLE'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
   const stopDistance=tradeReady?Math.abs(entry-stop):null;
   const stopDistancePct=tradeReady&&entry?((stopDistance/entry)*100):null;
-  const instrumentKey=String(arguments[5]||'');
+  const instrumentKey=String(instrumentSymbol||'');
   const priceUnitLabel=(instrumentKey.includes('/')&& !instrumentKey.includes('USDT'))?'pips':'price units';
   const pipMultiplier=(instrumentKey.includes('/')&& !instrumentKey.includes('USDT'))?(instrumentKey.includes('JPY')?100:10000):1;
   const stopDistanceUnits=tradeReady?stopDistance*pipMultiplier:null;
@@ -143,7 +143,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
   const current=candlesByTf[timeframe],topDown=buildTopDown(candlesByTf,ladder);
-  let setup=analyzeCandles(current,topDown.bias);
+  let setup=analyzeCandles(current,topDown.bias,symbol);
   const entryStructure=topDown.entryBias, middleStructure=topDown.middleBias;
   const structureConflict=topDown.conflict;
   const entryAligned=topDown.bias!=='WAIT'&&entryStructure===topDown.bias;
@@ -176,5 +176,5 @@ export default async function handler(req,res){if(req.method!=='GET')return json
     setup={...setup,directionBias:topDown.bias};
   }
   const confidenceBase=setup.confidence,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase+(topDown.structureAligned?8:0)-(structureConflict?8:0))));
-  return json(res,200,{ok:true,market,symbol,timeframe,setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'?'Yahoo Finance chart data':market==='perpetual'?'Binance USD-M futures with Bybit linear fallback':'Binance spot klines',generatedAt:new Date().toISOString()})
+  return json(res,200,{ok:true,market,symbol,timeframe,setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'||market==='metals'?'Yahoo Finance chart data':market==='perpetual'?'Binance USD-M futures with Bybit linear fallback':'Binance spot klines',generatedAt:new Date().toISOString()})
 }catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
