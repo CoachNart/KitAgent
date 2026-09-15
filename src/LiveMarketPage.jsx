@@ -24,7 +24,10 @@ function AnalysisResult({result,savedSignal}){
         <div className={s.entryBias===s.bias?'active':''}><span>ENTRY · {s.entryTimeframe||'LTF'}</span><b>{s.entryBias||'WAIT'}</b></div>
       </div>
       {s.structureConflict&&<div className="mtf-conflict"><span>STRUCTURE CONFLICT</span><b>Lower timeframe is not allowed to override the higher-timeframe bias.</b></div>}
-      <div className={`setup-v2-banner ${wait?'wait':'ready'}`}><div><b>{wait?'WATCHING FOR ENTRY':(s.orderType==='LIMIT'?'LIMIT SETUP':'LIVE ENTRY')}</b><span>{wait?'No clean entry yet — no forced levels.':s.orderType==='LIMIT'?'Wait for the planned pullback.':'Current price is offering the setup.'}</span></div>{!wait&&<strong>{s.riskReward}</strong>}</div>
+      <div className={"execution-type-card "+(s.orderType==='LIMIT'?'limit':'market')}>
+        <div><span className="execution-kicker">EXECUTION</span><strong>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</strong></div>
+        <div className="execution-trigger"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'CURRENT ENTRY'}</span><b>{s.entry ?? s.marketEntry ?? '—'}</b></div>
+      </div><div className={`setup-v2-banner ${wait?'wait':'ready'}`}><div><b>{wait?'WATCHING FOR ENTRY':(s.orderType==='LIMIT'?'LIMIT SETUP':'LIVE ENTRY')}</b><span>{wait?'No clean entry yet — no forced levels.':s.orderType==='LIMIT'?'Wait for the planned pullback.':'Current price is offering the setup.'}</span></div>{!wait&&<strong>{s.riskReward}</strong>}</div>
       {!wait&&<div className="setup-v2-levels">
         <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Now {price(s.marketEntry)}</small>}</div>
         <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b></div>
