@@ -94,12 +94,28 @@ function numberOrNull(value) {
 }
 
 export default async function handler(req, res) {
-  if (!['GET', 'POST'].includes(req.method)) return json(res, 405, { error: 'Method not allowed.' });
+  if (!['GET', 'POST', 'DELETE'].includes(req.method)) return json(res, 405, { error: 'Method not allowed.' });
   try {
     const decoded = await authenticate(req);
-    if (req.method === 'POST') await requireActiveAccess(decoded.uid);
+    if (req.method === 'POST' || req.method === 'DELETE') await requireActiveAccess(decoded.uid);
     const db = getAdmin().firestore();
     const collection = db.collection('users').doc(decoded.uid).collection('signals');
+
+    if (req.method === 'DELETE') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      if (String(body.confirmation || '').trim() !== 'CLEAR') return json(res, 400, { error: 'Type CLEAR to confirm history deletion.' });
+      const snapshot = await collection.get();
+      let deleted = 0;
+      let batch = db.batch();
+      let count = 0;
+      for (const doc of snapshot.docs) {
+        batch.delete(doc.ref);
+        deleted++; count++;
+        if (count === 450) { await batch.commit(); batch = db.batch(); count = 0; }
+      }
+      if (count) await batch.commit();
+      return json(res, 200, { ok: true, deleted });
+    }
 
     if (req.method === 'GET') {
       const snapshot = await collection.orderBy('generatedAt', 'desc').limit(100).get();
