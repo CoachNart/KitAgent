@@ -100,7 +100,7 @@ export default async function handler(req, res) {
   if (!['GET', 'POST', 'DELETE'].includes(req.method)) return json(res, 405, { error: 'Method not allowed.' });
   try {
     const decoded = await authenticate(req);
-    if (req.method === 'POST' || req.method === 'DELETE') await requireActiveAccess(decoded.uid);
+    if (req.method === 'POST') await requireActiveAccess(decoded.uid);
     const db = getAdmin().firestore();
     const collection = db.collection('users').doc(decoded.uid).collection('signals');
 
