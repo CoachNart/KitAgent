@@ -89,10 +89,10 @@ export async function resolveStatus(signal, price, nowMs=Date.now()) {
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP) return {...signal,currentPrice:price,status:'open',result:null,activatedAt,ambiguousOutcome:true};
-    if(hitSL){outcome={status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}}; break;}
-    if(hitTP){outcome={status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}}; break;}
+    if(hitSL){outcome={status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v2',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}}; break;}
+    if(hitTP){outcome={status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v2',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}}; break;}
   }
-  if(missedAt) return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(missedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',event:'ENTRY_MISSED_SL_REACHED',candleTime:new Date(missedAt).toISOString()}};
+  if(missedAt) return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(missedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v2',event:'ENTRY_MISSED_SL_REACHED',candleTime:new Date(missedAt).toISOString()}};
   return {...signal,currentPrice:price,...(outcome?outcome:active?{status:'open',activatedAt}:{status:signal.orderType==='LIMIT'?'limit_pending':'open'})};
 }
 function numberOrNull(value) {
