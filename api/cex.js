@@ -181,6 +181,26 @@ export default async function handler(req, res) {
     if (action === 'cancelStopOrder') return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/cancel', [{ stopPlanOrderId: Number(body.stopPlanOrderId) }]));
     if (action === 'cancelStopAll') return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/cancel_all', { positionId: body.positionId ? Number(body.positionId) : undefined, symbol }));
 
+    if (action === 'closePosition') {
+      const positionType = Number(body.positionType);
+      if (![1, 2].includes(positionType)) return json(res, 400, { error: 'Invalid position direction.' });
+      const positionMode = body.positionMode ? Number(body.positionMode) : undefined;
+      const payload = {
+        symbol,
+        price: 0,
+        vol: Number(body.volume),
+        side: positionType === 1 ? 4 : 2,
+        type: 5,
+        openType: Number(body.openType) === 1 ? 1 : 2,
+        positionId: Number(body.positionId),
+        positionMode,
+        reduceOnly: positionMode === 2 ? true : undefined
+      };
+      Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
+      const result = await privatePost(key, secret, '/api/v1/private/order/create', payload);
+      return json(res, 200, { ok: true, orderId: result?.data ?? result });
+    }
+
     if (action === 'order') {
       const opening = body.intent !== 'close';
       const side = opening ? (body.side === 'buy' ? 1 : 3) : (body.side === 'buy' ? 4 : 2);
