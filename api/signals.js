@@ -61,7 +61,9 @@ export async function currentPrice(signal) {
   } catch { return null; }
 }
 export async function resolveStatus(signal, price, nowMs=Date.now()) {
-  if (['target_hit','stop_hit','expired','closed'].includes(signal.status)) return signal;
+  if (['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.outcomeEvidence && signal.closedAt) return signal;
+  // Never trust a generic/legacy closed status as a real outcome.
+  if (['expired','closed'].includes(signal.status)) return {...signal,status:'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   if (!['LONG','SHORT'].includes(String(signal.direction||'').toUpperCase())) return {...signal,currentPrice:price};
   const candles=await marketKlines(signal);
   if(!candles.length)return {...signal,currentPrice:price,status:signal.status||'watching'};
@@ -69,13 +71,15 @@ export async function resolveStatus(signal, price, nowMs=Date.now()) {
   const entry=Number(signal.orderType==='LIMIT' ? signal.limitEntry : signal.entry);
   const sl=Number(signal.stopLoss), tp1=Number(signal.takeProfit1);
   if(!Number.isFinite(entry)||!Number.isFinite(sl)||!Number.isFinite(tp1))return {...signal,currentPrice:price};
-  let active=signal.orderType!=='LIMIT';
+  // A newly generated market setup has not triggered merely because it was generated.
+  // It becomes active only after a post-generation candle proves price traded through entry.
+  let active=signal.status==='open' && signal.activatedAt ? true : false;
   let activatedAt=signal.activatedAt||null, outcome=null, missedAt=null;
   for(const candle of candles){
     if(!active){
       const activated=dir==='LONG'?candle.high>=entry:candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated && !activated) { missedAt=candle.time; break; }
+      if(signal.orderType==='LIMIT' && invalidated && !activated) { missedAt=candle.time; break; }
       if(!activated) continue;
       // OHLC candles cannot prove the order of an entry touch versus TP/SL touch.
       // Require a later candle for the trade outcome rather than fabricating sequence.
@@ -179,7 +183,7 @@ export default async function handler(req, res) {
         bias: clean(x?.bias, 10).toUpperCase(),
         confidence: numberOrNull(x?.confidence)
       })) : [],
-      status: bias === 'WAIT' ? 'watching' : 'open',
+      status: bias === 'WAIT' ? 'watching' : (clean(setup.orderType, 20).toUpperCase()==='LIMIT' ? 'limit_pending' : 'watching'),
       result: null,
       pnlPercent: null,
       exitPrice: null,
