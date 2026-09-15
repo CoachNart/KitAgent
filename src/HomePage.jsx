@@ -25,6 +25,11 @@ export default function HomePage({go,wallet}){
   </section>
   <div className="home-section-head"><div><span className="tiny-label">MARKETS</span><h2>What's moving</h2></div><button onClick={()=>go('market')}>View analysis <ChevronRight size={15}/></button></div>
   <section className="market-list">{tickers.map(x=><button key={x.symbol} className="market-row" onClick={()=>go('market')}><span className="coin-mark">{x.symbol.slice(0,-4).slice(0,1)}</span><span className="coin-name"><b>{x.symbol.replace('USDT','')}</b><small>USDT</small></span><span className="coin-price">{money(x.last, x.last<1?4:2)}</span><span className={x.change>=0?'coin-change up':'coin-change down'}>{pct(x.change)}</span></button>)}</section>
+  <section className="home-glance">
+   <div className="glance-card primary"><div className="glance-icon"><TrendingUp size={17}/></div><div><span>MARKET STATUS</span><b>Live & moving</b><small>Prices refresh automatically</small></div><i><span/></i></div>
+   <div className="glance-card"><div className="glance-icon"><Zap size={17}/></div><div><span>SETUPS</span><b>Ready to explore</b><small>Find quality opportunities</small></div><button onClick={()=>go('market')}>Open <ChevronRight size={13}/></button></div>
+   <div className="glance-card"><div className="glance-icon"><Clock3 size={17}/></div><div><span>ACTIVITY</span><b>Stay in control</b><small>Review your trading history</small></div><button onClick={()=>go('history')}>View <ChevronRight size={13}/></button></div>
+  </section>
   <div className="home-section-head"><div><span className="tiny-label">YOUR WORKSPACE</span><h2>Jump in</h2></div></div>
   <section className="home-actions">
    <button onClick={()=>go('perps')}><span className="action-icon cyan"><Zap size={18}/></span><span><b>Perpetuals</b><small>Trade live crypto markets</small></span><ChevronRight size={16}/></button>
