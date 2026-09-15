@@ -13,8 +13,8 @@ export default function HomePage({go,wallet}){
  useEffect(()=>{refresh();const t=setInterval(refresh,10000);return()=>clearInterval(t)},[]);
  const btc=useMemo(()=>tickers.find(x=>x.symbol==='BTCUSDT')||{},[tickers]);
  const displayName=auth?.currentUser?.displayName||auth?.currentUser?.email?.split('@')[0]||'Trader';
- const [signalStats,setSignalStats]=useState({total:0,long:0,short:0,ready:0});
- useEffect(()=>{try{const raw=JSON.parse(localStorage.getItem('kitagent:signals')||'[]');const rows=Array.isArray(raw)?raw:[];setSignalStats({total:rows.length,long:rows.filter(x=>x?.setup?.bias==='LONG').length,short:rows.filter(x=>x?.setup?.bias==='SHORT').length,ready:rows.filter(x=>x?.setup?.tradeReady).length});}catch{setSignalStats({total:0,long:0,short:0,ready:0})}},[]);
+ const [signalStats,setSignalStats]=useState({total:0,long:0,short:0,ready:0}),[recentSignals,setRecentSignals]=useState([]);
+ useEffect(()=>{let cancelled=false;(async()=>{try{if(!auth?.currentUser)return;const token=await auth.currentUser.getIdToken();const r=await fetch('/api/signals',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});if(!r.ok)return;const j=await r.json();const rows=Array.isArray(j.signals)?j.signals:[];if(!cancelled){setSignalStats({total:rows.length,long:rows.filter(x=>x?.direction==='LONG').length,short:rows.filter(x=>x?.direction==='SHORT').length,ready:rows.filter(x=>x?.status==='open'&&x?.entry!=null).length});setRecentSignals(rows.slice(0,3));}}catch{} })();return()=>{cancelled=true}},[]);
  return <div className="home-page">
   <section className="home-top">
    <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you, {displayName}.</h1><p>Welcome To Your Crypto Command Center for AI-powered market intelligence, actionable trade setups, real-time signals, and a smarter way to trade.</p></div>
@@ -40,6 +40,10 @@ export default function HomePage({go,wallet}){
    <div className="insight-stat"><div><span>LONG</span><b>{signalStats.long}</b></div><TrendingUp size={16}/></div>
    <div className="insight-stat"><div><span>SHORT</span><b>{signalStats.short}</b></div><ArrowDownRight size={16}/></div>
    <div className="insight-stat"><div><span>TRADE READY</span><b>{signalStats.ready}</b></div><Target size={16}/></div>
+  </section>
+  <section className="home-signal-panel">
+   <div className="signal-panel-head"><div><span className="tiny-label">SIGNAL DESK</span><h2>Your recent signals</h2><p>Generated from your market analysis sessions.</p></div><button onClick={()=>go('history')}>View all <ChevronRight size={14}/></button></div>
+   {recentSignals.length?<div className="signal-feed">{recentSignals.map(x=><button className="signal-feed-row" key={x.id||x.signalId} onClick={()=>go('history')}><span className={x.direction==='LONG'?'signal-dot long':x.direction==='SHORT'?'signal-dot short':'signal-dot wait'}/><span className="signal-feed-main"><b>{x.symbol}</b><small>{x.timeframe} · {x.direction}</small></span><span className="signal-feed-value"><b>{x.riskReward||'Watching'}</b><small>{x.entry!=null?'Entry '+Number(x.entry).toLocaleString():'No entry yet'}</small></span><ChevronRight size={14}/></button>)}</div>:<div className="signal-empty"><div><Activity size={17}/></div><span><b>Your signal desk is quiet</b><small>Run a market analysis and your generated setups will appear here.</small></span><button onClick={()=>go('market')}>Analyze market <ChevronRight size={13}/></button></div>}
   </section>
   <div className="home-section-head"><div><span className="tiny-label">YOUR WORKSPACE</span><h2>Jump in</h2></div></div>
   <section className="home-actions">
