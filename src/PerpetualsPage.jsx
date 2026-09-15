@@ -34,8 +34,10 @@ export default function PerpetualsPage({ user }) {
   const [book, setBook] = useState(null);
   const [candleData, setCandleData] = useState([]);
   const [account, setAccount] = useState({ assets: [], positions: [], orders: [], stopOrders: [], history: [], positionHistory: [], funding: [], risk: null, fee: null, positionMode: null });
-  const [key, setKey] = useState('');
-  const [secret, setSecret] = useState('');
+  const MEXC_STORAGE_KEY = 'kitsetups_mexc_credentials_v2';
+  const savedCredentials = (() => { try { return JSON.parse(localStorage.getItem(MEXC_STORAGE_KEY) || '{}'); } catch { return {}; } })();
+  const [key, setKey] = useState(savedCredentials.key || '');
+  const [secret, setSecret] = useState(savedCredentials.secret || '');
   const [connected, setConnected] = useState(false);
   const [credentialsOpen, setCredentialsOpen] = useState(false);
   const [pairQuery, setPairQuery] = useState('');
@@ -98,13 +100,36 @@ export default function PerpetualsPage({ user }) {
     if (firstError) setError(firstError.reason?.message || 'One account feed failed.');
   }, [connected, key, secret, state]);
 
+  useEffect(() => {
+    if (!savedCredentials.key || !savedCredentials.secret) {
+      setCredentialsOpen(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setBusy(true);
+      setError('');
+      try {
+        await api('connect', { symbol, interval, key: savedCredentials.key, secret: savedCredentials.secret });
+        if (!cancelled) setConnected(true);
+      } catch (e) {
+        if (!cancelled) {
+          setConnected(false);
+          setError('Your saved MEXC connection needs to be reconnected. Please check the API key or permissions.');
+        }
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => { loadMarket(true); }, []);
   useEffect(() => { if (!pairs.length) return; localStorage.setItem('kitsetups_symbol', symbol); loadMarket(false); }, [symbol, interval]);
   useEffect(() => { if (!connected) return undefined; loadAccount(); const timer = setInterval(loadAccount, 2500); return () => clearInterval(timer); }, [connected, loadAccount]);
   useEffect(() => { const timer = setInterval(() => loadMarket(false), 2500); return () => clearInterval(timer); }, [loadMarket]);
 
-  const connect = async e => { e?.preventDefault(); if (!key || !secret) { setError('Enter your exchange Access Key and Secret Key.'); return; } setBusy(true); setError(''); try { await api('connect', state); setConnected(true); setCredentialsOpen(false); } catch (e) { setConnected(false); setError(e.message || 'Account connection failed.'); } finally { setBusy(false); } };
-  const disconnect = () => { setConnected(false); setAccount({ assets: [], positions: [], orders: [], stopOrders: [], history: [], positionHistory: [], funding: [], risk: null, fee: null, positionMode: null }); };
+  const connect = async e => { e?.preventDefault(); if (!key || !secret) { setError('Enter your exchange Access Key and Secret Key.'); return; } setBusy(true); setError(''); try { await api('connect', state); localStorage.setItem(MEXC_STORAGE_KEY, JSON.stringify({ key, secret })); setConnected(true); setCredentialsOpen(false); } catch (e) { setConnected(false); setError(e.message || 'Account connection failed.'); } finally { setBusy(false); } };
+  const disconnect = () => { localStorage.removeItem(MEXC_STORAGE_KEY); setKey(''); setSecret(''); setConnected(false); setAccount({ assets: [], positions: [], orders: [], stopOrders: [], history: [], positionHistory: [], funding: [], risk: null, fee: null, positionMode: null }); };
   const choosePair = value => { setSymbol(value.replace('_USDT', 'USDT')); setPairQuery(''); setPairOpen(false); };
 
   const placeOrder = async e => {
