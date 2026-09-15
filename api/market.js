@@ -4,9 +4,9 @@ const TIMEFRAME_LADDER={
   '1W':{bias:'1W',structure:'1D',entry:'4H'},
   '1D':{bias:'1D',structure:'4H',entry:'1H'},
   '4H':{bias:'1D',structure:'4H',entry:'1H'},
-  '1H':{bias:'4H',structure:'1H',entry:'15m'},
-  '30m':{bias:'4H',structure:'1H',entry:'15m'},
-  '15m':{bias:'1H',structure:'15m',entry:'5m'},
+  '1H':{bias:'4H',structure:'1H',entry:'1H'},
+  '30m':{bias:'4H',structure:'1H',entry:'30m'},
+  '15m':{bias:'1H',structure:'15m',entry:'15m'},
   '5m':{bias:'1H',structure:'15m',entry:'5m'},
   '1m':{bias:'15m',structure:'5m',entry:'1m'}
 };
@@ -65,11 +65,20 @@ function marketStructure(c){
 function structureBias(st){return st.trend==='LONG'||st.trend==='SHORT'?st.trend:'WAIT'}
 function opposite(a,b){return (a==='LONG'&&b==='SHORT')||(a==='SHORT'&&b==='LONG')}
 function topDownDecision(htf,mtf,ltf){
-  const h=structureBias(htf),m=structureBias(mtf),l=structureBias(ltf);
-  const bias=h!=='WAIT'?h:m!=='WAIT'?m:l;
-  const conflict=(h!=='WAIT'&&m!=='WAIT'&&opposite(h,m))||(h!=='WAIT'&&l!=='WAIT'&&opposite(h,l));
-  const structureAligned=Boolean(bias!=='WAIT'&&m===bias&&l===bias);
-  return {bias,higherBias:h,middleBias:m,entryBias:l,conflict,structureAligned};
+  const higherBias=structureBias(htf);
+  const middleBias=structureBias(mtf);
+  const entryBias=structureBias(ltf);
+  // Higher-timeframe structure is authoritative. A lower timeframe may refine
+  // the entry, but it can never create or reverse the directional bias.
+  const bias=higherBias;
+  const conflict=(higherBias!=='WAIT'&&middleBias!=='WAIT'&&opposite(higherBias,middleBias))
+    ||(higherBias!=='WAIT'&&entryBias!=='WAIT'&&opposite(higherBias,entryBias));
+  const structureAligned=Boolean(
+    higherBias!=='WAIT' &&
+    middleBias===higherBias &&
+    entryBias===higherBias
+  );
+  return {bias,higherBias,middleBias,entryBias,conflict,structureAligned};
 }
 function setupQuality(c,bias,entry,trade,e20,e50,r){
   if(!trade)return {score:0,grade:'WAIT',structure:marketStructure(c)};
@@ -120,7 +129,33 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const structureConflict=topDown.conflict;
   const entryAligned=topDown.bias!=='WAIT'&&entryStructure===topDown.bias;
   const isLimitSetup=setup.orderType==='LIMIT'&&setup.limitEntry!=null&&setup.takeProfit1!=null; const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias; const limitReady=isLimitSetup&&!structureConflict&&topDown.middleBias===topDown.bias; const canTrade=marketReady||limitReady;
-  if(!canTrade){setup={...setup,bias:'WAIT',tradeReady:false,orderType:'WAIT',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'WAIT',setupStatus:'WAIT',setupReason:structureConflict?'Higher-timeframe structure conflicts with the lower-timeframe read; waiting for alignment.':isLimitSetup?'Higher-timeframe structure is aligned; current price is not the preferred entry, so the setup is offered as a limit order at the defined structural level.':'Higher-timeframe bias is established, but the entry timeframe has not confirmed it yet.'};}
+  if(!canTrade){
+    const directionBias=topDown.bias;
+    const reason=directionBias==='WAIT'
+      ? 'No confirmed higher-timeframe market structure is present. There is no setup to trade.'
+      : structureConflict
+        ? 'Higher-timeframe direction is established, but the lower-timeframe structure conflicts with it. No setup is available until structure realigns.'
+        : 'Directional bias is established, but the selected execution timeframe has no quality market or limit entry with a legitimate structural target.';
+    setup={
+      ...setup,
+      bias:directionBias,
+      directionBias,
+      tradeReady:false,
+      orderType:'NO_SETUP',
+      entry:null,
+      limitEntry:null,
+      stopLoss:null,
+      takeProfit1:null,
+      takeProfit2:null,
+      riskReward:'—',
+      riskRewardValue:null,
+      quality:'NO SETUP',
+      setupStatus:'NO SETUP',
+      setupReason:reason
+    };
+  } else {
+    setup={...setup,directionBias:topDown.bias};
+  }
   const confidenceBase=setup.confidence,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase+(topDown.structureAligned?8:0)-(structureConflict?8:0))));
   return json(res,200,{ok:true,market,symbol,timeframe,setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'?'Yahoo Finance chart data':market==='perpetual'?'Binance USD-M futures with Bybit linear fallback':'Binance spot klines',generatedAt:new Date().toISOString()})
 }catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
