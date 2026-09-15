@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
-import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Zap} from 'lucide-react';
+import {auth} from './firebase.js';
+import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Zap,Activity,Target,ShieldCheck} from 'lucide-react';
 
 const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT'];
 const api=(op,p={})=>fetch(`/api/bybit?${new URLSearchParams({op,...p})}`,{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
@@ -11,9 +12,12 @@ export default function HomePage({go,wallet}){
  const refresh=async()=>{setBusy(true);try{const rows=await Promise.all(COINS.map(async symbol=>{const j=await api('ticker',{symbol});const x=j.list?.[0]||{};return {symbol,last:Number(x.lastPrice),change:Number(x.price24hPcnt)*100,turnover:Number(x.turnover24h)}}));setTickers(rows);setUpdated(Date.now())}finally{setBusy(false)}};
  useEffect(()=>{refresh();const t=setInterval(refresh,10000);return()=>clearInterval(t)},[]);
  const btc=useMemo(()=>tickers.find(x=>x.symbol==='BTCUSDT')||{},[tickers]);
+ const displayName=auth?.currentUser?.displayName||auth?.currentUser?.email?.split('@')[0]||'Trader';
+ const [signalStats,setSignalStats]=useState({total:0,long:0,short:0,ready:0});
+ useEffect(()=>{try{const raw=JSON.parse(localStorage.getItem('kitagent:signals')||'[]');const rows=Array.isArray(raw)?raw:[];setSignalStats({total:rows.length,long:rows.filter(x=>x?.setup?.bias==='LONG').length,short:rows.filter(x=>x?.setup?.bias==='SHORT').length,ready:rows.filter(x=>x?.setup?.tradeReady).length});}catch{setSignalStats({total:0,long:0,short:0,ready:0})}},[]);
  return <div className="home-page">
   <section className="home-top">
-   <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you.</h1><p>Welcome To Your Crypto Command Center for AI-powered market intelligence, actionable trade setups, real-time signals, and a smarter way to trade.</p></div>
+   <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you, {displayName}.</h1><p>Welcome To Your Crypto Command Center for AI-powered market intelligence, actionable trade setups, real-time signals, and a smarter way to trade.</p></div>
    <button className="home-refresh" onClick={refresh} disabled={busy} aria-label="Refresh markets"><RefreshCw size={17} className={busy?'spin':''}/></button>
   </section>
   <section className="home-balance">
@@ -29,6 +33,13 @@ export default function HomePage({go,wallet}){
    <div className="glance-card primary"><div className="glance-icon"><TrendingUp size={17}/></div><div><span>MARKET STATUS</span><b>Live & moving</b><small>Prices refresh automatically</small></div><i><span/></i></div>
    <div className="glance-card"><div className="glance-icon"><Zap size={17}/></div><div><span>SETUPS</span><b>Ready to explore</b><small>Find quality opportunities</small></div><button onClick={()=>go('market')}>Open <ChevronRight size={13}/></button></div>
    <div className="glance-card"><div className="glance-icon"><Clock3 size={17}/></div><div><span>ACTIVITY</span><b>Stay in control</b><small>Review your trading history</small></div><button onClick={()=>go('history')}>View <ChevronRight size={13}/></button></div>
+  </section>
+  <section className="home-insights">
+   <div className="insight-intro"><span className="tiny-label">YOUR ACTIVITY</span><h2>Your trading snapshot</h2><p>A quick view of the signals you've generated and the workspace you've been using.</p></div>
+   <div className="insight-stat"><div><span>SIGNALS</span><b>{signalStats.total}</b></div><Activity size={16}/></div>
+   <div className="insight-stat"><div><span>LONG</span><b>{signalStats.long}</b></div><TrendingUp size={16}/></div>
+   <div className="insight-stat"><div><span>SHORT</span><b>{signalStats.short}</b></div><ArrowDownRight size={16}/></div>
+   <div className="insight-stat"><div><span>TRADE READY</span><b>{signalStats.ready}</b></div><Target size={16}/></div>
   </section>
   <div className="home-section-head"><div><span className="tiny-label">YOUR WORKSPACE</span><h2>Jump in</h2></div></div>
   <section className="home-actions">
