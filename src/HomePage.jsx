@@ -6,6 +6,7 @@ const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT'];
 const api=(op,p={})=>fetch(`/api/bybit?${new URLSearchParams({op,...p})}`,{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
 const money=(v,d=2)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})}`:'—';
 const pct=v=>Number.isFinite(Number(v))?`${Number(v)>=0?'+':''}${Number(v).toFixed(2)}%`:'—';
+function CountUp({value,duration=650}){const target=Number(value)||0;const [shown,setShown]=useState(0);useEffect(()=>{let raf,start;const tick=t=>{if(!start)start=t;const p=Math.min(1,(t-start)/duration);setShown(Math.round(target*(1-Math.pow(1-p,3))));if(p<1)raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf)},[target,duration]);return <b key={target} className="snapshot-number" aria-label={String(target)}>{shown.toLocaleString()}</b>}
 
 export default function HomePage({go,wallet}){
  const [tickers,setTickers]=useState([]),[busy,setBusy]=useState(false),[updated,setUpdated]=useState(Date.now());
@@ -36,10 +37,10 @@ export default function HomePage({go,wallet}){
   </section>
   <section className="home-insights">
    <div className="insight-intro"><span className="tiny-label">YOUR ACTIVITY</span><h2>Your trading snapshot</h2><p>A quick view of the signals you've generated and the workspace you've been using.</p></div>
-   <div className="insight-stat"><div><span>SIGNALS</span><b>{signalStats.total}</b></div><Activity size={16}/></div>
-   <div className="insight-stat"><div><span>LONG</span><b>{signalStats.long}</b></div><TrendingUp size={16}/></div>
-   <div className="insight-stat"><div><span>SHORT</span><b>{signalStats.short}</b></div><ArrowDownRight size={16}/></div>
-   <div className="insight-stat"><div><span>TRADE READY</span><b>{signalStats.ready}</b></div><Target size={16}/></div>
+   <div className="insight-stat"><div><span>SIGNALS</span><CountUp value={signalStats.total}/></div><Activity size={16}/></div>
+   <div className="insight-stat"><div><span>LONG</span><CountUp value={signalStats.long}/></div><TrendingUp size={16}/></div>
+   <div className="insight-stat"><div><span>SHORT</span><CountUp value={signalStats.short}/></div><ArrowDownRight size={16}/></div>
+   <div className="insight-stat"><div><span>TRADE READY</span><CountUp value={signalStats.ready}/></div><Target size={16}/></div>
   </section>
   <section className="home-signal-panel">
    <div className="signal-panel-head"><div><span className="tiny-label">SIGNAL DESK</span><h2>Your recent signals</h2><p>Generated from your market analysis sessions.</p></div><button onClick={()=>go('history')}>View all <ChevronRight size={14}/></button></div>
