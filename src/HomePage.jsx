@@ -11,7 +11,7 @@ function CountUp({value,duration=2600}){const target=Number(value)||0;const ref=
 export default function HomePage({go,wallet}){
  const [tickers,setTickers]=useState([]),[busy,setBusy]=useState(false),[updated,setUpdated]=useState(Date.now());
  const [openTrades,setOpenTrades]=useState([]);
- const loadOpenTrades=async()=>{try{const r=await api('positions');const rows=Array.isArray(r?.data)?r.data:Array.isArray(r)?r:[];setOpenTrades(rows.filter(p=>Number(p.size||p.qty||p.positionAmt||0)!==0))}catch{setOpenTrades([])}};
+ const loadOpenTrades=async()=>{try{let creds={};try{creds=JSON.parse(localStorage.getItem('kitsetups_mexc_credentials_v2')||'{}')}catch{}if(!creds.key||!creds.secret){setOpenTrades([]);return}const r=await fetch('/api/cex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'positions',key:creds.key,secret:creds.secret})});const j=await r.json();if(!r.ok||j?.error)throw Error(j?.error||'Unable to load positions');const rows=Array.isArray(j?.data)?j.data:Array.isArray(j?.data?.data)?j.data.data:Array.isArray(j?.result)?j.result:[];setOpenTrades(rows.filter(p=>Number(p.holdVol??p.vol??p.size??0)>0))}catch{setOpenTrades([])}};
  useEffect(()=>{loadOpenTrades();const t=setInterval(loadOpenTrades,5000);return()=>clearInterval(t)},[]);
  const refresh=async()=>{setBusy(true);try{const rows=await Promise.all(COINS.map(async symbol=>{const j=await api('ticker',{symbol});const x=j.list?.[0]||{};return {symbol,last:Number(x.lastPrice),change:Number(x.price24hPcnt)*100,turnover:Number(x.turnover24h)}}));setTickers(rows);setUpdated(Date.now())}finally{setBusy(false)}};
  useEffect(()=>{refresh();const t=setInterval(refresh,10000);return()=>clearInterval(t)},[]);
