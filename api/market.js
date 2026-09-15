@@ -81,17 +81,18 @@ function topDownDecision(htf,mtf,ltf){
   const higherBias=structureBias(htf);
   const middleBias=structureBias(mtf);
   const entryBias=structureBias(ltf);
-  // Higher-timeframe structure is authoritative. A lower timeframe may refine
-  // the entry, but it can never create or reverse the directional bias.
+  // Higher-timeframe structure is authoritative. The execution timeframe is
+  // confirmation, not a second directional engine: a RANGE on the entry TF
+  // means "waiting for confirmation", while an actual opposite structure is
+  // a hard conflict. This prevents the old exact-alignment gate from turning
+  // every otherwise valid pullback into WAIT.
   const bias=higherBias;
-  const conflict=(higherBias!=='WAIT'&&middleBias!=='WAIT'&&opposite(higherBias,middleBias))
+  const hardConflict=(higherBias!=='WAIT'&&middleBias!=='WAIT'&&opposite(higherBias,middleBias))
     ||(higherBias!=='WAIT'&&entryBias!=='WAIT'&&opposite(higherBias,entryBias));
-  const structureAligned=Boolean(
-    higherBias!=='WAIT' &&
-    middleBias===higherBias &&
-    entryBias===higherBias
-  );
-  return {bias,higherBias,middleBias,entryBias,conflict,structureAligned};
+  const middleAligned=higherBias!=='WAIT'&&middleBias===higherBias;
+  const entryConfirmed=entryBias===higherBias;
+  const structureAligned=Boolean(middleAligned && (entryConfirmed || entryBias==='WAIT'));
+  return {bias,higherBias,middleBias,entryBias,conflict:hardConflict,structureAligned,middleAligned,entryConfirmed};
 }
 function setupQuality(c,bias,entry,trade,e20,e50,r){
   if(!trade)return {score:0,grade:'WAIT',structure:marketStructure(c)};
@@ -146,8 +147,11 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   let setup=analyzeCandles(current,topDown.bias,symbol);
   const entryStructure=topDown.entryBias, middleStructure=topDown.middleBias;
   const structureConflict=topDown.conflict;
-  const entryAligned=topDown.bias!=='WAIT'&&entryStructure===topDown.bias;
-  const isLimitSetup=setup.orderType==='LIMIT'&&setup.limitEntry!=null&&setup.takeProfit1!=null; const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias; const limitReady=isLimitSetup&&!structureConflict&&topDown.middleBias===topDown.bias; const canTrade=marketReady||limitReady;
+  const entryAligned=topDown.bias!=='WAIT'&&(entryStructure===topDown.bias||entryStructure==='WAIT');
+  const isLimitSetup=setup.orderType==='LIMIT'&&setup.limitEntry!=null&&setup.takeProfit1!=null;
+  const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias;
+  const limitReady=isLimitSetup&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias;
+  const canTrade=marketReady||limitReady;
   if(!canTrade){
     const directionBias=topDown.bias;
     const reason=directionBias==='WAIT'
