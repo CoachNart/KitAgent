@@ -10,6 +10,9 @@ function CountUp({value,duration=2600}){const target=Number(value)||0;const ref=
 
 export default function HomePage({go,wallet}){
  const [tickers,setTickers]=useState([]),[busy,setBusy]=useState(false),[updated,setUpdated]=useState(Date.now());
+ const [openTrades,setOpenTrades]=useState([]);
+ const loadOpenTrades=async()=>{try{const r=await api('positions');const rows=Array.isArray(r?.data)?r.data:Array.isArray(r)?r:[];setOpenTrades(rows.filter(p=>Number(p.size||p.qty||p.positionAmt||0)!==0))}catch{setOpenTrades([])}};
+ useEffect(()=>{loadOpenTrades();const t=setInterval(loadOpenTrades,5000);return()=>clearInterval(t)},[]);
  const refresh=async()=>{setBusy(true);try{const rows=await Promise.all(COINS.map(async symbol=>{const j=await api('ticker',{symbol});const x=j.list?.[0]||{};return {symbol,last:Number(x.lastPrice),change:Number(x.price24hPcnt)*100,turnover:Number(x.turnover24h)}}));setTickers(rows);setUpdated(Date.now())}finally{setBusy(false)}};
  useEffect(()=>{refresh();const t=setInterval(refresh,10000);return()=>clearInterval(t)},[]);
  const btc=useMemo(()=>tickers.find(x=>x.symbol==='BTCUSDT')||{},[tickers]);
@@ -42,6 +45,10 @@ export default function HomePage({go,wallet}){
    <div className="insight-stat"><div><span>LONG</span><CountUp value={signalStats.long}/></div><TrendingUp size={16}/></div>
    <div className="insight-stat"><div><span>SHORT</span><CountUp value={signalStats.short}/></div><ArrowDownRight size={16}/></div>
    <div className="insight-stat"><div><span>TRADE READY</span><CountUp value={signalStats.ready}/></div><Target size={16}/></div>
+  </section>
+  <section className="home-signal-panel home-open-trades">
+   <div className="signal-panel-head"><div><span className="tiny-label">LIVE TRADING</span><h2>Open trades</h2><p>Monitor your live positions without leaving Home.</p></div><button onClick={()=>go('perps')}>Open CEX <ChevronRight size={14}/></button></div>
+   {openTrades.length?<div className="signal-feed">{openTrades.map((p,i)=>{const pnl=Number(p.unRealizedPnl??p.unrealizedPnl??p.unrealisedPnl);const side=Number(p.positionType)===1||Number(p.side)===1?'LONG':'SHORT';return <button className="signal-feed-row" key={p.positionId||i} onClick={()=>go('perps')}><span className={side==='LONG'?'signal-dot long':'signal-dot short'}/><span className="signal-feed-main"><b>{String(p.symbol||'').replace('_USDT','/USDT')}</b><small>{side} · Entry {p.holdAvgPrice||p.entryPrice||'—'}</small></span><span className="signal-feed-value"><b>{Number.isFinite(pnl)?pct(pnl):'—'}</b><small>Mark {p.markPrice||p.fairPrice||'—'}</small></span><ChevronRight size={14}/></button>})}</div>:<div className="signal-empty"><div><ShieldCheck size={17}/></div><span><b>No open trades</b><small>Live positions will appear here when you have an active trade.</small></span><button onClick={()=>go('perps')}>Open CEX <ChevronRight size={13}/></button></div>}
   </section>
   <section className="home-signal-panel">
    <div className="signal-panel-head"><div><span className="tiny-label">SIGNAL DESK</span><h2>Your recent signals</h2><p>Generated from your market analysis sessions.</p></div><button onClick={()=>go('history')}>View all <ChevronRight size={14}/></button></div>
