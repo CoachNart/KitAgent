@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
 
-function getAdmin() {
+export function getAdmin() {
   if (admin.apps.length) return admin;
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -29,7 +29,7 @@ function clean(value, max = 500) {
   return String(value ?? '').slice(0, max);
 }
 
-async function marketKlines(signal) {
+export async function marketKlines(signal) {
   try {
     const symbol=String(signal.symbol||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
     if(!symbol)return [];
@@ -45,7 +45,7 @@ async function marketKlines(signal) {
     return rows.map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])})).filter(x=>[x.time,x.high,x.low,x.close].every(Number.isFinite));
   } catch { return []; }
 }
-async function currentPrice(signal) {
+export async function currentPrice(signal) {
   try {
     const symbol=String(signal.symbol||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
     if(!symbol)return null;
