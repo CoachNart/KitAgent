@@ -13,6 +13,20 @@ export default async function handler(req, res) {
   const provider = String(req.query?.provider || '');
 
   try {
+    if (provider === 'uniswap') {
+      if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
+      const apiKey = process.env.UNISWAP_API_KEY;
+      if (!apiKey) return json(res, 503, { ok: false, error: 'Uniswap Trading API key is not configured on the server.' });
+      const action = String(req.query?.action || 'quote');
+      const params = new URLSearchParams(req.query || {});
+      params.delete('provider');
+      const path = action === 'orders' ? '/orders' : '/quote';
+      const response = await fetch(`https://api.uniswap.org/v2${path}?${params.toString()}`, { headers: { Accept: 'application/json', 'x-api-key': apiKey } });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) return json(res, response.status, { ok: false, error: body?.message || body?.error || `Uniswap API returned ${response.status}`, details: body });
+      return json(res, 200, { ok: true, chainId: 4663, data: body });
+    }
+
     if (provider === 'lighter') {
       const path = String(req.query?.path || '/');
       const upstream = await fetch(
