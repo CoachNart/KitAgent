@@ -124,6 +124,31 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: true, deleted });
     }
 
+    if (req.method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const setup = body.setup || {};
+      const market = clean(body.market, 30);
+      const symbol = clean(body.symbol, 40);
+      const timeframe = clean(body.timeframe, 10);
+      const bias = clean(setup.bias, 10).toUpperCase();
+      if (!market || !symbol || !timeframe || !['LONG', 'SHORT', 'WAIT'].includes(bias)) return json(res, 400, { error: 'Incomplete signal record.' });
+      const ref = collection.doc();
+      const signal = {
+        signalId: `KA-${symbol.replace(/[^A-Z0-9]/gi, '').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
+        userId: decoded.uid, market, symbol, timeframe, direction: bias,
+        orderType: clean(setup.orderType, 20).toUpperCase() || 'WAIT',
+        confidence: numberOrNull(setup.confidence), entry: numberOrNull(setup.entry), limitEntry: numberOrNull(setup.limitEntry),
+        stopLoss: numberOrNull(setup.stopLoss), takeProfit1: numberOrNull(setup.takeProfit1), takeProfit2: numberOrNull(setup.takeProfit2),
+        riskReward: clean(setup.riskReward, 40), currentPrice: numberOrNull(setup.price),
+        status: bias === 'WAIT' ? 'watching' : (clean(setup.orderType, 20).toUpperCase()==='LIMIT' ? 'limit_pending' : 'watching'),
+        result: null, pnlPercent: null, exitPrice: null, closedAt: null,
+        generatedAt: admin.firestore.FieldValue.serverTimestamp(), createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        source: 'live-market-analysis-v1'
+      };
+      await ref.set(signal);
+      return json(res, 201, { ok: true, id: ref.id, signal: { ...signal, generatedAt: new Date().toISOString(), createdAt: new Date().toISOString() } });
+    }
+
     if (req.method === 'GET') {
       const snapshot = await collection.orderBy('generatedAt', 'desc').limit(100).get();
       const raw=snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
