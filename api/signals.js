@@ -29,6 +29,29 @@ function clean(value, max = 500) {
   return String(value ?? '').slice(0, max);
 }
 
+async function currentPrice(signal) {
+  try {
+    const symbol=String(signal.symbol||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    if(!symbol)return null;
+    if(signal.market==='perpetual'){
+      const r=await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${encodeURIComponent(symbol)}`,{headers:{Accept:'application/json'}}); const b=await r.json(); const p=Number(b?.price); return Number.isFinite(p)?p:null;
+    }
+    if(signal.market==='crypto'){
+      const r=await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`,{headers:{Accept:'application/json'}}); const b=await r.json(); const p=Number(b?.price); return Number.isFinite(p)?p:null;
+    }
+    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(signal.symbol+'=X')}?range=1d&interval=5m`,{headers:{'User-Agent':'KitAgent/1.0','Accept':'application/json'}}); const b=await r.json(); const q=b?.chart?.result?.[0]; const p=Number(q?.meta?.regularMarketPrice ?? q?.indicators?.quote?.[0]?.close?.at(-1)); return Number.isFinite(p)?p:null;
+  } catch { return null; }
+}
+function resolveStatus(signal, price) {
+  if (['target_hit','stop_hit','expired','closed'].includes(signal.status)) return signal;
+  if (!Number.isFinite(price)) return {...signal,currentPrice:null};
+  const dir=String(signal.direction||'').toUpperCase(), entry=Number(signal.entry), sl=Number(signal.stopLoss), tp1=Number(signal.takeProfit1);
+  let status=signal.status||'watching', result=signal.result||null, pnl=signal.pnlPercent, exit=signal.exitPrice, closedAt=signal.closedAt;
+  if(dir==='LONG') { if(Number.isFinite(sl)&&price<=sl){status='stop_hit';result='loss';exit=sl;pnl=Number.isFinite(entry)?((sl-entry)/entry)*100:null;} else if(Number.isFinite(tp1)&&price>=tp1){status='target_hit';result='win';exit=tp1;pnl=Number.isFinite(entry)?((tp1-entry)/entry)*100:null;} }
+  if(dir==='SHORT') { if(Number.isFinite(sl)&&price>=sl){status='stop_hit';result='loss';exit=sl;pnl=Number.isFinite(entry)?((entry-sl)/entry)*100:null;} else if(Number.isFinite(tp1)&&price<=tp1){status='target_hit';result='win';exit=tp1;pnl=Number.isFinite(entry)?((entry-tp1)/entry)*100:null;} }
+  if(status!==signal.status) closedAt=new Date().toISOString();
+  return {...signal,currentPrice:price,status,result,pnlPercent:pnl,exitPrice:exit,closedAt};
+}
 function numberOrNull(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
@@ -44,10 +67,9 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       const snapshot = await collection.orderBy('generatedAt', 'desc').limit(100).get();
-      return json(res, 200, {
-        ok: true,
-        signals: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      });
+      const raw=snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const signals=await Promise.all(raw.map(async signal=>resolveStatus(signal,await currentPrice(signal))));
+      return json(res, 200, { ok: true, signals });
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -69,8 +91,10 @@ export default async function handler(req, res) {
       symbol,
       timeframe,
       direction: bias,
+      orderType: clean(setup.orderType, 20).toUpperCase() || 'WAIT',
       confidence: numberOrNull(setup.confidence),
       entry: numberOrNull(setup.entry),
+      limitEntry: numberOrNull(setup.limitEntry),
       stopLoss: numberOrNull(setup.stopLoss),
       takeProfit1: numberOrNull(setup.takeProfit1),
       takeProfit2: numberOrNull(setup.takeProfit2),
