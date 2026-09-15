@@ -60,7 +60,7 @@ async function currentPrice(signal) {
     return null;
   } catch { return null; }
 }
-async function resolveStatus(signal, price) {
+export async function resolveStatus(signal, price, nowMs=Date.now()) {
   if (['target_hit','stop_hit','expired','closed'].includes(signal.status)) return signal;
   if (!['LONG','SHORT'].includes(String(signal.direction||'').toUpperCase())) return {...signal,currentPrice:price};
   const candles=await marketKlines(signal);
@@ -70,23 +70,26 @@ async function resolveStatus(signal, price) {
   const sl=Number(signal.stopLoss), tp1=Number(signal.takeProfit1);
   if(!Number.isFinite(entry)||!Number.isFinite(sl)||!Number.isFinite(tp1))return {...signal,currentPrice:price};
   let active=signal.orderType!=='LIMIT';
-  let activatedAt=null, outcome=null;
+  let activatedAt=signal.activatedAt||null, outcome=null, missedAt=null;
   for(const candle of candles){
     if(!active){
       const activated=dir==='LONG'?candle.high>=entry:candle.low<=entry;
-      if(!activated)continue;
+      const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
+      if(invalidated && !activated) { missedAt=candle.time; break; }
+      if(!activated) continue;
+      // OHLC candles cannot prove the order of an entry touch versus TP/SL touch.
+      // Require a later candle for the trade outcome rather than fabricating sequence.
       active=true; activatedAt=candle.time;
-      const both=dir==='LONG' ? candle.low<=sl&&candle.high>=tp1 : candle.high>=sl&&candle.low<=tp1;
-      if(both) return {...signal,currentPrice:price,status:'open',result:null,activatedAt};
       continue;
     }
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP) return {...signal,currentPrice:price,status:'open',result:null,activatedAt,ambiguousOutcome:true};
-    if(hitSL){outcome={status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:((sl-entry)/entry)*100}; if(dir==='SHORT')outcome.pnlPercent=((entry-sl)/entry)*100; break;}
-    if(hitTP){outcome={status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:((tp1-entry)/entry)*100}; if(dir==='SHORT')outcome.pnlPercent=((entry-tp1)/entry)*100; break;}
+    if(hitSL){outcome={status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}}; break;}
+    if(hitTP){outcome={status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}}; break;}
   }
-  return {...signal,currentPrice:price,...(outcome?{...outcome,closedAt:new Date().toISOString()}:active?{status:'open',activatedAt}:{status:signal.orderType==='LIMIT'?'limit_pending':'open'})};
+  if(missedAt) return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(missedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',event:'ENTRY_MISSED_SL_REACHED',candleTime:new Date(missedAt).toISOString()}};
+  return {...signal,currentPrice:price,...(outcome?outcome:active?{status:'open',activatedAt}:{status:signal.orderType==='LIMIT'?'limit_pending':'open'})};
 }
 function numberOrNull(value) {
   const n = Number(value);
@@ -124,9 +127,9 @@ export default async function handler(req, res) {
       const signals=[];
       for(const signal of resolved){
         const original=raw.find(x=>x.id===signal.id);
-        const changed=['status','result','pnlPercent','exitPrice','closedAt','activatedAt'].some(k=>String(original?.[k]??'')!==String(signal?.[k]??''));
+        const changed=['status','result','pnlPercent','exitPrice','closedAt','activatedAt','missedAt','outcomeEvidence'].some(k=>String(original?.[k]??'')!==String(signal?.[k]??''));
         if(changed){
-          const patch={status:signal.status,result:signal.result??null,pnlPercent:signal.pnlPercent??null,exitPrice:signal.exitPrice??null,closedAt:signal.closedAt??null};
+          const patch={status:signal.status,result:signal.result??null,pnlPercent:signal.pnlPercent??null,exitPrice:signal.exitPrice??null,closedAt:signal.closedAt??null,missedAt:signal.missedAt??null,outcomeEvidence:signal.outcomeEvidence??null};
           if(signal.activatedAt)patch.activatedAt=signal.activatedAt;
           await collection.doc(signal.id).set(patch,{merge:true});
         }
