@@ -66,15 +66,7 @@ function evaluateTrade(c,bias,entry,a,minRR=2.3){
   const target2=pools.find(level=>Math.abs(level-chosen.level)>a*.25&&Math.abs(level-entry)/risk>chosen.rr)||null;
   return {entry,stop,risk,target:chosen.level,target2,rr:chosen.rr};
 }
-function marketStructure(c){
-  const highs=[],lows=[];
-  for(let i=2;i<c.length-2;i++){if(pivotHigh(c,i))highs.push({p:c[i].high,i});if(pivotLow(c,i))lows.push({p:c[i].low,i});}
-  const h=highs.slice(-3),l=lows.slice(-3);
-  const higherHigh=h.length>=2&&h.at(-1).p>h.at(-2).p, lowerHigh=h.length>=2&&h.at(-1).p<h.at(-2).p;
-  const higherLow=l.length>=2&&l.at(-1).p>l.at(-2).p, lowerLow=l.length>=2&&l.at(-1).p<l.at(-2).p;
-  const trend=higherHigh&&higherLow?'LONG':lowerHigh&&lowerLow?'SHORT':'RANGE';
-  return {trend,higherHigh,higherLow,lowerHigh,lowerLow,lastHigh:h.at(-1)?.p??null,lastLow:l.at(-1)?.p??null};
-}
+function marketStructure(c){const highs=[],lows=[];for(let i=2;i<c.length-2;i++){if(pivotHigh(c,i))highs.push({p:c[i].high,i});if(pivotLow(c,i))lows.push({p:c[i].low,i});}const h=highs.slice(-3),l=lows.slice(-3);const higherHigh=h.length>=2&&h.at(-1).p>h.at(-2).p,lowerHigh=h.length>=2&&h.at(-1).p<h.at(-2).p,higherLow=l.length>=2&&l.at(-1).p>l.at(-2).p,lowerLow=l.length>=2&&l.at(-1).p<l.at(-2).p;return{trend:higherHigh&&higherLow?'LONG':lowerHigh&&lowerLow?'SHORT':'RANGE',higherHigh,higherLow,lowerHigh,lowerLow,lastHigh:h.at(-1)?.p??null,lastLow:l.at(-1)?.p??null,protectedHigh:h.at(-1)?.p??null,protectedLow:l.at(-1)?.p??null}}
 function structureBias(st){return st.trend==='LONG'||st.trend==='SHORT'?st.trend:'WAIT'}
 function opposite(a,b){return (a==='LONG'&&b==='SHORT')||(a==='SHORT'&&b==='LONG')}
 function topDownDecision(htf,mtf,ltf){
@@ -110,7 +102,7 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
   const recent=c.slice(-30),hi=Math.max(...recent.map(x=>x.high)),lo=Math.min(...recent.map(x=>x.low)),st=marketStructure(c);
   const score=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0);
-  const engineBias=score>=2?'LONG':score<=-2?'SHORT':st.trend!=='RANGE'?st.trend:'WAIT',bias=forcedBias||engineBias;
+  const engineBias=st.trend!=='RANGE'?st.trend:(score>=2?'LONG':score<=-2?'SHORT':'WAIT'),bias=forcedBias||engineBias;
   let trade=null,orderType='WAIT',entry=last.close,limitEntry=null,setupReason='No clean opportunity at the current price.';
   if(bias!=='WAIT'){
     const marketTrade=evaluateTrade(c,bias,last.close,a,2.3),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r);
