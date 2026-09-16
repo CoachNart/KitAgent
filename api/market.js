@@ -80,7 +80,7 @@ function topDownDecision(htf,mtf,ltf){
     ||(higherBias!=='WAIT'&&entryBias!=='WAIT'&&opposite(higherBias,entryBias));
   const middleAligned=higherBias!=='WAIT'&&middleBias===higherBias;
   const entryConfirmed=entryBias===higherBias;
-  const structureAligned=Boolean(middleAligned && (entryConfirmed || entryBias==='WAIT'));
+  const structureAligned=Boolean(higherBias!=='WAIT' && (middleBias===higherBias||middleBias==='WAIT') && (entryConfirmed || entryBias==='WAIT'));
   return {bias,higherBias,middleBias,entryBias,conflict:hardConflict,structureAligned,middleAligned,entryConfirmed};
 }
 function protectedLevels(c){
@@ -196,8 +196,8 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const structureConflict=topDown.conflict;
   const entryAligned=topDown.bias!=='WAIT'&&(entryStructure===topDown.bias||entryStructure==='WAIT');
   const isLimitSetup=setup.orderType==='LIMIT'&&setup.limitEntry!=null&&setup.takeProfit1!=null;
-  const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias;
-  const limitReady=isLimitSetup&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias;
+  const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict&&(topDown.middleBias===topDown.bias||topDown.middleBias==='WAIT');
+  const limitReady=isLimitSetup&&entryAligned&&!structureConflict&&(topDown.middleBias===topDown.bias||topDown.middleBias==='WAIT');
   const canTrade=marketReady||limitReady;
   if(!canTrade){
     const directionBias=topDown.bias;
