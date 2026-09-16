@@ -10,6 +10,9 @@ const money=(v,d=2)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(und
 const pct=v=>Number.isFinite(Number(v))?`${Number(v)>=0?'+':''}${Number(v).toFixed(2)}%`:'—';
 function CountUp({value,duration=2600}){const target=Number(value)||0;const ref=useRef(null);const [visible,setVisible]=useState(false);const [shown,setShown]=useState(0);useEffect(()=>{const el=ref.current;if(!el)return;const io=new IntersectionObserver(([entry])=>{if(entry.isIntersecting){setVisible(true);io.disconnect()}},{threshold:.35});io.observe(el);return()=>io.disconnect()},[]);useEffect(()=>{if(!visible)return;let raf=0,start=performance.now();const tick=now=>{const p=Math.min(1,(now-start)/duration);const eased=1-Math.pow(1-p,3);setShown(Math.round(target*eased));if(p<1)raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf)},[visible,target,duration]);return <b ref={ref} className="snapshot-number" aria-label={String(target)}>{shown.toLocaleString()}</b>}
 
+
+function T3KitBanner(){const [show,setShow]=useState(true);if(!show)return null;return <aside className="t3kit-float" aria-label="T3Kit promotion"><div className="t3kit-float-top"><span className="t3kit-brand"><span className="t3kit-brand-mark">T3</span> T3KIT</span><button className="t3kit-close" onClick={()=>setShow(false)} aria-label="Close"><span>×</span></button></div><h4>Your Web3 journey starts here.</h4><p>Learn Web3 from the ground up — guides, tools and opportunities.</p><a className="t3kit-cta" href="https://t3kit.xyz" target="_blank" rel="noreferrer">Explore T3Kit ↗</a></aside>}
+
 export default function HomePage({go,wallet,onLesson}){
  const [tickers,setTickers]=useState([]),[busy,setBusy]=useState(false),[updated,setUpdated]=useState(Date.now());
  const [openTrades,setOpenTrades]=useState([]);
@@ -22,7 +25,7 @@ export default function HomePage({go,wallet,onLesson}){
  const displayName=useMemo(()=>{const clean=String(rawDisplayName).trim().replace(/[._-]+/g,' ');const first=clean.split(/\s+/)[0]||'Trader';return first.charAt(0).toUpperCase()+first.slice(1).toLowerCase()},[rawDisplayName]);
  const [signalStats,setSignalStats]=useState({total:0,long:0,short:0,ready:0}),[recentSignals,setRecentSignals]=useState([]);
  useEffect(()=>{let cancelled=false;(async()=>{try{if(!auth?.currentUser)return;const token=await auth.currentUser.getIdToken();const r=await fetch('/api/signals',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});if(!r.ok)return;const j=await r.json();const rows=Array.isArray(j.signals)?j.signals:[];if(!cancelled){setSignalStats({total:rows.length,long:rows.filter(x=>x?.direction==='LONG').length,short:rows.filter(x=>x?.direction==='SHORT').length,ready:rows.filter(x=>x?.status==='open'&&x?.entry!=null).length});setRecentSignals(rows.slice(0,3));}}catch{} })();return()=>{cancelled=true}},[]);
- return <div className="home-page"><DailyLearning onReadMore={onLesson} />
+ return <div className="home-page"><DailyLearning onReadMore={onLesson} /><T3KitBanner />
   <section className="home-top">
    <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you, {displayName}.</h1><p>Welcome To Your Crypto Command Center for AI-powered market intelligence, actionable trade setups, real-time signals, and a smarter way to trade.</p></div>
    <button className="home-refresh" onClick={refresh} disabled={busy} aria-label="Refresh markets"><RefreshCw size={17} className={busy?'spin':''}/></button>
