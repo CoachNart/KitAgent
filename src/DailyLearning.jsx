@@ -6,7 +6,7 @@ const KEY='kitsetups_learning_state_v1';
 const readState=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return {}}};
 const saveState=s=>{try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}};
 
-export default function DailyLearning(){
+export default function DailyLearning({onReadMore}){
  const [lesson,setLesson]=useState(null),[open,setOpen]=useState(false),[tick,setTick]=useState(0);
  const choose=()=>{
   const state=readState(),seen=Array.isArray(state.seen)?state.seen:[],day=new Date().toISOString().slice(0,10);
@@ -33,6 +33,6 @@ export default function DailyLearning(){
   <h3>{lesson.title}</h3>
   <p>{lesson.body}</p>
   <div className="learning-tip"><b>Kit Tip</b><span>{lesson.tip}</span></div>
-  <div className="learning-foot"><span><Clock3 size={13}/> {lesson.minutes} min read</span><button onClick={()=>close(true)}>Got it <ChevronRight size={14}/></button></div>
+  <div className="learning-foot"><span><Clock3 size={13}/> {lesson.minutes} min read</span><div className="learning-actions"><button onClick={()=>close(false)}>Dismiss</button><button onClick={()=>onReadMore?.(lesson.id)}>Read more <ChevronRight size={14}/></button></div></div>
  </aside>
 }
