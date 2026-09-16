@@ -61,6 +61,9 @@ function evaluateTrade(c,bias,entry,a,minRR=2.0){
   const t=targets[0],second=targets.find(x=>Math.abs(x.level-t.level)>a*.2);
   return {entry,stop,risk,target:t.level,target2:second?.level??null,rr:t.rr};
 }
+function classifySetup(c,bias,a){const st=marketStructure(c),s=detectLiquiditySweep(c,bias,a),d=detectDisplacement(c,bias,a);return{type:s.detected&&d.detected?'REVERSAL-CONFIRMATION':st.trend===bias?'CONTINUATION':'PULLBACK',sweep:s,displacement:d}}
+function detectLiquiditySweep(c,bias,a){const p=protectedLevels(c),x=c.at(-1);if(!x)return{detected:false,type:null,level:null};if(bias==='LONG'&&Number.isFinite(p.protectedLow)&&x.low<p.protectedLow-a*.05&&x.close>p.protectedLow)return{detected:true,type:'SELL-SIDE',level:p.protectedLow};if(bias==='SHORT'&&Number.isFinite(p.protectedHigh)&&x.high>p.protectedHigh+a*.05&&x.close<p.protectedHigh)return{detected:true,type:'BUY-SIDE',level:p.protectedHigh};return{detected:false,type:null,level:null}}
+function detectDisplacement(c,bias,a){const x=c.at(-1),p=c.slice(-6,-1),avg=p.reduce((s,v)=>s+v.high-v.low,0)/Math.max(1,p.length),range=x.high-x.low,body=Math.abs(x.close-x.open),dir=bias==='LONG'?x.close>x.open&&x.close>=x.low+range*.65:bias==='SHORT'?x.close<x.open&&x.close<=x.high-range*.65:false;return{detected:dir&&range>=Math.max(a*.65,avg*1.05)&&body>=Math.max(a*.4,avg*.55),body,range}}
 function setupQuality(c,bias,entry,trade,e20,e50,r){
   if(!trade)return {score:0,grade:'NO SETUP',structure:marketStructure(c),setupType:'NONE',sweep:false,displacement:false};
   const st=marketStructure(c),a=atr(c)||0,event=classifySetup(c,bias,a);let score=0;
