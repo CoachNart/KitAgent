@@ -149,12 +149,43 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   const stopDistanceUnits=tradeReady?stopDistance*pipMultiplier:null;
   return {bias,engineBias,confidence,entry:roundPrice(tradeReady?entry:null),marketEntry:roundPrice(last.close),limitEntry:roundPrice(limitEntry),orderType:tradeReady?orderType:'WAIT',stopLoss:roundPrice(tradeReady?stop:null),takeProfit1:roundPrice(tradeReady?target1:null),takeProfit2:roundPrice(tradeReady?target2:null),riskReward:tradeReady?'1:'+targetRisk.toFixed(2):'—',riskPercent:tradeReady?Number(riskPct.toFixed(2)):null,stopDistance:tradeReady?roundPrice(stopDistance):null,stopDistancePct:tradeReady?Number(stopDistancePct.toFixed(3)):null,stopDistanceUnits:tradeReady?Number(stopDistanceUnits.toFixed(2)):null,priceUnitLabel,structuralInvalidation:tradeReady?roundPrice(stop):null,tradeReady,riskRewardValue:tradeReady?Number(targetRisk.toFixed(2)):null,quality:status,qualityScore:q.score,marketStructure:q.structure?.trend||st.trend,setupStatus:tradeReady?'TRADE READY':'WAIT',setupReason,rsi:Number(r.toFixed(2)),ema20:roundPrice(e20),ema50:roundPrice(e50),atr:roundPrice(a),price:roundPrice(last.close),swingHigh:roundPrice(hi),swingLow:roundPrice(lo),liquidityTarget:liquidity?roundPrice(liquidity.liquidityLevel):null,liquidityType:liquidity?.type||'No confirmed target',liquidityTouches:liquidity?.touches||0,liquidityDistancePct:liquidity?.distancePct||null,liquidityReason:tradeReady?(liquidity?.reason||'Target is derived from a legitimate structural/liquidity level.'):'No target is shown because no quality trade is currently available.',protectedHigh:roundPrice(q.structure?.protectedHigh),protectedLow:roundPrice(q.structure?.protectedLow),setupType:q.setupType,sweepDetected:q.sweep, sweepType:q.sweepType, sweepLevel:roundPrice(q.sweepLevel),displacementConfirmed:q.displacement,qualityGrade:q.grade,timestamp:last.time};
 }
+function aggregateCandles(c,bars){
+  if(!Number.isInteger(bars)||bars<2)return c;
+  const out=[];
+  for(let i=0;i<c.length;i+=bars){
+    const g=c.slice(i,i+bars);if(g.length<bars)continue;
+    out.push({time:g[0].time,open:g[0].open,high:Math.max(...g.map(x=>x.high)),low:Math.min(...g.map(x=>x.low)),close:g.at(-1).close,volume:g.reduce((s,x)=>s+x.volume,0)});
+  }
+  return out;
+}
+function backtestResult(c,baseMinutes,biasTf='4H',entryTf='15m'){
+  const step=Math.max(1,Math.floor(30/baseMinutes)),results=[];let wins=0,losses=0,signals=0;
+  for(let i=Math.max(240,60*step);i<c.length-20;i+=step){
+    const slice=c.slice(0,i);
+    const entry=analyzeCandles(slice,null,'BACKTEST');
+    if(!entry.tradeReady||!['MARKET','LIMIT'].includes(entry.orderType))continue;
+    signals++;
+    const ep=entry.entry,sl=entry.stopLoss,tp=entry.takeProfit1;
+    let outcome='OPEN';
+    for(let j=i+1;j<c.length;j++){
+      const bar=c[j],hitStop=entry.bias==='LONG'?bar.low<=sl:bar.high>=sl,hitTp=entry.bias==='LONG'?bar.high>=tp:bar.low<=tp;
+      if(hitStop&&hitTp){outcome='LOSS';break}
+      if(hitStop){outcome='LOSS';break}
+      if(hitTp){outcome='WIN';break}
+    }
+    if(outcome==='WIN')wins++;else if(outcome==='LOSS')losses++;
+    if(results.length<50)results.push({time:c[i].time,bias:entry.bias,entry:ep,stop:sl,target:tp,rr:entry.riskRewardValue,outcome});
+  }
+  const closed=wins+losses;
+  return {signals,wins,losses,open:signals-closed,winRate:closed?Number((wins/closed*100).toFixed(2)):null,lossRate:closed?Number((losses/closed*100).toFixed(2)):null,sample:results,method:'Same structural entry/stop/target engine replayed forward on historical candles. This is a diagnostic backtest, not a guarantee of future performance.'};
+}
 function buildTopDown(candlesByTf,ladder){
   const htf=marketStructure(candlesByTf[ladder.bias]),mtf=marketStructure(candlesByTf[ladder.structure]),ltf=marketStructure(candlesByTf[ladder.entry]);
   const d=topDownDecision(htf,mtf,ltf);
   return {bias:d.bias,higherBias:d.higherBias,middleBias:d.middleBias,entryBias:d.entryBias,conflict:d.conflict,structureAligned:d.structureAligned,higherStructure:htf,middleStructure:mtf,entryStructure:ltf};
 }
 export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(req.query?.action==='instruments'){if(market!=='metals')return json(res,400,{error:'Instrument discovery is only available for Metals / CFD'});const query=String(req.query?.q||'').trim();if(!query)return json(res,200,{ok:true,instruments:[]});const r=await fetch(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=25&newsCount=0`,{headers:{'User-Agent':'KitAgent/1.0','Accept':'application/json'}});if(!r.ok)return json(res,502,{error:'Instrument provider unavailable'});const body=await r.json();const instruments=(body?.quotes||[]).filter(x=>['FUTURE','INDEX','ETF','CURRENCY'].includes(String(x.quoteType||'').toUpperCase())).map(x=>{const raw=String(x.symbol||'').toUpperCase();const symbol=raw==='XAUUSD=X'?'XAU/USD':raw==='XAGUSD=X'?'XAG/USD':raw;return {symbol,providerSymbol:raw,name:x.longname||x.shortname||x.symbol,type:String(x.quoteType||'').toUpperCase(),exchange:x.exchange||x.fullExchangeName||''};}).filter((x,i,a)=>a.findIndex(y=>y.symbol===x.symbol)===i).slice(0,20);return json(res,200,{ok:true,instruments});}if(!['forex','crypto','perpetual','metals'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});
+  if(req.query?.action==='backtest'){const bt=await candlesFor(market,symbol,timeframe);const baseMinutes=timeframe==='15m'?15:timeframe==='30m'?30:timeframe==='1H'?60:timeframe==='4H'?240:timeframe==='1D'?1440:5;return json(res,200,{ok:true,market,symbol,timeframe,backtest:backtestResult(bt,baseMinutes),generatedAt:new Date().toISOString()})}
   const ladder=TIMEFRAME_LADDER[timeframe]||TIMEFRAME_LADDER['1H'];
   const needed=[...new Set([timeframe,ladder.bias,ladder.structure,ladder.entry])];
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
