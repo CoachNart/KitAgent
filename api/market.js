@@ -60,7 +60,7 @@ function targetPool(c,bias,entry,a){
   else {const lo=Math.min(...recent.map(x=>x.low));if(lo<entry)out.push(lo)}
   return [...new Set(out.map(Number))].filter(x=>bias==='LONG'?x>entry:x<entry).sort((x,y)=>bias==='LONG'?x-y:y-x);
 }
-function evaluateTrade(c,bias,entry,a,minRR=1.8){
+function evaluateTrade(c,bias,entry,a,minRR=2.5){
   const stop=stopForEntry(c,bias,entry,a);if(!Number.isFinite(stop))return null;
   const risk=Math.abs(entry-stop);
   if(!risk||risk<Math.max(a*.25,entry*.0002))return null;
@@ -93,18 +93,18 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   const engineBias=st.trend!=='RANGE'?st.trend:(score>=2?'LONG':score<=-2?'SHORT':'WAIT'),bias=forcedBias||engineBias;
   let trade=null,orderType='WAIT',entry=last.close,limitEntry=null,setupReason='No clean opportunity at the current price.';
   if(bias!=='WAIT'){
-    const marketTrade=evaluateTrade(c,bias,last.close,a,1.8),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r);
+    const marketTrade=evaluateTrade(c,bias,last.close,a,2.5),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r);
     if(marketTrade&&marketQuality.score>=2){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Current price offers a valid structural entry with a real target and acceptable reward-to-risk.';}
     else {
       const candidates=structuralEntryCandidates(c,bias,last.close,a);let candidate=null,limitTrade=null,limitQuality={score:0};
-      for(const x of candidates){const t=evaluateTrade(c,bias,x,a,1.8);const q=setupQuality(c,bias,x,t,e20,e50,r);if(t&&q.score>limitQuality.score){candidate=x;limitTrade=t;limitQuality=q}}
+      for(const x of candidates){const t=evaluateTrade(c,bias,x,a,2.5);const q=setupQuality(c,bias,x,t,e20,e50,r);if(t&&q.score>limitQuality.score){candidate=x;limitTrade=t;limitQuality=q}}
       if(limitTrade&&limitQuality.score>=2){trade=limitTrade;orderType='LIMIT';entry=candidate;limitEntry=candidate;setupReason='Current price is less attractive; a defined pullback entry offers cleaner structure and a real target.';}
       else setupReason='Directional bias exists, but price is not offering a clean market or limit entry with a legitimate target.';
     }
   }
   const confidence=Math.min(92,Math.max(42,Math.round(50+Math.abs(score)*7+(st.trend===bias?7:0)+(r>55||r<45?5:0))));
   const stop=trade?.stop??null,risk=trade?.risk??null,riskPct=entry>0&&risk!=null?(risk/entry)*100:null,target1=trade?.target??null,target2=trade?.target2??null,targetRisk=trade?.rr??null,q=setupQuality(c,bias,entry,trade,e20,e50,r);
-  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=1.8&&q.score>=3),status=tradeReady?(q.grade==='A'?'A-GRADE':q.grade==='B'?'QUALITY':'ACCEPTABLE'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
+  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.5&&q.score>=3),status=tradeReady?(q.grade==='A'?'A-GRADE':q.grade==='B'?'QUALITY':'ACCEPTABLE'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
   const stopDistance=tradeReady?Math.abs(entry-stop):null;
   const stopDistancePct=tradeReady&&entry?((stopDistance/entry)*100):null;
   const instrumentKey=String(instrumentSymbol||'');
