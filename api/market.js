@@ -132,6 +132,7 @@ function backtestResult(c,baseMinutes,biasTf='4H',entryTf='15m'){
   const closed=wins+losses;
   return {signals,wins,losses,open:signals-closed,winRate:closed?Number((wins/closed*100).toFixed(2)):null,lossRate:closed?Number((losses/closed*100).toFixed(2)):null,sample:results,method:'Same structural entry/stop/target engine replayed forward on historical candles. This is a diagnostic backtest, not a guarantee of future performance.'};
 }
+function topDownDecision(htf,mtf,ltf){const higherBias=htf?.trend==='LONG'||htf?.trend==='SHORT'?htf.trend:'WAIT',middleBias=mtf?.trend==='LONG'||mtf?.trend==='SHORT'?mtf.trend:'WAIT',entryBias=ltf?.trend==='LONG'||ltf?.trend==='SHORT'?ltf.trend:'WAIT';const conflict=higherBias!=='WAIT'&&((middleBias!=='WAIT'&&middleBias!==higherBias)||(entryBias!== 'WAIT'&&entryBias!==higherBias&&entryBias!==middleBias));const bias=higherBias!=='WAIT'?higherBias:middleBias!=='WAIT'?middleBias:entryBias;const structureAligned=!conflict&&bias!=='WAIT'&&(middleBias==='WAIT'||middleBias===bias)&&(entryBias==='WAIT'||entryBias===bias);return{bias,higherBias,middleBias,entryBias,conflict,structureAligned}}
 function buildTopDown(candlesByTf,ladder){
   const htf=marketStructure(candlesByTf[ladder.bias]),mtf=marketStructure(candlesByTf[ladder.structure]),ltf=marketStructure(candlesByTf[ladder.entry]);
   const d=topDownDecision(htf,mtf,ltf);
