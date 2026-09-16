@@ -1,3 +1,13 @@
-import {ArrowLeft,BookOpen,Clock3} from 'lucide-react';
+import {ArrowLeft,BookOpen,Clock3,Lightbulb,ShieldCheck} from 'lucide-react';
+import './lesson-detail.css';
 import {KIT_LESSONS} from './kitLessons.js';
-export default function LessonDetail({lessonId,onBack}){const lesson=KIT_LESSONS.find(x=>x.id===lessonId);if(!lesson)return <div className="page-wrap"><button onClick={onBack}><ArrowLeft size={16}/> Back</button><h2>Lesson not found</h2></div>;return <div className="page-wrap lesson-detail"><button className="lesson-back" onClick={onBack}><ArrowLeft size={16}/> Back to learning</button><span className="tiny-label"><BookOpen size={13}/> DAILY TEK · {lesson.category}</span><h1>{lesson.title}</h1><div className="lesson-meta"><Clock3 size={14}/> {lesson.minutes} min read</div><p className="lesson-body">{lesson.body}</p><section className="learning-tip"><b>Kit Tip</b><span>{lesson.tip}</span></section></div>}
+export default function LessonDetail({lessonId,onBack}){
+ const lesson=KIT_LESSONS.find(x=>x.id===lessonId);
+ if(!lesson)return <main className="lesson-page"><button className="lesson-back" onClick={onBack}><ArrowLeft size={16}/> Learning</button><div className="lesson-empty"><BookOpen size={28}/><h2>Lesson not found</h2><p>This lesson is no longer available.</p></div></main>;
+ return <main className="lesson-page">
+  <div className="lesson-nav"><button className="lesson-back" onClick={onBack}><ArrowLeft size={16}/><span>Back to Daily TEK</span></button><span className="lesson-pill"><BookOpen size={13}/> {lesson.category}</span></div>
+  <div className="lesson-hero"><span className="lesson-eyebrow">DAILY TEK · BEGINNER FRIENDLY</span><h1>{lesson.title}</h1><p className="lesson-intro">{lesson.intro||lesson.body}</p><div className="lesson-meta"><span><Clock3 size={14}/> {lesson.minutes} min read</span><span>Learn the concept before using it</span></div></div>
+  <div className="lesson-content"><article>{(lesson.sections||[['In simple terms',lesson.body]]).map(([heading,text],i)=><section className="lesson-section" key={heading}><span className="lesson-index">0{i+1}</span><div><h2>{heading}</h2><p>{text}</p></div></section>)}</article>
+  <aside className="lesson-aside"><div className="lesson-tip-card"><div className="tip-icon"><Lightbulb size={17}/></div><span>THE KIT TIP</span><h3>Keep this in mind</h3><p>{lesson.tip}</p></div><div className="lesson-note"><ShieldCheck size={16}/><div><b>Education, not a promise</b><p>Trading involves risk. Understanding a concept does not guarantee a profitable outcome.</p></div></div></aside></div>
+ </main>;
+}
