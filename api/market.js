@@ -160,49 +160,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   }
   const confidenceBase=setup.confidence,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase+(topDown.structureAligned?8:0)-(structureConflict?8:0))));
   return json(res,200,{ok:true,market,symbol,timeframe,setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'||market==='metals'?'Yahoo Finance chart data':market==='perpetual'?'Binance USD-M futures with Bybit linear fallback':'Binance spot klines',generatedAt:new Date().toISOString()})
-}catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}function structuralEntryCandidates(c,bias,current,a){
-  const closes=c.map(x=>x.close),e20=ema(closes,20),recent=c.slice(-30);
-  const hi=Math.max(...recent.map(x=>x.high)),lo=Math.min(...recent.map(x=>x.low)),mid=(hi+lo)/2;
-  const raw=[e20,mid,bias==='LONG'?lo+a*.25:hi-a*.25,current-(bias==='LONG'?a*.35:-a*.35)];
-  return [...new Set(raw.filter(Number.isFinite).map(Number))]
-    .filter(x=>bias==='LONG'?x<current:x>current)
-    .sort((x,y)=>Math.abs(x-current)-Math.abs(y-current));
-}
-function stopForEntry(c,bias,entry,a){
-  const pivots=[];
-  for(let i=2;i<c.length-2;i++){
-    if(bias==='LONG'&&pivotLow(c,i)&&c[i].low<entry)pivots.push({price:c[i].low,index:i});
-    if(bias==='SHORT'&&pivotHigh(c,i)&&c[i].high>entry)pivots.push({price:c[i].high,index:i});
-  }
-  const recent=pivots.slice(-6);
-  const invalidation=bias==='LONG'
-    ? (recent.length?Math.max(...recent.map(x=>x.price)):Math.min(...c.slice(-20).map(x=>x.low)))
-    : (recent.length?Math.min(...recent.map(x=>x.price)):Math.max(...c.slice(-20).map(x=>x.high)));
-  const buffer=Math.max(a*.18,entry*.00035);
-  return bias==='LONG'?invalidation-buffer:invalidation+buffer;
-}
-function targetPool(c,bias,entry,a){
-  const out=liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite);
-  for(let i=2;i<c.length-2;i++){
-    if(bias==='LONG'&&pivotHigh(c,i)&&c[i].high>entry)out.push(c[i].high);
-    if(bias==='SHORT'&&pivotLow(c,i)&&c[i].low<entry)out.push(c[i].low);
-  }
-  return [...new Set(out.map(Number))]
-    .filter(x=>bias==='LONG'?x>entry:x<entry)
-    .sort((x,y)=>bias==='LONG'?x-y:y-x);
-}
-function evaluateTrade(c,bias,entry,a,minRR=2.5){
-  const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop);
-  if(!Number.isFinite(stop)||!risk)return null;
-  const targets=targetPool(c,bias,entry,a)
-    .map(level=>({level,rr:Math.abs(level-entry)/risk}))
-    .filter(x=>x.rr>=minRR)
-    .sort((x,y)=>x.rr-y.rr);
-  if(!targets.length)return null;
-  const t=targets[0],second=targets.find(x=>Math.abs(x.level-t.level)>a*.15);
-  return {entry,stop,risk,target:t.level,target2:second?.level??null,rr:t.rr};
-}
-function setupQuality(c,bias,entry,trade,e20,e50,r){
+}catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}function setupQuality(c,bias,entry,trade,e20,e50,r){
   if(!trade)return {score:0,grade:'NO SETUP',structure:marketStructure(c),setupType:'NONE',sweep:false,displacement:false};
   const st=marketStructure(c),a=atr(c)||0,event=classifySetup(c,bias,a);let score=0;
   if(st.trend===bias)score+=3;
