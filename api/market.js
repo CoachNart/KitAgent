@@ -36,9 +36,6 @@ function structuralEntryCandidates(c,bias,current,a){
   return [...new Set(raw.filter(Number.isFinite).map(Number))].filter(x=>bias==='LONG'?x<current:x>current);
 }
 function stopForEntry(c,bias,entry,a){
-  // Stop must sit beyond a confirmed structural invalidation point, not merely
-  // a few ticks beyond the entry. This prevents meaningless "1:50+" RR caused
-  // by an artificially tiny risk distance.
   const pivots=[];
   for(let i=2;i<c.length-2;i++){
     if(bias==='LONG'&&pivotLow(c,i)&&c[i].low<entry)pivots.push(c[i].low);
