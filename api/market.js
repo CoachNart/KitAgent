@@ -130,17 +130,17 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   let trade=null,orderType='WAIT',entry=last.close,limitEntry=null,setupReason='No clean opportunity at the current price.';
   if(bias!=='WAIT'){
     const marketTrade=evaluateTrade(c,bias,last.close,a,2.3),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r);
-    if(marketTrade&&marketQuality.score>=4){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Current price offers a valid structural entry with a real target and acceptable reward-to-risk.';}
+    if(marketTrade&&marketQuality.score>=3){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Current price offers a valid structural entry with a real target and acceptable reward-to-risk.';}
     else {
       const candidates=structuralEntryCandidates(c,bias,last.close,a);let candidate=null,limitTrade=null,limitQuality={score:0};
       for(const x of candidates){const t=evaluateTrade(c,bias,x,a,2.3);const q=setupQuality(c,bias,x,t,e20,e50,r);if(t&&q.score>limitQuality.score){candidate=x;limitTrade=t;limitQuality=q}}
-      if(limitTrade&&limitQuality.score>=4){trade=limitTrade;orderType='LIMIT';entry=candidate;limitEntry=candidate;setupReason='Current price is less attractive; a defined pullback entry offers cleaner structure and a real target.';}
+      if(limitTrade&&limitQuality.score>=3){trade=limitTrade;orderType='LIMIT';entry=candidate;limitEntry=candidate;setupReason='Current price is less attractive; a defined pullback entry offers cleaner structure and a real target.';}
       else setupReason='Directional bias exists, but price is not offering a clean market or limit entry with a legitimate target.';
     }
   }
   const confidence=Math.min(92,Math.max(42,Math.round(50+Math.abs(score)*7+(st.trend===bias?7:0)+(r>55||r<45?5:0))));
   const stop=trade?.stop??null,risk=trade?.risk??null,riskPct=entry>0&&risk!=null?(risk/entry)*100:null,target1=trade?.target??null,target2=trade?.target2??null,targetRisk=trade?.rr??null,q=setupQuality(c,bias,entry,trade,e20,e50,r);
-  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.3&&q.score>=4),status=tradeReady?(q.grade==='A'?'A-GRADE':q.grade==='B'?'QUALITY':'ACCEPTABLE'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
+  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.3&&q.score>=3),status=tradeReady?(q.grade==='A'?'A-GRADE':q.grade==='B'?'QUALITY':'ACCEPTABLE'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
   const stopDistance=tradeReady?Math.abs(entry-stop):null;
   const stopDistancePct=tradeReady&&entry?((stopDistance/entry)*100):null;
   const instrumentKey=String(instrumentSymbol||'');
