@@ -2,14 +2,12 @@ import {useEffect,useMemo,useState} from 'react';
 import {BookOpen,ChevronRight,X,Clock3} from 'lucide-react';
 import {KIT_LESSONS} from './kitLessons.js';
 
-const KEY='kitsetups_learning_state_v1';
-const readState=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return {}}};
-const saveState=s=>{try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}};
+
 
 export default function DailyLearning({onReadMore}){
  const [lesson,setLesson]=useState(null),[open,setOpen]=useState(false),[tick,setTick]=useState(0);
  const choose=()=>{
-  const state=readState(),seen=Array.isArray(state.seen)?state.seen:[],day=new Date().toISOString().slice(0,10);
+  const seen=[];
   const pool=KIT_LESSONS.filter(x=>!seen.includes(x.id));
   const available=pool.length?pool:KIT_LESSONS;
   const next=available[(Math.floor(Math.random()*available.length)+tick)%available.length];
@@ -17,12 +15,10 @@ export default function DailyLearning({onReadMore}){
   const timer=setTimeout(()=>setOpen(false),90000);
   return()=>clearTimeout(timer);
  };
- useEffect(()=>{const state=readState(),last=state.lastShown||0;if(Date.now()-last<6*60*60*1000)return;const t=setTimeout(()=>{setTick(x=>x+1);choose();saveState({...state,lastShown:Date.now()})},8000);return()=>clearTimeout(t)},[]);
+ useEffect(()=>{const t=setTimeout(()=>{setTick(x=>x+1);choose();},8000);return()=>clearTimeout(t)},[]);
  const close=completed=>{
   if(!lesson)return;
-  const state=readState(),seen=new Set(Array.isArray(state.seen)?state.seen:[]);
-  if(completed)seen.add(lesson.id);
-  saveState({...state,seen:[...seen],lastShown:Date.now()});
+  
   setOpen(false);
   if(completed){setTimeout(()=>{setTick(x=>x+1);choose()},6*60*1000)}
  };
