@@ -2,31 +2,51 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Pause, Play, Volume2, X } from 'lucide-react';
 import './voice-tour.css';
 
-const STORAGE_KEY = 'kitsetups_voice_tour_v1';
+const STORAGE_KEY = 'kitsetups_voice_tour_v2';
 
 const STEPS = [
-  { id: 'welcome', title: 'Welcome to KitSetups', text: 'Welcome to KitSetups. This is your crypto command center for market intelligence, trade setups, signals and trading tools. I will give you a quick guided tour of the workspace.', target: () => document.querySelector('.home-page'), pause: 4200 },
-  { id: 'home', title: 'Your command center', text: 'This is Home. You get the live market pulse, moving markets, your signal snapshot, open trades and recent signals without leaving the workspace.', target: () => document.querySelector('.home-page'), pause: 3800 },
-  { id: 'market', title: 'Market analysis', text: 'Next is Market analysis. Open it when you want to study a pair, read the market structure and work through an analysis before taking a trade.', nav: 'Market analysis', target: () => document.querySelector('.content'), pause: 4300 },
-  { id: 'chart', title: 'Chart terminal', text: 'Chart terminal is where you can work directly with the charting workspace and inspect price action in more detail.', nav: 'Chart terminal', target: () => document.querySelector('.content'), pause: 3600 },
-  { id: 'perps', title: 'Perpetuals', text: 'Perpetuals is the trading area. This is where supported live trading workflows, positions and execution controls live. Execution stays permission-gated.', nav: 'Perpetuals', target: () => document.querySelector('.content'), pause: 4200 },
-  { id: 'history', title: 'History', text: 'History keeps your recent activity and trading actions in one place, so you can review what happened in your workspace.', nav: 'History', target: () => document.querySelector('.content'), pause: 3200 },
-  { id: 'profile', title: 'Profile and settings', text: 'Profile is where your account and workspace settings live. You can also manage supported wallet and account preferences from here.', nav: 'Profile', target: () => document.querySelector('.content'), pause: 3200 },
-  { id: 'wallet', title: 'Connect wallet', text: 'The Connect wallet button is in the top bar. KitSetups is non-custodial: you approve wallet actions yourself, and nothing consequential executes silently.', target: () => document.querySelector('.connect-btn'), pause: 4000 },
-  { id: 'done', title: 'You are ready', text: 'That is the KitSetups workspace. Explore freely, start with Home or Market analysis, and use the navigation whenever you want to move around.', target: () => document.querySelector('.kit-sidebar'), pause: 3500 },
+  { title: 'Welcome to KitSetups', text: 'Welcome to KitSetups — your command center for crypto market intelligence, trade setups, signals, and trading tools.', target: () => document.querySelector('.home-page'), pause: 900 },
+  { title: 'Start here: Home', text: 'Home gives you the market pulse at a glance. Scan what is moving, check your signals, and see what needs your attention.', target: () => document.querySelector('.home-page'), pause: 900 },
+  { title: 'Explore Market Analysis', text: 'This is where you study a market before making a decision. Choose a pair, read the structure, and work through the analysis.', nav: 'Market analysis', target: () => document.querySelector('.content'), pause: 1000 },
+  { title: 'Use the Chart Terminal', text: 'The chart terminal gives you a closer look at price action. Use it when you need more detail before qualifying a setup.', nav: 'Chart terminal', target: () => document.querySelector('.content'), pause: 1000 },
+  { title: 'Check Perpetuals', text: 'Perpetuals is your trading workspace. Review positions and supported execution controls here. Any consequential action stays under your control.', nav: 'Perpetuals', target: () => document.querySelector('.content'), pause: 1000 },
+  { title: 'Review your History', text: 'History lets you look back at your activity and trading actions, so you can review what happened instead of relying on memory.', nav: 'History', target: () => document.querySelector('.content'), pause: 900 },
+  { title: 'Manage your Profile', text: 'Profile is where your account and workspace preferences live. This is also where supported account settings can be managed.', nav: 'Profile', target: () => document.querySelector('.content'), pause: 900 },
+  { title: 'Connect your wallet', text: 'Your wallet connection lives in the top bar. Connect when you are ready, and approve wallet actions yourself.', target: () => document.querySelector('.connect-btn'), pause: 900 },
+  { title: 'That is KitSetups', text: 'You have the map now. Start on Home, dive into Market Analysis when you find something interesting, and use the navigation to explore the rest.', target: () => document.querySelector('.kit-sidebar'), pause: 1200 },
 ];
 
 function findNavButton(label) {
   return [...document.querySelectorAll('.kit-sidebar .side-link')].find((el) => el.textContent?.trim().toLowerCase().includes(label.toLowerCase())) || null;
 }
 
-function speak(text) {
+function getNaturalVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const preferred = [
+    'Microsoft Jenny Online', 'Microsoft Aria Online', 'Microsoft Ava Online',
+    'Google US English', 'Google UK English Female', 'Samantha', 'Karen', 'Daniel',
+  ];
+  return voices.find((voice) => preferred.some((name) => voice.name.toLowerCase().includes(name.toLowerCase())))
+    || voices.find((voice) => /^en(-|_)(US|GB)/i.test(voice.lang))
+    || voices.find((voice) => /^en/i.test(voice.lang))
+    || voices[0];
+}
+
+function speak(text, onStart, onEnd) {
   if (!('speechSynthesis' in window)) return false;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.98;
-  utterance.pitch = 1;
+  const voice = getNaturalVoice();
+  if (voice) utterance.voice = voice;
+  utterance.lang = voice?.lang || 'en-US';
+  utterance.rate = 0.78;
+  utterance.pitch = 1.02;
   utterance.volume = 1;
+  utterance.onstart = onStart;
+  utterance.onend = onEnd;
+  utterance.onerror = onEnd;
   window.speechSynthesis.speak(utterance);
   return true;
 }
@@ -38,7 +58,7 @@ export default function VoiceTour() {
   const [paused, setPaused] = useState(false);
   const [rect, setRect] = useState(null);
   const timerRef = useRef(null);
-  const resizeRef = useRef(null);
+  const advanceRef = useRef(null);
 
   const step = STEPS[stepIndex];
   const progress = useMemo(() => `${stepIndex + 1} / ${STEPS.length}`, [stepIndex]);
@@ -46,23 +66,24 @@ export default function VoiceTour() {
   const stopSpeech = () => {
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setSpeaking(false);
+    setPaused(false);
   };
 
   const closeTour = (completed = false) => {
     stopSpeech();
     clearTimeout(timerRef.current);
     setActive(false);
-    setPaused(false);
     if (completed) localStorage.setItem(STORAGE_KEY, 'completed');
   };
 
-  const locateTarget = () => {
-    const el = step.target?.();
+  const locateTarget = (target = step.target) => {
+    const el = target?.();
     if (!el) return null;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return null;
-    setRect({ top: Math.max(8, r.top - 8), left: Math.max(8, r.left - 8), width: r.width + 16, height: r.height + 16 });
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const pad = 8;
+    setRect({ top: Math.max(8, r.top - pad), left: Math.max(8, r.left - pad), width: Math.min(r.width + pad * 2, window.innerWidth - 16), height: r.height + pad * 2 });
     return el;
   };
 
@@ -70,9 +91,10 @@ export default function VoiceTour() {
     const next = STEPS[index];
     if (!next) return;
     clearTimeout(timerRef.current);
-    stopSpeech();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setStepIndex(index);
     setPaused(false);
+    setSpeaking(false);
 
     const reveal = () => {
       if (next.nav) {
@@ -80,23 +102,30 @@ export default function VoiceTour() {
         if (button) button.click();
       }
       setTimeout(() => {
-        locateTarget();
-        const didSpeak = speak(next.text);
-        setSpeaking(didSpeak);
-        timerRef.current = setTimeout(() => {
-          if (index < STEPS.length - 1) runStep(index + 1);
-          else closeTour(true);
-        }, next.pause);
-      }, next.nav ? 550 : 100);
+        locateTarget(next.target);
+        const didSpeak = speak(
+          next.text,
+          () => setSpeaking(true),
+          () => {
+            setSpeaking(false);
+            if (index < STEPS.length - 1) {
+              timerRef.current = setTimeout(() => runStep(index + 1), next.pause);
+            } else {
+              timerRef.current = setTimeout(() => closeTour(true), next.pause);
+            }
+          },
+        );
+        if (!didSpeak) setSpeaking(false);
+        if (!didSpeak) timerRef.current = setTimeout(() => index < STEPS.length - 1 ? runStep(index + 1) : closeTour(true), 5000);
+      }, next.nav ? 700 : 180);
     };
-
     reveal();
   };
 
   const startTour = () => {
     setActive(true);
     setStepIndex(0);
-    setTimeout(() => runStep(0), 250);
+    setTimeout(() => runStep(0), 220);
   };
 
   const next = () => {
@@ -123,6 +152,8 @@ export default function VoiceTour() {
   };
 
   useEffect(() => {
+    const loadVoices = () => window.speechSynthesis?.getVoices();
+    window.speechSynthesis?.addEventListener?.('voiceschanged', loadVoices);
     let cancelled = false;
     const boot = () => {
       if (cancelled) return;
@@ -137,7 +168,9 @@ export default function VoiceTour() {
     return () => {
       cancelled = true;
       clearTimeout(timerRef.current);
+      clearTimeout(advanceRef.current);
       stopSpeech();
+      window.speechSynthesis?.removeEventListener?.('voiceschanged', loadVoices);
     };
   }, []);
 
@@ -146,8 +179,7 @@ export default function VoiceTour() {
     const update = () => locateTarget();
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, { passive: true });
-    resizeRef.current = update;
-    const t = setTimeout(update, 80);
+    const t = setTimeout(update, 500);
     return () => {
       clearTimeout(t);
       window.removeEventListener('resize', update);
@@ -166,11 +198,11 @@ export default function VoiceTour() {
         <button className="voice-tour-close" onClick={() => closeTour(false)} aria-label="Close tour"><X size={17} /></button>
       </div>
       <div className="voice-tour-progress"><span style={{ width: `${((stepIndex + 1) / STEPS.length) * 100}%` }} /></div>
-      <div className="voice-tour-count">{progress}</div>
+      <div className="voice-tour-count">{progress} · {speaking ? 'VOICE ON' : paused ? 'PAUSED' : 'GUIDED TOUR'}</div>
       <h3>{step.title}</h3>
       <p>{step.text}</p>
       <div className="voice-tour-controls">
-        <button onClick={togglePause} className="voice-tour-play" disabled={!('speechSynthesis' in window)}>{paused ? <Play size={15} /> : <Pause size={15} />} {paused ? 'Resume voice' : speaking ? 'Pause voice' : 'Play voice'}</button>
+        <button onClick={togglePause} className="voice-tour-play" disabled={!('speechSynthesis' in window)}>{paused ? <Play size={15} /> : <Pause size={15} />} {paused ? 'Resume' : 'Pause'}</button>
         <button onClick={back} className="voice-tour-icon" disabled={stepIndex === 0} aria-label="Previous"><ArrowLeft size={16} /></button>
         <button onClick={next} className="voice-tour-next">{stepIndex === STEPS.length - 1 ? 'Finish' : 'Next'} <ArrowRight size={16} /></button>
       </div>
