@@ -138,7 +138,7 @@ export default function PerpetualsPage({ user }) {
     if (!connected) { setCredentialsOpen(true); return; }
     const vol = n(volume); if (!vol || vol <= 0) { setError('Enter the contract quantity in the Size field.'); return; }
     if (leverage < 1 || leverage > maxLeverage) { setError(`Leverage must be between 1x and ${maxLeverage}x for ${displaySymbol(symbol)}.`); return; }
-    const price = orderType === 'market' ? last : n(limitPrice); if (!price) { setError('Enter a valid order price.'); return; }
+    const price = orderType === 'market' ? 0 : n(limitPrice); if (orderType !== 'market' && !price) { setError('Enter a valid order price.'); return; }
     if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
     setBusy(true); setError('');
     try { await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined }); setVolume(''); await loadAccount(); }
