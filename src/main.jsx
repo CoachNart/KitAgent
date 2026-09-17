@@ -5,6 +5,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import App from './App.jsx';
 import AuthGate from './AuthGate.jsx';
 import AccountDeletionPage from './AccountDeletionPage.jsx';
+import VoiceTour from './VoiceTour.jsx';
 import './styles.css';
 import './brand.css';
 import './overrides.css';
@@ -55,7 +56,7 @@ function NativeLifecycle(){
 function Root(){
   const publicPath=window.location.pathname.replace(/\/+$/,'')||'/';
   if(publicPath==='/delete-account')return <AccountDeletionPage/>;
-  return <><NativeLifecycle /><AuthGate>{user => <App user={user} />}</AuthGate></>;
+  return <><NativeLifecycle /><AuthGate>{user => <App user={user} />}</AuthGate><VoiceTour /></>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
