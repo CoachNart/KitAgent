@@ -27,7 +27,7 @@ export default function DailyLearning({onReadMore}){
   <div className="learning-top"><span className="learning-kicker"><BookOpen size={14}/> DAILY TEK</span><button onClick={()=>close(false)} aria-label="Close lesson"><X size={16}/></button></div>
   <div className="learning-category">{lesson.category}</div>
   <h3>{lesson.title}</h3>
-  <p>{lesson.body}</p>
+  <p className="learning-preview">{String(lesson.body || "").replace(/\s+/g," ").trim().slice(0, 145)}{String(lesson.body || "").trim().length > 145 ? "…" : ""}</p>
   <div className="learning-tip"><b>Kit Tip</b><span>{lesson.tip}</span></div>
   <div className="learning-foot"><span><Clock3 size={13}/> {lesson.minutes} min read</span><div className="learning-actions"><button onClick={()=>close(false)}>Dismiss</button><button onClick={()=>onReadMore?.(lesson.id)}>Read more <ChevronRight size={14}/></button></div></div>
  </aside>
