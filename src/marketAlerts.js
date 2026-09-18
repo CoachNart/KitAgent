@@ -1,6 +1,6 @@
 import { auth } from './firebase.js';
 
-const BYBIT_BASE='https://api.bytick.com';
+const BYBIT_BASE='https://api.bybit.com';
 const NEWS_URL='https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 const POLL_MS=60_000;
 const UNIVERSE_REFRESH_MS=15*60_000;
@@ -19,7 +19,7 @@ let snapshot={running:false,source:'Bybit',timeframe:'5m → 15m',checkedAt:0,ma
 function read(key){try{return JSON.parse(localStorage.getItem(key)||'{}')}catch{return{}}}
 function save(key,v){try{localStorage.setItem(key,JSON.stringify(v))}catch{}}
 function emit(){try{window.dispatchEvent(new CustomEvent('kitagent:market-alert-update',{detail:snapshot}))}catch{}}
-function notify(title,body,tag){if(typeof Notification==='undefined'||Notification.permission!=='granted')return;try{new Notification(title,{body,icon:'/kitsetups-logo.svg',badge:'/kitsetups-logo.svg',tag})}catch{}}
+function notify(){/* Background market pushes are delivered by the server-side FCM monitor. */}
 
 function candles(rows){return Array.isArray(rows)?rows.map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)).sort((a,b)=>a.time-b.time):[]}
 function pivots(c){const highs=[],lows=[];for(let i=2;i<c.length-2;i++){const x=c[i];if(x.high>c[i-1].high&&x.high>=c[i+1].high&&x.high>c[i-2].high&&x.high>=c[i+2].high)highs.push({price:x.high,time:x.time,index:i});if(x.low<c[i-1].low&&x.low<=c[i+1].low&&x.low<c[i-2].low&&x.low<=c[i+2].low)lows.push({price:x.low,time:x.time,index:i})}return{highs,lows}}
@@ -27,7 +27,7 @@ function structure(c){if(c.length<30)return{event:null};const{highs,lows}=pivots
 
 async function bybitJson(path,params={}){const u=new URL(`${BYBIT_BASE}${path}`);Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,String(v)));const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});if(!r.ok)throw new Error(`Bybit HTTP ${r.status}`);const body=await r.json();if(body?.retCode!==0)throw new Error(`Bybit ${body?.retCode||'request failed'}: ${body?.retMsg||'unknown error'}`);return body}
 
-async function getMajorSymbols(){const now=Date.now();if(symbolsCache.length&&now-symbolsCacheAt<UNIVERSE_REFRESH_MS)return symbolsCache;const body=await bybitJson('/v5/market/tickers',{category:'linear'});const list=Array.isArray(body?.result?.list)?body.result.list:[];const ranked=list.filter(x=>x?.symbol?.endsWith('USDT')&&x?.contractType==='LinearPerpetual'&&x?.status==='Trading').map(x=>({symbol:x.symbol,turnover:Number(x.turnover24h)||0})).filter(x=>x.turnover>0).sort((a,b)=>b.turnover-a.turnover).slice(0,MAJOR_PAIR_COUNT).map(x=>x.symbol);if(!ranked.length)throw new Error('Bybit returned no major USDT perpetual pairs');symbolsCache=ranked;symbolsCacheAt=now;return ranked}
+async function getMajorSymbols(){const now=Date.now();if(symbolsCache.length&&now-symbolsCacheAt<UNIVERSE_REFRESH_MS)return symbolsCache;const body=await bybitJson('/v5/market/tickers',{category:'linear'});const list=Array.isArray(body?.result?.list)?body.result.list:[];const ranked=list.filter(x=>x?.symbol?.endsWith('USDT')).map(x=>({symbol:x.symbol,turnover:Number(x.turnover24h)||0})).filter(x=>x.turnover>0).sort((a,b)=>b.turnover-a.turnover).slice(0,MAJOR_PAIR_COUNT).map(x=>x.symbol);if(!ranked.length)throw new Error('Bybit returned no major USDT perpetual pairs');symbolsCache=ranked;symbolsCacheAt=now;return ranked}
 async function market(symbol,interval){const body=await bybitJson('/v5/market/kline',{category:'linear',symbol,interval,limit:150});const rows=body?.result?.list;if(!Array.isArray(rows)||rows.length<30)throw new Error('Bybit returned insufficient candle data');return candles(rows.slice(1))}
 
 function parseNewsTime(item){if(Number.isFinite(Number(item?.timestamp)))return Number(item.timestamp)*1000;if(item?.date&&item?.time){const d=String(item.date).trim(),t=String(item.time).trim();if(/^\d{4}-\d{2}-\d{2}$/.test(d)){const n=Date.parse(`${d} ${t}`);if(Number.isFinite(n))return n}const m=d.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);if(m){const n=Date.parse(`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')} ${t} UTC`);if(Number.isFinite(n))return n}}return null}
