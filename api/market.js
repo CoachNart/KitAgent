@@ -109,11 +109,17 @@ function liquidityCandidates(c,bias,entry,a){
 }
 function chooseLiquidityTarget(c,bias,entry,a){const candidates=liquidityCandidates(c,bias,entry,a);if(!candidates.length)return null;const chosen=candidates[0],buffer=Math.max(a*.08,entry*.00015),target=bias==='LONG'?chosen.level-buffer:chosen.level+buffer;if((bias==='LONG'&&target<=entry)||(bias==='SHORT'&&target>=entry))return null;return{target,type:chosen.type,liquidityLevel:chosen.level,touches:chosen.touches,distancePct:Number((chosen.distance*100).toFixed(2)),reason:`Targeting ${chosen.type.toLowerCase()} at ${roundPrice(chosen.level)}; TP is placed just before the liquidity to account for reaction.`}}
 function protectiveStop(c,bias,entry,a){
-  const st=marketStructure(c),sweep=liquiditySweep(c,bias),buffer=Math.max(a*.18,entry*.00035);
-  let invalidation=bias==='LONG'?(st.protectedLow??Math.min(...c.slice(-20).map(x=>x.low))):(st.protectedHigh??Math.max(...c.slice(-20).map(x=>x.high)));
+  const st=marketStructure(c),sweep=liquiditySweep(c,bias),buffer=Math.max(a*.16,entry*.00025);
+  const swings=bias==='LONG'?st.lows:st.highs;
+  const recent=swings.filter(x=>x.i>=Math.max(0,c.length-50)&& (bias==='LONG'?x.p<entry:x.p>entry));
+  let invalidation=bias==='LONG'
+    ?(recent.at(-1)?.p??st.protectedLow??Math.min(...c.slice(-20).map(x=>x.low)))
+    :(recent.at(-1)?.p??st.protectedHigh??Math.max(...c.slice(-20).map(x=>x.high)));
   if(sweep)invalidation=bias==='LONG'?Math.min(invalidation,sweep.level):Math.max(invalidation,sweep.level);
-  let stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;const maxRisk=Math.max(a*2.2,entry*.025);
-  if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);return stop;
+  let stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;
+  const maxRisk=Math.max(a*2.2,entry*.025);
+  if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);
+  return stop;
 }
 function structuralEntryCandidates(c,bias,current,a){
   const zones=entryZones(c,bias,current,a),sweep=liquiditySweep(c,bias),bos=structureBreak(c,bias,36),candidates=[];
@@ -141,11 +147,29 @@ function evaluateTrade(c,bias,entry,a,minRR=2.25){
 }
 function marketStructure(c){
   const {highs,lows}=confirmedSwings(c),h=highs.slice(-8),l=lows.slice(-8);
-  const prevH=h.at(-2)?.p??null,lastH=h.at(-1)?.p??null,prevL=l.at(-2)?.p??null,lastL=l.at(-1)?.p??null;
-  const higherHigh=prevH!=null&&lastH>prevH,lowerHigh=prevH!=null&&lastH<prevH,higherLow=prevL!=null&&lastL>prevL,lowerLow=prevL!=null&&lastL<prevL;
-  const close=c.at(-1)?.close??null,priorHigh=h.at(-2)?.p??null,priorLow=l.at(-2)?.p??null,bullishBreak=priorHigh!=null&&close>priorHigh,bearishBreak=priorLow!=null&&close<priorLow;
-  let trend='RANGE';if(higherHigh&&higherLow)trend='LONG';else if(lowerHigh&&lowerLow)trend='SHORT';else if(bullishBreak)trend='LONG';else if(bearishBreak)trend='SHORT';
-  return {trend,higherHigh,higherLow,lowerHigh,lowerLow,bullishBreak,bearishBreak,lastHigh:lastH,lastLow:lastL,protectedHigh:trend==='SHORT'?lastH:prevH??lastH,protectedLow:trend==='LONG'?lastL:prevL??lastL,highs,lows};
+  const recentH=h.slice(-4),recentL=l.slice(-4),lastH=h.at(-1)?.p??null,lastL=l.at(-1)?.p??null;
+  const prevH=h.at(-2)?.p??null,prevL=l.at(-2)?.p??null;
+  const higherHigh=prevH!=null&&lastH>prevH,lowerHigh=prevH!=null&&lastH<prevH;
+  const higherLow=prevL!=null&&lastL>prevL,lowerLow=prevL!=null&&lastL<prevL;
+  const risingHighs=recentH.length>=3&&recentH.slice(1).every((x,i)=>x.p>recentH[i].p);
+  const fallingHighs=recentH.length>=3&&recentH.slice(1).every((x,i)=>x.p<recentH[i].p);
+  const risingLows=recentL.length>=3&&recentL.slice(1).every((x,i)=>x.p>recentL[i].p);
+  const fallingLows=recentL.length>=3&&recentL.slice(1).every((x,i)=>x.p<recentL[i].p);
+  const close=c.at(-1)?.close??null;
+  const bullishBreak=lastH!=null&&close>lastH;
+  const bearishBreak=lastL!=null&&close<lastL;
+  let trend='RANGE';
+  if((risingHighs&&risingLows)||bullishBreak)trend='LONG';
+  else if((fallingHighs&&fallingLows)||bearishBreak)trend='SHORT';
+  else if(higherHigh&&higherLow)trend='LONG';
+  else if(lowerHigh&&lowerLow)trend='SHORT';
+  return {
+    trend,higherHigh,higherLow,lowerHigh,lowerLow,risingHighs,risingLows,fallingHighs,fallingLows,
+    bullishBreak,bearishBreak,lastHigh:lastH,lastLow:lastL,
+    protectedHigh:trend==='SHORT'?(prevH??lastH):lastH,
+    protectedLow:trend==='LONG'?(prevL??lastL):lastL,
+    highs,lows
+  };
 }
 function structureBias(st){return st.trend==='LONG'||st.trend==='SHORT'?st.trend:'WAIT'}
 function opposite(a,b){return (a==='LONG'&&b==='SHORT')||(a==='SHORT'&&b==='LONG')}
@@ -159,8 +183,7 @@ function topDownDecision(htf,mtf,ltf){
   // a hard conflict. This prevents the old exact-alignment gate from turning
   // every otherwise valid pullback into WAIT.
   const bias=higherBias;
-  const hardConflict=(higherBias!=='WAIT'&&middleBias!=='WAIT'&&opposite(higherBias,middleBias))
-    ||(higherBias!=='WAIT'&&entryBias!=='WAIT'&&opposite(higherBias,entryBias));
+  const hardConflict=(higherBias!=='WAIT'&&middleBias!=='WAIT'&&opposite(higherBias,middleBias));
   const middleAligned=higherBias!=='WAIT'&&middleBias===higherBias;
   const entryConfirmed=entryBias===higherBias;
   const structureAligned=Boolean(middleAligned && (entryConfirmed || entryBias==='WAIT'));
@@ -191,7 +214,7 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
     else{
       const candidates=structuralEntryCandidates(c,bias,last.close,a);let best=null,bestTrade=null,bestQuality={score:0};
       for(const candidate of candidates){const t=evaluateTrade(c,bias,candidate.entry,a,2.25),zone=candidate.zone,zoneBonus=zone?.type?.includes('FVG')||zone?.type?.includes('ORDER BLOCK')?2:0,q2=setupQuality(c,bias,candidate.entry,t,e20,e50,r,confirmation);if(t&&q2.score+zoneBonus>bestQuality.score){best=candidate;bestTrade=t;bestQuality={...q2,score:q2.score+zoneBonus};}}
-      const validLimit=Boolean(bestTrade&&best?.zone&&(best.zone.type?.includes('FVG')||best.zone.type?.includes('ORDER BLOCK'))&&bestQuality.score>=6);
+      const validLimit=Boolean(bestTrade&&best?.zone&&(best.zone.type?.includes('FVG')||best.zone.type?.includes('ORDER BLOCK'))&&bestQuality.score>=5);
       if(validLimit){trade=bestTrade;orderType='LIMIT';entry=best.entry;limitEntry=best.entry;setupReason='Price is away from the confirmed execution zone. The limit entry is anchored to a real FVG or order block, with invalidation beyond structure and target at external liquidity.';}
       else if(marketTrade&&marketConfirmed&&marketQuality.score>=5){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Confirmed structure and displacement are present; current price is the execution point.';}
       else setupReason='Bias exists, but there is no confirmed market entry or structurally valid pullback zone with a legitimate target.';
@@ -239,10 +262,11 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   let setup=analyzeCandles(current,topDown.bias,symbol);
   const entryStructure=topDown.entryBias, middleStructure=topDown.middleBias;
   const structureConflict=topDown.conflict;
-  const entryAligned=topDown.bias!=='WAIT'&&(entryStructure===topDown.bias||entryStructure==='WAIT');
+  // A countertrend entry-timeframe structure can be the pullback that creates a valid LIMIT.
+  const entryAligned=topDown.bias!=='WAIT'&&!structureConflict;
   const isLimitSetup=setup.orderType==='LIMIT'&&setup.limitEntry!=null&&setup.takeProfit1!=null;
-  const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict;
-  const limitReady=isLimitSetup&&entryAligned&&!structureConflict;
+  const marketReady=setup.orderType==='MARKET'&&entryAligned;
+  const limitReady=isLimitSetup&&entryAligned;
   const canTrade=marketReady||limitReady;
   if(!canTrade){
     const directionBias=topDown.bias;
