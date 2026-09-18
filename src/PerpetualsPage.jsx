@@ -204,7 +204,25 @@ export default function PerpetualsPage({ user }) {
     return ((mark - entry) / entry) * lev * 100 * direction;
   };
 
-  const buildPnlSvg = p => {
+  const imageUrlToDataUri = async url => {
+    if (!url) return '';
+    if (String(url).startsWith('data:')) return url;
+    try {
+      const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+      if (!response.ok) throw new Error('Avatar request failed.');
+      const blob = await response.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  const buildPnlSvg = async p => {
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
     const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
     const lev = n(p.leverage || p.leverageRatio) || 1;
@@ -230,8 +248,11 @@ export default function PerpetualsPage({ user }) {
       return `<text x="${x}" y="1080" fill="#f1f3f5" font-family="Arial,Helvetica,sans-serif" font-size="22">${safe(item[0])}</text><text x="${x}" y="1152" fill="#eef0f2" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700">${safe(item[1])}</text>`;
     }).join('');
     const initials = safe(profileName.slice(0, 1).toUpperCase());
+    const avatarDataUri = await imageUrlToDataUri(profileAvatar);
+    const avatarHref = avatarDataUri || profileAvatar;
     return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1277" viewBox="0 0 1080 1277">
       <defs>
+        <clipPath id="pnlAvatarClip"><circle cx="865" cy="228" r="58"/></clipPath>
         <radialGradient id="glow" cx="72%" cy="53%" r="52%"><stop offset="0" stop-color="#0b3b37" stop-opacity=".62"/><stop offset=".42" stop-color="#06221f" stop-opacity=".26"/><stop offset="1" stop-color="#050708" stop-opacity="0"/></radialGradient>
         <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b5d60"/><stop offset=".5" stop-color="#12373a"/><stop offset="1" stop-color="#071d20"/></linearGradient>
       </defs>
@@ -241,12 +262,14 @@ export default function PerpetualsPage({ user }) {
       <circle cx="807" cy="630" r="408" fill="none" stroke="#0b4548" stroke-opacity=".78" stroke-width="2"/>
       <path d="M397 628 A410 410 0 0 1 997 266" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
       <path d="M407 628 A407 407 0 0 0 997 994" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
-      <rect x="156" y="288" width="94" height="94" rx="22" fill="#27c9c2"/>
-      <text x="203" y="351" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="700" fill="#071112">K</text>
+      <rect x="156" y="288" width="94" height="94" rx="22" fill="#071112"/>
+      <svg x="156" y="288" width="94" height="94" viewBox="350 440 1350 1170" aria-label="KitSetups logo">
+        <path fill="#00C7FE" fill-rule="evenodd" d="M 498,950 399,1214 402,1220 736,1219 743,1223 749,1233 746,1249 726,1298 642,1530 631,1556 632,1560 636,1562 928,1562 946,1560 954,1544 1029,1337 1114,1112 1119,1085 1118,1052 1112,1028 1099,1003 1085,986 1055,964 1030,954 1002,949 Z M 543,1012 1004,1012 1022,1017 1034,1024 1049,1040 1054,1051 1057,1066 1055,1091 903,1498 721,1498 736,1451 829,1202 835,1182 834,1172 826,1162 819,1159 490,1158 488,1154 539,1017 Z M 1317,491 1314,491 1307,499 1134,745 1103,778 1086,792 1060,808 1047,813 724,907 716,913 720,916 1074,915 1108,907 1135,894 1150,884 1176,862 1188,848 1212,810 1240,743 1241,751 1228,822 1228,853 1233,875 1249,906 1270,928 1283,937 1301,945 1318,950 1381,955 1393,958 1387,961 1313,968 1276,976 1257,984 1235,997 1213,1014 1198,1029 1177,1059 1164,1089 1047,1395 1048,1399 1055,1396 1253,1134 1280,1105 1317,1078 1345,1065 1596,977 1650,960 1654,956 1643,949 1592,933 1385,859 1367,849 1351,833 1339,812 1332,787 1322,600 1319,493 Z"/>
+      </svg>
       <text x="275" y="311" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" letter-spacing="3.5" fill="#27d1c7">KITSETUPS FUTURES</text>
       <text x="275" y="367" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="600" fill="#f4f5f6">${safe(profileName)}</text>
       <circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/>
-      <text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>
+      ${avatarHref ? `<image href="${safe(avatarHref)}" x="807" y="170" width="116" height="116" preserveAspectRatio="xMidYMid slice" clip-path="url(#pnlAvatarClip)"/>` : `<text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>`}
       <text x="156" y="518" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="700" letter-spacing="-2.2" fill="#f6f7f8">${safe(displaySymbol(p.symbol))} · ${sideText}</text>
       <text x="179" y="722" font-family="Arial,Helvetica,sans-serif" font-size="86" fill="${pnlColor}">${arrow}</text>
       <text x="306" y="732" font-family="Arial,Helvetica,sans-serif" font-size="174" font-weight="800" letter-spacing="-5" fill="${pnlColor}">${safe(pnlText)}</text>
@@ -304,8 +327,7 @@ export default function PerpetualsPage({ user }) {
   };
 
   const sharePnl = async p => {
-    const svg = buildPnlSvg(p);
-    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+    const svg = await buildPnlSvg(p);
     const file = pnlShareFile;
     if (!file) {
       setError('PNL image is still preparing. Please tap Share again in a moment.');
@@ -353,9 +375,8 @@ export default function PerpetualsPage({ user }) {
       return undefined;
     }
     setPnlShareBusy(true);
-    const svg = buildPnlSvg(pnlSharePosition);
     const safeName = `kitsetups-${String(pnlSharePosition.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
-    void svgToPngFile(svg, `${safeName}.png`)
+    void buildPnlSvg(pnlSharePosition).then(svg => svgToPngFile(svg, `${safeName}.png`))
       .then(file => {
         if (!cancelled) setPnlShareFile(file);
       })
