@@ -240,15 +240,26 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
     if(displacement(tail,bias)){impulse=true;impulseIndex=i;}
   }
   const freshImpulse=impulse&&impulseIndex>=c.length-6,confirmation={bos:freshBos,sweep:freshSweep,displacement:freshImpulse};
+  // Confirmation can mature over several candles. A valid bullish/bearish
+  // structure should not disappear simply because displacement was not the
+  // literal last candle. Prefer a live MARKET execution when price remains
+  // close to the confirmed break/sweep leg; otherwise use a fresh LIMIT zone.
+  const confirmationAge=Math.min(
+    freshBos&&bos?.breakIndex!=null?c.length-1-bos.breakIndex:99,
+    freshSweep&&sweep?.index!=null?c.length-1-sweep.index:99
+  );
+  const liveImpulseAge=freshImpulse?c.length-1-impulseIndex:99;
+  const matureConfirmation=Boolean((freshBos||freshSweep)&&impulse&&confirmationAge<=10&&liveImpulseAge<=10);
   if(bias!=='WAIT'){
-    const marketTrade=evaluateTrade(c,bias,last.close,a,2.25),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r,confirmation),marketConfirmed=Boolean((freshBos||freshSweep)&&impulse);
+    const marketTrade=evaluateTrade(c,bias,last.close,a,2.25),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r,{...confirmation,displacement:impulse}),marketConfirmed=Boolean(matureConfirmation);
     if(marketTrade&&marketConfirmed&&marketQuality.score>=7){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason=freshSweep?'Liquidity was swept and reclaimed, followed by displacement. Current price is the confirmed execution point.':'Structure broke with displacement and current price is still inside the valid execution leg.';}
     else{
       const candidates=structuralEntryCandidates(c,bias,last.close,a);let best=null,bestTrade=null,bestQuality={score:0};
       for(const candidate of candidates){const t=evaluateTrade(c,bias,candidate.entry,a,2.25),zone=candidate.zone,zoneBonus=zone?.type?.includes('FVG')||zone?.type?.includes('ORDER BLOCK')?2:0,q2=setupQuality(c,bias,candidate.entry,t,e20,e50,r,confirmation);if(t&&q2.score+zoneBonus>bestQuality.score){best=candidate;bestTrade=t;bestQuality={...q2,score:q2.score+zoneBonus};}}
       const validLimit=Boolean(bestTrade&&best?.zone&&(best.zone.type?.includes('FVG')||best.zone.type?.includes('ORDER BLOCK'))&&bestQuality.score>=5);
       if(validLimit){trade=bestTrade;orderType='LIMIT';entry=best.entry;limitEntry=best.entry;setupReason='Price is away from the confirmed execution zone. The limit entry is anchored to a real FVG or order block, with invalidation beyond structure and target at external liquidity.';}
-      else if(marketTrade&&marketConfirmed&&marketQuality.score>=5){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Confirmed structure and displacement are present; current price is the execution point.';}
+      else if(marketTrade&&marketConfirmed&&marketQuality.score>=5){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Confirmed structure and displacement remain valid; current price is still inside the active execution leg.';}
+      else if(marketTrade&&freshBos&&impulse&&marketQuality.score>=6&&confirmationAge<=12&&liveImpulseAge<=12){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Recent structure break and displacement remain active; current price is a valid market execution point.';}
       else setupReason='Bias exists, but there is no confirmed market entry or structurally valid pullback zone with a legitimate target.';
     }
   }
