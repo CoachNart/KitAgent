@@ -76,6 +76,30 @@ function entryZones(c,bias,current,a){
   const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-2);
   return zones.filter(z=>{const ahead=bias==='LONG'?z.mid<current:z.mid>current;const side=bias==='LONG'?z.mid<=mid:z.mid>=mid;return ahead&&side&&Math.abs(current-z.mid)<=a*2.5;}).sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
 }
+function liquidityCandidates(c,bias,entry,a){
+  const st=marketStructure(c),source=bias==='LONG'?st.highs:st.lows;
+  const tolerance=Math.max(a*.18,entry*.0006),groups=[];
+  for(const swing of source.filter(x=>x.i>=Math.max(0,c.length-120))){
+    if(!Number.isFinite(swing.p))continue;
+    const valid=bias==='LONG'?swing.p>entry:swing.p<entry;
+    if(!valid)continue;
+    let group=groups.find(g=>Math.abs(g.level-swing.p)<=tolerance);
+    if(!group){group={level:swing.p,touches:0,lastIndex:swing.i};groups.push(group);}
+    group.touches+=1;group.lastIndex=Math.max(group.lastIndex,swing.i);
+  }
+  const recentExtreme=bias==='LONG'
+    ?Math.max(...c.slice(-80).map(x=>x.high))
+    :Math.min(...c.slice(-80).map(x=>x.low));
+  if(Number.isFinite(recentExtreme)&&(bias==='LONG'?recentExtreme>entry:recentExtreme<entry)){
+    const group=groups.find(g=>Math.abs(g.level-recentExtreme)<=tolerance);
+    if(group)group.touches+=1;
+    else groups.push({level:recentExtreme,touches:1,lastIndex:c.length-1});
+  }
+  return groups.map(g=>({...g,distance:Math.abs(g.level-entry),type:g.touches>=2
+    ?(bias==='LONG'?'EQUAL HIGHS / BUY-SIDE LIQUIDITY':'EQUAL LOWS / SELL-SIDE LIQUIDITY')
+    :(bias==='LONG'?'SWING HIGH / BUY-SIDE LIQUIDITY':'SWING LOW / SELL-SIDE LIQUIDITY')
+  })).sort((x,y)=>x.distance-y.distance);
+}
 function chooseLiquidityTarget(c,bias,entry,a){const candidates=liquidityCandidates(c,bias,entry,a);if(!candidates.length)return null;const chosen=candidates[0],buffer=Math.max(a*.08,entry*.00015),target=bias==='LONG'?chosen.level-buffer:chosen.level+buffer;if((bias==='LONG'&&target<=entry)||(bias==='SHORT'&&target>=entry))return null;return{target,type:chosen.type,liquidityLevel:chosen.level,touches:chosen.touches,distancePct:Number((chosen.distance*100).toFixed(2)),reason:`Targeting ${chosen.type.toLowerCase()} at ${roundPrice(chosen.level)}; TP is placed just before the liquidity to account for reaction.`}}
 function protectiveStop(c,bias,entry,a){
   const st=marketStructure(c),sweep=liquiditySweep(c,bias),buffer=Math.max(a*.18,entry*.00035);
