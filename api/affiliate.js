@@ -52,7 +52,7 @@ export default async function handler(req,res){
   }
   const [commissions,referrals]=await Promise.all([
    db.collection('affiliateCommissions').where('affiliateId','==',affiliate.id).limit(500).get(),
-   db.collection('referrals').where('affiliateId','==',affiliate.id).limit(500).get()
+   db.collection('referrals').where('affiliateId','==',affiliate.id).count().get()
   ]);
   const rows=commissions.docs.map(d=>({id:d.id,...d.data()}));
   return json(res,200,{affiliate:true,referralCode:data.referralCode,commissionRateBps:data.commissionRateBps||rateBps(),payoutMinimumUsd:Number(data.payoutMinimumUsd||PAYOUT_MINIMUM_USD),payoutSchedule:data.payoutSchedule||PAYOUT_SCHEDULE,payoutNetwork:data.payoutNetwork||PAYOUT_NETWORK,payoutAsset:data.payoutAsset||PAYOUT_ASSET,payoutWallet:data.payoutWallet||'',status:data.status||'active',referralCount:referrals.size,totalEarned:Number(data.totalEarned||0),availableBalance:Number(data.availableBalance||0),pendingBalance:Number(data.pendingBalance||0),commissions:rows});
