@@ -2,6 +2,7 @@
   "regions": [
     "lhr1"
   ],
+  "crons": [{"path":"/api/affiliate-payout","schedule":"5 0 1 * *"}],
   "headers": [
     {
       "source": "/(.*)",
