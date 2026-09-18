@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 
@@ -7,15 +8,42 @@ const SYMBOL_LIMIT = 5;
 const INTERVAL = '5';
 const LOOKBACK = 150;
 const POLL_MS = 5 * 60 * 1000;
+const BRIDGE_PORT = Number(process.env.KITSETUPS_ALERT_PORT || 17873);
 const STATE_FILE = process.env.KITSETUPS_ALERT_STATE || `${homedir()}/.kitsetups-market-alerts.json`;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+let latestEvent = null;
+let lastCheckAt = null;
+let lastError = null;
+
+const bridge = createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+  if (req.method !== 'GET') { res.writeHead(405); return res.end('Method not allowed'); }
+  const body = JSON.stringify({
+    ok: true,
+    monitor: 'kitsetups-termux',
+    checkedAt: lastCheckAt,
+    error: lastError,
+    event: latestEvent,
+  });
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(body);
+});
+
+bridge.listen(BRIDGE_PORT, '127.0.0.1', () => {
+  console.log(`[market-alerts] Local KitSetups bridge: http://127.0.0.1:${BRIDGE_PORT}/`);
+});
 
 async function bybitJson(path, params = {}) {
   const url = new URL(`${BYBIT_BASE}${path}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
   const response = await fetch(url, {
-    headers: { Accept: 'application/json', 'User-Agent': 'KitSetups-Termux-MarketMonitor/1.0' },
+    headers: { Accept: 'application/json', 'User-Agent': 'KitSetups-Termux-MarketMonitor/1.1' },
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`Bybit HTTP ${response.status}`);
@@ -112,9 +140,11 @@ async function notify(event) {
 }
 
 async function checkOnce() {
+  lastCheckAt = new Date().toISOString();
+  lastError = null;
   const symbols=await getSymbols();
   if(!symbols.length) throw new Error('Bybit returned no USDT perpetual markets.');
-  console.log(`[market-alerts] ${new Date().toISOString()} checking ${symbols.join(', ')}`);
+  console.log(`[market-alerts] ${lastCheckAt} checking ${symbols.join(', ')}`);
   const state=await loadState();
   const sent=state.sentEvents && typeof state.sentEvents==='object' ? state.sentEvents : {};
   for(const symbol of symbols) {
@@ -123,6 +153,8 @@ async function checkOnce() {
     const key=`${event.symbol}-${event.direction}-${event.candleTime}`;
     if(sent[key]) continue;
     const delivered=await notify(event);
+    const bridgeEvent={...event,detectedAt:Date.now(),alertId:key};
+    latestEvent=bridgeEvent;
     sent[key]={at:Date.now(),delivered};
     console.log(`[market-alerts] ${event.symbol} ${event.direction} BOS at ${formatPrice(event.level)}${delivered?' — notified':''}`);
   }
@@ -136,10 +168,13 @@ async function main() {
   console.log(`[market-alerts] Poll interval: ${POLL_MS/60000} minutes`);
   console.log(`[market-alerts] State file: ${STATE_FILE}`);
   while(true) {
-    try { await checkOnce(); } catch(error) { console.error(`[market-alerts] check failed: ${error?.message||error}`); }
+    try { await checkOnce(); } catch(error) {
+      lastError = error?.message || String(error);
+      console.error(`[market-alerts] check failed: ${lastError}`);
+    }
     await sleep(POLL_MS);
   }
 }
-process.on('SIGINT',()=>{console.log('\\n[market-alerts] stopped.');process.exit(0);});
-process.on('SIGTERM',()=>process.exit(0));
+process.on('SIGINT',()=>{console.log('\\n[market-alerts] stopped.');bridge.close(()=>process.exit(0));});
+process.on('SIGTERM',()=>{bridge.close(()=>process.exit(0));});
 main().catch(error=>{console.error(error);process.exit(1);});
