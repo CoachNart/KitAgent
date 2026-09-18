@@ -78,9 +78,17 @@ function orderBlockCandidates(c,bias){
 }
 function entryZones(c,bias,current,a){
   const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-2);
+  // A LIMIT setup is a live execution plan, not a historical zone bookmark.
+  // Once price has travelled too far from an old FVG/OB, the original
+  // imbalance may already be mitigated or structurally invalid. Keep zones
+  // reasonably fresh and close enough to current price to remain executable.
+  const maxDistance=Math.max(a*2.25,current*.0125);
+  const maxAge=24;
   return zones.filter(z=>{
     const ahead=bias==='LONG'?z.mid<current:z.mid>current;
-    return ahead&&Math.abs(current-z.mid)<=a*3.5;
+    const age=c.length-1-z.index;
+    const distance=Math.abs(current-z.mid);
+    return ahead&&age<=maxAge&&distance<=maxDistance;
   }).sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
 }
 function liquidityCandidates(c,bias,entry,a){
