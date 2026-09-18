@@ -152,10 +152,9 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         return json(res,200,{ok:true,instruments:filtered});
       }
       if(market==='forex'){
-        const r=await fetch('https://query1.finance.yahoo.com/v1/finance/search?q=forex%20major%20pairs&quotesCount=100&newsCount=0',{headers:{'User-Agent':'KitAgent/1.0','Accept':'application/json'}});
-        if(!r.ok)return json(res,502,{error:'Forex instrument provider unavailable'});
-        const body=await r.json();
-        const discovered=(body?.quotes||[]).map(x=>String(x.symbol||'').toUpperCase()).filter(x=>/^[A-Z]{6}=X$/.test(x)).map(x=>({symbol:x.slice(0,6),providerSymbol:x,name:x.slice(0,3)+' / '+x.slice(3,6),type:'FOREX'}));
+        const queries=['USD','EUR','GBP','JPY','AUD','NZD','CAD','CHF','SEK','NOK','SGD','HKD','CNH','ZAR','MXN','TRY','PLN','HUF','THB','CZK','ILS','INR','BRL','CLP','COP'];
+        const responses=await Promise.all(queries.map(q=>fetch(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q+' forex')}&quotesCount=100&newsCount=0`,{headers:{'User-Agent':'KitAgent/1.0','Accept':'application/json'}}).then(async r=>r.ok?(await r.json()).quotes||[]:[]).catch(()=>[])));
+        const discovered=responses.flat().map(x=>String(x.symbol||'').toUpperCase()).filter(x=>/^[A-Z]{6}=X$/.test(x)).map(x=>({symbol:x.slice(0,6),providerSymbol:x,name:x.slice(0,3)+' / '+x.slice(3,6),type:'FOREX'}));
         const fallback=FOREX_INSTRUMENTS.map(symbol=>({symbol,providerSymbol:`${symbol}=X`,name:`${symbol.slice(0,3)} / ${symbol.slice(3)}`,type:'FOREX'}));
         return json(res,200,{ok:true,instruments:normalizeInstrumentList([...discovered,...fallback])});
       }
