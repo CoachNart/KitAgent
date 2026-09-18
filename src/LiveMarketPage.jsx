@@ -37,7 +37,6 @@ function AnalysisResult({result,savedSignal}){
   return <div className="live-result">
     <div className={`setup-card-v2 ${tone}`}>
       <div className="setup-v2-head"><div className="setup-v2-symbol"><span>{result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'METALS / CFD'} · {result.timeframe}</span><h3>{result.market==='forex'||result.market==='metals'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div><div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div><div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div></div>
-      {savedSignal&&<div className="signal-saved"><ShieldCheck size={14}/><span>Signal recorded · {savedSignal.signalId}</span></div>}
       <div className="mtf-structure-strip">
         <div className={s.higherBias===s.bias && s.bias!=='WAIT'?'active':''}><span>BIAS · {s.higherTimeframe||'HTF'}</span><b>{s.higherBias||'WAIT'}</b></div>
         <i>→</i>
