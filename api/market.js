@@ -132,18 +132,42 @@ function stopForEntry(c,bias,entry,a){return protectiveStop(c,bias,entry,a);}
 function targetPool(c,bias,entry,a){
   const structural=liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite);
   const window=c.slice(-80);
+  const previous=c.slice(-160,-80);
   const extremes=bias==='LONG'
-    ?[Math.max(...window.map(x=>x.high)),Math.max(...c.slice(-160,-80).map(x=>x.high))]
-    : [Math.min(...window.map(x=>x.low)),Math.min(...c.slice(-160,-80).map(x=>x.low))];
-  return [...new Set([...structural,...extremes.filter(Number.isFinite).filter(x=>bias==='LONG'?x>entry:x<entry)])]
+    ?[Math.max(...window.map(x=>x.high)),...(previous.length?[Math.max(...previous.map(x=>x.high))]:[])]
+    : [Math.min(...window.map(x=>x.low)),...(previous.length?[Math.min(...previous.map(x=>x.low))]:[])];
+  const maxDistance=Math.max(a*8,entry*.04);
+  return [...new Set([...structural,...extremes])]
+    .filter(level=>Number.isFinite(level))
+    .filter(level=>bias==='LONG'?level>entry&&level-entry<=maxDistance:level<entry&&entry-level<=maxDistance)
     .sort((x,y)=>bias==='LONG'?x-y:y-x);
 }
 function evaluateTrade(c,bias,entry,a,minRR=2.25){
   const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop),minimumRisk=Math.max(a*.65,entry*.001);
   if(!risk||!Number.isFinite(risk)||risk<minimumRisk)return null;
-  const pools=targetPool(c,bias,entry,a),candidates=pools.map(level=>({level,rr:Math.abs(level-entry)/risk})).filter(x=>x.rr>=minRR);
-  if(!candidates.length)return null;const chosen=candidates[0],target2=pools.find(level=>Math.abs(level-chosen.level)>a*.3&&Math.abs(level-entry)/risk>chosen.rr);
-  return {entry,stop,risk,target:chosen.level,target2:target2??null,rr:chosen.rr};
+  const pools=targetPool(c,bias,entry,a);
+  const buffer=Math.max(a*.08,entry*.00015);
+  const candidates=pools.map(level=>{
+    const target=bias==='LONG'?level-buffer:level+buffer;
+    const reward=Math.abs(target-entry);
+    return {level,target,reward,rr:reward/risk};
+  }).filter(x=>Number.isFinite(x.target)&&x.rr>=minRR);
+  if(!candidates.length)return null;
+  const chosen=candidates[0];
+  const target2Candidate=pools.slice(1).map(level=>{
+    const target=bias==='LONG'?level-buffer:level+buffer;
+    return {target,rr:Math.abs(target-entry)/risk};
+  }).find(x=>x.rr>chosen.rr&&Math.abs(x.target-chosen.target)>a*.3);
+  return {
+    entry,
+    stop,
+    risk,
+    target:chosen.target,
+    targetLiquidity:chosen.level,
+    target2:target2Candidate?.target??null,
+    target2Liquidity:target2Candidate?.target??null,
+    rr:chosen.rr
+  };
 }
 function marketStructure(c){
   const {highs,lows}=confirmedSwings(c),h=highs.slice(-8),l=lows.slice(-8);
@@ -222,7 +246,15 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   }
   const confidence=Math.min(94,Math.max(38,Math.round(45+(st.trend===bias?10:0)+(freshBos?12:0)+(freshSweep?10:0)+(impulse?8:0)+(((bias==='LONG'&&e20>e50)||(bias==='SHORT'&&e20<e50))?5:0)+(((bias==='LONG'&&r>=48&&r<=70)||(bias==='SHORT'&&r>=30&&r<=52))?5:0))));
   const stop=trade?.stop??null,risk=trade?.risk??null,riskPct=entry>0&&risk!=null?(risk/entry)*100:null,target1=trade?.target??null,target2=trade?.target2??null,targetRisk=trade?.rr??null,q3=setupQuality(c,bias,entry,trade,e20,e50,r,confirmation);
-  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.25&&q3.score>=6),status=tradeReady?(targetRisk>=3?'A-GRADE':'QUALITY'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
+  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.25&&q3.score>=6),status=tradeReady?(targetRisk>=3?'A-GRADE':'QUALITY'):'WAIT';
+  const liquidity=tradeReady&&trade.targetLiquidity!=null?{
+    target:target1,
+    liquidityLevel:trade.targetLiquidity,
+    type:liquidityCandidates(c,bias,entry,a).find(x=>Math.abs(x.level-trade.targetLiquidity)<=Math.max(a*.18,entry*.0006))?.type||'STRUCTURAL LIQUIDITY',
+    touches:liquidityCandidates(c,bias,entry,a).find(x=>Math.abs(x.level-trade.targetLiquidity)<=Math.max(a*.18,entry*.0006))?.touches||0,
+    distancePct:Number((Math.abs(trade.targetLiquidity-entry)*100/entry).toFixed(2)),
+    reason:'Target is the nearest qualified external liquidity level within the risk model; TP is placed just before that liquidity.'
+  }:null;
   const stopDistance=tradeReady?Math.abs(entry-stop):null,stopDistancePct=tradeReady&&entry?(stopDistance/entry)*100:null,instrumentKey=String(instrumentSymbol||''),priceUnitLabel=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?'pips':'price units',pipMultiplier=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?(instrumentKey.includes('JPY')?100:10000):1,stopDistanceUnits=tradeReady?stopDistance*pipMultiplier:null;
   return {bias,engineBias,confidence,entry:roundPrice(tradeReady?entry:null),marketEntry:roundPrice(last.close),limitEntry:roundPrice(limitEntry),orderType:tradeReady?orderType:'WAIT',stopLoss:roundPrice(tradeReady?stop:null),takeProfit1:roundPrice(tradeReady?target1:null),takeProfit2:roundPrice(tradeReady?target2:null),riskReward:tradeReady?'1:'+targetRisk.toFixed(2):'—',riskPercent:tradeReady?Number(riskPct.toFixed(2)):null,stopDistance:tradeReady?roundPrice(stopDistance):null,stopDistancePct:tradeReady?Number(stopDistancePct.toFixed(3)):null,stopDistanceUnits:tradeReady?Number(stopDistanceUnits.toFixed(2)):null,priceUnitLabel,structuralInvalidation:tradeReady?roundPrice(stop):null,tradeReady,riskRewardValue:tradeReady?Number(targetRisk.toFixed(2)):null,quality:status,qualityScore:q3.score,marketStructure:q3.structure?.trend||st.trend,setupStatus:tradeReady?'TRADE READY':'WAIT',setupReason,rsi:Number(r.toFixed(2)),ema20:roundPrice(e20),ema50:roundPrice(e50),atr:roundPrice(a),price:roundPrice(last.close),swingHigh:roundPrice(Math.max(...c.slice(-30).map(x=>x.high))),swingLow:roundPrice(Math.min(...c.slice(-30).map(x=>x.low))),liquidityTarget:liquidity?roundPrice(liquidity.liquidityLevel):null,liquidityType:liquidity?.type||'No confirmed target',liquidityTouches:liquidity?.touches||0,liquidityDistancePct:liquidity?.distancePct||null,liquidityReason:tradeReady?(liquidity?.reason||'Target is derived from a legitimate structural/liquidity level.'):'No target is shown because no quality trade is currently available.',confirmation:{bos:Boolean(freshBos),sweep:Boolean(freshSweep),displacement:Boolean(impulse)},timestamp:last.time};
 }
