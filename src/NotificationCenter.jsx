@@ -5,40 +5,18 @@ import { getMarketAlertSnapshot } from './marketAlerts.js';
 
 const KEY='kitsetups-market-alerts-v2';
 const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT'];
-const BRIDGE_URL='http://127.0.0.1:17873/';
 const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}};
 const fmtPrice=(v)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)<10?4:2})}`:'—';
 const fmtTime=(v)=>v?new Date(v).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—';
 
 export default function NotificationCenter({user,embedded=false}){
- const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot()),[termux,setTermux]=useState({connected:false,event:null,checkedAt:null,error:null});
+ const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot());
  useEffect(()=>localStorage.setItem(KEY,JSON.stringify(alerts)),[alerts]);
  useEffect(()=>{
    const onUpdate=e=>setMarket(e.detail||getMarketAlertSnapshot());
    window.addEventListener('kitagent:market-alert-update',onUpdate);
    setMarket(getMarketAlertSnapshot());
    return()=>window.removeEventListener('kitagent:market-alert-update',onUpdate);
- },[]);
- useEffect(()=>{
-   let dead=false,lastAlertId='';
-   const poll=async()=>{
-     try{
-       const response=await fetch(BRIDGE_URL,{cache:'no-store'});
-       if(!response.ok)throw new Error(`bridge HTTP ${response.status}`);
-       const payload=await response.json();
-       if(dead)return;
-       setTermux({connected:true,event:payload.event||null,checkedAt:payload.checkedAt||null,error:payload.error||null});
-       const event=payload.event;
-       if(!event?.alertId||event.alertId===lastAlertId)return;
-       lastAlertId=event.alertId;
-       if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
-         try{new Notification(`KitSetups · ${event.symbol?.replace('USDT','')} ${event.direction}`,{body:`5m BOS detected at ${fmtPrice(event.level)}`,icon:'/kitsetups-logo.svg',tag:event.alertId})}catch{}
-       }
-     }catch{
-       if(!dead)setTermux(v=>({...v,connected:false}));
-     }
-   };
-   poll();const id=setInterval(poll,5000);return()=>{dead=true;clearInterval(id)};
  },[]);
  useEffect(()=>{
    let dead=false;
@@ -53,21 +31,20 @@ export default function NotificationCenter({user,embedded=false}){
  const count=useMemo(()=>alerts.filter(a=>!a.triggered).length,[alerts]);
  const liveMarkets=market.markets||[];
  const upcoming=market.news||[];
- const enable=async()=>{try{const r=await enableKitSetupsNotifications(user);setPermission(r.enabled?'granted':(typeof Notification!=='undefined'?Notification.permission:'denied'))}catch{}};
+ const enable=async()=>{try{const r=await enableKitSetupsNotifications(user);setPermission(r.enabled?'granted':(typeof Notification!=='undefined'?Notification.permission:'denied'))}catch(error){console.warn('KitSetups notifications could not be enabled:',error);setPermission(typeof Notification!=='undefined'?Notification.permission:'denied')}};
  const add=()=>{const n=Number(target);if(!Number.isFinite(n)||n<=0)return;setAlerts(a=>[...a,{id:crypto.randomUUID(),symbol,direction,target:n,createdAt:Date.now(),triggered:false}]);setTarget('')};
  return <div style={embedded?wrapEmbedded:wrapFloating}>
   <button aria-label="Open notifications" onClick={()=>setOpen(v=>!v)} style={embedded?buttonEmbedded:button}>{count?<BellRing size={17}/>:<Bell size={17}/>} {count>0&&<span style={badge}>{count}</span>}</button>
   {open&&<div style={embedded?panelEmbedded:panel}>
    <div style={head}><div><strong>Market alerts</strong><div style={sub}>Live structure + scheduled news</div></div><button onClick={()=>setOpen(false)} style={close}><X size={16}/></button></div>
    <div style={statusCard}><div style={statusTop}><span><Radio size={12}/> BYBIT LIVE</span><small>{market.checkedAt?`Checked ${fmtTime(market.checkedAt)}`:'Starting monitor…'}</small></div><div style={statusGrid}><div><b>{liveMarkets.filter(x=>x.ok).length}/{SYMBOLS.length}</b><span>symbols online</span></div><div><b>5m</b><span>structure</span></div><div><b>{upcoming.length}</b><span>high impact</span></div></div>{market.error&&<div style={error}>{market.error}</div>}</div>
-   <div style={bridgeCard}><span style={{...bridgeDot,background:termux.connected?'#42e6a0':'rgba(255,255,255,.25)'}}/> <b>{termux.connected?'TERMUX LINK ACTIVE':'TERMUX LINK OFFLINE'}</b><small>{termux.checkedAt?`Last check ${fmtTime(termux.checkedAt)}`:'Open the Termux monitor to connect'}</small></div>
-   {termux.event&&<div style={eventCard}><div style={eventIcon}><Zap size={13}/></div><div><b>{termux.event.symbol?.replace('USDT','')} {termux.event.direction} BOS</b><span>{fmtPrice(termux.event.level)} · detected {fmtTime(termux.event.detectedAt)}</span></div></div>}
    {market.lastEvent&&<div style={eventCard}><div style={eventIcon}><Zap size={13}/></div><div><b>{market.lastEvent.symbol?.replace('USDT','')} {market.lastEvent.direction} BOS</b><span>{fmtPrice(market.lastEvent.level)} · detected {fmtTime(market.lastEvent.detectedAt)}</span></div></div>}
    {upcoming.length>0&&<div style={section}><div style={sectionTitle}>UPCOMING HIGH-IMPACT</div>{upcoming.slice(0,3).map(n=><div style={newsItem} key={n.id}><div><b>{n.country||'Market'} · {n.title||'Economic release'}</b><span>{fmtTime(n.when)} · scheduled</span></div></div>)}</div>}
    {permission!=='granted'&&<button onClick={enable} style={enableBtn}><Bell size={14}/> Enable browser notifications</button>}
+   {permission==='granted'&&<div style={enabledNotice}><CheckCircle2 size={13}/> Browser notifications enabled</div>}
    <div style={section}><div style={sectionTitle}>PRICE ALERT</div><div style={row}><select value={symbol} onChange={e=>setSymbol(e.target.value)} style={field}>{SYMBOLS.map(s=><option key={s}>{s}</option>)}</select><select value={direction} onChange={e=>setDirection(e.target.value)} style={field}><option value="above">Above</option><option value="below">Below</option></select></div><div style={row}><input inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Target price" style={{...field,flex:1}}/><button onClick={add} style={addBtn}>Add</button></div></div>
    <div style={list}>{alerts.length===0&&<div style={empty}>No manual price alerts.</div>}{alerts.slice().reverse().map(a=><div key={a.id} style={item}><div><strong>{a.symbol.replace('USDT','')}</strong> {a.direction} {fmtPrice(a.target)}<div style={meta}>{a.triggered?'Triggered':'Watching'}</div></div><button onClick={()=>setAlerts(x=>x.filter(y=>y.id!==a.id))} style={close}>×</button></div>)}</div>
-   <div style={footer}><CheckCircle2 size={12}/> Termux can relay live market alerts into KitSetups while this page is open.</div>
+   <div style={footer}><CheckCircle2 size={12}/> Push notifications will be delivered by KitSetups when server-side alerts are connected.</div>
   </div>}
  </div>;
 }
@@ -84,6 +61,7 @@ const row={display:'flex',gap:5,marginBottom:6,minWidth:0};
 const field={minWidth:0,width:0,flex:1,padding:'7px 8px',borderRadius:7,border:'1px solid rgba(255,255,255,.1)',background:'rgba(255,255,255,.055)',color:'#fff',outline:'none',fontSize:12,lineHeight:1.4};
 const close={background:'none',border:0,color:'#fff',cursor:'pointer',opacity:.7,padding:3};
 const enableBtn={fontFamily:'"DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',width:'100%',padding:'8px',borderRadius:7,border:'1px solid rgba(0,199,254,.2)',background:'rgba(0,199,254,.07)',color:'#9deaff',cursor:'pointer',display:'flex',gap:6,alignItems:'center',justifyContent:'center',marginBottom:8,fontSize:10};
+const enabledNotice={display:'flex',gap:6,alignItems:'center',justifyContent:'center',padding:'7px',borderRadius:7,background:'rgba(66,230,160,.07)',border:'1px solid rgba(66,230,160,.16)',color:'#8af0be',marginBottom:8,fontSize:10};
 const addBtn={fontFamily:'"DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',padding:'0 10px',borderRadius:7,border:0,background:'#fff',color:'#000',display:'grid',placeItems:'center',cursor:'pointer',fontSize:9,fontWeight:800};
 const list={marginTop:8,display:'grid',gap:4,maxHeight:120,overflow:'auto'};
 const item={display:'flex',alignItems:'center',justifyContent:'space-between',gap:5,padding:'6px 7px',borderRadius:7,background:'rgba(255,255,255,.045)',fontSize:10,minWidth:0};
@@ -93,9 +71,6 @@ const empty={fontSize:11,opacity:.45,padding:'7px 0'};
 const statusCard={border:'1px solid rgba(66,230,160,.16)',background:'rgba(66,230,160,.045)',borderRadius:9,padding:8,marginBottom:7};
 const statusTop={display:'flex',justifyContent:'space-between',alignItems:'center',gap:6};
 const statusGrid={display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:5,marginTop:8};
-const bridgeCard={display:'flex',alignItems:'center',gap:6,border:'1px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.035)',borderRadius:8,padding:'7px 8px',marginBottom:7,fontSize:8};
-const bridgeDot={width:6,height:6,borderRadius:99,flexShrink:0};
-const bridgeCardSmall={fontSize:8,opacity:.45,marginLeft:'auto'};
 const eventCard={display:'flex',gap:8,alignItems:'center',border:'1px solid rgba(0,199,254,.14)',background:'rgba(0,199,254,.04)',borderRadius:8,padding:8,marginBottom:7};
 const eventIcon={width:25,height:25,borderRadius:7,display:'grid',placeItems:'center',background:'rgba(0,199,254,.08)',color:'#78e0ff',flexShrink:0};
 const section={borderTop:'1px solid rgba(255,255,255,.07)',paddingTop:8,marginTop:8};
