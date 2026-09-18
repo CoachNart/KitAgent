@@ -139,7 +139,7 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
   const st=marketStructure(c),rawScore=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0),engineBias=st.trend!=='RANGE'?st.trend:(rawScore>=2?'LONG':rawScore<=-2?'SHORT':'WAIT'),bias=forcedBias||engineBias;
   let trade=null,orderType='WAIT',entry=last.close,limitEntry=null,setupReason='No clean opportunity at the current price.';
-  const bos=structureBreak(c,bias,36),sweep=liquiditySweep(c,bias),impulse=displacement(c,bias),freshSweep=sweep&&sweep.index>=c.length-4,freshBos=bos&&bos.breakIndex>=c.length-5,confirmation={bos:freshBos?sweep?bos:bos:bos,sweep:freshSweep,displacement:impulse};
+  const bos=structureBreak(c,bias,36),sweep=liquiditySweep(c,bias),impulse=displacement(c,bias),freshSweep=sweep&&sweep.index>=c.length-4,freshBos=bos&&bos.breakIndex>=c.length-5,confirmation={bos:freshBos,sweep:freshSweep,displacement:impulse};
   if(bias!=='WAIT'){
     const marketTrade=evaluateTrade(c,bias,last.close,a,2.25),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r,confirmation),marketConfirmed=Boolean((freshBos||freshSweep)&&impulse);
     if(marketTrade&&marketConfirmed&&marketQuality.score>=7){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason=freshSweep?'Liquidity was swept and reclaimed, followed by displacement. Current price is the confirmed execution point.':'Structure broke with displacement and current price is still inside the valid execution leg.';}
@@ -196,8 +196,8 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const structureConflict=topDown.conflict;
   const entryAligned=topDown.bias!=='WAIT'&&(entryStructure===topDown.bias||entryStructure==='WAIT');
   const isLimitSetup=setup.orderType==='LIMIT'&&setup.limitEntry!=null&&setup.takeProfit1!=null;
-  const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias;
-  const limitReady=isLimitSetup&&entryAligned&&!structureConflict&&topDown.middleBias===topDown.bias;
+  const marketReady=setup.orderType==='MARKET'&&entryAligned&&!structureConflict;
+  const limitReady=isLimitSetup&&entryAligned&&!structureConflict;
   const canTrade=marketReady||limitReady;
   if(!canTrade){
     const directionBias=topDown.bias;
