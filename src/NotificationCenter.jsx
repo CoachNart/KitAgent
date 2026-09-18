@@ -5,18 +5,40 @@ import { getMarketAlertSnapshot } from './marketAlerts.js';
 
 const KEY='kitsetups-market-alerts-v2';
 const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT'];
+const BRIDGE_URL='http://127.0.0.1:17873/';
 const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}};
 const fmtPrice=(v)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)<10?4:2})}`:'—';
 const fmtTime=(v)=>v?new Date(v).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—';
 
 export default function NotificationCenter({user,embedded=false}){
- const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot());
+ const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot()),[termux,setTermux]=useState({connected:false,event:null,checkedAt:null,error:null});
  useEffect(()=>localStorage.setItem(KEY,JSON.stringify(alerts)),[alerts]);
  useEffect(()=>{
    const onUpdate=e=>setMarket(e.detail||getMarketAlertSnapshot());
    window.addEventListener('kitagent:market-alert-update',onUpdate);
    setMarket(getMarketAlertSnapshot());
    return()=>window.removeEventListener('kitagent:market-alert-update',onUpdate);
+ },[]);
+ useEffect(()=>{
+   let dead=false,lastAlertId='';
+   const poll=async()=>{
+     try{
+       const response=await fetch(BRIDGE_URL,{cache:'no-store'});
+       if(!response.ok)throw new Error(`bridge HTTP ${response.status}`);
+       const payload=await response.json();
+       if(dead)return;
+       setTermux({connected:true,event:payload.event||null,checkedAt:payload.checkedAt||null,error:payload.error||null});
+       const event=payload.event;
+       if(!event?.alertId||event.alertId===lastAlertId)return;
+       lastAlertId=event.alertId;
+       if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
+         try{new Notification(`KitSetups · ${event.symbol?.replace('USDT','')} ${event.direction}`,{body:`5m BOS detected at ${fmtPrice(event.level)}`,icon:'/kitsetups-logo.svg',tag:event.alertId})}catch{}
+       }
+     }catch{
+       if(!dead)setTermux(v=>({...v,connected:false}));
+     }
+   };
+   poll();const id=setInterval(poll,5000);return()=>{dead=true;clearInterval(id)};
  },[]);
  useEffect(()=>{
    let dead=false;
@@ -38,12 +60,14 @@ export default function NotificationCenter({user,embedded=false}){
   {open&&<div style={embedded?panelEmbedded:panel}>
    <div style={head}><div><strong>Market alerts</strong><div style={sub}>Live structure + scheduled news</div></div><button onClick={()=>setOpen(false)} style={close}><X size={16}/></button></div>
    <div style={statusCard}><div style={statusTop}><span><Radio size={12}/> BYBIT LIVE</span><small>{market.checkedAt?`Checked ${fmtTime(market.checkedAt)}`:'Starting monitor…'}</small></div><div style={statusGrid}><div><b>{liveMarkets.filter(x=>x.ok).length}/{SYMBOLS.length}</b><span>symbols online</span></div><div><b>5m</b><span>structure</span></div><div><b>{upcoming.length}</b><span>high impact</span></div></div>{market.error&&<div style={error}>{market.error}</div>}</div>
+   <div style={bridgeCard}><span style={{...bridgeDot,background:termux.connected?'#42e6a0':'rgba(255,255,255,.25)'}}/> <b>{termux.connected?'TERMUX LINK ACTIVE':'TERMUX LINK OFFLINE'}</b><small>{termux.checkedAt?`Last check ${fmtTime(termux.checkedAt)}`:'Open the Termux monitor to connect'}</small></div>
+   {termux.event&&<div style={eventCard}><div style={eventIcon}><Zap size={13}/></div><div><b>{termux.event.symbol?.replace('USDT','')} {termux.event.direction} BOS</b><span>{fmtPrice(termux.event.level)} · detected {fmtTime(termux.event.detectedAt)}</span></div></div>}
    {market.lastEvent&&<div style={eventCard}><div style={eventIcon}><Zap size={13}/></div><div><b>{market.lastEvent.symbol?.replace('USDT','')} {market.lastEvent.direction} BOS</b><span>{fmtPrice(market.lastEvent.level)} · detected {fmtTime(market.lastEvent.detectedAt)}</span></div></div>}
    {upcoming.length>0&&<div style={section}><div style={sectionTitle}>UPCOMING HIGH-IMPACT</div>{upcoming.slice(0,3).map(n=><div style={newsItem} key={n.id}><div><b>{n.country||'Market'} · {n.title||'Economic release'}</b><span>{fmtTime(n.when)} · scheduled</span></div></div>)}</div>}
    {permission!=='granted'&&<button onClick={enable} style={enableBtn}><Bell size={14}/> Enable browser notifications</button>}
    <div style={section}><div style={sectionTitle}>PRICE ALERT</div><div style={row}><select value={symbol} onChange={e=>setSymbol(e.target.value)} style={field}>{SYMBOLS.map(s=><option key={s}>{s}</option>)}</select><select value={direction} onChange={e=>setDirection(e.target.value)} style={field}><option value="above">Above</option><option value="below">Below</option></select></div><div style={row}><input inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Target price" style={{...field,flex:1}}/><button onClick={add} style={addBtn}>Add</button></div></div>
    <div style={list}>{alerts.length===0&&<div style={empty}>No manual price alerts.</div>}{alerts.slice().reverse().map(a=><div key={a.id} style={item}><div><strong>{a.symbol.replace('USDT','')}</strong> {a.direction} {fmtPrice(a.target)}<div style={meta}>{a.triggered?'Triggered':'Watching'}</div></div><button onClick={()=>setAlerts(x=>x.filter(y=>y.id!==a.id))} style={close}>×</button></div>)}</div>
-   <div style={footer}><CheckCircle2 size={12}/> Background market alerts use push notifications when enabled.</div>
+   <div style={footer}><CheckCircle2 size={12}/> Termux can relay live market alerts into KitSetups while this page is open.</div>
   </div>}
  </div>;
 }
@@ -68,8 +92,10 @@ const meta={fontSize:8,opacity:.45,marginTop:2};
 const empty={fontSize:11,opacity:.45,padding:'7px 0'};
 const statusCard={border:'1px solid rgba(66,230,160,.16)',background:'rgba(66,230,160,.045)',borderRadius:9,padding:8,marginBottom:7};
 const statusTop={display:'flex',justifyContent:'space-between',alignItems:'center',gap:6};
-const statusTopSpan={fontSize:8};
 const statusGrid={display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:5,marginTop:8};
+const bridgeCard={display:'flex',alignItems:'center',gap:6,border:'1px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.035)',borderRadius:8,padding:'7px 8px',marginBottom:7,fontSize:8};
+const bridgeDot={width:6,height:6,borderRadius:99,flexShrink:0};
+const bridgeCardSmall={fontSize:8,opacity:.45,marginLeft:'auto'};
 const eventCard={display:'flex',gap:8,alignItems:'center',border:'1px solid rgba(0,199,254,.14)',background:'rgba(0,199,254,.04)',borderRadius:8,padding:8,marginBottom:7};
 const eventIcon={width:25,height:25,borderRadius:7,display:'grid',placeItems:'center',background:'rgba(0,199,254,.08)',color:'#78e0ff',flexShrink:0};
 const section={borderTop:'1px solid rgba(255,255,255,.07)',paddingTop:8,marginTop:8};
