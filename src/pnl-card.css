@@ -6,6 +6,7 @@
 .pnl-card-inner{position:absolute;inset:2.1% 5.3%;border:2px solid #0b3538;border-radius:3px}
 .pnl-card-brand{position:absolute;left:7.4%;top:21.8%;display:flex;align-items:center;gap:24px}
 .pnl-card-brand .mexc-logo{width:94px;height:94px;border-radius:22px;background:#27c9c2;color:#071112;font-size:47px;font-weight:700;display:grid;place-items:center}
+.pnl-card-brand .pnl-card-logo{width:94px;height:94px;border-radius:22px;object-fit:contain;display:block;background:#071112}
 .pnl-card-brand div{display:flex;flex-direction:column;gap:12px}
 .pnl-card-brand small{color:#27d1c7;font-size:24px;line-height:1;font-weight:700;letter-spacing:.145em}
 .pnl-card-brand b{color:#f4f5f6;font-size:34px;line-height:1;font-weight:600}
@@ -31,6 +32,7 @@
   .pnl-share-dialog{width:calc(100vw - 16px)}
   .pnl-card-brand{gap:10px}
   .pnl-card-brand .mexc-logo{width:58px;height:58px;border-radius:14px;font-size:29px}
+  .pnl-card-brand .pnl-card-logo{width:58px;height:58px;border-radius:14px}
   .pnl-card-brand div{gap:6px}
   .pnl-card-brand small{font-size:13px;letter-spacing:.11em}
   .pnl-card-brand b{font-size:20px}
