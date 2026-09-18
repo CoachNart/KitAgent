@@ -204,6 +204,8 @@ export default function PerpetualsPage({ user }) {
     return ((mark - entry) / entry) * lev * 100 * direction;
   };
 
+  const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/x1Gvk4Zw/Kitsets-Up.png';
+
   const imageUrlToDataUri = async url => {
     if (!url) return '';
     if (String(url).startsWith('data:')) return url;
@@ -250,6 +252,7 @@ export default function PerpetualsPage({ user }) {
     const initials = safe(profileName.slice(0, 1).toUpperCase());
     const avatarDataUri = await imageUrlToDataUri(profileAvatar);
     const avatarHref = avatarDataUri || profileAvatar;
+    const logoDataUri = await imageUrlToDataUri(KITSETUPS_LOGO_URL);
     return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1277" viewBox="0 0 1080 1277">
       <defs>
         <clipPath id="pnlAvatarClip"><circle cx="865" cy="228" r="58"/></clipPath>
@@ -263,9 +266,7 @@ export default function PerpetualsPage({ user }) {
       <path d="M397 628 A410 410 0 0 1 997 266" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
       <path d="M407 628 A407 407 0 0 0 997 994" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
       <rect x="156" y="288" width="94" height="94" rx="22" fill="#071112"/>
-      <svg x="156" y="288" width="94" height="94" viewBox="350 440 1350 1170" aria-label="KitSetups logo">
-        <path fill="#00C7FE" fill-rule="evenodd" d="M 498,950 399,1214 402,1220 736,1219 743,1223 749,1233 746,1249 726,1298 642,1530 631,1556 632,1560 636,1562 928,1562 946,1560 954,1544 1029,1337 1114,1112 1119,1085 1118,1052 1112,1028 1099,1003 1085,986 1055,964 1030,954 1002,949 Z M 543,1012 1004,1012 1022,1017 1034,1024 1049,1040 1054,1051 1057,1066 1055,1091 903,1498 721,1498 736,1451 829,1202 835,1182 834,1172 826,1162 819,1159 490,1158 488,1154 539,1017 Z M 1317,491 1314,491 1307,499 1134,745 1103,778 1086,792 1060,808 1047,813 724,907 716,913 720,916 1074,915 1108,907 1135,894 1150,884 1176,862 1188,848 1212,810 1240,743 1241,751 1228,822 1228,853 1233,875 1249,906 1270,928 1283,937 1301,945 1318,950 1381,955 1393,958 1387,961 1313,968 1276,976 1257,984 1235,997 1213,1014 1198,1029 1177,1059 1164,1089 1047,1395 1048,1399 1055,1396 1253,1134 1280,1105 1317,1078 1345,1065 1596,977 1650,960 1654,956 1643,949 1592,933 1385,859 1367,849 1351,833 1339,812 1332,787 1322,600 1319,493 Z"/>
-      </svg>
+      ${logoDataUri ? `<image href="${safe(logoDataUri)}" x="156" y="288" width="94" height="94" preserveAspectRatio="xMidYMid meet" />` : ''}
       <text x="275" y="311" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" letter-spacing="3.5" fill="#27d1c7">KITSETUPS FUTURES</text>
       <text x="275" y="367" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="600" fill="#f4f5f6">${safe(profileName)}</text>
       <circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/>
@@ -358,7 +359,7 @@ export default function PerpetualsPage({ user }) {
       return;
     }
     try {
-      const svg = buildPnlSvg(p);
+      const svg = await buildPnlSvg(p);
       const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
       const png = await svgToPngFile(svg, `${safeName}.png`);
       triggerPnlDownload(png);
@@ -441,7 +442,7 @@ export default function PerpetualsPage({ user }) {
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
           <div className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
             <div className="pnl-card-inner" aria-hidden="true" />
-            <div className="pnl-card-brand"><span className="mexc-logo">K</span><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
+            <div className="pnl-card-brand"><img className="pnl-card-logo" src={KITSETUPS_LOGO_URL} alt="" /><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
             <span className="pnl-arrow" aria-hidden="true">{positive ? '↗' : '↘'}</span>
