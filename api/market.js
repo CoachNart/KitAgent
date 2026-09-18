@@ -47,8 +47,13 @@ function confirmedSwings(c){
 }
 function structureBreak(c,bias,lookback=30){
   const st=marketStructure(c),start=Math.max(2,c.length-lookback);
-  if(bias==='LONG'){const ref=st.highs.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++)if(c[i].close>ref.p)return {type:'BOS',level:ref.p,index:ref.i,breakIndex:i};}}
-  if(bias==='SHORT'){const ref=st.lows.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++)if(c[i].close<ref.p)return {type:'BOS',level:ref.p,index:ref.i,breakIndex:i};}}
+  const refs=bias==='LONG'?st.highs:st.lows;
+  for(const ref of refs.filter(x=>x.i>=start&&x.i<c.length-2).slice().reverse()){
+    for(let i=ref.i+1;i<c.length;i++){
+      if((bias==='LONG'&&c[i].close>ref.p)||(bias==='SHORT'&&c[i].close<ref.p))
+        return {type:'BOS',level:ref.p,index:ref.i,breakIndex:i};
+    }
+  }
   return null;
 }
 function displacement(c,bias){
@@ -72,9 +77,11 @@ function orderBlockCandidates(c,bias){
   }return out;
 }
 function entryZones(c,bias,current,a){
-  const range=c.slice(-50),hi=Math.max(...range.map(x=>x.high)),lo=Math.min(...range.map(x=>x.low)),mid=(hi+lo)/2;
   const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-2);
-  return zones.filter(z=>{const ahead=bias==='LONG'?z.mid<current:z.mid>current;const side=bias==='LONG'?z.mid<=mid:z.mid>=mid;return ahead&&side&&Math.abs(current-z.mid)<=a*2.5;}).sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
+  return zones.filter(z=>{
+    const ahead=bias==='LONG'?z.mid<current:z.mid>current;
+    return ahead&&Math.abs(current-z.mid)<=a*3.5;
+  }).sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
 }
 function liquidityCandidates(c,bias,entry,a){
   const st=marketStructure(c),source=bias==='LONG'?st.highs:st.lows;
@@ -116,7 +123,15 @@ function structuralEntryCandidates(c,bias,current,a){
   return candidates.sort((x,y)=>Math.abs(current-x.entry)-Math.abs(current-y.entry));
 }
 function stopForEntry(c,bias,entry,a){return protectiveStop(c,bias,entry,a);}
-function targetPool(c,bias,entry,a){return liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite).sort((x,y)=>bias==='LONG'?x-y:y-x);}
+function targetPool(c,bias,entry,a){
+  const structural=liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite);
+  const window=c.slice(-80);
+  const extremes=bias==='LONG'
+    ?[Math.max(...window.map(x=>x.high)),Math.max(...c.slice(-160,-80).map(x=>x.high))]
+    : [Math.min(...window.map(x=>x.low)),Math.min(...c.slice(-160,-80).map(x=>x.low))];
+  return [...new Set([...structural,...extremes.filter(Number.isFinite).filter(x=>bias==='LONG'?x>entry:x<entry)])]
+    .sort((x,y)=>bias==='LONG'?x-y:y-x);
+}
 function evaluateTrade(c,bias,entry,a,minRR=2.25){
   const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop),minimumRisk=Math.max(a*.65,entry*.001);
   if(!risk||!Number.isFinite(risk)||risk<minimumRisk)return null;
@@ -163,7 +178,13 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
   const st=marketStructure(c),rawScore=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0),engineBias=st.trend!=='RANGE'?st.trend:(rawScore>=2?'LONG':rawScore<=-2?'SHORT':'WAIT'),bias=forcedBias||engineBias;
   let trade=null,orderType='WAIT',entry=last.close,limitEntry=null,setupReason='No clean opportunity at the current price.';
-  const bos=structureBreak(c,bias,36),sweep=liquiditySweep(c,bias),impulse=displacement(c,bias),freshSweep=sweep&&sweep.index>=c.length-4,freshBos=bos&&bos.breakIndex>=c.length-5,confirmation={bos:freshBos,sweep:freshSweep,displacement:impulse};
+  const bos=structureBreak(c,bias,36),sweep=liquiditySweep(c,bias),freshSweep=sweep&&sweep.index>=c.length-6,freshBos=bos&&bos.breakIndex>=c.length-7;
+  let impulse=false,impulseIndex=-1;
+  for(let i=Math.max(0,c.length-6);i<c.length;i++){
+    const tail=c.slice(0,i+1);
+    if(displacement(tail,bias)){impulse=true;impulseIndex=i;}
+  }
+  const freshImpulse=impulse&&impulseIndex>=c.length-6,confirmation={bos:freshBos,sweep:freshSweep,displacement:freshImpulse};
   if(bias!=='WAIT'){
     const marketTrade=evaluateTrade(c,bias,last.close,a,2.25),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r,confirmation),marketConfirmed=Boolean((freshBos||freshSweep)&&impulse);
     if(marketTrade&&marketConfirmed&&marketQuality.score>=7){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason=freshSweep?'Liquidity was swept and reclaimed, followed by displacement. Current price is the confirmed execution point.':'Structure broke with displacement and current price is still inside the valid execution leg.';}
@@ -172,7 +193,7 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
       for(const candidate of candidates){const t=evaluateTrade(c,bias,candidate.entry,a,2.25),zone=candidate.zone,zoneBonus=zone?.type?.includes('FVG')||zone?.type?.includes('ORDER BLOCK')?2:0,q2=setupQuality(c,bias,candidate.entry,t,e20,e50,r,confirmation);if(t&&q2.score+zoneBonus>bestQuality.score){best=candidate;bestTrade=t;bestQuality={...q2,score:q2.score+zoneBonus};}}
       const validLimit=Boolean(bestTrade&&best?.zone&&(best.zone.type?.includes('FVG')||best.zone.type?.includes('ORDER BLOCK'))&&bestQuality.score>=6);
       if(validLimit){trade=bestTrade;orderType='LIMIT';entry=best.entry;limitEntry=best.entry;setupReason='Price is away from the confirmed execution zone. The limit entry is anchored to a real FVG or order block, with invalidation beyond structure and target at external liquidity.';}
-      else if(marketTrade&&marketConfirmed&&marketQuality.score>=6){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Confirmed structure and displacement are present; current price is the execution point.';}
+      else if(marketTrade&&marketConfirmed&&marketQuality.score>=5){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Confirmed structure and displacement are present; current price is the execution point.';}
       else setupReason='Bias exists, but there is no confirmed market entry or structurally valid pullback zone with a legitimate target.';
     }
   }
