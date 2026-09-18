@@ -204,7 +204,7 @@ export default function PerpetualsPage({ user }) {
     return ((mark - entry) / entry) * lev * 100 * direction;
   };
 
-  const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/x1Gvk4Zw/Kitsets-Up.png';
+  const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png';
 
   const imageUrlToDataUri = async url => {
     if (!url) return '';
