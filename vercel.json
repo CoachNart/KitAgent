@@ -47,6 +47,12 @@
       ]
     }
   ],
+  "crons": [
+    {
+      "path": "/api/affiliate-payout",
+      "schedule": "5 0 1 * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/uniswap",
