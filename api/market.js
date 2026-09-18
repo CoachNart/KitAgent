@@ -76,14 +76,13 @@ function orderBlockCandidates(c,bias){
     if(bias==='SHORT'&&x.close>x.open&&n.close<x.low&&nbody>=body*.9)out.push({low:x.low,high:x.high,mid:(x.low+x.high)/2,index:i,type:'BEARISH ORDER BLOCK'});
   }return out;
 }
-function entryZones(c,bias,current,a){
+function entryZones(c,bias,current,a,maxAge=24){
   const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-2);
   // A LIMIT setup is a live execution plan, not a historical zone bookmark.
   // Once price has travelled too far from an old FVG/OB, the original
   // imbalance may already be mitigated or structurally invalid. Keep zones
   // reasonably fresh and close enough to current price to remain executable.
   const maxDistance=Math.max(a*2.25,current*.0125);
-  const maxAge=24;
   return zones.filter(z=>{
     const ahead=bias==='LONG'?z.mid<current:z.mid>current;
     const age=c.length-1-z.index;
@@ -228,12 +227,14 @@ function setupQuality(c,bias,entry,trade,e20,e50,r,confirmation){
   if((bias==='LONG'&&r>=48&&r<=70)||(bias==='SHORT'&&r>=30&&r<=52))score+=1;if(trade.rr>=3)score+=2;else if(trade.rr>=2.25)score+=1;
   return {score,grade:score>=9?'A':score>=7?'B':'C',structure:st};
 }
-function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
+function analyzeCandles(c,forcedBias=null,instrumentSymbol='',executionTimeframe='1H'){
   if(c.length<60)throw new Error('Not enough candles for a reliable setup ('+c.length+' received)');
   const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
+  const confirmationWindow={ '1m':8,'5m':8,'15m':10,'30m':10,'1H':12,'4H':8,'1D':6,'1W':4 }[executionTimeframe]||10;
+  const limitZoneAge={ '1m':12,'5m':16,'15m':24,'30m':24,'1H':24,'4H':12,'1D':8,'1W':6 }[executionTimeframe]||24;
   const st=marketStructure(c),rawScore=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0),engineBias=st.trend!=='RANGE'?st.trend:(rawScore>=2?'LONG':rawScore<=-2?'SHORT':'WAIT'),bias=forcedBias||engineBias;
   let trade=null,orderType='WAIT',entry=last.close,limitEntry=null,setupReason='No clean opportunity at the current price.';
-  const bos=structureBreak(c,bias,36),sweep=liquiditySweep(c,bias),freshSweep=sweep&&sweep.index>=c.length-6,freshBos=bos&&bos.breakIndex>=c.length-7;
+  const bos=structureBreak(c,bias,36),sweep=liquiditySweep(c,bias),freshSweep=sweep&&sweep.index>=c.length-confirmationWindow,freshBos=bos&&bos.breakIndex>=c.length-confirmationWindow;
   let impulse=false,impulseIndex=-1;
   for(let i=Math.max(0,c.length-6);i<c.length;i++){
     const tail=c.slice(0,i+1);
@@ -249,12 +250,12 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
     freshSweep&&sweep?.index!=null?c.length-1-sweep.index:99
   );
   const liveImpulseAge=freshImpulse?c.length-1-impulseIndex:99;
-  const matureConfirmation=Boolean((freshBos||freshSweep)&&impulse&&confirmationAge<=10&&liveImpulseAge<=10);
+  const matureConfirmation=Boolean((freshBos||freshSweep)&&impulse&&confirmationAge<=confirmationWindow&&liveImpulseAge<=confirmationWindow);
   if(bias!=='WAIT'){
     const marketTrade=evaluateTrade(c,bias,last.close,a,2.25),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r,{...confirmation,displacement:impulse}),marketConfirmed=Boolean(matureConfirmation);
     if(marketTrade&&marketConfirmed&&marketQuality.score>=7){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason=freshSweep?'Liquidity was swept and reclaimed, followed by displacement. Current price is the confirmed execution point.':'Structure broke with displacement and current price is still inside the valid execution leg.';}
     else{
-      const candidates=structuralEntryCandidates(c,bias,last.close,a);let best=null,bestTrade=null,bestQuality={score:0};
+      const candidates=structuralEntryCandidates(c,bias,last.close,a).filter(candidate=>!candidate.zone||candidate.zone.index==null||c.length-1-candidate.zone.index<=limitZoneAge);let best=null,bestTrade=null,bestQuality={score:0};
       for(const candidate of candidates){const t=evaluateTrade(c,bias,candidate.entry,a,2.25),zone=candidate.zone,zoneBonus=zone?.type?.includes('FVG')||zone?.type?.includes('ORDER BLOCK')?2:0,q2=setupQuality(c,bias,candidate.entry,t,e20,e50,r,confirmation);if(t&&q2.score+zoneBonus>bestQuality.score){best=candidate;bestTrade=t;bestQuality={...q2,score:q2.score+zoneBonus};}}
       const validLimit=Boolean(bestTrade&&best?.zone&&(best.zone.type?.includes('FVG')||best.zone.type?.includes('ORDER BLOCK'))&&bestQuality.score>=5);
       if(validLimit){trade=bestTrade;orderType='LIMIT';entry=best.entry;limitEntry=best.entry;setupReason='Price is away from the confirmed execution zone. The limit entry is anchored to a real FVG or order block, with invalidation beyond structure and target at external liquidity.';}
@@ -310,7 +311,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
   const current=candlesByTf[timeframe],topDown=buildTopDown(candlesByTf,ladder);
-  let setup=analyzeCandles(current,topDown.bias,symbol);
+  let setup=analyzeCandles(current,topDown.bias,symbol,timeframe);
   const entryStructure=topDown.entryBias, middleStructure=topDown.middleBias;
   const structureConflict=topDown.conflict;
   // A countertrend entry-timeframe structure can be the pullback that creates a valid LIMIT.
