@@ -43,7 +43,7 @@ export default function NotificationCenter({user,embedded=false}){
    {permission!=='granted'&&<button onClick={enable} style={enableBtn}><Bell size={14}/> Enable browser notifications</button>}
    <div style={section}><div style={sectionTitle}>PRICE ALERT</div><div style={row}><select value={symbol} onChange={e=>setSymbol(e.target.value)} style={field}>{SYMBOLS.map(s=><option key={s}>{s}</option>)}</select><select value={direction} onChange={e=>setDirection(e.target.value)} style={field}><option value="above">Above</option><option value="below">Below</option></select></div><div style={row}><input inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Target price" style={{...field,flex:1}}/><button onClick={add} style={addBtn}>Add</button></div></div>
    <div style={list}>{alerts.length===0&&<div style={empty}>No manual price alerts.</div>}{alerts.slice().reverse().map(a=><div key={a.id} style={item}><div><strong>{a.symbol.replace('USDT','')}</strong> {a.direction} {fmtPrice(a.target)}<div style={meta}>{a.triggered?'Triggered':'Watching'}</div></div><button onClick={()=>setAlerts(x=>x.filter(y=>y.id!==a.id))} style={close}>×</button></div>)}</div>
-   <div style={footer}><CheckCircle2 size={12}/> Alerts run while KitSetups is open on this client.</div>
+   <div style={footer}><CheckCircle2 size={12}/> Background market alerts use push notifications when enabled.</div>
   </div>}
  </div>;
 }
