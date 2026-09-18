@@ -42,45 +42,72 @@ async function fetchBybit(symbol,timeframe){const r=await fetch(`https://api.byb
 async function candlesFor(market,symbol,timeframe){const mapped=TIMEFRAME_MAP[timeframe]?.[market==='forex'?'forex':'crypto'];if(!mapped)throw new Error('Unsupported timeframe');if(market==='forex')return fetchYahoo(`${symbol}=X`,mapped);if(market==='metals'){const cfd=CFD_INSTRUMENTS.find(x=>x.symbol===symbol);try{return await fetchYahoo(cfd?.providerSymbol||symbol,mapped)}catch(e){const fallback={XAUUSD:'GC=F',XAGUSD:'SI=F',US30:'^DJI',US500:'^GSPC',NAS100:'^IXIC',UK100:'^FTSE',GER40:'^GDAXI',FRA40:'^FCHI',JP225:'^N225',HK50:'^HSI',USOIL:'CL=F',UKOIL:'BZ=F'}[symbol];if(!fallback)throw e;return fetchYahoo(fallback,mapped)}}const clean=symbol.replace(/[^A-Z0-9]/gi,'');if(market==='perpetual')return fetchBybit(clean,timeframe);throw new Error('Unsupported market data source')}
 function pivotHigh(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;for(let j=1;j<=left;j++)if(c[i].high<=c[i-j].high)return false;for(let j=1;j<=right;j++)if(c[i].high<c[i+j].high)return false;return true}
 function pivotLow(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;for(let j=1;j<=left;j++)if(c[i].low>=c[i-j].low)return false;for(let j=1;j<=right;j++)if(c[i].low>c[i+j].low)return false;return true}
-function liquidityCandidates(c,bias,entry,atrValue){const start=Math.max(2,c.length-140),out=[],minDistance=Math.max(.001,Math.min(.004,(atrValue/entry)*.45)),maxDistance=Math.min(.10,Math.max(.015,(atrValue/entry)*8));for(let i=start;i<c.length-2;i++){if(bias==='LONG'&&pivotHigh(c,i)){const level=c[i].high;if(level<=entry)continue;const distance=(level-entry)/entry;if(distance<minDistance||distance>maxDistance)continue;let touches=1;for(let j=Math.max(start,i-20);j<i;j++)if(Math.abs(c[j].high-level)<=Math.max((c[j].high-c[j].low)*.25,entry*.00035))touches++;out.push({level,type:touches>=2?'Equal/clustered highs':'Internal swing high',touches,distance,index:i})}if(bias==='SHORT'&&pivotLow(c,i)){const level=c[i].low;if(level>=entry)continue;const distance=(entry-level)/entry;if(distance<minDistance||distance>maxDistance)continue;let touches=1;for(let j=Math.max(start,i-20);j<i;j++)if(Math.abs(c[j].low-level)<=Math.max((c[j].high-c[j].low)*.25,entry*.00035))touches++;out.push({level,type:touches>=2?'Equal/clustered lows':'Internal swing low',touches,distance,index:i})}}return out.sort((a,b)=>((b.touches-a.touches)*.35)+(a.distance-b.distance)*12-(b.index-a.index)*.0005)}
+function confirmedSwings(c){
+  const highs=[],lows=[];for(let i=2;i<c.length-2;i++){if(pivotHigh(c,i))highs.push({p:c[i].high,i});if(pivotLow(c,i))lows.push({p:c[i].low,i});}return {highs,lows};
+}
+function structureBreak(c,bias,lookback=30){
+  const st=marketStructure(c),start=Math.max(2,c.length-lookback);
+  if(bias==='LONG'){const ref=st.highs.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++)if(c[i].close>ref.p)return {type:'BOS',level:ref.p,index:ref.i,breakIndex:i};}}
+  if(bias==='SHORT'){const ref=st.lows.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++)if(c[i].close<ref.p)return {type:'BOS',level:ref.p,index:ref.i,breakIndex:i};}}
+  return null;
+}
+function displacement(c,bias){
+  if(c.length<8)return false;const last=c.at(-1),body=Math.abs(last.close-last.open),range=last.high-last.low,avg=c.slice(-7,-1).reduce((s,x)=>s+(x.high-x.low),0)/6;
+  if(!range||body<range*.55||range<avg*1.15)return false;
+  return bias==='LONG'?last.close>last.open&&last.close>=last.high-range*.25:last.close<last.open&&last.close<=last.low+range*.25;
+}
+function liquiditySweep(c,bias){
+  const st=marketStructure(c),start=Math.max(2,c.length-20);
+  if(bias==='LONG'){const ref=st.lows.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++)if(c[i].low<ref.p&&c[i].close>ref.p)return {type:'SELL-SIDE SWEEP',level:ref.p,index:i};}}
+  if(bias==='SHORT'){const ref=st.highs.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++)if(c[i].high>ref.p&&c[i].close<ref.p)return {type:'BUY-SIDE SWEEP',level:ref.p,index:i};}}
+  return null;
+}
+function fairValueGaps(c,bias){
+  const out=[];for(let i=2;i<c.length;i++){const a=c[i-2],d=c[i];if(bias==='LONG'&&d.low>a.high)out.push({low:a.high,high:d.low,mid:(a.high+d.low)/2,index:i,type:'BULLISH FVG'});if(bias==='SHORT'&&d.high<a.low)out.push({low:d.high,high:a.low,mid:(d.high+a.low)/2,index:i,type:'BEARISH FVG'});}return out.filter(x=>x.index>=Math.max(2,c.length-80));
+}
+function orderBlockCandidates(c,bias){
+  const out=[];for(let i=Math.max(2,c.length-60);i<c.length-1;i++){const x=c[i],n=c[i+1],body=Math.abs(x.close-x.open),nbody=Math.abs(n.close-n.open);
+    if(bias==='LONG'&&x.close<x.open&&n.close>x.high&&nbody>=body*.9)out.push({low:x.low,high:x.high,mid:(x.low+x.high)/2,index:i,type:'BULLISH ORDER BLOCK'});
+    if(bias==='SHORT'&&x.close>x.open&&n.close<x.low&&nbody>=body*.9)out.push({low:x.low,high:x.high,mid:(x.low+x.high)/2,index:i,type:'BEARISH ORDER BLOCK'});
+  }return out;
+}
+function entryZones(c,bias,current,a){
+  const range=c.slice(-50),hi=Math.max(...range.map(x=>x.high)),lo=Math.min(...range.map(x=>x.low)),mid=(hi+lo)/2;
+  const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-2);
+  return zones.filter(z=>{const ahead=bias==='LONG'?z.mid<current:z.mid>current;const side=bias==='LONG'?z.mid<=mid:z.mid>=mid;return ahead&&side&&Math.abs(current-z.mid)<=a*2.5;}).sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
+}
 function chooseLiquidityTarget(c,bias,entry,a){const candidates=liquidityCandidates(c,bias,entry,a);if(!candidates.length)return null;const chosen=candidates[0],buffer=Math.max(a*.08,entry*.00015),target=bias==='LONG'?chosen.level-buffer:chosen.level+buffer;if((bias==='LONG'&&target<=entry)||(bias==='SHORT'&&target>=entry))return null;return{target,type:chosen.type,liquidityLevel:chosen.level,touches:chosen.touches,distancePct:Number((chosen.distance*100).toFixed(2)),reason:`Targeting ${chosen.type.toLowerCase()} at ${roundPrice(chosen.level)}; TP is placed just before the liquidity to account for reaction.`}}
-function protectiveStop(c,bias,entry,a){const recent=c.slice(-12),recentLow=Math.min(...recent.map(x=>x.low)),recentHigh=Math.max(...recent.map(x=>x.high)),d=Math.max(a*.85,entry*.0015);let stop=bias==='LONG'?Math.min(recentLow,entry-d):Math.max(recentHigh,entry+d);const maxRisk=Math.max(entry*.025,a*1.6);if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);if(bias==='LONG'&&stop>=entry)stop=entry-Math.min(d,maxRisk);if(bias==='SHORT'&&stop<=entry)stop=entry+Math.min(d,maxRisk);return stop}
+function protectiveStop(c,bias,entry,a){
+  const st=marketStructure(c),sweep=liquiditySweep(c,bias),buffer=Math.max(a*.18,entry*.00035);
+  let invalidation=bias==='LONG'?(st.protectedLow??Math.min(...c.slice(-20).map(x=>x.low))):(st.protectedHigh??Math.max(...c.slice(-20).map(x=>x.high)));
+  if(sweep)invalidation=bias==='LONG'?Math.min(invalidation,sweep.level):Math.max(invalidation,sweep.level);
+  let stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;const maxRisk=Math.max(a*2.2,entry*.025);
+  if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);return stop;
+}
 function structuralEntryCandidates(c,bias,current,a){
-  const closes=c.map(x=>x.close),e20=ema(closes,20),recent=c.slice(-20);
-  const hi=Math.max(...recent.map(x=>x.high)),lo=Math.min(...recent.map(x=>x.low)),mid=(hi+lo)/2;
-  const raw=[e20,mid,bias==='LONG'?lo+a*.5:hi-a*.5,current-a,current+a];
-  return [...new Set(raw.filter(Number.isFinite).map(Number))].filter(x=>bias==='LONG'?x<current:x>current);
+  const zones=entryZones(c,bias,current,a),sweep=liquiditySweep(c,bias),bos=structureBreak(c,bias,36),candidates=[];
+  for(const z of zones)candidates.push({entry:z.mid,zone:z});
+  if(sweep)candidates.push({entry:bias==='LONG'?sweep.level+a*.10:sweep.level-a*.10,zone:sweep});
+  if(bos)candidates.push({entry:current,zone:bos});
+  return candidates.sort((x,y)=>Math.abs(current-x.entry)-Math.abs(current-y.entry));
 }
-function stopForEntry(c,bias,entry,a){
-  const pivots=[];
-  for(let i=2;i<c.length-2;i++){
-    if(bias==='LONG'&&pivotLow(c,i)&&c[i].low<entry)pivots.push(c[i].low);
-    if(bias==='SHORT'&&pivotHigh(c,i)&&c[i].high>entry)pivots.push(c[i].high);
-  }
-  const recent=pivots.slice(-6);
-  const invalidation=bias==='LONG'
-    ?(recent.length?Math.max(...recent):Math.min(...c.slice(-20).map(x=>x.low)))
-    :(recent.length?Math.min(...recent):Math.max(...c.slice(-20).map(x=>x.high)));
-  const buffer=Math.max(a*.18,entry*.00035);
-  return bias==='LONG'?invalidation-buffer:invalidation+buffer;
-}
-function targetPool(c,bias,entry,a){
-  return liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite).sort((x,y)=>bias==='LONG'?x-y:y-x);
-}
-function evaluateTrade(c,bias,entry,a,minRR=2.5){
-  const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop);
-  // Reject entries whose structural invalidation is unrealistically close.
-  // The floor scales with ATR and prevents inflated RR from a microscopic stop.
-  const minimumRisk=Math.max(a*.55,entry*.001);
+function stopForEntry(c,bias,entry,a){return protectiveStop(c,bias,entry,a);}
+function targetPool(c,bias,entry,a){return liquidityCandidates(c,bias,entry,a).map(x=>x.level).filter(Number.isFinite).sort((x,y)=>bias==='LONG'?x-y:y-x);}
+function evaluateTrade(c,bias,entry,a,minRR=2.25){
+  const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop),minimumRisk=Math.max(a*.65,entry*.001);
   if(!risk||!Number.isFinite(risk)||risk<minimumRisk)return null;
-  const pools=targetPool(c,bias,entry,a);
-  const scored=pools.map(level=>({level,rr:Math.abs(level-entry)/risk})).filter(x=>x.rr>=minRR);
-  if(!scored.length)return null;
-  const chosen=scored[0];
-  const target2=pools.find(level=>Math.abs(level-chosen.level)>a*.25&&Math.abs(level-entry)/risk>chosen.rr)||null;
-  return {entry,stop,risk,target:chosen.level,target2,rr:chosen.rr};
+  const pools=targetPool(c,bias,entry,a),candidates=pools.map(level=>({level,rr:Math.abs(level-entry)/risk})).filter(x=>x.rr>=minRR);
+  if(!candidates.length)return null;const chosen=candidates[0],target2=pools.find(level=>Math.abs(level-chosen.level)>a*.3&&Math.abs(level-entry)/risk>chosen.rr);
+  return {entry,stop,risk,target:chosen.level,target2:target2??null,rr:chosen.rr};
 }
-function marketStructure(c){const highs=[],lows=[];for(let i=2;i<c.length-2;i++){if(pivotHigh(c,i))highs.push({p:c[i].high,i});if(pivotLow(c,i))lows.push({p:c[i].low,i});}const h=highs.slice(-3),l=lows.slice(-3);const higherHigh=h.length>=2&&h.at(-1).p>h.at(-2).p,lowerHigh=h.length>=2&&h.at(-1).p<h.at(-2).p,higherLow=l.length>=2&&l.at(-1).p>l.at(-2).p,lowerLow=l.length>=2&&l.at(-1).p<l.at(-2).p;return{trend:higherHigh&&higherLow?'LONG':lowerHigh&&lowerLow?'SHORT':'RANGE',higherHigh,higherLow,lowerHigh,lowerLow,lastHigh:h.at(-1)?.p??null,lastLow:l.at(-1)?.p??null,protectedHigh:h.at(-1)?.p??null,protectedLow:l.at(-1)?.p??null}}
+function marketStructure(c){
+  const {highs,lows}=confirmedSwings(c),h=highs.slice(-8),l=lows.slice(-8);
+  const prevH=h.at(-2)?.p??null,lastH=h.at(-1)?.p??null,prevL=l.at(-2)?.p??null,lastL=l.at(-1)?.p??null;
+  const higherHigh=prevH!=null&&lastH>prevH,lowerHigh=prevH!=null&&lastH<prevH,higherLow=prevL!=null&&lastL>prevL,lowerLow=prevL!=null&&lastL<prevL;
+  const close=c.at(-1)?.close??null,priorHigh=h.at(-2)?.p??null,priorLow=l.at(-2)?.p??null,bullishBreak=priorHigh!=null&&close>priorHigh,bearishBreak=priorLow!=null&&close<priorLow;
+  let trend='RANGE';if(higherHigh&&higherLow)trend='LONG';else if(lowerHigh&&lowerLow)trend='SHORT';else if(bullishBreak)trend='LONG';else if(bearishBreak)trend='SHORT';
+  return {trend,higherHigh,higherLow,lowerHigh,lowerLow,bullishBreak,bearishBreak,lastHigh:lastH,lastLow:lastL,protectedHigh:trend==='SHORT'?lastH:prevH??lastH,protectedLow:trend==='LONG'?lastL:prevL??lastL,highs,lows};
+}
 function structureBias(st){return st.trend==='LONG'||st.trend==='SHORT'?st.trend:'WAIT'}
 function opposite(a,b){return (a==='LONG'&&b==='SHORT')||(a==='SHORT'&&b==='LONG')}
 function topDownDecision(htf,mtf,ltf){
@@ -100,44 +127,36 @@ function topDownDecision(htf,mtf,ltf){
   const structureAligned=Boolean(middleAligned && (entryConfirmed || entryBias==='WAIT'));
   return {bias,higherBias,middleBias,entryBias,conflict:hardConflict,structureAligned,middleAligned,entryConfirmed};
 }
-function setupQuality(c,bias,entry,trade,e20,e50,r){
-  if(!trade)return {score:0,grade:'WAIT',structure:marketStructure(c)};
-  const st=marketStructure(c); let score=0;
-  if(st.trend===bias)score+=3; else if(st.trend==='RANGE')score+=1;
-  if((bias==='LONG'&&entry>e20)||(bias==='SHORT'&&entry<e20))score+=1;
+function setupQuality(c,bias,entry,trade,e20,e50,r,confirmation){
+  if(!trade)return {score:0,grade:'WAIT',structure:marketStructure(c)};const st=marketStructure(c);let score=0;
+  if(st.trend===bias)score+=2;if(confirmation?.bos)score+=2;if(confirmation?.sweep)score+=2;if(confirmation?.displacement)score+=2;
   if((bias==='LONG'&&e20>e50)||(bias==='SHORT'&&e20<e50))score+=1;
-  if((bias==='LONG'&&r>=50&&r<=68)||(bias==='SHORT'&&r>=32&&r<=50))score+=1;
-  if(trade.rr>=2.5)score+=3; else if(trade.rr>=2)score+=2; else score+=1;
-  return {score,grade:score>=8?'A':score>=6?'B':'C',structure:st};
+  if((bias==='LONG'&&r>=48&&r<=70)||(bias==='SHORT'&&r>=30&&r<=52))score+=1;if(trade.rr>=3)score+=2;else if(trade.rr>=2.25)score+=1;
+  return {score,grade:score>=9?'A':score>=7?'B':'C',structure:st};
 }
 function analyzeCandles(c,forcedBias=null,instrumentSymbol=''){
   if(c.length<60)throw new Error('Not enough candles for a reliable setup ('+c.length+' received)');
-  const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);
-  if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
-  const recent=c.slice(-30),hi=Math.max(...recent.map(x=>x.high)),lo=Math.min(...recent.map(x=>x.low)),st=marketStructure(c);
-  const score=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0);
-  const engineBias=st.trend!=='RANGE'?st.trend:(score>=2?'LONG':score<=-2?'SHORT':'WAIT'),bias=forcedBias||engineBias;
+  const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
+  const st=marketStructure(c),rawScore=(last.close>e20?1:-1)+(e20>e50?1:-1)+(r>52?1:r<48?-1:0),engineBias=st.trend!=='RANGE'?st.trend:(rawScore>=2?'LONG':rawScore<=-2?'SHORT':'WAIT'),bias=forcedBias||engineBias;
   let trade=null,orderType='WAIT',entry=last.close,limitEntry=null,setupReason='No clean opportunity at the current price.';
+  const bos=structureBreak(c,bias,36),sweep=liquiditySweep(c,bias),impulse=displacement(c,bias),freshSweep=sweep&&sweep.index>=c.length-4,freshBos=bos&&bos.breakIndex>=c.length-5,confirmation={bos:freshBos?sweep?bos:bos:bos,sweep:freshSweep,displacement:impulse};
   if(bias!=='WAIT'){
-    const marketTrade=evaluateTrade(c,bias,last.close,a,2.5),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r);
-    if(marketTrade&&marketQuality.score>=5){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Current price offers a valid structural entry with a real target and acceptable reward-to-risk.';}
-    else {
-      const candidates=structuralEntryCandidates(c,bias,last.close,a);let candidate=null,limitTrade=null,limitQuality={score:0};
-      for(const x of candidates){const t=evaluateTrade(c,bias,x,a,2.5);const q=setupQuality(c,bias,x,t,e20,e50,r);if(t&&q.score>limitQuality.score){candidate=x;limitTrade=t;limitQuality=q}}
-      if(limitTrade&&limitQuality.score>=5){trade=limitTrade;orderType='LIMIT';entry=candidate;limitEntry=candidate;setupReason='Current price is less attractive; a defined pullback entry offers cleaner structure and a real target.';}
-      else setupReason='Directional bias exists, but price is not offering a clean market or limit entry with a legitimate target.';
+    const marketTrade=evaluateTrade(c,bias,last.close,a,2.25),marketQuality=setupQuality(c,bias,last.close,marketTrade,e20,e50,r,confirmation),marketConfirmed=Boolean((freshBos||freshSweep)&&impulse);
+    if(marketTrade&&marketConfirmed&&marketQuality.score>=7){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason=freshSweep?'Liquidity was swept and reclaimed, followed by displacement. Current price is the confirmed execution point.':'Structure broke with displacement and current price is still inside the valid execution leg.';}
+    else{
+      const candidates=structuralEntryCandidates(c,bias,last.close,a);let best=null,bestTrade=null,bestQuality={score:0};
+      for(const candidate of candidates){const t=evaluateTrade(c,bias,candidate.entry,a,2.25),zone=candidate.zone,zoneBonus=zone?.type?.includes('FVG')||zone?.type?.includes('ORDER BLOCK')?2:0,q2=setupQuality(c,bias,candidate.entry,t,e20,e50,r,confirmation);if(t&&q2.score+zoneBonus>bestQuality.score){best=candidate;bestTrade=t;bestQuality={...q2,score:q2.score+zoneBonus};}}
+      const validLimit=Boolean(bestTrade&&best?.zone&&(best.zone.type?.includes('FVG')||best.zone.type?.includes('ORDER BLOCK'))&&bestQuality.score>=6);
+      if(validLimit){trade=bestTrade;orderType='LIMIT';entry=best.entry;limitEntry=best.entry;setupReason='Price is away from the confirmed execution zone. The limit entry is anchored to a real FVG or order block, with invalidation beyond structure and target at external liquidity.';}
+      else if(marketTrade&&marketConfirmed&&marketQuality.score>=6){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Confirmed structure and displacement are present; current price is the execution point.';}
+      else setupReason='Bias exists, but there is no confirmed market entry or structurally valid pullback zone with a legitimate target.';
     }
   }
-  const confidence=Math.min(92,Math.max(42,Math.round(50+Math.abs(score)*7+(st.trend===bias?7:0)+(r>55||r<45?5:0))));
-  const stop=trade?.stop??null,risk=trade?.risk??null,riskPct=entry>0&&risk!=null?(risk/entry)*100:null,target1=trade?.target??null,target2=trade?.target2??null,targetRisk=trade?.rr??null,q=setupQuality(c,bias,entry,trade,e20,e50,r);
-  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.5&&q.score>=5),status=tradeReady?(targetRisk>=3?'A-GRADE':targetRisk>=2.5?'QUALITY':'ACCEPTABLE'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
-  const stopDistance=tradeReady?Math.abs(entry-stop):null;
-  const stopDistancePct=tradeReady&&entry?((stopDistance/entry)*100):null;
-  const instrumentKey=String(instrumentSymbol||'');
-  const priceUnitLabel=(instrumentKey.includes('/')&& !instrumentKey.includes('USDT'))?'pips':'price units';
-  const pipMultiplier=(instrumentKey.includes('/')&& !instrumentKey.includes('USDT'))?(instrumentKey.includes('JPY')?100:10000):1;
-  const stopDistanceUnits=tradeReady?stopDistance*pipMultiplier:null;
-  return {bias,engineBias,confidence,entry:roundPrice(tradeReady?entry:null),marketEntry:roundPrice(last.close),limitEntry:roundPrice(limitEntry),orderType:tradeReady?orderType:'WAIT',stopLoss:roundPrice(tradeReady?stop:null),takeProfit1:roundPrice(tradeReady?target1:null),takeProfit2:roundPrice(tradeReady?target2:null),riskReward:tradeReady?'1:'+targetRisk.toFixed(2):'—',riskPercent:tradeReady?Number(riskPct.toFixed(2)):null,stopDistance:tradeReady?roundPrice(stopDistance):null,stopDistancePct:tradeReady?Number(stopDistancePct.toFixed(3)):null,stopDistanceUnits:tradeReady?Number(stopDistanceUnits.toFixed(2)):null,priceUnitLabel,structuralInvalidation:tradeReady?roundPrice(stop):null,tradeReady,riskRewardValue:tradeReady?Number(targetRisk.toFixed(2)):null,quality:status,qualityScore:q.score,marketStructure:q.structure?.trend||st.trend,setupStatus:tradeReady?'TRADE READY':'WAIT',setupReason,rsi:Number(r.toFixed(2)),ema20:roundPrice(e20),ema50:roundPrice(e50),atr:roundPrice(a),price:roundPrice(last.close),swingHigh:roundPrice(hi),swingLow:roundPrice(lo),liquidityTarget:liquidity?roundPrice(liquidity.liquidityLevel):null,liquidityType:liquidity?.type||'No confirmed target',liquidityTouches:liquidity?.touches||0,liquidityDistancePct:liquidity?.distancePct||null,liquidityReason:tradeReady?(liquidity?.reason||'Target is derived from a legitimate structural/liquidity level.'):'No target is shown because no quality trade is currently available.',timestamp:last.time};
+  const confidence=Math.min(94,Math.max(38,Math.round(45+(st.trend===bias?10:0)+(freshBos?12:0)+(freshSweep?10:0)+(impulse?8:0)+(((bias==='LONG'&&e20>e50)||(bias==='SHORT'&&e20<e50))?5:0)+(((bias==='LONG'&&r>=48&&r<=70)||(bias==='SHORT'&&r>=30&&r<=52))?5:0))));
+  const stop=trade?.stop??null,risk=trade?.risk??null,riskPct=entry>0&&risk!=null?(risk/entry)*100:null,target1=trade?.target??null,target2=trade?.target2??null,targetRisk=trade?.rr??null,q3=setupQuality(c,bias,entry,trade,e20,e50,r,confirmation);
+  const tradeReady=Boolean(trade&&target1!=null&&targetRisk>=2.25&&q3.score>=6),status=tradeReady?(targetRisk>=3?'A-GRADE':'QUALITY'):'WAIT',liquidity=target1?chooseLiquidityTarget(c,bias,entry,a):null;
+  const stopDistance=tradeReady?Math.abs(entry-stop):null,stopDistancePct=tradeReady&&entry?(stopDistance/entry)*100:null,instrumentKey=String(instrumentSymbol||''),priceUnitLabel=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?'pips':'price units',pipMultiplier=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?(instrumentKey.includes('JPY')?100:10000):1,stopDistanceUnits=tradeReady?stopDistance*pipMultiplier:null;
+  return {bias,engineBias,confidence,entry:roundPrice(tradeReady?entry:null),marketEntry:roundPrice(last.close),limitEntry:roundPrice(limitEntry),orderType:tradeReady?orderType:'WAIT',stopLoss:roundPrice(tradeReady?stop:null),takeProfit1:roundPrice(tradeReady?target1:null),takeProfit2:roundPrice(tradeReady?target2:null),riskReward:tradeReady?'1:'+targetRisk.toFixed(2):'—',riskPercent:tradeReady?Number(riskPct.toFixed(2)):null,stopDistance:tradeReady?roundPrice(stopDistance):null,stopDistancePct:tradeReady?Number(stopDistancePct.toFixed(3)):null,stopDistanceUnits:tradeReady?Number(stopDistanceUnits.toFixed(2)):null,priceUnitLabel,structuralInvalidation:tradeReady?roundPrice(stop):null,tradeReady,riskRewardValue:tradeReady?Number(targetRisk.toFixed(2)):null,quality:status,qualityScore:q3.score,marketStructure:q3.structure?.trend||st.trend,setupStatus:tradeReady?'TRADE READY':'WAIT',setupReason,rsi:Number(r.toFixed(2)),ema20:roundPrice(e20),ema50:roundPrice(e50),atr:roundPrice(a),price:roundPrice(last.close),swingHigh:roundPrice(Math.max(...c.slice(-30).map(x=>x.high))),swingLow:roundPrice(Math.min(...c.slice(-30).map(x=>x.low))),liquidityTarget:liquidity?roundPrice(liquidity.liquidityLevel):null,liquidityType:liquidity?.type||'No confirmed target',liquidityTouches:liquidity?.touches||0,liquidityDistancePct:liquidity?.distancePct||null,liquidityReason:tradeReady?(liquidity?.reason||'Target is derived from a legitimate structural/liquidity level.'):'No target is shown because no quality trade is currently available.',confirmation:{bos:Boolean(freshBos),sweep:Boolean(freshSweep),displacement:Boolean(impulse)},timestamp:last.time};
 }
 function buildTopDown(candlesByTf,ladder){
   const htf=marketStructure(candlesByTf[ladder.bias]),mtf=marketStructure(candlesByTf[ladder.structure]),ltf=marketStructure(candlesByTf[ladder.entry]);
