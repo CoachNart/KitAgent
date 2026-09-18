@@ -240,7 +240,7 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol='',executionTimeframe
     const tail=c.slice(0,i+1);
     if(displacement(tail,bias)){impulse=true;impulseIndex=i;}
   }
-  const freshImpulse=impulse&&impulseIndex>=c.length-6,confirmation={bos:freshBos,sweep:freshSweep,displacement:freshImpulse};
+  const freshImpulse=impulse&&impulseIndex>=c.length-confirmationWindow,confirmation={bos:freshBos,sweep:freshSweep,displacement:freshImpulse};
   // Confirmation can mature over several candles. A valid bullish/bearish
   // structure should not disappear simply because displacement was not the
   // literal last candle. Prefer a live MARKET execution when price remains
@@ -260,7 +260,7 @@ function analyzeCandles(c,forcedBias=null,instrumentSymbol='',executionTimeframe
       const validLimit=Boolean(bestTrade&&best?.zone&&(best.zone.type?.includes('FVG')||best.zone.type?.includes('ORDER BLOCK'))&&bestQuality.score>=5);
       if(validLimit){trade=bestTrade;orderType='LIMIT';entry=best.entry;limitEntry=best.entry;setupReason='Price is away from the confirmed execution zone. The limit entry is anchored to a real FVG or order block, with invalidation beyond structure and target at external liquidity.';}
       else if(marketTrade&&marketConfirmed&&marketQuality.score>=5){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Confirmed structure and displacement remain valid; current price is still inside the active execution leg.';}
-      else if(marketTrade&&freshBos&&impulse&&marketQuality.score>=6&&confirmationAge<=12&&liveImpulseAge<=12){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Recent structure break and displacement remain active; current price is a valid market execution point.';}
+      else if(marketTrade&&freshBos&&impulse&&marketQuality.score>=6&&confirmationAge<=confirmationWindow&&liveImpulseAge<=confirmationWindow){trade=marketTrade;orderType='MARKET';entry=last.close;setupReason='Recent structure break and displacement remain active; current price is a valid market execution point.';}
       else setupReason='Bias exists, but there is no confirmed market entry or structurally valid pullback zone with a legitimate target.';
     }
   }
