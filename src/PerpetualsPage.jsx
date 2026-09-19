@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
 import './mexcFutures.css';
 import './pnl-card.css';
 
@@ -9,6 +10,7 @@ const normalize = s => String(s || '').toUpperCase().replace(/[-/]/g, '').replac
 const displaySymbol = s => String(s || '').replace('_USDT', '/USDT');
 const arr = v => Array.isArray(v) ? v : (Array.isArray(v?.data) ? v.data : []);
 const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);
+const KITSETUPS_LOGO_URL = '/kitsetups-logo.svg';
 
 async function api(action, state, extra = {}) {
   const response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }) });
@@ -57,6 +59,7 @@ export default function PerpetualsPage({ user }) {
 
   const [pnlShareFile, setPnlShareFile] = useState(null);
   const [pnlShareBusy, setPnlShareBusy] = useState(false);
+  const pnlCardRef = useRef(null);
   const [riskPosition, setRiskPosition] = useState(null);
   const [riskTp, setRiskTp] = useState('');
   const [riskSl, setRiskSl] = useState('');
@@ -426,7 +429,7 @@ export default function PerpetualsPage({ user }) {
       const lev = n(pnlSharePosition.leverage || pnlSharePosition.leverageRatio) || 1;
       return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
-          <div className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
+          <div ref={pnlCardRef} className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
             <div className="pnl-card-inner" aria-hidden="true" />
             <div className="pnl-card-brand"><img className="pnl-card-logo" src={KITSETUPS_LOGO_URL} alt="" /><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
