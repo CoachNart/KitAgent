@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import './mexcFutures.css';
 import './pnl-card.css';
 
@@ -343,7 +346,36 @@ export default function PerpetualsPage({ user }) {
     return new File([pngBlob], filename, { type: 'image/png' });
   };
 
-  const triggerPnlDownload = file => {
+  const blobToBase64 = file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      resolve(result.includes(',') ? result.slice(result.indexOf(',') + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Could not read the PnL image.'));
+    reader.readAsDataURL(file);
+  });
+
+  const nativePnlPath = file => `pnl/${String(file.name || 'kitsetups-pnl.png').replace(/[^a-z0-9._-]/gi, '')}`;
+
+  const triggerPnlDownload = async file => {
+    if (Capacitor.isNativePlatform()) {
+      const path = nativePnlPath(file);
+      try {
+        await Filesystem.requestPermissions();
+        await Filesystem.writeFile({
+          path,
+          data: await blobToBase64(file),
+          directory: Directory.Documents,
+          recursive: true
+        });
+        setError('');
+        return;
+      } catch (e) {
+        setError(e?.message || 'Could not save the PnL image on this device.');
+        return;
+      }
+    }
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
@@ -356,7 +388,6 @@ export default function PerpetualsPage({ user }) {
   };
 
   const sharePnl = async p => {
-    const svg = await buildPnlSvg(p);
     const file = pnlShareFile;
     if (!file) {
       setError('PNL image is still preparing. Please tap Share again in a moment.');
@@ -364,6 +395,23 @@ export default function PerpetualsPage({ user }) {
     }
     const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
     try {
+      if (Capacitor.isNativePlatform()) {
+        const path = nativePnlPath(file);
+        await Filesystem.writeFile({
+          path,
+          data: await blobToBase64(file),
+          directory: Directory.Cache,
+          recursive: true
+        });
+        const uri = (await Filesystem.getUri({ path, directory: Directory.Cache })).uri;
+        await Share.share({
+          title: 'KitSetups Futures PnL',
+          text,
+          files: [uri],
+          dialogTitle: 'Share KitSetups PnL'
+        });
+        return;
+      }
       if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
@@ -372,10 +420,9 @@ export default function PerpetualsPage({ user }) {
           if (e?.name === 'AbortError') return;
         }
       }
-      // Never share the SVG or text-only card. If this browser cannot share files,
-      // download the same PNG so the user gets the actual image artifact.
       triggerPnlDownload(file);
     } catch (e) {
+      if (e?.name === 'AbortError') return;
       setError(e?.message || 'Could not share the PnL image.');
     }
   };
@@ -383,14 +430,14 @@ export default function PerpetualsPage({ user }) {
   const downloadPnl = async p => {
     const file = pnlShareFile;
     if (file) {
-      triggerPnlDownload(file);
+      await triggerPnlDownload(file);
       return;
     }
     try {
       const svg = await buildPnlSvg(p);
       const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
       const png = await svgToPngFile(svg, `${safeName}.png`);
-      triggerPnlDownload(png);
+      await triggerPnlDownload(png);
     } catch (e) {
       setError(e?.message || 'Could not create the PnL PNG.');
     }
