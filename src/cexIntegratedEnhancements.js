@@ -101,8 +101,33 @@
     c.fillStyle='#657287';c.font='500 13px Inter,Arial,sans-serif';c.fillText(`Generated ${new Date().toLocaleString()}  •  kitsetups.xyz`,72,604);
     return await new Promise(resolve=>canvas.toBlob(b=>resolve({blob:b,canvas}), 'image/png',1));
   }
-  async function sharePnl(p,closed,forcedPnl){const out=await makePnlImage(p,closed,forcedPnl,false);if(!out?.blob)return;const file=new File([out.blob],`kitsetups-${normSym(p?.symbol)}-pnl.png`,{type:'image/png'});try{if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({title:'KitSetups PNL',text:`${normSym(p?.symbol)} • ${forcedPnl??pnl(p,closed)>=0?'+':''}${fmt(forcedPnl??pnl(p,closed))} USDT`,files:[file]});return}}catch(error){if(error?.name==='AbortError')return}downloadBlob(out.blob,`kitsetups-${normSym(p?.symbol)}-pnl.png`)}
-  async function downloadAd(p,closed,forcedPnl){const out=await makePnlImage(p,closed,forcedPnl,true);if(out?.blob)downloadBlob(out.blob,`kitsetups-${normSym(p?.symbol)}-ad.png`)}
+  function pnlCardUrl(p,closed,forcedPnl,download=false){
+    const x=forcedPnl??pnl(p,closed), m=margin(p), roi=m?x/m*100:0;
+    const params=new URLSearchParams({
+      pair:normSym(p?.symbol||document.querySelector('#kit-cex #ks')?.value||'BTCUSDT'),
+      side:Number(p?.positionType??p?.posSide)===2?'SHORT':'LONG',
+      pnl:String(x),roi:String(roi),
+      entry:String(num(p?.holdAvgPrice??p?.openAvgPrice??p?.avgOpenPrice??p?.price)),
+      mark:String(num(p?.closeAvgPrice??p?.newCloseAvgPrice??p?.fairPrice??p?.markPrice??p?.dealAvgPrice)),
+      leverage:String(num(p?.leverage)||num(document.querySelector('#kit-cex #lev')?.value)),
+      margin:String(m)
+    });
+    if(download)params.set('download','1');
+    return '/api/pnl-card?'+params.toString();
+  }
+  async function sharePnl(p,closed,forcedPnl){
+    const url=pnlCardUrl(p,closed,forcedPnl,false);
+    const x=forcedPnl??pnl(p,closed), pair=normSym(p?.symbol);
+    try{
+      if(navigator.share){await navigator.share({title:'KitSetups PNL',text:pair+' · '+(x>=0?'+':'')+fmt(x)+' USDT',url:location.origin+url});return}
+    }catch(error){if(error?.name==='AbortError')return}
+    window.open(url,'_blank','noopener');
+  }
+  async function downloadAd(p,closed,forcedPnl){
+    const url=pnlCardUrl(p,closed,forcedPnl,true);
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
+  }
+
   function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 
   function lower(tab){let rows=[],total=0,title='';if(tab==='open'){rows=live.positions;total=rows.reduce((s,p)=>s+pnl(p),0);title='Open positions'}else if(tab==='close'){rows=live.closed;total=rows.reduce((s,p)=>s+pnl(p,true),0);title='Closed positions'}else{rows=live.history;total=rows.reduce((s,p)=>s+num(p.profit??p.realizedPnl??p.realised),0);title='Order history'}const body=rows.length?`<table class="kc-table"><thead><tr><th>Pair</th><th>Side</th><th>Entry</th><th>Exit / Mark</th><th>Margin</th><th>PNL</th><th>ROI</th><th>Share</th></tr></thead><tbody>${rows.map((p,i)=>{const x=pnl(p,tab==='close'),m=margin(p),roi=m?x/m*100:0,side=Number(p.positionType??p.posSide)===2?'Short':'Long';return `<tr><td>${esc(p.symbol||p.contractId||'—')}</td><td>${side}</td><td>${fmt(p.holdAvgPrice??p.openAvgPrice??p.avgOpenPrice??p.price)}</td><td>${fmt(p.closeAvgPrice??p.newCloseAvgPrice??p.fairPrice??p.markPrice??p.dealAvgPrice)}</td><td>${fmt(m)} USDT</td><td>${x>=0?'+':''}${fmt(x)} USDT</td><td>${roi>=0?'+':''}${fmt(roi)}%</td><td><button class="kc-action ki-pnl-share" data-i="${i}" data-tab="${tab}">Share</button></td></tr>`}).join('')}</tbody></table>`:'<div class="kc-empty">No records yet</div>';return `<div class="ki-summary"><div><small style="color:#657287">LIVE ${title}</small><br><strong>${total>=0?'+':''}${fmt(total)} USDT</strong></div><span class="ki-live-dot">● LIVE DATA</span></div><div class="ki-sharebar"><button data-share-summary="1">Share PNL image</button><button data-download-summary="1">Download Ad image</button></div>${body}`}
