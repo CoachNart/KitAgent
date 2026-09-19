@@ -60,7 +60,7 @@ export async function currentPrice(signal) {
  *   this endpoint has no authoritative price feed for them.
  */
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
-  if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.outcomeEvidence?.engineVersion==='v2' && signal.closedAt)return signal;
+  if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.outcomeEvidence?.engineVersion==='v3' && signal.closedAt)return signal;
   const market=String(signal.market||'').toLowerCase();
   if(!['crypto','perpetual'].includes(market))return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   const candles=await marketKlines(signal); if(!candles.length)return {...signal,currentPrice:price};
@@ -79,7 +79,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       if(candle.time<generatedMs)continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v2',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
+      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v3',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){active=true;activatedAt=candle.time;break;}
     }
   } else return {...signal,currentPrice:price,status:'watching'};
@@ -91,8 +91,8 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
-    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v2',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
-    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v2',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v3',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v3',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
   }
   return {...signal,currentPrice:price,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
 }
