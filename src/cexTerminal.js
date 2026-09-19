@@ -35,37 +35,33 @@ function openPnlImage(dataUrl,name){
   document.body.appendChild(a);
   try{a.click();return true}finally{a.remove()}
 }
+function pnlHostedUrl(p,download=false){
+ const v=ppnl(p),m=margin(p),params=new URLSearchParams({
+  pair:String(p.symbol||p.contractId||S.symbol),
+  side:pside(p).toUpperCase(),
+  pnl:String(v),
+  roi:String(roi(p)),
+  entry:String(entry(p)),
+  mark:String(mark(p)),
+  leverage:String(p.leverage||S.lev),
+  margin:String(m)
+ });
+ if(download)params.set('download','1');
+ return '/api/pnl-card?'+params.toString();
+}
 async function savePnl(i){
-  const p=arr(S.positions)[i];if(!p)return;
-  const canvas=makePnlImage(p);
-  const name=`kitsetups-${String(p.symbol||S.symbol).toLowerCase()}-pnl.png`;
-  const dataUrl=canvasDataUrl(canvas);
-  if(openPnlImage(dataUrl,name))return;
-  const b=await blob(canvas);
-  const u=URL.createObjectURL(b);
-  const a=document.createElement('a');a.href=u;a.download=name;a.target='_blank';a.rel='noopener';document.body.appendChild(a);
-  try{a.click()}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+ const p=arr(S.positions)[i];if(!p)return;
+ const a=document.createElement('a');a.href=pnlHostedUrl(p,true);a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
 }
 async function sharePnl(i){
-  const p=arr(S.positions)[i];if(!p)return;
-  const canvas=makePnlImage(p);
-  const name=`kitsetups-${String(p.symbol||S.symbol).toLowerCase()}-pnl.png`;
-  const b=await blob(canvas);
-  const f=new File([b],name,{type:'image/png'});
-  const text=`${p.symbol||S.symbol} ${pside(p)} · ${ppnl(p)>=0?'+':''}${num(ppnl(p))} USDT`;
-  if(navigator.share){
-    try{
-      if(!navigator.canShare||navigator.canShare({files:[f]})){
-        await navigator.share({title:'KitSetups PNL',text,files:[f]});
-        return;
-      }
-    }catch{}
-    try{await navigator.share({title:'KitSetups PNL',text});return}catch{}
-  }
-  const dataUrl=canvasDataUrl(canvas);
-  if(openPnlImage(dataUrl,name))return;
-  await savePnl(i);
+ const p=arr(S.positions)[i];if(!p)return;
+ const url=location.origin+pnlHostedUrl(p,false),v=ppnl(p);
+ if(navigator.share){
+  try{await navigator.share({title:'KitSetups PNL',text:`${p.symbol||S.symbol} ${pside(p)} · ${v>=0?'+':''}${num(v)} USDT`,url});return}catch(e){if(e?.name==='AbortError')return}
+ }
+ window.open(url,'_blank','noopener');
 }
+
 function connect(){const m=document.createElement('div');m.className='kc-modal';m.innerHTML=`<div class="kc-card"><h3>Connect ${S.exchange==='mexc'?'MEXC':'Bitget'} Futures</h3><p style="color:#718097;font-size:10px">Use read/trade permissions only. Keep withdrawals disabled.</p><input id="ak" placeholder="API key" autocomplete="off"><input id="as" placeholder="API secret" type="password" autocomplete="off">${S.exchange==='bitget'?'<input id="ap" placeholder="API passphrase" type="password" autocomplete="off">':''}<button id="go">Connect securely</button><button class="close" id="no">Cancel</button></div>`;document.body.appendChild(m);m.querySelector('#no').onclick=()=>m.remove();m.querySelector('#go').onclick=async()=>{try{S.key=m.querySelector('#ak').value.trim();S.secret=m.querySelector('#as').value.trim();S.passphrase=m.querySelector('#ap')?.value.trim()||'';m.querySelector('#go').textContent='Connecting…';await api('connect');S.connected=true;m.remove();await refresh(true)}catch(e){m.querySelector('#go').textContent=e.message||'Connection failed'}}}
 async function refresh(force=false){S.error='';try{if(!S.pairs.length)S.pairs=pairs(await api('pairs'));const [t,b,c]=await Promise.all([api('ticker'),api('book'),api('candles')]);S.ticker=Array.isArray(t?.data)?t.data[0]:t?.data||t;S.book=b?.data||b;S.candles=candles(c);if(S.connected){const [ba,p,o]=await Promise.all([api('balance'),api('positions'),api('orders')]);S.balance=arr(ba);S.positions=arr(p);S.orders=arr(o)}const editing=document.activeElement&&document.getElementById('kit-cex')?.contains(document.activeElement);if(force||!editing)render()}catch(e){S.error=e.message||'Live data unavailable';if(force)render()}}
 async function place(){if(!S.connected)return connect();const size=Number(S.size),mx=maxLev();if(!size)return alert('Enter a valid size.');if(S.lev>mx)return alert(`MEXC allows up to ${mx}x on ${S.symbol}.`);try{await api('order',{side:S.side,orderType:S.type,volume:size,price:Number(S.price||0),leverage:S.lev,marginMode:S.margin,takeProfit:Number(S.tp||0)||undefined,stopLoss:Number(S.sl||0)||undefined});S.size='';await refresh(true)}catch(e){alert(e.message||'Order failed')}}
