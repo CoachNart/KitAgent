@@ -33,7 +33,7 @@ export default function SignalHistory({activity=[]}){
   useEffect(()=>{const timer=setInterval(()=>load(),30000);return()=>clearInterval(timer)},[]);
   const tradeSignals=useMemo(()=>signals.filter(isTrade),[signals]);
   const stats=useMemo(()=>{
-    const verified=tradeSignals.filter(s=>['target_hit','stop_hit'].includes(s.status)&&(s.result==='win'||s.result==='loss')&&s.outcomeEvidence?.engineVersion==='v2'&&Number.isFinite(Number(s.exitPrice))&&s.closedAt);
+    const verified=tradeSignals.filter(s=>['target_hit','stop_hit'].includes(s.status)&&(s.result==='win'||s.result==='loss')&&s.outcomeEvidence?.engineVersion==='v3'&&Number.isFinite(Number(s.exitPrice))&&s.closedAt);
     const wins=verified.filter(s=>s.result==='win').length,losses=verified.filter(s=>s.result==='loss').length,pnl=verified.map(s=>Number(s.pnlPercent)).filter(Number.isFinite),closed=tradeSignals.filter(isClosed).length;
     return {total:tradeSignals.length,active:tradeSignals.length-closed,closed,wins,losses,winRate:verified.length?Math.round(wins/verified.length*100):null,lossRate:verified.length?Math.round(losses/verified.length*100):null,avgPnl:pnl.length?pnl.reduce((a,b)=>a+b,0)/pnl.length:null,verified:verified.length};
   },[tradeSignals]);
