@@ -232,28 +232,37 @@ export default function PerpetualsPage({ user }) {
     if (!card) throw new Error('PNL card is not ready.');
     if (document.fonts?.ready) { try { await document.fonts.ready; } catch {} }
 
-    // Clone the real rendered card so the exported PNG contains the exact
-    // visible structure, including the real KitSetups logo and profile avatar.
+    // Capture at the card's actual rendered size first. This is important:
+    // forcing the clone to 1080px wide on a phone changes the responsive
+    // typography/layout. The original card is rendered at its real size and
+    // then scaled to the fixed 1080x1277 PNG canvas.
+    const rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) throw new Error('PNL card has no renderable size.');
+
     const clone = card.cloneNode(true);
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+    clone.style.aspectRatio = '1080/1277';
+    clone.style.boxShadow = 'none';
+
+    // Inline the actual rendered image assets in the export clone so the
+    // KitSetups logo and profile avatar survive html2canvas/CORS handling.
     const sourceImages = Array.from(card.querySelectorAll('img'));
     const cloneImages = Array.from(clone.querySelectorAll('img'));
     await Promise.all(sourceImages.map(async (img, i) => {
+      if (!cloneImages[i]) return;
       const dataUrl = await imageToDataUrl(img);
-      if (dataUrl && cloneImages[i]) {
+      if (dataUrl) {
         cloneImages[i].src = dataUrl;
         cloneImages[i].removeAttribute('crossorigin');
-      } else if (cloneImages[i]) {
+      } else {
         cloneImages[i].src = img.currentSrc || img.src;
         cloneImages[i].setAttribute('crossorigin', 'anonymous');
       }
     }));
 
     const holder = document.createElement('div');
-    holder.style.cssText = 'position:fixed;left:-100000px;top:0;width:1080px;height:1277px;overflow:hidden;pointer-events:none;background:#050708;';
-    clone.style.width = '1080px';
-    clone.style.height = '1277px';
-    clone.style.aspectRatio = '1080/1277';
-    clone.style.boxShadow = 'none';
+    holder.style.cssText = 'position:fixed;left:-100000px;top:0;width:' + rect.width + 'px;height:' + rect.height + 'px;overflow:hidden;pointer-events:none;background:#050708;';
     holder.appendChild(clone);
     document.body.appendChild(holder);
 
@@ -261,19 +270,28 @@ export default function PerpetualsPage({ user }) {
       const images = Array.from(clone.querySelectorAll('img'));
       await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
         const done = () => { img.removeEventListener('load', done); img.removeEventListener('error', done); resolve(); };
-        img.addEventListener('load', done); img.addEventListener('error', done);
+        img.addEventListener('load', done);
+        img.addEventListener('error', done);
       })));
 
       const rendered = await html2canvas(clone, {
         backgroundColor: '#050708',
-        width: 1080,
-        height: 1277,
-        scale: 1,
+        scale: 1080 / rect.width,
         useCORS: true,
         allowTaint: false,
         logging: false
       });
-      const blob = await new Promise((resolve, reject) => rendered.toBlob(x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')), 'image/png'));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1277;
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (!ctx) throw new Error('PNG renderer is unavailable on this device.');
+      ctx.fillStyle = '#050708';
+      ctx.fillRect(0, 0, 1080, 1277);
+      ctx.drawImage(rendered, 0, 0, 1080, 1277);
+
+      const blob = await new Promise((resolve, reject) => canvas.toBlob(x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')), 'image/png'));
       return new File([blob], 'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png', { type: 'image/png' });
     } finally {
       holder.remove();
