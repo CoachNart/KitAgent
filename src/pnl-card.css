@@ -13,10 +13,10 @@
 .pnl-card-avatar{position:absolute;right:8.6%;top:13.1%;width:116px;height:116px;border-radius:50%;object-fit:cover;border:2px solid #687272;background:#14191a}
 .pnl-card-avatar.fallback{display:grid;place-items:center;color:#eef3f8;font-size:34px;font-weight:800}
 .pnl-share-card h3{position:absolute;left:7.4%;right:10%;top:38.7%;margin:0;font-size:52px;line-height:1.05;letter-spacing:-.042em;font-weight:700;color:#f6f7f8}
-.pnl-share-card>strong{position:absolute;left:26.7%;right:7.4%;top:45.8%;margin:0;font-size:174px;line-height:.92;letter-spacing:-.055em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:visible;z-index:2}
+.pnl-share-card>strong{position:absolute;left:26.7%;top:45.8%;margin:0;font-size:174px;line-height:.92;letter-spacing:-.055em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pnl-share-card.profit>strong{color:#4f7dff}
 .pnl-share-card.loss>strong{color:#ff5266}
-.pnl-share-card>span:not(.pnl-arrow){position:absolute;left:7.4%;right:7.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em;white-space:nowrap;overflow:visible;z-index:2}
+.pnl-share-card>span:not(.pnl-arrow){position:absolute;left:7.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em}
 .pnl-share-card .pnl-meta{position:absolute;left:7.4%;right:7.4%;bottom:4.2%;height:14%;display:grid;grid-template-columns:repeat(5,1fr);border-top:2px solid #242829;border-bottom:2px solid #242829}
 .pnl-share-card .pnl-meta p{margin:0;padding:8% 12px 0 0;border-right:2px solid #242829;min-width:0}
 .pnl-share-card .pnl-meta p:last-child{border-right:0}
@@ -29,25 +29,22 @@
 .pnl-share-actions button:first-child{background:#22d3c5;color:#03100e;border-color:#22d3c5}
 .pnl-share-actions .ghost{color:#718097;background:transparent}
 @media(max-width:760px){
-  /* Keep the desktop/Chrome card geometry as the single visual source of truth.
-     Only scale the same proportions for narrow viewports; never swap in a second design. */
   .pnl-share-dialog{width:calc(100vw - 16px)}
-  .pnl-card-brand{gap:2.47vw}
-  .pnl-card-brand .mexc-logo{width:9.67vw;height:9.67vw;border-radius:2.26vw;font-size:4.84vw}
-  .pnl-card-brand .pnl-card-logo{width:9.67vw;height:9.67vw;border-radius:2.26vw}
-  .pnl-card-brand div{gap:1.23vw}
-  .pnl-card-brand small{font-size:2.47vw;letter-spacing:.145em}
-  .pnl-card-brand b{font-size:3.50vw}
-  .pnl-card-avatar{width:11.93vw;height:11.93vw;right:8.6%;top:13.1%}
-  .pnl-share-card h3{font-size:5.35vw}
-  .pnl-share-card>strong{font-size:17.90vw;left:26.7%}
-  .pnl-share-card>span:not(.pnl-arrow){font-size:2.47vw;top:73.6%}
-  .pnl-share-card .pnl-arrow{font-size:8.85vw;top:48.5%;left:10%}
-  .pnl-share-card .pnl-meta{height:14%;bottom:4.2%}
-  .pnl-share-card .pnl-meta p{padding:8% 1.23vw 0 0}
-  .pnl-share-card .pnl-meta small{font-size:2.26vw}
-  .pnl-share-card .pnl-meta b{font-size:2.78vw;margin-top:1.85vw}
-  .pnl-card-foot{font-size:1.34vw}
+  .pnl-card-brand{gap:10px}
+  .pnl-card-brand .mexc-logo{width:58px;height:58px;border-radius:14px;font-size:29px}
+  .pnl-card-brand .pnl-card-logo{width:58px;height:58px;border-radius:14px}
+  .pnl-card-brand div{gap:6px}
+  .pnl-card-brand small{font-size:13px;letter-spacing:.11em}
+  .pnl-card-brand b{font-size:20px}
+  .pnl-card-avatar{width:70px;height:70px;right:8.6%;top:13.1%}
+  .pnl-share-card h3{font-size:30px}
+  .pnl-share-card>strong{font-size:88px;left:25.5%}
+  .pnl-share-card>span:not(.pnl-arrow){font-size:13px;top:73%}.pnl-share-card .pnl-arrow{font-size:44px;top:49%;left:9.5%}
+  .pnl-share-card .pnl-meta{height:16%;bottom:4.3%}
+  .pnl-share-card .pnl-meta p{padding:9% 5px 0 0}
+  .pnl-share-card .pnl-meta small{font-size:10px}
+  .pnl-share-card .pnl-meta b{font-size:13px;margin-top:8px}
+  .pnl-card-foot{font-size:8px}
 }
 
 .pnl-share-card .pnl-arrow{position:absolute;left:10%;top:48.5%;margin:0;color:inherit;font-size:86px;line-height:1;font-weight:400}.pnl-share-card.profit .pnl-arrow{color:#4f7dff}.pnl-share-card.loss .pnl-arrow{color:#ff5266}
