@@ -197,12 +197,30 @@ export default function PerpetualsPage({ user }) {
   const cancelAll = async () => { setBusy(true); setError(''); try { await api('cancelAll', state); await loadAccount(); } catch (e) { setError(e.message || 'Cancel-all failed.'); } finally { setBusy(false); } };
   const closePosition = async p => { if (!p?.positionId || !n(p.holdVol)) { setError('Position details are incomplete; refresh the account and try again.'); return; } setBusy(true); setError(''); try { await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode) || undefined }); await loadAccount(); for (let i = 0; i < 3; i++) { await new Promise(r => setTimeout(r, 700)); await loadAccount(); } } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); } };
 
+  const isClosedPnl = p => (
+    p?.closeAvgPrice != null ||
+    p?.realised != null ||
+    p?.realized != null ||
+    p?.realizedPnl != null ||
+    p?.closeProfitLoss != null ||
+    p?.profitLoss != null
+  );
+
+  const pnlValue = p => {
+    if (isClosedPnl(p)) return n(p.realised ?? p.realized ?? p.realizedPnl ?? p.closeProfitLoss ?? p.profitLoss);
+    return n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
+  };
+
   const pnlPercent = p => {
-    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
-    const margin = n(p.im);
+    const closed = isClosedPnl(p);
+    const pnl = pnlValue(p);
+    const margin = n(p.im ?? p.positionMargin ?? p.openMargin ?? p.margin);
     if (margin > 0) return (pnl / margin) * 100;
+
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
-    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const mark = closed
+      ? n(p.closeAvgPrice || p.closePrice)
+      : n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
     const lev = n(p.leverage || p.leverageRatio) || 1;
     if (!entry || !mark) return 0;
     const direction = n(p.positionType) === 1 ? 1 : -1;
@@ -419,11 +437,15 @@ export default function PerpetualsPage({ user }) {
     <section className="mexc-bottom"><div className="mexc-tabs">{[['positions','Positions'],['orders','Open Orders'],['history','Order History'],['positionHistory','Position History'],['funding','Funding'],['risk','Risk / Fees']].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'positions' && positions.length ? ` (${positions.length})` : ''}{id === 'orders' && openOrders.length ? ` (${openOrders.length})` : ''}</button>)}{tab === 'orders' && openOrders.length > 0 && <button className="cancel-all" onClick={cancelAll} disabled={busy}>Cancel All</button>}</div><div className="mexc-table-wrap">{tab === 'positions' && <Positions rows={positions} stopOrders={stopOrders} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} />}{tab === 'orders' && <Orders rows={openOrders} onCancel={cancel} />}{tab === 'history' && <Orders rows={account.history} history />}{tab === 'positionHistory' && <PositionHistory rows={account.positionHistory} onShare={p => setPnlSharePosition(p)} onDownload={p => downloadPnl(p)} />}{tab === 'funding' && <Funding rows={account.funding} />}{tab === 'risk' && <Risk risk={account.risk} fee={account.fee} positionMode={account.positionMode} contract={contract} />}</div></section>
     {error && <div className="mexc-error"><span>{error}</span><button onClick={() => setError('')}>×</button></div>}
     {pnlSharePosition && (() => {
+      const closed = isClosedPnl(pnlSharePosition);
       const roi = pnlPercent(pnlSharePosition);
+      const realizedPnl = pnlValue(pnlSharePosition);
       const positive = roi >= 0;
-      const risk = stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId));
+      const risk = closed ? null : stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId));
       const entry = n(pnlSharePosition.holdAvgPrice || pnlSharePosition.openAvgPrice);
-      const mark = n(pnlSharePosition.markPrice || pnlSharePosition.markPricePrice || pnlSharePosition.fairPrice || pnlSharePosition.lastPrice) || last;
+      const mark = closed
+        ? n(pnlSharePosition.closeAvgPrice || pnlSharePosition.closePrice)
+        : n(pnlSharePosition.markPrice || pnlSharePosition.markPricePrice || pnlSharePosition.fairPrice || pnlSharePosition.lastPrice) || last;
       const lev = n(pnlSharePosition.leverage || pnlSharePosition.leverageRatio) || 1;
       return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
@@ -434,10 +456,10 @@ export default function PerpetualsPage({ user }) {
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
             <span className="pnl-arrow" aria-hidden="true">{positive ? '↗' : '↘'}</span>
             <strong>{positive ? '+' : ''}{roi.toFixed(3)}%</strong>
-            <span>UNREALIZED PNL</span>
+            <span>{closed ? 'REALIZED PNL' : 'UNREALIZED PNL'}</span>
             <div className="pnl-meta">
               <p><small>ENTRY</small><b>{fmt(entry)}</b></p>
-              <p><small>MARK</small><b>{fmt(mark)}</b></p>
+              <p><small>{closed ? 'CLOSE' : 'MARK'}</small><b>{fmt(mark)}</b></p>
               <p><small>LEVERAGE</small><b>{fmt(lev,0)}x</b></p>
               <p><small>SL</small><b>{risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—'}</b></p>
               <p><small>TP</small><b>{risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—'}</b></p>
