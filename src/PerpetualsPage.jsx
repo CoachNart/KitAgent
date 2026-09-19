@@ -191,7 +191,6 @@ export default function PerpetualsPage({ user }) {
   const cancelAll = async () => { setBusy(true); setError(''); try { await api('cancelAll', state); await loadAccount(); } catch (e) { setError(e.message || 'Cancel-all failed.'); } finally { setBusy(false); } };
   const closePosition = async p => { if (!p?.positionId || !n(p.holdVol)) { setError('Position details are incomplete; refresh the account and try again.'); return; } setBusy(true); setError(''); try { await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode) || undefined }); await loadAccount(); for (let i = 0; i < 3; i++) { await new Promise(r => setTimeout(r, 700)); await loadAccount(); } } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); } };
 
-  const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
   const pnlPercent = p => {
     const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
     const margin = n(p.im);
@@ -204,103 +203,125 @@ export default function PerpetualsPage({ user }) {
     return ((mark - entry) / entry) * lev * 100 * direction;
   };
 
-  const buildPnlSvg = p => {
+  // Render directly to Canvas. No SVG/data-URI pipeline is used.
+  const createPnlFile = async p => {
+    const width = 1080, height = 1277;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('PNG renderer is unavailable on this device.');
+
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
     const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
     const lev = n(p.leverage || p.leverageRatio) || 1;
     const roi = pnlPercent(p);
     const positive = roi >= 0;
-    const pnlColor = positive ? '#4f7dff' : '#ff5266';
-    const arrow = positive ? '↗' : '↘';
+    const color = positive ? '#4f7dff' : '#ff5266';
     const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
     const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
     const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—';
     const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—';
-    const safe = v => escapeSvg(v);
-    const pnlText = `${positive ? '+' : ''}${roi.toFixed(2)}%`;
+    const name = String(profileName || 'KitSetups Trader');
+    const symbolText = displaySymbol(p.symbol);
+
+    ctx.fillStyle = '#050708';
+    ctx.fillRect(0, 0, width, height);
+    const glow = ctx.createRadialGradient(778, 675, 10, 778, 675, 560);
+    glow.addColorStop(0, 'rgba(11,59,55,.62)');
+    glow.addColorStop(.42, 'rgba(6,34,31,.26)');
+    glow.addColorStop(1, 'rgba(5,7,8,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = '#0b3538';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(57, 16, 966, 1245);
+    ctx.strokeRect(84, 43, 913, 1214);
+    ctx.strokeStyle = 'rgba(11,69,72,.72)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(807, 630, 408, 408, -0.09, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#27c9c2';
+    ctx.beginPath();
+    ctx.roundRect(156, 288, 94, 94, 22);
+    ctx.fill();
+    ctx.fillStyle = '#071112';
+    ctx.font = '700 47px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('K', 203, 351);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27d1c7';
+    ctx.font = '700 24px Arial, sans-serif';
+    ctx.fillText('KITSETUPS FUTURES', 275, 311);
+    ctx.fillStyle = '#f4f5f6';
+    ctx.font = '600 34px Arial, sans-serif';
+    ctx.fillText(name, 275, 367);
+
+    ctx.fillStyle = '#101718';
+    ctx.beginPath();
+    ctx.arc(865, 228, 58, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#687272';
+    ctx.stroke();
+    ctx.fillStyle = '#eef3f8';
+    ctx.font = '700 28px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(name.slice(0, 1).toUpperCase(), 865, 238);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f6f7f8';
+    ctx.font = '700 52px Arial, sans-serif';
+    ctx.fillText(symbolText + ' · ' + sideText, 156, 518);
+    ctx.fillStyle = color;
+    ctx.font = '400 86px Arial, sans-serif';
+    ctx.fillText(positive ? '↗' : '↘', 179, 722);
+    ctx.font = '800 174px Arial, sans-serif';
+    ctx.fillText((positive ? '+' : '') + roi.toFixed(2) + '%', 306, 732);
+    ctx.font = '800 108px Arial, sans-serif';
+    ctx.fillText('PNL', 156, 861);
+    ctx.fillStyle = '#84919f';
+    ctx.font = '400 24px Arial, sans-serif';
+    ctx.fillText('UNREALIZED PNL', 156, 948);
+
+    ctx.strokeStyle = '#242829';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(156, 1027); ctx.lineTo(924, 1027);
+    [340, 524, 708].forEach(x => { ctx.moveTo(x, 1027); ctx.lineTo(x, 1205); });
+    ctx.stroke();
+
     const vals = [
-      ['Entry', fmt(entry)],
-      ['Mark', fmt(mark)],
-      ['Leverage', `${fmt(lev, 0)}x`],
+      ['ENTRY', fmt(entry)],
+      ['MARK', fmt(mark)],
+      ['LEVERAGE', fmt(lev, 0) + 'x'],
       ['SL', sl],
       ['TP', tp]
     ];
-    const cells = vals.map((item, i) => {
-      const x = 80 + i * 184;
-      return `<text x="${x}" y="1080" fill="#f1f3f5" font-family="Arial,Helvetica,sans-serif" font-size="22">${safe(item[0])}</text><text x="${x}" y="1152" fill="#eef0f2" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700">${safe(item[1])}</text>`;
-    }).join('');
-    const initials = safe(profileName.slice(0, 1).toUpperCase());
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1277" viewBox="0 0 1080 1277">
-      <defs>
-        <radialGradient id="glow" cx="72%" cy="53%" r="52%"><stop offset="0" stop-color="#0b3b37" stop-opacity=".62"/><stop offset=".42" stop-color="#06221f" stop-opacity=".26"/><stop offset="1" stop-color="#050708" stop-opacity="0"/></radialGradient>
-        <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b5d60"/><stop offset=".5" stop-color="#12373a"/><stop offset="1" stop-color="#071d20"/></linearGradient>
-      </defs>
-      <rect width="1080" height="1277" fill="#050708"/>
-      <rect x="57" y="16" width="966" height="1245" rx="50" fill="#050708" stroke="url(#edge)" stroke-width="2.5"/>
-      <rect x="84" y="43" width="913" height="1214" rx="3" fill="url(#glow)" stroke="#0b3538" stroke-width="2"/>
-      <circle cx="807" cy="630" r="408" fill="none" stroke="#0b4548" stroke-opacity=".78" stroke-width="2"/>
-      <path d="M397 628 A410 410 0 0 1 997 266" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
-      <path d="M407 628 A407 407 0 0 0 997 994" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
-      <rect x="156" y="288" width="94" height="94" rx="22" fill="#27c9c2"/>
-      <text x="203" y="351" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="700" fill="#071112">K</text>
-      <text x="275" y="311" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" letter-spacing="3.5" fill="#27d1c7">KITSETUPS FUTURES</text>
-      <text x="275" y="367" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="600" fill="#f4f5f6">${safe(profileName)}</text>
-      <circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/>
-      <text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>
-      <text x="156" y="518" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="700" letter-spacing="-2.2" fill="#f6f7f8">${safe(displaySymbol(p.symbol))} · ${sideText}</text>
-      <text x="179" y="722" font-family="Arial,Helvetica,sans-serif" font-size="86" fill="${pnlColor}">${arrow}</text>
-      <text x="306" y="732" font-family="Arial,Helvetica,sans-serif" font-size="174" font-weight="800" letter-spacing="-5" fill="${pnlColor}">${safe(pnlText)}</text>
-      <text x="156" y="861" font-family="Arial,Helvetica,sans-serif" font-size="108" font-weight="800" letter-spacing="-4" fill="${pnlColor}">PNL</text>
-      <text x="156" y="948" font-family="Arial,Helvetica,sans-serif" font-size="24" letter-spacing="4.2" fill="#84919f">UNREALIZED PNL</text>
-      <line x1="156" y1="1027" x2="924" y2="1027" stroke="#242829" stroke-width="2"/>
-      <line x1="340" y1="1027" x2="340" y2="1205" stroke="#242829" stroke-width="2"/>
-      <line x1="524" y1="1027" x2="524" y2="1205" stroke="#242829" stroke-width="2"/>
-      <line x1="708" y1="1027" x2="708" y2="1205" stroke="#242829" stroke-width="2"/>
-      <line x1="892" y1="1027" x2="892" y2="1205" stroke="#242829" stroke-width="2"/>
-      <line x1="156" y1="1205" x2="924" y2="1205" stroke="#242829" stroke-width="2"/>
-      ${cells}
-    </svg>`;
-  };
+    vals.forEach(([label, value], i) => {
+      const x = 156 + i * 184;
+      ctx.fillStyle = '#f1f3f5';
+      ctx.font = '400 22px Arial, sans-serif';
+      ctx.fillText(label, x, 1080);
+      ctx.fillStyle = '#eef0f2';
+      ctx.font = '700 27px Arial, sans-serif';
+      ctx.fillText(value, x, 1152);
+    });
 
-  const downloadSvgFile = (svg, filename) => {
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    try { a.click(); } finally {
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-    }
-  };
+    ctx.fillStyle = '#66727f';
+    ctx.font = '700 13px Arial, sans-serif';
+    ctx.fillText('KITSETUPS', 156, 1242);
+    ctx.textAlign = 'right';
+    ctx.fillText('FUTURES PNL', 924, 1242);
+    ctx.textAlign = 'left';
 
-  const svgToPngFile = async (svg, filename) => {
-    const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const svgUrl = URL.createObjectURL(svgBlob);
-    try {
-      const img = new Image();
-      img.src = svgUrl;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('PNL image renderer failed.'));
-      });
-      const canvas = document.createElement('canvas');
-      canvas.width = 1080;
-      canvas.height = 1277;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas is unavailable.');
-      ctx.fillStyle = '#050708';
-      ctx.fillRect(0, 0, 1080, 1277);
-      ctx.drawImage(img, 0, 0, 1080, 1277);
-      const pngBlob = await new Promise((resolve, reject) => {
-        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG creation failed.')), 'image/png');
-      });
-      return new File([pngBlob], filename, { type: 'image/png' });
-    } finally {
-      URL.revokeObjectURL(svgUrl);
-    }
+    const pngBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('This browser could not create a PNG.')), 'image/png');
+    });
+    return new File([pngBlob], 'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png', { type: 'image/png' });
   };
 
   const triggerPnlDownload = file => {
@@ -310,39 +331,33 @@ export default function PerpetualsPage({ user }) {
     a.href = url;
     a.download = file.name;
     a.rel = 'noopener';
+    a.style.display = 'none';
     document.body.appendChild(a);
-    try { a.click(); } finally {
+    a.click();
+    window.setTimeout(() => {
       a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-    }
-  };
-
-  const createPnlFile = async p => {
-    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`;
-    return svgToPngFile(buildPnlSvg(p), safeName);
+      URL.revokeObjectURL(url);
+    }, 1500);
   };
 
   const sharePnl = async p => {
     setPnlShareBusy(true);
     setError('');
     try {
-      const svg = buildPnlSvg(p);
-      try {
-        const file = await createPnlFile(p);
-        setPnlShareFile(file);
-        const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
-        if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-          try { await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] }); return; }
-          catch (e) { if (e?.name === 'AbortError') return; }
+      const file = await createPnlFile(p);
+      setPnlShareFile(file);
+      const text = profileName + ' · ' + displaySymbol(p.symbol) + ' · ' + (n(p.positionType) === 1 ? 'Long' : 'Short') + ' · PnL ' + pnlPercent(p).toFixed(2) + '%';
+      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
+          return;
+        } catch (e) {
+          if (e?.name === 'AbortError') return;
         }
-        triggerPnlDownload(file);
-        return;
-      } catch (renderError) {
-        console.warn('PNG PnL render failed; using SVG fallback.', renderError);
-        downloadSvgFile(svg, `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.svg`);
       }
+      triggerPnlDownload(file);
     } catch (e) {
-      setError(e?.message || 'Could not create the PnL card.');
+      setError(e?.message || 'Could not create the PNG PnL card.');
     } finally {
       setPnlShareBusy(false);
     }
@@ -352,17 +367,11 @@ export default function PerpetualsPage({ user }) {
     setPnlShareBusy(true);
     setError('');
     try {
-      const svg = buildPnlSvg(p);
-      try {
-        const file = await createPnlFile(p);
-        setPnlShareFile(file);
-        triggerPnlDownload(file);
-      } catch (renderError) {
-        console.warn('PNG PnL render failed; downloading SVG fallback.', renderError);
-        downloadSvgFile(svg, `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.svg`);
-      }
+      const file = await createPnlFile(p);
+      setPnlShareFile(file);
+      triggerPnlDownload(file);
     } catch (e) {
-      setError(e?.message || 'Could not create the PnL card.');
+      setError(e?.message || 'Could not create the PNG PnL card.');
     } finally {
       setPnlShareBusy(false);
     }
