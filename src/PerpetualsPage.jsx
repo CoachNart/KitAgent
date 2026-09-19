@@ -302,7 +302,7 @@ export default function PerpetualsPage({ user }) {
     try {
       const file = await createPnlFile(p);
       setPnlShareFile(file);
-      const text = profileName + ' · ' + displaySymbol(p.symbol) + ' · ' + (n(p.positionType) === 1 ? 'Long' : 'Short') + ' · PnL ' + pnlPercent(p).toFixed(2) + '%';
+      const text = profileName + ' · ' + displaySymbol(p.symbol) + ' · ' + (n(p.positionType) === 1 ? 'Long' : 'Short') + ' · PnL ' + pnlPercent(p).toFixed(3) + '%';
 
       if (Capacitor.isNativePlatform()) {
         const base64 = await new Promise((resolve, reject) => {
@@ -433,7 +433,7 @@ export default function PerpetualsPage({ user }) {
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
             <span className="pnl-arrow" aria-hidden="true">{positive ? '↗' : '↘'}</span>
-            <strong>{positive ? '+' : ''}{roi.toFixed(2)}%</strong>
+            <strong>{positive ? '+' : ''}{roi.toFixed(3)}%</strong>
             <span>UNREALIZED PNL</span>
             <div className="pnl-meta">
               <p><small>ENTRY</small><b>{fmt(entry)}</b></p>
