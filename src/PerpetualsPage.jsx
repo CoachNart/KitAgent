@@ -452,7 +452,7 @@ export default function PerpetualsPage({ user }) {
       return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
           <div ref={pnlCardRef} className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
-            <div className="pnl-card-inner" aria-hidden="true" />
+            <div className="pnl-card-frame" aria-hidden="true" />
             <div className="pnl-card-brand"><img className="pnl-card-logo" src={KITSETUPS_LOGO_URL} crossOrigin="anonymous" alt="" /><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
