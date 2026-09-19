@@ -1,50 +1,47 @@
-/* KitSetups Futures PNL card — single source of truth for the visible card. */
-.pnl-share-dialog{width:min(972px,calc(100vw - 24px));padding:0;background:transparent}
-.pnl-share-card{position:relative;isolation:isolate;overflow:hidden;width:100%;aspect-ratio:1080/1277;background:#050708;border:2px solid #0b3538;border-radius:4px;color:#f4f7f8;box-shadow:0 24px 80px rgba(0,0,0,.58)}
-.pnl-share-card::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(circle at 72% 53%,rgba(11,59,55,.62),rgba(6,34,31,.26) 31%,transparent 60%)}
-.pnl-share-card::after{content:"";position:absolute;z-index:-1;left:36%;top:17%;width:76%;height:64%;border:2px solid rgba(11,69,72,.72);border-radius:50%;transform:rotate(-5deg);box-shadow:-10px 0 0 rgba(11,69,72,.2),10px 0 0 rgba(11,69,72,.12)}
-.pnl-card-inner{position:absolute;inset:2.1% 5.3%;border:2px solid #0b3538;border-radius:3px}
-.pnl-card-brand{position:absolute;left:7.4%;top:21.8%;display:flex;align-items:center;gap:24px}
+/* Fresh KitSetups Futures PNL share card. Self-contained; no legacy export hooks. */
+.pnl-share-dialog{width:min(540px,calc(100vw - 24px));padding:10px;border-radius:22px;background:#070a0b;border:1px solid rgba(34,211,197,.22);box-shadow:0 30px 100px rgba(0,0,0,.75)}
+.pnl-share-card{position:relative;isolation:isolate;overflow:hidden;aspect-ratio:1080/1277;width:100%;background:#050708;border:1px solid #0b3538;border-radius:3px;padding:0;color:#f4f7f8}
+.pnl-share-card::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(circle at 72% 53%,rgba(11,59,55,.62),rgba(6,34,31,.26) 30%,transparent 58%)}
+.pnl-share-card::after{content:"";position:absolute;z-index:-1;left:36%;top:17%;width:76%;height:64%;border:1px solid rgba(11,69,72,.78);border-radius:50%;transform:rotate(-5deg);box-shadow:-10px 0 0 rgba(11,69,72,.35),10px 0 0 rgba(11,69,72,.18)}
+.pnl-card-frame{position:absolute;inset:2.1% 5.3%;border:2px solid #0b3538;border-radius:3px;pointer-events:none}
+.pnl-card-brand{position:absolute;left:14.4%;top:22.6%;display:flex;align-items:center;gap:24px}
 .pnl-card-brand .mexc-logo{width:94px;height:94px;border-radius:22px;background:#27c9c2;color:#071112;font-size:47px;font-weight:700;display:grid;place-items:center}
-.pnl-card-brand .pnl-card-logo{width:94px;height:94px;border-radius:22px;object-fit:contain;display:block;background:#071112}
 .pnl-card-brand div{display:flex;flex-direction:column;gap:12px}
 .pnl-card-brand small{color:#27d1c7;font-size:24px;line-height:1;font-weight:700;letter-spacing:.145em}
 .pnl-card-brand b{color:#f4f5f6;font-size:34px;line-height:1;font-weight:600}
-.pnl-card-avatar{position:absolute;right:8.6%;top:13.1%;width:116px;height:116px;border-radius:50%;object-fit:cover;border:2px solid #687272;background:#14191a}
+.pnl-card-avatar{position:absolute;right:10.1%;top:13.3%;width:116px;height:116px;border-radius:50%;object-fit:cover;border:2px solid #687272;background:#14191a}
 .pnl-card-avatar.fallback{display:grid;place-items:center;color:#eef3f8;font-size:34px;font-weight:800}
-.pnl-share-card h3{position:absolute;left:7.4%;right:10%;top:38.7%;margin:0;font-size:52px;line-height:1.05;letter-spacing:-.042em;font-weight:700;color:#f6f7f8}
-.pnl-share-card>strong{position:absolute;left:26.7%;top:45.8%;margin:0;font-size:174px;line-height:.92;letter-spacing:-.055em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pnl-share-card h3{position:absolute;left:14.4%;right:12%;top:38.7%;margin:0;font-size:52px;line-height:1.05;letter-spacing:-.042em;font-weight:700;color:#f6f7f8}
+.pnl-share-card>strong{position:absolute;left:28.3%;top:45.8%;margin:0;font-size:174px;line-height:.92;letter-spacing:-.055em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pnl-share-card.profit>strong{color:#4f7dff}
 .pnl-share-card.loss>strong{color:#ff5266}
-.pnl-share-card>span:not(.pnl-arrow){position:absolute;left:7.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em}
-.pnl-share-card .pnl-meta{position:absolute;left:7.4%;right:7.4%;bottom:4.2%;height:14%;display:grid;grid-template-columns:repeat(5,1fr);border-top:2px solid #242829;border-bottom:2px solid #242829}
-.pnl-share-card .pnl-meta p{margin:0;padding:8% 12px 0 0;border-right:2px solid #242829;min-width:0}
+.pnl-share-card>strong::first-letter{font-size:.58em}
+.pnl-share-card>span{position:absolute;left:14.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em}
+.pnl-share-card .pnl-meta{position:absolute;left:14.4%;right:14.4%;bottom:4.1%;height:14%;display:grid;grid-template-columns:repeat(5,1fr);border-top:2px solid #242829;border-bottom:2px solid #242829}
+.pnl-share-card .pnl-meta p{margin:0;padding:13% 10px 0 0;border-right:2px solid #242829;min-width:0}
 .pnl-share-card .pnl-meta p:last-child{border-right:0}
 .pnl-share-card .pnl-meta small{display:block;color:#f1f3f5;font-size:22px;line-height:1}
 .pnl-share-card .pnl-meta b{display:block;margin-top:18px;color:#eef0f2;font-size:27px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pnl-card-foot{position:absolute;left:7.4%;right:7.4%;bottom:1.2%;display:flex;justify-content:space-between;color:#66727f;font-size:13px;letter-spacing:.04em}
+.pnl-card-foot{position:absolute;left:14.4%;right:14.4%;bottom:1.4%;display:flex;justify-content:space-between;color:#66727f;font-size:13px;letter-spacing:.04em}
 .pnl-card-foot b{font-weight:700;color:#66727f}
-.pnl-share-actions{display:flex;gap:8px;margin-top:10px}
-.pnl-share-actions button{flex:1;height:42px;border:1px solid #263141;background:#111721;color:#e7edf7;border-radius:8px;font-weight:800;cursor:pointer;touch-action:manipulation}
+.pnl-share-actions{display:flex;gap:6px;margin-top:8px}
+.pnl-share-actions button{flex:1;height:40px;border:1px solid #263141;background:#111721;color:#e7edf7;border-radius:8px;font-weight:800;cursor:pointer;touch-action:manipulation}
 .pnl-share-actions button:first-child{background:#22d3c5;color:#03100e;border-color:#22d3c5}
 .pnl-share-actions .ghost{color:#718097;background:transparent}
 @media(max-width:760px){
-  .pnl-share-dialog{width:calc(100vw - 16px)}
+  .pnl-share-dialog{width:min(540px,calc(100vw - 16px));padding:7px}
   .pnl-card-brand{gap:10px}
   .pnl-card-brand .mexc-logo{width:58px;height:58px;border-radius:14px;font-size:29px}
-  .pnl-card-brand .pnl-card-logo{width:58px;height:58px;border-radius:14px}
   .pnl-card-brand div{gap:6px}
   .pnl-card-brand small{font-size:13px;letter-spacing:.11em}
   .pnl-card-brand b{font-size:20px}
-  .pnl-card-avatar{width:70px;height:70px;right:8.6%;top:13.1%}
+  .pnl-card-avatar{width:70px;height:70px;right:9%;top:13%}
   .pnl-share-card h3{font-size:30px}
-  .pnl-share-card>strong{font-size:88px;left:25.5%}
-  .pnl-share-card>span:not(.pnl-arrow){font-size:13px;top:73%}.pnl-share-card .pnl-arrow{font-size:44px;top:49%;left:9.5%}
+  .pnl-share-card>strong{font-size:88px;left:27%}
+  .pnl-share-card>span{font-size:13px;top:73%}
   .pnl-share-card .pnl-meta{height:16%;bottom:4.3%}
-  .pnl-share-card .pnl-meta p{padding:9% 5px 0 0}
-  .pnl-share-card .pnl-meta small{font-size:10px}
-  .pnl-share-card .pnl-meta b{font-size:13px;margin-top:8px}
+  .pnl-share-card .pnl-meta p{padding-top:9%}
+  .pnl-share-card .pnl-meta small{font-size:11px}
+  .pnl-share-card .pnl-meta b{font-size:14px;margin-top:8px}
   .pnl-card-foot{font-size:8px}
 }
-
-.pnl-share-card .pnl-arrow{position:absolute;left:10%;top:48.5%;margin:0;color:inherit;font-size:86px;line-height:1;font-weight:400}.pnl-share-card.profit .pnl-arrow{color:#4f7dff}.pnl-share-card.loss .pnl-arrow{color:#ff5266}
