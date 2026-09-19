@@ -1,0 +1,18 @@
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function n(v) { const x = Number(String(v ?? '').replace(/,/g,'')); return Number.isFinite(x) ? x : 0; }
+export default function handler(req, res) {
+  const q = req.query || {};
+  const pair = esc(q.pair || 'BTCUSDT');
+  const side = String(q.side || 'LONG').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG';
+  const pnl = n(q.pnl), roi = n(q.roi), entry = n(q.entry), mark = n(q.mark), leverage = n(q.leverage), margin = n(q.margin);
+  const positive = pnl >= 0, accent = positive ? '#25d6d0' : '#ff5266', bg = positive ? '#101b24' : '#21131a';
+  const fmt = (x,d=6) => Number(x).toLocaleString('en-US',{maximumFractionDigits:d});
+  const cells = [['PAIR',pair],['SIDE',side],['LEVERAGE',fmt(leverage,0)+'x'],['MARGIN',fmt(margin)+' USDT'],['ENTRY',fmt(entry)],['MARK',fmt(mark)]];
+  const cards = cells.map((v,i) => { const x=72+(i%3)*350,y=330+Math.floor(i/3)*115; return '<rect x="'+x+'" y="'+y+'" width="342" height="80" rx="13" fill="#0b1119" stroke="#192b35"/><text x="'+(x+17)+'" y="'+(y+25)+'" fill="#66788a" font-family="Arial,sans-serif" font-size="12" font-weight="700">'+v[0]+'</text><text x="'+(x+17)+'" y="'+(y+54)+'" fill="#eef3f9" font-family="Arial,sans-serif" font-size="23" font-weight="800">'+v[1]+'</text>'; }).join('');
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+bg+'"/><stop offset="1" stop-color="#080b10"/></linearGradient><radialGradient id="glow"><stop offset="0" stop-color="'+accent+'" stop-opacity=".22"/><stop offset="1" stop-color="'+accent+'" stop-opacity="0"/></radialGradient></defs><rect width="1200" height="675" fill="url(#bg)"/><circle cx="930" cy="120" r="310" fill="url(#glow)"/><rect x="36" y="36" width="1128" height="603" rx="24" fill="none" stroke="'+accent+'" stroke-opacity=".55" stroke-width="2"/><text x="72" y="92" fill="'+accent+'" font-family="Arial,sans-serif" font-size="30" font-weight="800">KITSETUPS</text><text x="72" y="122" fill="#657287" font-family="Arial,sans-serif" font-size="16">FUTURES PNL</text><rect x="1030" y="65" width="100" height="38" rx="19" fill="'+accent+'" fill-opacity=".12" stroke="'+accent+'" stroke-opacity=".25"/><text x="1080" y="90" text-anchor="middle" fill="'+accent+'" font-family="Arial,sans-serif" font-size="13" font-weight="800">'+side+'</text><text x="72" y="215" fill="'+(positive?'#25d6d0':'#ff6878')+'" font-family="Arial,sans-serif" font-size="64" font-weight="900">'+(positive?'+':'')+fmt(pnl)+' USDT</text><text x="74" y="258" fill="'+(positive?'#25d6d0':'#ff6878')+'" font-family="Arial,sans-serif" font-size="25" font-weight="700">'+(roi>=0?'+':'')+fmt(roi,2)+'% ROI</text>'+cards+'<text x="72" y="604" fill="#657287" font-family="Arial,sans-serif" font-size="13">KitSetups · Crypto command center</text><text x="1128" y="604" text-anchor="end" fill="#657287" font-family="Arial,sans-serif" font-size="13">'+new Date().toLocaleDateString('en-US')+'</text></svg>';
+  res.setHeader('Cache-Control','public, max-age=60');
+  if (String(q.download) === '1') res.setHeader('Content-Disposition','attachment; filename="kitsetups-pnl.svg"');
+  res.setHeader('Content-Type','image/svg+xml; charset=utf-8'); res.status(200).send(svg);
+}
