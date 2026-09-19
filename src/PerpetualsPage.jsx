@@ -356,33 +356,9 @@ export default function PerpetualsPage({ user }) {
   };
 
   useEffect(() => {
-    let cancelled = false;
     setPnlShareFile(null);
-    if (!pnlSharePosition) {
-      setPnlShareBusy(false);
-      return undefined;
-    }
-    setPnlShareBusy(true);
-    const svg = buildPnlSvg(pnlSharePosition);
-    const safeName = `kitsetups-${String(pnlSharePosition.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
-    void svgToPngFile(svg, `${safeName}.png`)
-      .then(file => {
-        if (!cancelled) setPnlShareFile(file);
-      })
-      .catch(error => {
-        if (!cancelled) {
-          setPnlShareFile(null);
-          setError(error?.message || 'Could not prepare the PnL PNG.');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPnlShareBusy(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    setPnlShareBusy(false);
   }, [pnlSharePosition]);
-
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
   const riskMmr = (() => {
     const type = side === 'buy' ? 1 : 2;
