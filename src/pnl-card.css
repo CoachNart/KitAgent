@@ -48,3 +48,22 @@
 }
 
 .pnl-share-card .pnl-arrow{position:absolute;left:10%;top:48.5%;margin:0;color:inherit;font-size:86px;line-height:1;font-weight:400}.pnl-share-card.profit .pnl-arrow{color:#4f7dff}.pnl-share-card.loss .pnl-arrow{color:#ff5266}
+
+
+/* Fixed export master: the original 1080x1277 PnL card. */
+.pnl-share-card.pnl-exporting .pnl-card-brand{gap:24px}
+.pnl-share-card.pnl-exporting .pnl-card-brand .mexc-logo{width:94px;height:94px;border-radius:22px;font-size:47px}
+.pnl-share-card.pnl-exporting .pnl-card-brand .pnl-card-logo{width:94px;height:94px;border-radius:22px}
+.pnl-share-card.pnl-exporting .pnl-card-brand div{gap:12px}
+.pnl-share-card.pnl-exporting .pnl-card-brand small{font-size:24px;letter-spacing:.145em}
+.pnl-share-card.pnl-exporting .pnl-card-brand b{font-size:34px}
+.pnl-share-card.pnl-exporting .pnl-card-avatar{width:116px;height:116px;right:8.6%;top:13.1%}
+.pnl-share-card.pnl-exporting h3{font-size:52px}
+.pnl-share-card.pnl-exporting>strong{font-size:174px;left:26.7%}
+.pnl-share-card.pnl-exporting>span:not(.pnl-arrow){font-size:24px;top:73.6%}
+.pnl-share-card.pnl-exporting .pnl-arrow{font-size:86px;top:48.5%;left:10%}
+.pnl-share-card.pnl-exporting .pnl-meta{height:14%;bottom:4.2%}
+.pnl-share-card.pnl-exporting .pnl-meta p{padding:8% 12px 0 0}
+.pnl-share-card.pnl-exporting .pnl-meta small{font-size:22px}
+.pnl-share-card.pnl-exporting .pnl-meta b{font-size:27px;margin-top:18px}
+.pnl-share-card.pnl-exporting .pnl-card-foot{font-size:13px}
