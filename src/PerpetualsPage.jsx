@@ -13,7 +13,7 @@ const normalize = s => String(s || '').toUpperCase().replace(/[-/]/g, '').replac
 const displaySymbol = s => String(s || '').replace('_USDT', '/USDT');
 const arr = v => Array.isArray(v) ? v : (Array.isArray(v?.data) ? v.data : []);
 const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);
-const KITSETUPS_LOGO_URL = '/kitsetups-logo.svg';
+const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png';
 
 async function api(action, state, extra = {}) {
   const response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }) });
@@ -209,6 +209,32 @@ export default function PerpetualsPage({ user }) {
     return ((mark - entry) / entry) * lev * 100 * direction;
   };
 
+  const fitPnlPercent = () => {
+    const card = pnlCardRef.current;
+    const value = card?.querySelector(':scope > strong');
+    if (!card || !value) return;
+    const width = card.clientWidth;
+    if (!width) return;
+    const maxWidth = width * 0.66;
+    const styles = getComputedStyle(value);
+    const probe = document.createElement('canvas').getContext('2d');
+    if (!probe) return;
+    const text = value.textContent || '';
+    const letterSpacing = parseFloat(styles.letterSpacing) || 0;
+    let size = Math.min(parseFloat(styles.fontSize) || 174, 174);
+    for (let i = 0; i < 8; i += 1) {
+      probe.font = styles.fontWeight + ' ' + size + 'px ' + styles.fontFamily;
+      const measured = probe.measureText(text).width + Math.max(0, text.length - 1) * letterSpacing;
+      if (measured <= maxWidth) break;
+      size = Math.max(52, size * (maxWidth / measured) * 0.97);
+    }
+    value.style.right = '7.4%';
+    value.style.maxWidth = maxWidth + 'px';
+    value.style.fontSize = Math.floor(size) + 'px';
+    value.style.overflow = 'visible';
+    value.style.whiteSpace = 'nowrap';
+  };
+
   // Export the actual rendered card. This is the original 1080x1277 geometry:
   // no cloned responsive layout, no SVG/data-URI pipeline, and no redesign.
   const createPnlFile = async p => {
@@ -297,16 +323,29 @@ export default function PerpetualsPage({ user }) {
         return;
       }
 
-      if (typeof navigator.share !== 'function') {
-        throw new Error('Sharing is not available in this browser. Use the Download button for the PNG.');
+      const fileShareSupported = typeof navigator.share === 'function' && (
+        typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] })
+      );
+      if (fileShareSupported) {
+        try {
+          await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
+          return;
+        } catch (e) {
+          if (e?.name === 'AbortError') return;
+        }
       }
 
-      try {
-        await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
-      } catch (e) {
-        if (e?.name === 'AbortError') return;
-        throw new Error('Your browser could not open the share sheet for this PNG.');
+      // Firefox Android currently exposes neither the native Web Share file path nor a
+      // working share target in some builds. Keep the button useful there by copying the
+      // actual PNG to the clipboard instead of silently downloading or sharing text.
+      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': file })]);
+          setError('PNG copied. Paste it into WhatsApp, Telegram, Instagram, or any app that accepts images.');
+          return;
+        } catch {}
       }
+      throw new Error('This browser cannot share image files. Use Chrome on Android or the KitSetups app to share the PNG.');
     } catch (e) {
       setError(e?.message || 'Could not share the PNG PnL card.');
     } finally {
@@ -331,6 +370,17 @@ export default function PerpetualsPage({ user }) {
   useEffect(() => {
     setPnlShareFile(null);
     setPnlShareBusy(false);
+    if (!pnlSharePosition) return undefined;
+    let frame = 0;
+    const fit = () => fitPnlPercent();
+    frame = requestAnimationFrame(fit);
+    const card = pnlCardRef.current;
+    const observer = card && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
+    observer?.observe(card);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
   }, [pnlSharePosition]);
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
   const riskMmr = (() => {
@@ -379,7 +429,7 @@ export default function PerpetualsPage({ user }) {
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
           <div ref={pnlCardRef} className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
             <div className="pnl-card-inner" aria-hidden="true" />
-            <div className="pnl-card-brand"><img className="pnl-card-logo" src={KITSETUPS_LOGO_URL} alt="" /><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
+            <div className="pnl-card-brand"><img className="pnl-card-logo" src={KITSETUPS_LOGO_URL} crossOrigin="anonymous" alt="" /><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
             <span className="pnl-arrow" aria-hidden="true">{positive ? '↗' : '↘'}</span>
