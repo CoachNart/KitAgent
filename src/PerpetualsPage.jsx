@@ -1,8 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
-import { Capacitor } from '@capacitor/core';
-import { Share } from '@capacitor/share';
-import { Filesystem, Directory } from '@capacitor/filesystem';
 import './mexcFutures.css';
 import './pnl-card.css';
 
@@ -13,7 +9,6 @@ const normalize = s => String(s || '').toUpperCase().replace(/[-/]/g, '').replac
 const displaySymbol = s => String(s || '').replace('_USDT', '/USDT');
 const arr = v => Array.isArray(v) ? v : (Array.isArray(v?.data) ? v.data : []);
 const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);
-const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png';
 
 async function api(action, state, extra = {}) {
   const response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }) });
@@ -62,7 +57,6 @@ export default function PerpetualsPage({ user }) {
 
   const [pnlShareFile, setPnlShareFile] = useState(null);
   const [pnlShareBusy, setPnlShareBusy] = useState(false);
-  const pnlCardRef = useRef(null);
   const [riskPosition, setRiskPosition] = useState(null);
   const [riskTp, setRiskTp] = useState('');
   const [riskSl, setRiskSl] = useState('');
@@ -78,8 +72,7 @@ export default function PerpetualsPage({ user }) {
   const usdt = account.assets.find(x => String(x.currency || '').toUpperCase() === 'USDT') || {};
   const positions = account.positions.filter(p => normalize(p.symbol) === normalize(symbol));
   const openOrders = account.orders.filter(o => normalize(o.symbol) === normalize(symbol));
-  const allStopOrders = account.stopOrders.filter(o => normalize(o.symbol) === normalize(symbol));
-  const stopOrders = allStopOrders.filter(o => !n(o.isFinished));
+  const stopOrders = account.stopOrders.filter(o => normalize(o.symbol) === normalize(symbol) && !n(o.isFinished));
   const orderEntry = orderType === 'limit' ? n(limitPrice) : last;
   const orderContractSize = n(contract?.contractSize || 1);
   const projectedTpPnl = volume && takeProfit && orderEntry ? positionPnl(orderEntry, takeProfit, volume, orderContractSize, side === 'buy' ? 1 : 2) : 0;
@@ -198,154 +191,129 @@ export default function PerpetualsPage({ user }) {
   const cancelAll = async () => { setBusy(true); setError(''); try { await api('cancelAll', state); await loadAccount(); } catch (e) { setError(e.message || 'Cancel-all failed.'); } finally { setBusy(false); } };
   const closePosition = async p => { if (!p?.positionId || !n(p.holdVol)) { setError('Position details are incomplete; refresh the account and try again.'); return; } setBusy(true); setError(''); try { await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode) || undefined }); await loadAccount(); for (let i = 0; i < 3; i++) { await new Promise(r => setTimeout(r, 700)); await loadAccount(); } } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); } };
 
-  const isClosedPnl = p => (
-    p?.closeAvgPrice != null ||
-    p?.realised != null ||
-    p?.realized != null ||
-    p?.realizedPnl != null ||
-    p?.closeProfitLoss != null ||
-    p?.profitLoss != null
-  );
-
-  const pnlValue = p => {
-    if (isClosedPnl(p)) return n(p.realised ?? p.realized ?? p.realizedPnl ?? p.closeProfitLoss ?? p.profitLoss);
-    return n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
-  };
-
+  const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
   const pnlPercent = p => {
-    const closed = isClosedPnl(p);
-    const pnl = pnlValue(p);
-    const margin = n(p.im ?? p.positionMargin ?? p.openMargin ?? p.margin);
+    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
+    const margin = n(p.im);
     if (margin > 0) return (pnl / margin) * 100;
-
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
-    const mark = closed
-      ? n(p.closeAvgPrice || p.closePrice)
-      : n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
     const lev = n(p.leverage || p.leverageRatio) || 1;
     if (!entry || !mark) return 0;
     const direction = n(p.positionType) === 1 ? 1 : -1;
     return ((mark - entry) / entry) * lev * 100 * direction;
   };
 
-  const fitPnlPercent = () => {
-    const card = pnlCardRef.current;
-    const value = card?.querySelector(':scope > strong');
-    if (!card || !value) return;
-    const width = card.clientWidth;
-    if (!width) return;
-    const maxWidth = width * 0.66;
-    const styles = getComputedStyle(value);
-    const probe = document.createElement('canvas').getContext('2d');
-    if (!probe) return;
-    const text = value.textContent || '';
-    const letterSpacing = parseFloat(styles.letterSpacing) || 0;
-    let size = Math.min(parseFloat(styles.fontSize) || 174, 174);
-    for (let i = 0; i < 8; i += 1) {
-      probe.font = styles.fontWeight + ' ' + size + 'px ' + styles.fontFamily;
-      const measured = probe.measureText(text).width + Math.max(0, text.length - 1) * letterSpacing;
-      if (measured <= maxWidth) break;
-      size = Math.max(52, size * (maxWidth / measured) * 0.97);
-    }
-    value.style.right = '7.4%';
-    value.style.maxWidth = maxWidth + 'px';
-    value.style.fontSize = Math.floor(size) + 'px';
-    value.style.overflow = 'visible';
-    value.style.whiteSpace = 'nowrap';
+  const buildPnlSvg = p => {
+    const entry = n(p.holdAvgPrice || p.openAvgPrice);
+    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const lev = n(p.leverage || p.leverageRatio) || 1;
+    const roi = pnlPercent(p);
+    const positive = roi >= 0;
+    const pnlColor = positive ? '#4f7dff' : '#ff5266';
+    const arrow = positive ? '↗' : '↘';
+    const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
+    const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
+    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—';
+    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—';
+    const safe = v => escapeSvg(v);
+    const pnlText = `${positive ? '+' : ''}${roi.toFixed(2)}%`;
+    const vals = [
+      ['Entry', fmt(entry)],
+      ['Mark', fmt(mark)],
+      ['Leverage', `${fmt(lev, 0)}x`],
+      ['SL', sl],
+      ['TP', tp]
+    ];
+    const cells = vals.map((item, i) => {
+      const x = 80 + i * 184;
+      return `<text x="${x}" y="1080" fill="#f1f3f5" font-family="Arial,Helvetica,sans-serif" font-size="22">${safe(item[0])}</text><text x="${x}" y="1152" fill="#eef0f2" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700">${safe(item[1])}</text>`;
+    }).join('');
+    const initials = safe(profileName.slice(0, 1).toUpperCase());
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1277" viewBox="0 0 1080 1277">
+      <defs>
+        <radialGradient id="glow" cx="72%" cy="53%" r="52%"><stop offset="0" stop-color="#0b3b37" stop-opacity=".62"/><stop offset=".42" stop-color="#06221f" stop-opacity=".26"/><stop offset="1" stop-color="#050708" stop-opacity="0"/></radialGradient>
+        <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b5d60"/><stop offset=".5" stop-color="#12373a"/><stop offset="1" stop-color="#071d20"/></linearGradient>
+      </defs>
+      <rect width="1080" height="1277" fill="#050708"/>
+      <rect x="57" y="16" width="966" height="1245" rx="50" fill="#050708" stroke="url(#edge)" stroke-width="2.5"/>
+      <rect x="84" y="43" width="913" height="1214" rx="3" fill="url(#glow)" stroke="#0b3538" stroke-width="2"/>
+      <circle cx="807" cy="630" r="408" fill="none" stroke="#0b4548" stroke-opacity=".78" stroke-width="2"/>
+      <path d="M397 628 A410 410 0 0 1 997 266" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
+      <path d="M407 628 A407 407 0 0 0 997 994" fill="none" stroke="#0b4548" stroke-opacity=".72" stroke-width="2"/>
+      <rect x="156" y="288" width="94" height="94" rx="22" fill="#27c9c2"/>
+      <text x="203" y="351" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="700" fill="#071112">K</text>
+      <text x="275" y="311" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" letter-spacing="3.5" fill="#27d1c7">KITSETUPS FUTURES</text>
+      <text x="275" y="367" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="600" fill="#f4f5f6">${safe(profileName)}</text>
+      <circle cx="865" cy="228" r="58" fill="#101718" stroke="#687272" stroke-width="2"/>
+      <text x="865" y="240" text-anchor="middle" fill="#eef3f8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">${initials}</text>
+      <text x="156" y="518" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="700" letter-spacing="-2.2" fill="#f6f7f8">${safe(displaySymbol(p.symbol))} · ${sideText}</text>
+      <text x="179" y="722" font-family="Arial,Helvetica,sans-serif" font-size="86" fill="${pnlColor}">${arrow}</text>
+      <text x="306" y="732" font-family="Arial,Helvetica,sans-serif" font-size="174" font-weight="800" letter-spacing="-5" fill="${pnlColor}">${safe(pnlText)}</text>
+      <text x="156" y="861" font-family="Arial,Helvetica,sans-serif" font-size="108" font-weight="800" letter-spacing="-4" fill="${pnlColor}">PNL</text>
+      <text x="156" y="948" font-family="Arial,Helvetica,sans-serif" font-size="24" letter-spacing="4.2" fill="#84919f">UNREALIZED PNL</text>
+      <line x1="156" y1="1027" x2="924" y2="1027" stroke="#242829" stroke-width="2"/>
+      <line x1="340" y1="1027" x2="340" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="524" y1="1027" x2="524" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="708" y1="1027" x2="708" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="892" y1="1027" x2="892" y2="1205" stroke="#242829" stroke-width="2"/>
+      <line x1="156" y1="1205" x2="924" y2="1205" stroke="#242829" stroke-width="2"/>
+      ${cells}
+    </svg>`;
   };
 
-  // Export the actual rendered card. This is the original 1080x1277 geometry:
-  // no cloned responsive layout, no SVG/data-URI pipeline, and no redesign.
-  const createPnlFile = async p => {
-    const card = pnlCardRef.current;
-    if (!card) throw new Error('PNL card is not ready.');
-    if (document.fonts?.ready) { try { await document.fonts.ready; } catch {} }
-
-    const images = Array.from(card.querySelectorAll('img'));
-    await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
-      const done = () => { img.removeEventListener('load', done); img.removeEventListener('error', done); resolve(); };
-      img.addEventListener('load', done);
-      img.addEventListener('error', done);
-    })));
-
-    const rect = card.getBoundingClientRect();
-    if (!rect.width || !rect.height) throw new Error('PNL card has no renderable size.');
-
-    const rendered = await html2canvas(card, {
-      backgroundColor: '#050708',
-      scale: 1080 / rect.width,
-      useCORS: true,
-      allowTaint: false,
-      logging: false
+  const svgToPngFile = async (svg, filename) => {
+    // Rasterize the artwork into a real PNG. The SVG exists only as an
+    // intermediate renderer and is never exposed as the downloadable file.
+    const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    const img = new Image();
+    img.decoding = 'async';
+    const loaded = new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('PNL image renderer failed.'));
     });
-
+    img.src = encoded;
+    await loaded;
+    if (img.decode) {
+      try { await img.decode(); } catch {}
+    }
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1277;
     const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('PNG renderer is unavailable on this device.');
+    if (!ctx) throw new Error('Canvas is unavailable in this browser.');
     ctx.fillStyle = '#050708';
-    ctx.fillRect(0, 0, 1080, 1277);
-    ctx.drawImage(rendered, 0, 0, 1080, 1277);
-
-    const blob = await new Promise((resolve, reject) => canvas.toBlob(
-      x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')),
-      'image/png'
-    ));
-    return new File(
-      [blob],
-      'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png',
-      { type: 'image/png' }
-    );
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, 1080, 1277);
+    const pngBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Browser could not create the PNG.')), 'image/png');
+    });
+    return new File([pngBlob], filename, { type: 'image/png' });
   };
 
   const triggerPnlDownload = file => {
-    if (!file) throw new Error('PNL image is unavailable.');
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
     a.download = file.name;
     a.rel = 'noopener';
-    a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    window.setTimeout(() => {
-      a.remove();
-      URL.revokeObjectURL(url);
-    }, 1500);
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   };
 
   const sharePnl = async p => {
-    setPnlShareBusy(true);
-    setError('');
+    const svg = buildPnlSvg(p);
+    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+    const file = pnlShareFile;
+    if (!file) {
+      setError('PNL image is still preparing. Please tap Share again in a moment.');
+      return;
+    }
+    const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
     try {
-      const file = await createPnlFile(p);
-      setPnlShareFile(file);
-      const text = profileName + ' · ' + displaySymbol(p.symbol) + ' · ' + (n(p.positionType) === 1 ? 'Long' : 'Short') + ' · PnL ' + pnlPercent(p).toFixed(3) + '%';
-
-      if (Capacitor.isNativePlatform()) {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const path = 'kitsetups-pnl-' + Date.now() + '.png';
-        await Filesystem.writeFile({ path, data: base64, directory: Directory.Cache });
-        const fileUri = await Filesystem.getUri({ path, directory: Directory.Cache });
-        await Share.share({
-          title: 'KitSetups Futures PnL',
-          text,
-          files: [fileUri.uri],
-          dialogTitle: 'Share KitSetups PnL'
-        });
-        return;
-      }
-
-      const fileShareSupported = typeof navigator.share === 'function' && (
-        typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] })
-      );
-      if (fileShareSupported) {
+      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
           return;
@@ -353,54 +321,58 @@ export default function PerpetualsPage({ user }) {
           if (e?.name === 'AbortError') return;
         }
       }
-
-      // Firefox Android currently exposes neither the native Web Share file path nor a
-      // working share target in some builds. Keep the button useful there by copying the
-      // actual PNG to the clipboard instead of silently downloading or sharing text.
-      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': file })]);
-          setError('PNG copied. Paste it into WhatsApp, Telegram, Instagram, or any app that accepts images.');
-          return;
-        } catch {}
-      }
-      throw new Error('This browser cannot share image files. Use Chrome on Android or the KitSetups app to share the PNG.');
+      // Never share the SVG or text-only card. If this browser cannot share files,
+      // download the same PNG so the user gets the actual image artifact.
+      triggerPnlDownload(file);
     } catch (e) {
-      setError(e?.message || 'Could not share the PNG PnL card.');
-    } finally {
-      setPnlShareBusy(false);
+      setError(e?.message || 'Could not share the PnL image.');
     }
   };
 
   const downloadPnl = async p => {
-    setPnlShareBusy(true);
-    setError('');
-    try {
-      const file = await createPnlFile(p);
-      setPnlShareFile(file);
+    const file = pnlShareFile;
+    if (file) {
       triggerPnlDownload(file);
+      return;
+    }
+    try {
+      const svg = buildPnlSvg(p);
+      const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+      const png = await svgToPngFile(svg, `${safeName}.png`);
+      triggerPnlDownload(png);
     } catch (e) {
-      setError(e?.message || 'Could not create the PNG PnL card.');
-    } finally {
-      setPnlShareBusy(false);
+      setError(e?.message || 'Could not create the PnL PNG.');
     }
   };
 
   useEffect(() => {
+    let cancelled = false;
     setPnlShareFile(null);
-    setPnlShareBusy(false);
-    if (!pnlSharePosition) return undefined;
-    let frame = 0;
-    const fit = () => fitPnlPercent();
-    frame = requestAnimationFrame(fit);
-    const card = pnlCardRef.current;
-    const observer = card && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
-    observer?.observe(card);
+    if (!pnlSharePosition) {
+      setPnlShareBusy(false);
+      return undefined;
+    }
+    setPnlShareBusy(true);
+    const svg = buildPnlSvg(pnlSharePosition);
+    const safeName = `kitsetups-${String(pnlSharePosition.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+    void svgToPngFile(svg, `${safeName}.png`)
+      .then(file => {
+        if (!cancelled) setPnlShareFile(file);
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setPnlShareFile(null);
+          setError(error?.message || 'Could not prepare the PnL PNG.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPnlShareBusy(false);
+      });
     return () => {
-      cancelAnimationFrame(frame);
-      observer?.disconnect();
+      cancelled = true;
     };
   }, [pnlSharePosition]);
+
   const estimatedMargin = n(volume) && last ? (n(volume) * last * orderContractSize) / Math.max(1, n(leverage)) : 0;
   const riskMmr = (() => {
     const type = side === 'buy' ? 1 : 2;
@@ -438,30 +410,25 @@ export default function PerpetualsPage({ user }) {
     <section className="mexc-bottom"><div className="mexc-tabs">{[['positions','Positions'],['orders','Open Orders'],['history','Order History'],['positionHistory','Position History'],['funding','Funding'],['risk','Risk / Fees']].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'positions' && positions.length ? ` (${positions.length})` : ''}{id === 'orders' && openOrders.length ? ` (${openOrders.length})` : ''}</button>)}{tab === 'orders' && openOrders.length > 0 && <button className="cancel-all" onClick={cancelAll} disabled={busy}>Cancel All</button>}</div><div className="mexc-table-wrap">{tab === 'positions' && <Positions rows={positions} stopOrders={stopOrders} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} />}{tab === 'orders' && <Orders rows={openOrders} onCancel={cancel} />}{tab === 'history' && <Orders rows={account.history} history />}{tab === 'positionHistory' && <PositionHistory rows={account.positionHistory} onShare={p => setPnlSharePosition(p)} onDownload={p => downloadPnl(p)} />}{tab === 'funding' && <Funding rows={account.funding} />}{tab === 'risk' && <Risk risk={account.risk} fee={account.fee} positionMode={account.positionMode} contract={contract} />}</div></section>
     {error && <div className="mexc-error"><span>{error}</span><button onClick={() => setError('')}>×</button></div>}
     {pnlSharePosition && (() => {
-      const closed = isClosedPnl(pnlSharePosition);
       const roi = pnlPercent(pnlSharePosition);
-      const realizedPnl = pnlValue(pnlSharePosition);
       const positive = roi >= 0;
-      const risk = allStopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId)) ||
-        allStopOrders.find(o => String(o.positionId || o.positionIdLong || o.positionIdShort) === String(pnlSharePosition.positionId));
+      const risk = stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId));
       const entry = n(pnlSharePosition.holdAvgPrice || pnlSharePosition.openAvgPrice);
-      const mark = closed
-        ? n(pnlSharePosition.closeAvgPrice || pnlSharePosition.closePrice)
-        : n(pnlSharePosition.markPrice || pnlSharePosition.markPricePrice || pnlSharePosition.fairPrice || pnlSharePosition.lastPrice) || last;
+      const mark = n(pnlSharePosition.markPrice || pnlSharePosition.markPricePrice || pnlSharePosition.fairPrice || pnlSharePosition.lastPrice) || last;
       const lev = n(pnlSharePosition.leverage || pnlSharePosition.leverageRatio) || 1;
       return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
-          <div ref={pnlCardRef} className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
+          <div className={`pnl-share-card ${positive ? 'profit' : 'loss'}`}>
             <div className="pnl-card-inner" aria-hidden="true" />
-            <div className="pnl-card-brand"><img className="pnl-card-logo" src={KITSETUPS_LOGO_URL} crossOrigin="anonymous" alt="" /><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
+            <div className="pnl-card-brand"><img className="pnl-card-logo" src={KITSETUPS_LOGO_URL} alt="" /><div><small>KITSETUPS FUTURES</small><b>{profileName}</b></div></div>
             {profileAvatar ? <img className="pnl-card-avatar" src={profileAvatar} alt="" /> : <div className="pnl-card-avatar fallback">{profileName.slice(0,1).toUpperCase()}</div>}
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
             <span className="pnl-arrow" aria-hidden="true">{positive ? '↗' : '↘'}</span>
-            <strong>{positive ? '+' : ''}{roi.toFixed(3)}%</strong>
-            <span>PNL</span>
+            <strong>{positive ? '+' : ''}{roi.toFixed(2)}%</strong>
+            <span>UNREALIZED PNL</span>
             <div className="pnl-meta">
               <p><small>ENTRY</small><b>{fmt(entry)}</b></p>
-              <p><small>{closed ? 'CLOSE' : 'MARK'}</small><b>{fmt(mark)}</b></p>
+              <p><small>MARK</small><b>{fmt(mark)}</b></p>
               <p><small>LEVERAGE</small><b>{fmt(lev,0)}x</b></p>
               <p><small>SL</small><b>{risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—'}</b></p>
               <p><small>TP</small><b>{risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—'}</b></p>
