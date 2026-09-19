@@ -40,11 +40,18 @@ async function savePnl(i){
   const canvas=makePnlImage(p);
   const name=`kitsetups-${String(p.symbol||S.symbol).toLowerCase()}-pnl.png`;
   const dataUrl=canvasDataUrl(canvas);
-  if(openPnlImage(dataUrl,name))return;
-  const b=await blob(canvas);
-  const u=URL.createObjectURL(b);
-  const a=document.createElement('a');a.href=u;a.download=name;a.target='_blank';a.rel='noopener';document.body.appendChild(a);
-  try{a.click()}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+  // Android WebView can silently ignore a data-URL download when target="_blank".
+  // Trigger the download first, then expose the image as a fallback the user can long-press/save.
+  const a=document.createElement('a');
+  a.href=dataUrl;
+  a.download=name;
+  a.rel='noopener';
+  a.style.display='none';
+  document.body.appendChild(a);
+  try{a.click()}finally{a.remove()}
+  window.setTimeout(()=>{
+    try{window.open(dataUrl,'_blank','noopener,noreferrer')}catch{}
+  },180);
 }
 async function sharePnl(i){
   const p=arr(S.positions)[i];if(!p)return;
