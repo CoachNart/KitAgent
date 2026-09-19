@@ -78,7 +78,8 @@ export default function PerpetualsPage({ user }) {
   const usdt = account.assets.find(x => String(x.currency || '').toUpperCase() === 'USDT') || {};
   const positions = account.positions.filter(p => normalize(p.symbol) === normalize(symbol));
   const openOrders = account.orders.filter(o => normalize(o.symbol) === normalize(symbol));
-  const stopOrders = account.stopOrders.filter(o => normalize(o.symbol) === normalize(symbol) && !n(o.isFinished));
+  const allStopOrders = account.stopOrders.filter(o => normalize(o.symbol) === normalize(symbol));
+  const stopOrders = allStopOrders.filter(o => !n(o.isFinished));
   const orderEntry = orderType === 'limit' ? n(limitPrice) : last;
   const orderContractSize = n(contract?.contractSize || 1);
   const projectedTpPnl = volume && takeProfit && orderEntry ? positionPnl(orderEntry, takeProfit, volume, orderContractSize, side === 'buy' ? 1 : 2) : 0;
@@ -441,7 +442,8 @@ export default function PerpetualsPage({ user }) {
       const roi = pnlPercent(pnlSharePosition);
       const realizedPnl = pnlValue(pnlSharePosition);
       const positive = roi >= 0;
-      const risk = closed ? null : stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId));
+      const risk = allStopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId)) ||
+        allStopOrders.find(o => String(o.positionId || o.positionIdLong || o.positionIdShort) === String(pnlSharePosition.positionId));
       const entry = n(pnlSharePosition.holdAvgPrice || pnlSharePosition.openAvgPrice);
       const mark = closed
         ? n(pnlSharePosition.closeAvgPrice || pnlSharePosition.closePrice)
