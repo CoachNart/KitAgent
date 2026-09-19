@@ -24,55 +24,8 @@ function bind(){const r=document.getElementById('kit-cex'),q=id=>document.getEle
 function bindLower(){document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closePosition(b.dataset.close));document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>cancelOrder(b.dataset.cancel));document.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>sharePnl(+b.dataset.share));document.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>savePnl(+b.dataset.save))}
 function makePnlImage(p){const w=1080,h=1350,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d'),s=pside(p),v=ppnl(p),good=v>=0,a=s==='Long'?'#25d6d0':'#ff5266',g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,'#101a24');g.addColorStop(1,'#070a0f');x.fillStyle=g;x.fillRect(0,0,w,h);x.strokeStyle=a;x.lineWidth=6;x.strokeRect(28,28,w-56,h-56);x.fillStyle='#e7edf7';x.font='900 52px Arial';x.fillText('KITSETUPS',70,110);x.fillStyle=a;x.font='900 36px Arial';x.fillText(s.toUpperCase(),70,185);x.fillStyle='#e7edf7';x.font='900 74px Arial';x.fillText(String(p.symbol||p.contractId||S.symbol),70,290);x.fillStyle=good?'#25d6d0':'#ff5266';x.font='900 94px Arial';x.fillText((good?'+':'')+num(v)+' USDT',70,435);x.font='700 40px Arial';x.fillText((good?'+':'')+roi(p).toFixed(2)+'% ROI',70,500);[['ENTRY',entry(p)],['MARK',mark(p)],['SIZE',psize(p)],['LEVERAGE',Number(p.leverage||S.lev)+'x']].forEach((z,i)=>{const y=625+i*125;x.fillStyle='#657287';x.font='700 24px Arial';x.fillText(z[0],70,y);x.fillStyle='#e7edf7';x.font='800 36px Arial';x.fillText(num(z[1]),70,y+43)});x.fillStyle='#33404e';x.fillRect(70,1120,940,2);x.fillStyle='#9aa8ba';x.font='500 25px Arial';x.fillText('Crypto command center · powered by KitSetups',70,1175);x.fillStyle='#657287';x.font='500 22px Arial';x.fillText(new Date().toLocaleString(),70,1225);return c}
 const blob=c=>new Promise(ok=>c.toBlob(ok,'image/png'));
-const canvasDataUrl=c=>{try{return c.toDataURL('image/png')}catch{return ''}};
-function openPnlImage(dataUrl,name){
-  if(!dataUrl)return false;
-  const a=document.createElement('a');
-  a.href=dataUrl;
-  a.download=name;
-  a.target='_blank';
-  a.rel='noopener';
-  document.body.appendChild(a);
-  try{a.click();return true}finally{a.remove()}
-}
-async function savePnl(i){
-  const p=arr(S.positions)[i];if(!p)return;
-  const canvas=makePnlImage(p);
-  const name=`kitsetups-${String(p.symbol||S.symbol).toLowerCase()}-pnl.png`;
-  const dataUrl=canvasDataUrl(canvas);
-  // Android WebView can silently ignore a data-URL download when target="_blank".
-  // Trigger the download first, then expose the image as a fallback the user can long-press/save.
-  const a=document.createElement('a');
-  a.href=dataUrl;
-  a.download=name;
-  a.rel='noopener';
-  a.style.display='none';
-  document.body.appendChild(a);
-  try{a.click()}finally{a.remove()}
-  window.setTimeout(()=>{
-    try{window.open(dataUrl,'_blank','noopener,noreferrer')}catch{}
-  },180);
-}
-async function sharePnl(i){
-  const p=arr(S.positions)[i];if(!p)return;
-  const canvas=makePnlImage(p);
-  const name=`kitsetups-${String(p.symbol||S.symbol).toLowerCase()}-pnl.png`;
-  const b=await blob(canvas);
-  const f=new File([b],name,{type:'image/png'});
-  const text=`${p.symbol||S.symbol} ${pside(p)} · ${ppnl(p)>=0?'+':''}${num(ppnl(p))} USDT`;
-  if(navigator.share){
-    try{
-      if(!navigator.canShare||navigator.canShare({files:[f]})){
-        await navigator.share({title:'KitSetups PNL',text,files:[f]});
-        return;
-      }
-    }catch{}
-    try{await navigator.share({title:'KitSetups PNL',text});return}catch{}
-  }
-  const dataUrl=canvasDataUrl(canvas);
-  if(openPnlImage(dataUrl,name))return;
-  await savePnl(i);
-}
+async function savePnl(i){const p=arr(S.positions)[i];if(!p)return;const b=await blob(makePnlImage(p)),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=`kitsetups-${String(p.symbol||S.symbol).toLowerCase()}-pnl.png`;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+async function sharePnl(i){const p=arr(S.positions)[i];if(!p)return;const b=await blob(makePnlImage(p)),f=new File([b],`kitsetups-${String(p.symbol||S.symbol).toLowerCase()}-pnl.png`,{type:'image/png'});if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[f]}))){try{await navigator.share({title:'KitSetups PNL',text:`${p.symbol||S.symbol} ${pside(p)} · ${ppnl(p)>=0?'+':''}${num(ppnl(p))} USDT`,files:[f]});return}catch{}}await savePnl(i)}
 function connect(){const m=document.createElement('div');m.className='kc-modal';m.innerHTML=`<div class="kc-card"><h3>Connect ${S.exchange==='mexc'?'MEXC':'Bitget'} Futures</h3><p style="color:#718097;font-size:10px">Use read/trade permissions only. Keep withdrawals disabled.</p><input id="ak" placeholder="API key" autocomplete="off"><input id="as" placeholder="API secret" type="password" autocomplete="off">${S.exchange==='bitget'?'<input id="ap" placeholder="API passphrase" type="password" autocomplete="off">':''}<button id="go">Connect securely</button><button class="close" id="no">Cancel</button></div>`;document.body.appendChild(m);m.querySelector('#no').onclick=()=>m.remove();m.querySelector('#go').onclick=async()=>{try{S.key=m.querySelector('#ak').value.trim();S.secret=m.querySelector('#as').value.trim();S.passphrase=m.querySelector('#ap')?.value.trim()||'';m.querySelector('#go').textContent='Connecting…';await api('connect');S.connected=true;m.remove();await refresh(true)}catch(e){m.querySelector('#go').textContent=e.message||'Connection failed'}}}
 async function refresh(force=false){S.error='';try{if(!S.pairs.length)S.pairs=pairs(await api('pairs'));const [t,b,c]=await Promise.all([api('ticker'),api('book'),api('candles')]);S.ticker=Array.isArray(t?.data)?t.data[0]:t?.data||t;S.book=b?.data||b;S.candles=candles(c);if(S.connected){const [ba,p,o]=await Promise.all([api('balance'),api('positions'),api('orders')]);S.balance=arr(ba);S.positions=arr(p);S.orders=arr(o)}const editing=document.activeElement&&document.getElementById('kit-cex')?.contains(document.activeElement);if(force||!editing)render()}catch(e){S.error=e.message||'Live data unavailable';if(force)render()}}
 async function place(){if(!S.connected)return connect();const size=Number(S.size),mx=maxLev();if(!size)return alert('Enter a valid size.');if(S.lev>mx)return alert(`MEXC allows up to ${mx}x on ${S.symbol}.`);try{await api('order',{side:S.side,orderType:S.type,volume:size,price:Number(S.price||0),leverage:S.lev,marginMode:S.margin,takeProfit:Number(S.tp||0)||undefined,stopLoss:Number(S.sl||0)||undefined});S.size='';await refresh(true)}catch(e){alert(e.message||'Order failed')}}
