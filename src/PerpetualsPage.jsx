@@ -209,18 +209,23 @@ export default function PerpetualsPage({ user }) {
     return ((mark - entry) / entry) * lev * 100 * direction;
   };
 
-  // Render directly to Canvas. No SVG/data-URI pipeline is used.
+  // Export the actual rendered card. This is the original 1080x1277 geometry:
+  // no cloned responsive layout, no SVG/data-URI pipeline, and no redesign.
   const createPnlFile = async p => {
     const card = pnlCardRef.current;
     if (!card) throw new Error('PNL card is not ready.');
     if (document.fonts?.ready) { try { await document.fonts.ready; } catch {} }
+
     const images = Array.from(card.querySelectorAll('img'));
     await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
       const done = () => { img.removeEventListener('load', done); img.removeEventListener('error', done); resolve(); };
-      img.addEventListener('load', done); img.addEventListener('error', done);
+      img.addEventListener('load', done);
+      img.addEventListener('error', done);
     })));
+
     const rect = card.getBoundingClientRect();
     if (!rect.width || !rect.height) throw new Error('PNL card has no renderable size.');
+
     const rendered = await html2canvas(card, {
       backgroundColor: '#050708',
       scale: 1080 / rect.width,
@@ -228,15 +233,27 @@ export default function PerpetualsPage({ user }) {
       allowTaint: false,
       logging: false
     });
+
     const canvas = document.createElement('canvas');
-    canvas.width = 1080; canvas.height = 1277;
+    canvas.width = 1080;
+    canvas.height = 1277;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('PNG renderer is unavailable on this device.');
-    ctx.fillStyle = '#050708'; ctx.fillRect(0, 0, 1080, 1277);
+    ctx.fillStyle = '#050708';
+    ctx.fillRect(0, 0, 1080, 1277);
     ctx.drawImage(rendered, 0, 0, 1080, 1277);
-    const blob = await new Promise((resolve, reject) => canvas.toBlob(x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')), 'image/png'));
-    return new File([blob], 'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png', { type: 'image/png' });
+
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(
+      x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')),
+      'image/png'
+    ));
+    return new File(
+      [blob],
+      'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png',
+      { type: 'image/png' }
+    );
   };
+
   const triggerPnlDownload = file => {
     if (!file) throw new Error('PNL image is unavailable.');
     const url = URL.createObjectURL(file);
@@ -261,8 +278,6 @@ export default function PerpetualsPage({ user }) {
       setPnlShareFile(file);
       const text = profileName + ' · ' + displaySymbol(p.symbol) + ' · ' + (n(p.positionType) === 1 ? 'Long' : 'Short') + ' · PnL ' + pnlPercent(p).toFixed(2) + '%';
 
-      // Capacitor's native Share sheet is the reliable Android path. It needs
-      // a real cached PNG file rather than a blob/SVG/data-URI.
       if (Capacitor.isNativePlatform()) {
         const base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -271,17 +286,8 @@ export default function PerpetualsPage({ user }) {
           reader.readAsDataURL(file);
         });
         const path = 'kitsetups-pnl-' + Date.now() + '.png';
-        await Filesystem.writeFile({
-          path,
-          data: base64,
-          directory: Directory.Cache
-        });
-        // Android's share sheet needs the native file URI, not the raw
-        // Filesystem path/URL returned by the web layer.
-        const fileUri = await Filesystem.getUri({
-          path,
-          directory: Directory.Cache
-        });
+        await Filesystem.writeFile({ path, data: base64, directory: Directory.Cache });
+        const fileUri = await Filesystem.getUri({ path, directory: Directory.Cache });
         await Share.share({
           title: 'KitSetups Futures PnL',
           text,
@@ -291,23 +297,16 @@ export default function PerpetualsPage({ user }) {
         return;
       }
 
-      if (typeof navigator.share === 'function') {
-        try {
-          await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
-          return;
-        } catch (e) {
-          if (e?.name === 'AbortError') return;
-          throw new Error('Your browser could not open the share sheet for this PNG.');
-        }
+      if (typeof navigator.share !== 'function') {
+        throw new Error('Sharing is not available in this browser. Use the Download button for the PNG.');
       }
-      throw new Error('Sharing is not available in this browser. Use the Download button for the PNG.');
-    } catch (e) {
-          if (e?.name === 'AbortError') return;
-          // Some browsers expose navigator.share but reject file sharing.
-          // Keep the PNG download as the non-sharing fallback.
-        }
+
+      try {
+        await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        throw new Error('Your browser could not open the share sheet for this PNG.');
       }
-      triggerPnlDownload(file);
     } catch (e) {
       setError(e?.message || 'Could not share the PNG PnL card.');
     } finally {
