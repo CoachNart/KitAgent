@@ -345,6 +345,15 @@ export default function PerpetualsPage({ user }) {
 
   const triggerPnlDownload = file => {
     const url = URL.createObjectURL(file);
+    const isNative = Boolean(window.Capacitor?.isNativePlatform?.());
+    if (isNative) {
+      // Android WebView does not reliably honor <a download>. Open the already
+      // generated PNG instead; the system/WebView can then save or share it.
+      const opened = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!opened) window.location.href = url;
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
+    }
     const a = document.createElement('a');
     a.href = url;
     a.download = file.name;
@@ -356,15 +365,17 @@ export default function PerpetualsPage({ user }) {
   };
 
   const sharePnl = async p => {
-    const svg = await buildPnlSvg(p);
-    const file = pnlShareFile;
-    if (!file) {
-      setError('PNL image is still preparing. Please tap Share again in a moment.');
-      return;
-    }
-    const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
     try {
-      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      let file = pnlShareFile;
+      if (!file) {
+        setPnlShareBusy(true);
+        const svg = await buildPnlSvg(p);
+        const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+        file = await svgToPngFile(svg, `${safeName}.png`);
+        setPnlShareFile(file);
+      }
+      const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
+      if (typeof navigator.share === 'function') {
         try {
           await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
           return;
@@ -372,25 +383,24 @@ export default function PerpetualsPage({ user }) {
           if (e?.name === 'AbortError') return;
         }
       }
-      // Never share the SVG or text-only card. If this browser cannot share files,
-      // download the same PNG so the user gets the actual image artifact.
       triggerPnlDownload(file);
     } catch (e) {
       setError(e?.message || 'Could not share the PnL image.');
+    } finally {
+      setPnlShareBusy(false);
     }
   };
 
   const downloadPnl = async p => {
-    const file = pnlShareFile;
-    if (file) {
-      triggerPnlDownload(file);
-      return;
-    }
     try {
-      const svg = await buildPnlSvg(p);
-      const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
-      const png = await svgToPngFile(svg, `${safeName}.png`);
-      triggerPnlDownload(png);
+      let file = pnlShareFile;
+      if (!file) {
+        const svg = await buildPnlSvg(p);
+        const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
+        file = await svgToPngFile(svg, `${safeName}.png`);
+        setPnlShareFile(file);
+      }
+      triggerPnlDownload(file);
     } catch (e) {
       setError(e?.message || 'Could not create the PnL PNG.');
     }
