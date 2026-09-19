@@ -19,6 +19,7 @@ import './mobile-nav.css';
 import './contentProtection.js';
 import './route-runtime.js';
 import { startMarketAlerts } from './marketAlerts.js';
+import { startAndroidPullToRefresh } from './androidPullToRefresh.js';
 
 startMarketAlerts();
 
@@ -28,6 +29,7 @@ function NativeLifecycle(){
     let backHandle;
     let urlHandle;
     let active=true;
+    const stopPullToRefresh = startAndroidPullToRefresh();
     const setup=async()=>{
       backHandle=await CapacitorApp.addListener('backButton',({canGoBack})=>{
         if(!active) return;
@@ -38,7 +40,7 @@ function NativeLifecycle(){
         if(!active||!url) return;
         try{
           const parsed=new URL(url);
-          if(parsed.pathname) window.history.replaceState({},'',`${parsed.pathname}${parsed.search}${parsed.hash}`);
+          if(parsed.pathname) window.history.replaceState({},'',parsed.pathname+parsed.search+parsed.hash);
           window.dispatchEvent(new CustomEvent('kitagent:app-url-open',{detail:{url}}));
         }catch(error){console.warn('KitSetups deep-link handling failed:',error)}
       });
@@ -46,6 +48,7 @@ function NativeLifecycle(){
     setup();
     return()=>{
       active=false;
+      stopPullToRefresh?.();
       backHandle?.remove();
       urlHandle?.remove();
     };
