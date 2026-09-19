@@ -189,7 +189,17 @@ export default function PerpetualsPage({ user }) {
 
   const cancel = async orderId => { setBusy(true); setError(''); try { await api('cancel', state, { orderIds: [orderId] }); await loadAccount(); } catch (e) { setError(e.message || 'Cancel failed.'); } finally { setBusy(false); } };
   const cancelAll = async () => { setBusy(true); setError(''); try { await api('cancelAll', state); await loadAccount(); } catch (e) { setError(e.message || 'Cancel-all failed.'); } finally { setBusy(false); } };
-  const closePosition = async p => { if (!p?.positionId || !n(p.holdVol)) { setError('Position details are incomplete; refresh the account and try again.'); return; } setBusy(true); setError(''); try { await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode) || undefined }); await loadAccount(); for (let i = 0; i < 3; i++) { await new Promise(r => setTimeout(r, 700)); await loadAccount(); } } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); } };
+  const closePosition = async p => {
+    if (!p?.positionId || !n(p.holdVol)) { setError('Position details are incomplete; refresh the account and try again.'); return; }
+    setBusy(true); setError('');
+    try {
+      await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode) || undefined });
+      // A manually closed position must not retain its separate protective stop plans.
+      await api('cancelStopAll', state, { positionId: p.positionId });
+      await loadAccount();
+      for (let i = 0; i < 3; i++) { await new Promise(r => setTimeout(r, 700)); await loadAccount(); }
+    } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); }
+  };
 
   const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
   const pnlPercent = p => {
