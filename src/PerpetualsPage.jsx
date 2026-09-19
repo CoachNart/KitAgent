@@ -331,21 +331,35 @@ export default function PerpetualsPage({ user }) {
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-        const saved = await Filesystem.writeFile({
-          path: 'kitsetups-pnl-' + Date.now() + '.png',
+        const path = 'kitsetups-pnl-' + Date.now() + '.png';
+        await Filesystem.writeFile({
+          path,
           data: base64,
           directory: Directory.Cache
         });
-        await Share.share({ title: 'KitSetups Futures PnL', text, files: [saved.uri], dialogTitle: 'Share KitSetups PnL' });
+        // Android's share sheet needs the native file URI, not the raw
+        // Filesystem path/URL returned by the web layer.
+        const fileUri = await Filesystem.getUri({
+          path,
+          directory: Directory.Cache
+        });
+        await Share.share({
+          title: 'KitSetups Futures PnL',
+          text,
+          files: [fileUri.uri],
+          dialogTitle: 'Share KitSetups PnL'
+        });
         return;
       }
 
-      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      if (typeof navigator.share === 'function') {
         try {
           await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
           return;
         } catch (e) {
           if (e?.name === 'AbortError') return;
+          // Some browsers expose navigator.share but reject file sharing.
+          // Keep the PNG download as the non-sharing fallback.
         }
       }
       triggerPnlDownload(file);
