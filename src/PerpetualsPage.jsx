@@ -208,125 +208,32 @@ export default function PerpetualsPage({ user }) {
 
   // Render directly to Canvas. No SVG/data-URI pipeline is used.
   const createPnlFile = async p => {
-    const width = 1080, height = 1277;
+    const card = pnlCardRef.current;
+    if (!card) throw new Error('PNL card is not ready.');
+    if (document.fonts?.ready) { try { await document.fonts.ready; } catch {} }
+    const images = Array.from(card.querySelectorAll('img'));
+    await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+      const done = () => { img.removeEventListener('load', done); img.removeEventListener('error', done); resolve(); };
+      img.addEventListener('load', done); img.addEventListener('error', done);
+    })));
+    const rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) throw new Error('PNL card has no renderable size.');
+    const rendered = await html2canvas(card, {
+      backgroundColor: '#050708',
+      scale: 1080 / rect.width,
+      useCORS: true,
+      allowTaint: false,
+      logging: false
+    });
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = 1080; canvas.height = 1277;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('PNG renderer is unavailable on this device.');
-
-    const entry = n(p.holdAvgPrice || p.openAvgPrice);
-    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
-    const lev = n(p.leverage || p.leverageRatio) || 1;
-    const roi = pnlPercent(p);
-    const positive = roi >= 0;
-    const color = positive ? '#4f7dff' : '#ff5266';
-    const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
-    const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
-    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—';
-    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—';
-    const name = String(profileName || 'KitSetups Trader');
-    const symbolText = displaySymbol(p.symbol);
-
-    ctx.fillStyle = '#050708';
-    ctx.fillRect(0, 0, width, height);
-    const glow = ctx.createRadialGradient(778, 675, 10, 778, 675, 560);
-    glow.addColorStop(0, 'rgba(11,59,55,.62)');
-    glow.addColorStop(.42, 'rgba(6,34,31,.26)');
-    glow.addColorStop(1, 'rgba(5,7,8,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.strokeStyle = '#0b3538';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(57, 16, 966, 1245);
-    ctx.strokeRect(84, 43, 913, 1214);
-    ctx.strokeStyle = 'rgba(11,69,72,.72)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(807, 630, 408, 408, -0.09, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#27c9c2';
-    ctx.beginPath();
-    ctx.roundRect(156, 288, 94, 94, 22);
-    ctx.fill();
-    ctx.fillStyle = '#071112';
-    ctx.font = '700 47px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('K', 203, 351);
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#27d1c7';
-    ctx.font = '700 24px Arial, sans-serif';
-    ctx.fillText('KITSETUPS FUTURES', 275, 311);
-    ctx.fillStyle = '#f4f5f6';
-    ctx.font = '600 34px Arial, sans-serif';
-    ctx.fillText(name, 275, 367);
-
-    ctx.fillStyle = '#101718';
-    ctx.beginPath();
-    ctx.arc(865, 228, 58, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#687272';
-    ctx.stroke();
-    ctx.fillStyle = '#eef3f8';
-    ctx.font = '700 28px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(name.slice(0, 1).toUpperCase(), 865, 238);
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#f6f7f8';
-    ctx.font = '700 52px Arial, sans-serif';
-    ctx.fillText(symbolText + ' · ' + sideText, 156, 518);
-    ctx.fillStyle = color;
-    ctx.font = '400 86px Arial, sans-serif';
-    ctx.fillText(positive ? '↗' : '↘', 179, 722);
-    ctx.font = '800 174px Arial, sans-serif';
-    ctx.fillText((positive ? '+' : '') + roi.toFixed(2) + '%', 306, 732);
-    ctx.font = '800 108px Arial, sans-serif';
-    ctx.fillText('PNL', 156, 861);
-    ctx.fillStyle = '#84919f';
-    ctx.font = '400 24px Arial, sans-serif';
-    ctx.fillText('UNREALIZED PNL', 156, 948);
-
-    ctx.strokeStyle = '#242829';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(156, 1027); ctx.lineTo(924, 1027);
-    [340, 524, 708].forEach(x => { ctx.moveTo(x, 1027); ctx.lineTo(x, 1205); });
-    ctx.stroke();
-
-    const vals = [
-      ['ENTRY', fmt(entry)],
-      ['MARK', fmt(mark)],
-      ['LEVERAGE', fmt(lev, 0) + 'x'],
-      ['SL', sl],
-      ['TP', tp]
-    ];
-    vals.forEach(([label, value], i) => {
-      const x = 156 + i * 184;
-      ctx.fillStyle = '#f1f3f5';
-      ctx.font = '400 22px Arial, sans-serif';
-      ctx.fillText(label, x, 1080);
-      ctx.fillStyle = '#eef0f2';
-      ctx.font = '700 27px Arial, sans-serif';
-      ctx.fillText(value, x, 1152);
-    });
-
-    ctx.fillStyle = '#66727f';
-    ctx.font = '700 13px Arial, sans-serif';
-    ctx.fillText('KITSETUPS', 156, 1242);
-    ctx.textAlign = 'right';
-    ctx.fillText('FUTURES PNL', 924, 1242);
-    ctx.textAlign = 'left';
-
-    const pngBlob = await new Promise((resolve, reject) => {
-      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('This browser could not create a PNG.')), 'image/png');
-    });
-    return new File([pngBlob], 'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png', { type: 'image/png' });
+    ctx.fillStyle = '#050708'; ctx.fillRect(0, 0, 1080, 1277);
+    ctx.drawImage(rendered, 0, 0, 1080, 1277);
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')), 'image/png'));
+    return new File([blob], 'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png', { type: 'image/png' });
   };
-
   const triggerPnlDownload = file => {
     if (!file) throw new Error('PNL image is unavailable.');
     const url = URL.createObjectURL(file);
