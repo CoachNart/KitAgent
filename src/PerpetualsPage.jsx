@@ -197,7 +197,7 @@ export default function PerpetualsPage({ user }) {
     const margin = n(p.im);
     if (margin > 0) return (pnl / margin) * 100;
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
-    const mark = n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+    const mark = displayMarkFor(p);
     const lev = n(p.leverage || p.leverageRatio) || 1;
     if (!entry || !mark) return 0;
     const direction = n(p.positionType) === 1 ? 1 : -1;
@@ -205,6 +205,24 @@ export default function PerpetualsPage({ user }) {
   };
 
   const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png';
+
+  const isClosedPosition = p => Boolean(p?.closeAvgPrice || p?.closeTime || p?.closeTimestamp || p?.closeVol || p?.realised !== undefined || p?.closeProfitLoss !== undefined);
+
+  const protectionFor = p => {
+    const closed = isClosedPosition(p);
+    const risk = !closed ? stopOrders.find(o => String(o.positionId) === String(p.positionId)) : null;
+    const historyOrders = account.history.filter(o => String(o.positionId || '') === String(p.positionId || ''));
+    const first = historyOrders.find(o => o.stopLossPrice || o.takeProfitPrice || o.lossPrice || o.profitPrice) || {};
+    return {
+      sl: p?.stopLossPrice ?? p?.stopLoss ?? p?.slPrice ?? risk?.stopLossPrice ?? first?.stopLossPrice ?? first?.lossPrice ?? '',
+      tp: p?.takeProfitPrice ?? p?.takeProfit ?? p?.tpPrice ?? risk?.takeProfitPrice ?? first?.takeProfitPrice ?? first?.profitPrice ?? ''
+    };
+  };
+
+  const displayMarkFor = p => {
+    if (isClosedPosition(p)) return n(p.closeAvgPrice || p.closePrice || p.exitPrice) || n(p.markPrice || p.fairPrice);
+    return n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || last;
+  };
 
   const imageUrlToDataUri = async url => {
     if (!url) return '';
@@ -233,9 +251,9 @@ export default function PerpetualsPage({ user }) {
     const pnlColor = positive ? '#4f7dff' : '#ff5266';
     const arrow = positive ? '↗' : '↘';
     const sideText = n(p.positionType) === 1 ? 'Long' : 'Short';
-    const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId));
-    const sl = risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—';
-    const tp = risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—';
+    const protection = protectionFor(p);
+    const sl = protection.sl !== '' ? fmt(protection.sl) : '—';
+    const tp = protection.tp !== '' ? fmt(protection.tp) : '—';
     const safe = v => escapeSvg(v);
     const pnlText = `${positive ? '+' : ''}${roi.toFixed(2)}%`;
     const vals = [
@@ -434,9 +452,9 @@ export default function PerpetualsPage({ user }) {
     {pnlSharePosition && (() => {
       const roi = pnlPercent(pnlSharePosition);
       const positive = roi >= 0;
-      const risk = stopOrders.find(o => String(o.positionId) === String(pnlSharePosition.positionId));
+      const protection = protectionFor(pnlSharePosition);
       const entry = n(pnlSharePosition.holdAvgPrice || pnlSharePosition.openAvgPrice);
-      const mark = n(pnlSharePosition.markPrice || pnlSharePosition.markPricePrice || pnlSharePosition.fairPrice || pnlSharePosition.lastPrice) || last;
+      const mark = displayMarkFor(pnlSharePosition);
       const lev = n(pnlSharePosition.leverage || pnlSharePosition.leverageRatio) || 1;
       return <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setPnlSharePosition(null)}>
         <div className="pnl-share-dialog" role="dialog" aria-label="KitSetups Futures PNL card">
@@ -452,8 +470,8 @@ export default function PerpetualsPage({ user }) {
               <p><small>ENTRY</small><b>{fmt(entry)}</b></p>
               <p><small>MARK</small><b>{fmt(mark)}</b></p>
               <p><small>LEVERAGE</small><b>{fmt(lev,0)}x</b></p>
-              <p><small>SL</small><b>{risk?.stopLossPrice ? fmt(risk.stopLossPrice) : '—'}</b></p>
-              <p><small>TP</small><b>{risk?.takeProfitPrice ? fmt(risk.takeProfitPrice) : '—'}</b></p>
+              <p><small>SL</small><b>{protection.sl !== '' ? fmt(protection.sl) : '—'}</b></p>
+              <p><small>TP</small><b>{protection.tp !== '' ? fmt(protection.tp) : '—'}</b></p>
             </div>
           </div>
           <div className="pnl-share-actions">
