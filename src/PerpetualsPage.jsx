@@ -458,7 +458,7 @@ export default function PerpetualsPage({ user }) {
             <h3>{displaySymbol(pnlSharePosition.symbol)} · {n(pnlSharePosition.positionType) === 1 ? 'Long' : 'Short'}</h3>
             <span className="pnl-arrow" aria-hidden="true">{positive ? '↗' : '↘'}</span>
             <strong>{positive ? '+' : ''}{roi.toFixed(3)}%</strong>
-            <span>{closed ? 'REALIZED PNL' : 'UNREALIZED PNL'}</span>
+            <span>PNL</span>
             <div className="pnl-meta">
               <p><small>ENTRY</small><b>{fmt(entry)}</b></p>
               <p><small>{closed ? 'CLOSE' : 'MARK'}</small><b>{fmt(mark)}</b></p>
