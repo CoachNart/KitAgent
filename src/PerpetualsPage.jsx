@@ -210,92 +210,33 @@ export default function PerpetualsPage({ user }) {
   };
 
   // Render directly to Canvas. No SVG/data-URI pipeline is used.
-  const imageToDataUrl = async img => {
-    if (!img?.src) return '';
-    try {
-      const response = await fetch(img.src, { mode: 'cors', credentials: 'omit' });
-      if (!response.ok) throw new Error('image fetch failed');
-      const blob = await response.blob();
-      return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return '';
-    }
-  };
-
   const createPnlFile = async p => {
     const card = pnlCardRef.current;
     if (!card) throw new Error('PNL card is not ready.');
     if (document.fonts?.ready) { try { await document.fonts.ready; } catch {} }
-
-    // The original share asset is a fixed 1080x1277 card. Export that
-    // exact geometry and master typography even when the app is running on a phone.
-    const exportWidth = 1080;
-    const exportHeight = 1277;
-    const clone = card.cloneNode(true);
-    clone.classList.add('pnl-exporting');
-    clone.style.width = exportWidth + 'px';
-    clone.style.height = exportHeight + 'px';
-    clone.style.aspectRatio = '1080/1277';
-    clone.style.boxShadow = 'none';
-
-    // Inline the actual rendered image assets in the export clone so the
-    // KitSetups logo and profile avatar survive html2canvas/CORS handling.
-    const sourceImages = Array.from(card.querySelectorAll('img'));
-    const cloneImages = Array.from(clone.querySelectorAll('img'));
-    await Promise.all(sourceImages.map(async (img, i) => {
-      if (!cloneImages[i]) return;
-      const dataUrl = await imageToDataUrl(img);
-      if (dataUrl) {
-        cloneImages[i].src = dataUrl;
-        cloneImages[i].removeAttribute('crossorigin');
-      } else {
-        cloneImages[i].src = img.currentSrc || img.src;
-        cloneImages[i].setAttribute('crossorigin', 'anonymous');
-      }
-    }));
-
-    const holder = document.createElement('div');
-    holder.style.cssText = 'position:fixed;left:-100000px;top:0;width:1080px;height:1277px;overflow:hidden;pointer-events:none;background:#050708;';
-    holder.appendChild(clone);
-    document.body.appendChild(holder);
-
-    try {
-      const images = Array.from(clone.querySelectorAll('img'));
-      await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
-        const done = () => { img.removeEventListener('load', done); img.removeEventListener('error', done); resolve(); };
-        img.addEventListener('load', done);
-        img.addEventListener('error', done);
-      })));
-
-      const rendered = await html2canvas(clone, {
-        backgroundColor: '#050708',
-        scale: 1,
-        useCORS: true,
-        allowTaint: false,
-        logging: false
-      });
-
-      const canvas = document.createElement('canvas');
-      canvas.width = 1080;
-      canvas.height = 1277;
-      const ctx = canvas.getContext('2d', { alpha: false });
-      if (!ctx) throw new Error('PNG renderer is unavailable on this device.');
-      ctx.fillStyle = '#050708';
-      ctx.fillRect(0, 0, 1080, 1277);
-      ctx.drawImage(rendered, 0, 0, 1080, 1277);
-
-      const blob = await new Promise((resolve, reject) => canvas.toBlob(x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')), 'image/png'));
-      return new File([blob], 'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png', { type: 'image/png' });
-    } finally {
-      holder.remove();
-    }
+    const images = Array.from(card.querySelectorAll('img'));
+    await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+      const done = () => { img.removeEventListener('load', done); img.removeEventListener('error', done); resolve(); };
+      img.addEventListener('load', done); img.addEventListener('error', done);
+    })));
+    const rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) throw new Error('PNL card has no renderable size.');
+    const rendered = await html2canvas(card, {
+      backgroundColor: '#050708',
+      scale: 1080 / rect.width,
+      useCORS: true,
+      allowTaint: false,
+      logging: false
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080; canvas.height = 1277;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('PNG renderer is unavailable on this device.');
+    ctx.fillStyle = '#050708'; ctx.fillRect(0, 0, 1080, 1277);
+    ctx.drawImage(rendered, 0, 0, 1080, 1277);
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(x => x ? resolve(x) : reject(new Error('This browser could not create a PNG.')), 'image/png'));
+    return new File([blob], 'kitsetups-' + String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '') + '-pnl.png', { type: 'image/png' });
   };
-
   const triggerPnlDownload = file => {
     if (!file) throw new Error('PNL image is unavailable.');
     const url = URL.createObjectURL(file);
@@ -355,6 +296,12 @@ export default function PerpetualsPage({ user }) {
           await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
           return;
         } catch (e) {
+          if (e?.name === 'AbortError') return;
+          throw new Error('Your browser could not open the share sheet for this PNG.');
+        }
+      }
+      throw new Error('Sharing is not available in this browser. Use the Download button for the PNG.');
+    } catch (e) {
           if (e?.name === 'AbortError') return;
           // Some browsers expose navigator.share but reject file sharing.
           // Keep the PNG download as the non-sharing fallback.
