@@ -263,85 +263,95 @@ export default function PerpetualsPage({ user }) {
   };
 
   const svgToPngFile = async (svg, filename) => {
-    // Rasterize the artwork into a real PNG. The SVG exists only as an
-    // intermediate renderer and is never exposed as the downloadable file.
-    const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-    const img = new Image();
-    img.decoding = 'async';
-    const loaded = new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = () => reject(new Error('PNL image renderer failed.'));
-    });
-    img.src = encoded;
-    await loaded;
-    if (img.decode) {
-      try { await img.decode(); } catch {}
+    // Keep the artwork in memory only long enough to rasterize it. A Blob URL
+    // is more reliable on mobile WebViews than a large SVG data URI.
+    const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    try {
+      const img = new Image();
+      img.decoding = 'async';
+      const loaded = new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('PNL image renderer failed.'));
+      });
+      img.src = svgUrl;
+      await loaded;
+      if (img.decode) {
+        try { await img.decode(); } catch {}
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1277;
+      const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: false });
+      if (!ctx) throw new Error('Canvas is unavailable in this browser.');
+      ctx.fillStyle = '#050708';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, 1080, 1277);
+      const pngBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Browser could not create the PNG.')), 'image/png');
+      });
+      return new File([pngBlob], filename, { type: 'image/png' });
+    } finally {
+      URL.revokeObjectURL(svgUrl);
     }
-    const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1277;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('Canvas is unavailable in this browser.');
-    ctx.fillStyle = '#050708';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, 1080, 1277);
-    const pngBlob = await new Promise((resolve, reject) => {
-      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Browser could not create the PNG.')), 'image/png');
-    });
-    return new File([pngBlob], filename, { type: 'image/png' });
   };
 
   const triggerPnlDownload = file => {
+    if (!file) throw new Error('PNL image is unavailable.');
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
     a.download = file.name;
     a.rel = 'noopener';
     document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    try { a.click(); } finally {
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+  };
+
+  const createPnlFile = async p => {
+    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl.png`;
+    return svgToPngFile(buildPnlSvg(p), safeName);
   };
 
   const sharePnl = async p => {
-    const svg = buildPnlSvg(p);
-    const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
-    const file = pnlShareFile;
-    if (!file) {
-      setError('PNL image is still preparing. Please tap Share again in a moment.');
-      return;
-    }
-    const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
+    setPnlShareBusy(true);
+    setError('');
     try {
-      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      const file = await createPnlFile(p);
+      setPnlShareFile(file);
+      const text = `${profileName} · ${displaySymbol(p.symbol)} · ${n(p.positionType) === 1 ? 'Long' : 'Short'} · PnL ${pnlPercent(p).toFixed(2)}%`;
+      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
         try {
-          await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
-          return;
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ title: 'KitSetups Futures PnL', text, files: [file] });
+            return;
+          }
         } catch (e) {
           if (e?.name === 'AbortError') return;
         }
       }
-      // Never share the SVG or text-only card. If this browser cannot share files,
-      // download the same PNG so the user gets the actual image artifact.
+      // Browsers/WebViews that cannot share files receive the same PNG via download.
       triggerPnlDownload(file);
     } catch (e) {
       setError(e?.message || 'Could not share the PnL image.');
+    } finally {
+      setPnlShareBusy(false);
     }
   };
 
   const downloadPnl = async p => {
-    const file = pnlShareFile;
-    if (file) {
-      triggerPnlDownload(file);
-      return;
-    }
+    setPnlShareBusy(true);
+    setError('');
     try {
-      const svg = buildPnlSvg(p);
-      const safeName = `kitsetups-${String(p.symbol || 'position').replace(/[^a-z0-9_-]/gi, '')}-pnl`;
-      const png = await svgToPngFile(svg, `${safeName}.png`);
-      triggerPnlDownload(png);
+      const file = await createPnlFile(p);
+      setPnlShareFile(file);
+      triggerPnlDownload(file);
     } catch (e) {
       setError(e?.message || 'Could not create the PnL PNG.');
+    } finally {
+      setPnlShareBusy(false);
     }
   };
 
