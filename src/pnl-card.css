@@ -13,10 +13,10 @@
 .pnl-card-avatar{position:absolute;right:8.6%;top:13.1%;width:116px;height:116px;border-radius:50%;object-fit:cover;border:2px solid #687272;background:#14191a}
 .pnl-card-avatar.fallback{display:grid;place-items:center;color:#eef3f8;font-size:34px;font-weight:800}
 .pnl-share-card h3{position:absolute;left:7.4%;right:10%;top:38.7%;margin:0;font-size:52px;line-height:1.05;letter-spacing:-.042em;font-weight:700;color:#f6f7f8}
-.pnl-share-card>strong{position:absolute;left:26.7%;top:45.8%;margin:0;font-size:174px;line-height:.92;letter-spacing:-.055em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pnl-share-card>strong{position:absolute;left:26.7%;right:7.4%;top:45.8%;margin:0;font-size:174px;line-height:.92;letter-spacing:-.055em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:visible;z-index:2}
 .pnl-share-card.profit>strong{color:#4f7dff}
 .pnl-share-card.loss>strong{color:#ff5266}
-.pnl-share-card>span:not(.pnl-arrow){position:absolute;left:7.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em}
+.pnl-share-card>span:not(.pnl-arrow){position:absolute;left:7.4%;right:7.4%;top:73.6%;margin:0;color:#84919f;font-size:24px;line-height:1;letter-spacing:.175em;white-space:nowrap;overflow:visible;z-index:2}
 .pnl-share-card .pnl-meta{position:absolute;left:7.4%;right:7.4%;bottom:4.2%;height:14%;display:grid;grid-template-columns:repeat(5,1fr);border-top:2px solid #242829;border-bottom:2px solid #242829}
 .pnl-share-card .pnl-meta p{margin:0;padding:8% 12px 0 0;border-right:2px solid #242829;min-width:0}
 .pnl-share-card .pnl-meta p:last-child{border-right:0}
