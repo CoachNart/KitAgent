@@ -232,16 +232,14 @@ export default function PerpetualsPage({ user }) {
     if (!card) throw new Error('PNL card is not ready.');
     if (document.fonts?.ready) { try { await document.fonts.ready; } catch {} }
 
-    // Capture at the card's actual rendered size first. This is important:
-    // forcing the clone to 1080px wide on a phone changes the responsive
-    // typography/layout. The original card is rendered at its real size and
-    // then scaled to the fixed 1080x1277 PNG canvas.
-    const rect = card.getBoundingClientRect();
-    if (!rect.width || !rect.height) throw new Error('PNL card has no renderable size.');
-
+    // The original share asset is a fixed 1080x1277 card. Export that
+    // exact geometry and master typography even when the app is running on a phone.
+    const exportWidth = 1080;
+    const exportHeight = 1277;
     const clone = card.cloneNode(true);
-    clone.style.width = rect.width + 'px';
-    clone.style.height = rect.height + 'px';
+    clone.classList.add('pnl-exporting');
+    clone.style.width = exportWidth + 'px';
+    clone.style.height = exportHeight + 'px';
     clone.style.aspectRatio = '1080/1277';
     clone.style.boxShadow = 'none';
 
@@ -262,7 +260,7 @@ export default function PerpetualsPage({ user }) {
     }));
 
     const holder = document.createElement('div');
-    holder.style.cssText = 'position:fixed;left:-100000px;top:0;width:' + rect.width + 'px;height:' + rect.height + 'px;overflow:hidden;pointer-events:none;background:#050708;';
+    holder.style.cssText = 'position:fixed;left:-100000px;top:0;width:1080px;height:1277px;overflow:hidden;pointer-events:none;background:#050708;';
     holder.appendChild(clone);
     document.body.appendChild(holder);
 
@@ -276,7 +274,7 @@ export default function PerpetualsPage({ user }) {
 
       const rendered = await html2canvas(clone, {
         backgroundColor: '#050708',
-        scale: 1080 / rect.width,
+        scale: 1,
         useCORS: true,
         allowTaint: false,
         logging: false
