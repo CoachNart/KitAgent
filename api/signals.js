@@ -22,9 +22,9 @@ export async function marketKlines(signal) {
     if(!symbol||!Number.isFinite(startMs))return [];
     const now=Date.now();
     const endpoint=signal.market==='perpetual'
-      ? \`https://fapi.binance.com/fapi/v1/klines?symbol=\${encodeURIComponent(symbol)}&interval=1m&startTime=\${startMs}&endTime=\${now}&limit=1000\`
+      ? `https://fapi.binance.com/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=1m&startTime=${startMs}&endTime=${now}&limit=1000`
       : signal.market==='crypto'
-        ? \`https://api.binance.com/api/v3/klines?symbol=\${encodeURIComponent(symbol)}&interval=1m&startTime=\${startMs}&endTime=\${now}&limit=1000\`
+        ? `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1m&startTime=${startMs}&endTime=${now}&limit=1000`
         : null;
     if(!endpoint)return [];
     const r=await fetch(endpoint,{headers:{Accept:'application/json'}});
@@ -38,9 +38,9 @@ export async function currentPrice(signal) {
   try {
     const symbol=String(signal.symbol||'').replace(/[^A-Z0-9]/gi,'').toUpperCase(); if(!symbol)return null;
     const endpoint=signal.market==='perpetual'
-      ? \`https://fapi.binance.com/fapi/v1/ticker/price?symbol=\${encodeURIComponent(symbol)}\`
+      ? `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${encodeURIComponent(symbol)}`
       : signal.market==='crypto'
-        ? \`https://api.binance.com/api/v3/ticker/price?symbol=\${encodeURIComponent(symbol)}\`
+        ? `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`
         : null;
     if(!endpoint)return null;
     const r=await fetch(endpoint,{headers:{Accept:'application/json'}}); if(!r.ok)return null;
@@ -114,7 +114,7 @@ export default async function handler(req,res){
       const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),bias=clean(setup.bias,10).toUpperCase();
       if(!market||!symbol||!timeframe||!['LONG','SHORT','WAIT'].includes(bias))return json(res,400,{error:'Incomplete signal record.'});
       const ref=collection.doc(),orderType=clean(setup.orderType,20).toUpperCase()||'WAIT';
-      const signal={signalId:\`KA-\${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-\${Date.now().toString(36).toUpperCase()}\`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-market-analysis-v1'};
+      const signal={signalId:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-market-analysis-v1'};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
