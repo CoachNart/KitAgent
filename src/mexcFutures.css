@@ -1201,3 +1201,41 @@
   .ks-position-switch span{min-width:18px;height:18px;font-size:10px}
   .ks-close-all{flex:0 0 auto}
 }
+
+/* Live order lifecycle feedback */
+.ks-order-status{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid #202a36;
+  border-radius:10px;
+  background:#0d131b;
+  color:#cbd5e1;
+}
+.ks-order-status-dot{
+  width:8px;height:8px;flex:0 0 8px;margin-top:5px;
+  border-radius:50%;background:#7f8b9b;
+}
+.ks-order-status>div{min-width:0;flex:1}
+.ks-order-status strong{display:block;font-size:12px;font-weight:700;line-height:1.25}
+.ks-order-status small{display:block;margin-top:3px;color:#778596;font-size:10px;line-height:1.35}
+.ks-order-status>button{
+  width:22px;height:22px;flex:0 0 22px;
+  border:0;border-radius:6px;background:transparent;
+  color:#748194;font-size:17px;line-height:1;cursor:pointer;
+}
+.ks-order-status>button:hover{background:#18212b;color:#e7edf4}
+.ks-order-status.pending{border-color:#29405a;background:#0d1722}
+.ks-order-status.pending .ks-order-status-dot{background:#5b9cff;box-shadow:0 0 0 4px rgba(91,156,255,.1);animation:ks-order-pulse 1.2s ease-in-out infinite}
+.ks-order-status.success{border-color:#245844;background:#0d1916}
+.ks-order-status.success .ks-order-status-dot{background:#35c88a}
+.ks-order-status.error{border-color:#63313b;background:#1a1014}
+.ks-order-status.error .ks-order-status-dot{background:#ff536b}
+@keyframes ks-order-pulse{50%{opacity:.35;transform:scale(.8)}}
+@media(max-width:520px){
+  .ks-order-status{padding:9px 10px}
+  .ks-order-status strong{font-size:11px}
+  .ks-order-status small{font-size:9px}
+}
