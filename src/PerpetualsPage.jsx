@@ -137,7 +137,7 @@ export default function PerpetualsPage({ user }) {
       } catch (e) {
         if (!cancelled) {
           setConnected(false);
-          setError('Your saved MEXC connection needs to be reconnected. Please check the API key or permissions.');
+          setError('Your saved exchange connection needs to be reconnected. Please check the API key or permissions.');
         }
       } finally {
         if (!cancelled) setBusy(false);
@@ -208,7 +208,7 @@ export default function PerpetualsPage({ user }) {
           console.warn('Order accepted; position refresh failed:', refreshError);
         }
       }
-      const successText = returnedOrderId ? `Order accepted · ${returnedOrderId}` : 'Order accepted by MEXC.';
+      const successText = returnedOrderId ? `Order accepted · ${returnedOrderId}` : 'Order accepted by the exchange.';
       setOrderStatus({ type: 'success', text: successText, detail: orderType === 'market' ? 'Position refresh requested.' : 'Open orders refreshed.' });
     } catch (e) {
       const rawMessage = e.message || 'The exchange rejected the order.';
