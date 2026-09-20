@@ -631,7 +631,7 @@ export default function PerpetualsPage({ user }) {
         <div className="mexc-position-tabs">
           <button className={tab === 'positions' ? 'active' : ''} onClick={() => { setTab('positions'); setMorePositionsOpen(false); }}>Positions({positions.length})</button>
           <button className={tab === 'orders' ? 'active' : ''} onClick={() => { setTab('orders'); setMorePositionsOpen(false); }}>Open Orders({openOrders.length})</button>
-          <button className="mexc-ai-tab" type="button" aria-label="AI Strategy">AI Strategy(0)</button>
+          <button className="mexc-ai-tab" type="button" aria-label="AI Strategy" onClick={() => setError('AI Strategy is not enabled for this Futures account yet.')}>AI Strategy(0)</button>
         </div>
         <div className="mexc-position-more-wrap">
           <button className="mexc-position-doc" type="button" aria-label="More account views" onClick={() => setMorePositionsOpen(v => !v)}>
@@ -648,7 +648,7 @@ export default function PerpetualsPage({ user }) {
           <label className="mexc-hide-pairs"><input type="checkbox" checked={hideOtherPairs} onChange={e => setHideOtherPairs(e.target.checked)} /><span className="mexc-checkmark" aria-hidden="true" />Hide other pairs</label>
           <div className="mexc-position-toolbar-right">
             <button type="button" className="mexc-close-all" onClick={closeAllPositions} disabled={busy || !positions.length}>Close All</button>
-            <button type="button" className="mexc-info-button" title="Position information" aria-label="Position information">i</button>
+            <button type="button" className="mexc-info-button" title="Position information" aria-label="Position information" onClick={() => setMarketInfoOpen(true)}>i</button>
           </div>
         </div>
         <div className="mexc-position-list">
