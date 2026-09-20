@@ -214,7 +214,7 @@ export default async function handler(req, res) {
         reduceOnly: positionMode === 2 ? true : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      const result = validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/submit', payload), 'Close order was rejected by MEXC.');
+      const result = validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/create', payload), 'Close order was rejected by MEXC.');
       return json(res, 200, { ok: true, orderId: result?.data ?? result });
     }
 
@@ -243,7 +243,7 @@ export default async function handler(req, res) {
         externalOid: body.externalOid ? String(body.externalOid) : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/submit', payload), 'Order was rejected by MEXC.'));
+      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/create', payload), 'Order was rejected by MEXC.'));
     }
 
     if (action === 'cancel') return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/cancel', { orderIds: body.orderIds || [] }), 'Order cancellation was rejected by MEXC.'));
