@@ -254,7 +254,7 @@ export default function PerpetualsPage({ user }) {
     if (!p?.positionId || !n(p.holdVol)) { setError('Position details are incomplete; refresh the account and try again.'); return; }
     setBusy(true); setError('');
     try {
-      await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode) || undefined });
+      await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode ?? account.positionMode) || undefined });
       // A manually closed position must not retain its separate protective stop plans.
       try { await api('cancelStopAll', state, { positionId: p.positionId }); } catch {}
       await loadAccount();
