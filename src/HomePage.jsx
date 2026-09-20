@@ -37,6 +37,12 @@ export default function HomePage({go,wallet,onLesson}){
    <div className="mini-chart" aria-hidden="true"><svg viewBox="0 0 500 110" preserveAspectRatio="none"><path d="M0 82 C35 75 48 86 76 66 S118 78 145 58 S188 62 215 45 S252 58 278 41 S320 52 345 28 S382 47 410 35 S450 40 500 15" fill="none"/><path d="M0 82 C35 75 48 86 76 66 S118 78 145 58 S188 62 215 45 S252 58 278 41 S320 52 345 28 S382 47 410 35 S450 40 500 15 L500 110 L0 110 Z"/></svg></div>
    <div className="balance-foot"><span>BTC/USDT perpetual</span><span>Updated {new Date(updated).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>
   </section>
+  <section className="home-actions" aria-label="Quick actions">
+   <button className="home-action-btn" onClick={()=>go('perps')} aria-label="Perpetuals"><span className="action-icon cyan"><Zap size={18}/></span><b>Perpetuals</b><ChevronRight size={15}/></button>
+   <button className="home-action-btn" onClick={()=>go('market')} aria-label="Market analysis"><span className="action-icon"><BarChart3 size={18}/></span><b>Market analysis</b><ChevronRight size={15}/></button>
+   <button className="home-action-btn" onClick={()=>go('history')} aria-label="Activity"><span className="action-icon"><Clock3 size={18}/></span><b>Activity</b><ChevronRight size={15}/></button>
+   <button className="home-action-btn" onClick={()=>go('profile')} aria-label="Settings"><span className="action-icon"><ShieldCheck size={18}/></span><b>Settings</b><ChevronRight size={15}/></button>
+  </section>
   <div className="home-section-head"><div><span className="tiny-label">MARKETS</span><h2>What's moving</h2></div><button onClick={()=>go('market')}>View analysis <ChevronRight size={15}/></button></div>
   <section className="market-list">{tickers.map(x=><button key={x.symbol} className="market-row" onClick={()=>go('market')}><span className="coin-mark">{x.symbol.slice(0,-4).slice(0,1)}</span><span className="coin-name"><b>{x.symbol.replace('USDT','')}</b><small>USDT</small></span><span className={x.change>=0?"coin-price up":"coin-price down"}>{money(x.last, x.last<1?4:2)}</span><span className={x.change>=0?'coin-change up':'coin-change down'}>{pct(x.change)}</span></button>)}</section>
   <section className="home-glance">
@@ -59,11 +65,6 @@ export default function HomePage({go,wallet,onLesson}){
    <div className="signal-panel-head"><div><span className="tiny-label">SIGNAL DESK</span><h2>Your recent signals</h2><p>Generated from your market analysis sessions.</p></div><button onClick={()=>go('history')}>View all <ChevronRight size={14}/></button></div>
    {recentSignals.length?<div className="signal-feed">{recentSignals.map(x=><button className="signal-feed-row" key={x.id||x.signalId} onClick={()=>go('history')}><span className={x.direction==='LONG'?'signal-dot long':x.direction==='SHORT'?'signal-dot short':'signal-dot wait'}/><span className="signal-feed-main"><b>{x.symbol}</b><small>{x.timeframe} · {x.direction}</small></span><span className="signal-feed-value"><b>{x.riskReward||'Watching'}</b><small>{x.entry!=null?'Entry '+Number(x.entry).toLocaleString():'No entry yet'}</small></span><ChevronRight size={14}/></button>)}</div>:<div className="signal-empty"><div><Activity size={17}/></div><span><b>Your signal desk is quiet</b><small>Run a market analysis and your generated setups will appear here.</small></span><button onClick={()=>go('market')}>Analyze market <ChevronRight size={13}/></button></div>}
   </section>
-  <section className="home-actions" aria-label="Quick actions">
-   <button className="home-action-btn" onClick={()=>go('perps')} aria-label="Perpetuals"><span className="action-icon cyan"><Zap size={18}/></span><b>Perpetuals</b><ChevronRight size={15}/></button>
-   <button className="home-action-btn" onClick={()=>go('market')} aria-label="Market analysis"><span className="action-icon"><BarChart3 size={18}/></span><b>Market analysis</b><ChevronRight size={15}/></button>
-   <button className="home-action-btn" onClick={()=>go('history')} aria-label="Activity"><span className="action-icon"><Clock3 size={18}/></span><b>Activity</b><ChevronRight size={15}/></button>
-   <button className="home-action-btn" onClick={()=>go('profile')} aria-label="Settings"><span className="action-icon"><ShieldCheck size={18}/></span><b>Settings</b><ChevronRight size={15}/></button>
-  </section>
+
  </div>
 }
