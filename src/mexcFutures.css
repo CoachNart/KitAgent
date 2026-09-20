@@ -642,3 +642,125 @@
   .mexc-position-actions{gap:9px;margin-top:32px}
   .mexc-position-actions button{height:48px;font-size:16px}
 }
+
+
+/* Compact KitSetups position surface — dark, narrow, app-like. */
+.mexc-bottom{background:#080b10;border-top:1px solid #151b24}
+.mexc-position-appbar{
+  min-height:58px;
+  padding:0 16px;
+  background:#0b0f15;
+  border-bottom:1px solid #171e28;
+}
+.mexc-position-tabs{height:58px;gap:25px}
+.mexc-position-tabs button{font-size:18px;font-weight:650;color:#778291}
+.mexc-position-tabs button.active{color:#f3f5f7}
+.mexc-position-tabs button.active::after{height:2px;background:#f3f5f7}
+.mexc-position-more-wrap{margin-left:auto}
+.mexc-position-doc{width:38px;height:38px;color:#a8b1bd}
+.mexc-position-doc:hover{background:#141a23}
+.mexc-position-more-menu{top:45px;background:#10151c;border-color:#222b37;box-shadow:0 16px 35px rgba(0,0,0,.42)}
+.mexc-position-more-menu button{color:#d9dee5}
+.mexc-position-more-menu button:hover{background:#1a222d}
+.mexc-positions-view{background:#080b10;color:#e9edf2}
+.mexc-position-toolbar{
+  min-height:54px;
+  padding:0 16px;
+  border-bottom:1px solid #121923;
+}
+.mexc-hide-pairs{font-size:14px;gap:9px;color:#aeb7c4}
+.mexc-checkmark{width:22px;height:22px;border:1.5px solid #526071;border-radius:6px;background:#0d1219}
+.mexc-hide-pairs input:checked + .mexc-checkmark{border-color:#7b8797;background:#e9edf2;box-shadow:inset 0 0 0 5px #0d1219}
+.mexc-position-toolbar-right{gap:9px}
+.mexc-close-all{min-width:94px;height:36px;padding:0 15px;border-radius:19px;background:#151b24;color:#e6eaf0;font-size:13px;font-weight:600;border:1px solid #202a36}
+.mexc-close-all:hover{background:#1b2430}
+.mexc-info-button{width:27px;height:27px;font-size:16px;background:#4c5665}
+.mexc-position-list{padding:0 16px 14px}
+.mexc-position-card{
+  max-width:680px;
+  margin:0 auto;
+  padding:14px 0 16px;
+  background:#080b10;
+  border-bottom:1px solid #171e27;
+}
+.mexc-position-head{gap:10px}
+.mexc-position-contract{gap:9px}
+.mexc-position-side{width:29px;height:29px;border-radius:5px;font-size:15px}
+.mexc-position-contract strong{font-size:19px;color:#f4f6f8}
+.mexc-position-perpetual{font-size:17px;color:#9ba5b2}
+.mexc-position-head-icons{gap:4px}
+.mexc-position-head-icons button{width:31px;height:31px;color:#8792a1;border-radius:8px}
+.mexc-position-head-icons button:hover{background:#141a22;color:#dce2e8}
+.mexc-position-head-icons svg{width:24px;height:24px}
+.mexc-pnl-icon{position:relative;display:grid;place-items:center}
+.mexc-pnl-icon span{position:absolute;right:1px;bottom:1px;font-size:9px;font-weight:800;line-height:1;color:#62a0ff;background:#080b10}
+.mexc-position-mode{
+  margin-top:12px;
+  padding:7px 10px;
+  border-radius:7px;
+  background:#141a22;
+  color:#dfe4eb;
+  font-size:13px;
+  gap:5px;
+}
+.mexc-position-mode span{font-size:20px;color:#7e8998}
+.mexc-position-pnl-row{margin-top:17px;gap:10px}
+.mexc-position-pnl-label{
+  color:#aeb7c3;
+  font-size:14px;
+  border-bottom:1px dotted #66717f;
+}
+.mexc-position-pnl-label span{width:18px;height:18px;margin-left:4px;border-radius:5px;background:#171e27;color:#8792a1;font-size:11px}
+.mexc-position-pnl-row strong{font-size:21px;font-weight:700}
+.mexc-position-grid{
+  column-gap:20px;
+  row-gap:21px;
+  margin-top:22px;
+}
+.mexc-position-grid small{font-size:12px;color:#7e8997}
+.mexc-position-grid b{margin-top:7px;font-size:17px;color:#e9edf2}
+.mexc-margin-plus{width:21px;height:21px;border-width:1.5px;font-size:14px}
+.mexc-auto-margin{margin-top:22px;font-size:13px;gap:9px;color:#7f8997}
+.mexc-auto-margin button{width:43px;height:24px;background:#151b23}
+.mexc-auto-margin button span{width:18px;height:18px;top:3px;left:3px}
+.mexc-position-expand{margin-top:19px}
+.mexc-position-expand span{width:54px;height:27px;border-radius:5px;background:#111720;color:#7e8997;font-size:20px}
+.mexc-position-actions{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;
+  margin-top:18px;
+}
+.mexc-position-actions button{
+  height:38px;
+  border:1px solid #202936;
+  border-radius:20px;
+  background:#141a22;
+  color:#e4e8ed;
+  font-size:13px;
+  font-weight:600;
+}
+.mexc-position-actions button:hover{background:#1b232e;border-color:#2a3544}
+.mexc-position-actions button.flash{background:#17345e;color:#6ea8ff;border-color:#214b82}
+.mexc-position-actions button:disabled{opacity:.45}
+.mexc-position-pnl-row strong.profit{color:#4f8cff}
+.mexc-position-pnl-row strong.loss{color:#ff5266}
+@media(max-width:520px){
+  .mexc-position-appbar{padding:0 12px}
+  .mexc-position-tabs{gap:19px;height:55px}
+  .mexc-position-tabs button{font-size:16px}
+  .mexc-position-toolbar{padding:0 12px;min-height:51px}
+  .mexc-position-list{padding:0 12px 12px}
+  .mexc-position-card{padding-top:12px}
+  .mexc-position-contract strong{font-size:18px}
+  .mexc-position-perpetual{font-size:16px}
+  .mexc-position-mode{font-size:12px;margin-top:10px}
+  .mexc-position-pnl-row{margin-top:15px}
+  .mexc-position-pnl-label{font-size:13px}
+  .mexc-position-pnl-row strong{font-size:19px}
+  .mexc-position-grid{column-gap:15px;row-gap:18px;margin-top:19px}
+  .mexc-position-grid small{font-size:11px}
+  .mexc-position-grid b{font-size:16px;margin-top:6px}
+  .mexc-auto-margin{margin-top:19px;font-size:12px}
+  .mexc-position-actions{gap:5px;margin-top:15px}
+  .mexc-position-actions button{height:35px;font-size:12px}
+}
