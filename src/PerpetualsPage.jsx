@@ -71,6 +71,7 @@ export default function PerpetualsPage({ user }) {
   const [error, setError] = useState('');
   const [marketInfoOpen, setMarketInfoOpen] = useState(false);
   const chartRef = useRef(null);
+  const orderRef = useRef(null);
 
   const state = useMemo(() => ({ symbol, interval, key, secret }), [symbol, interval, key, secret]);
   const contract = useMemo(() => pairs.find(p => normalize(p.symbol) === normalize(symbol)), [pairs, symbol]);
@@ -150,6 +151,7 @@ export default function PerpetualsPage({ user }) {
     const price = orderType === 'market' ? 0 : n(limitPrice); if (orderType !== 'market' && !price) { setError('Enter a valid order price.'); return; }
     if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
     setBusy(true); setError('');
+    if (!orderRef.current) orderRef.current = `kitagent-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
       const positionMode = n(account.positionMode?.positionMode ?? account.positionMode) || undefined;
       const result = await api('order', state, {
@@ -163,10 +165,12 @@ export default function PerpetualsPage({ user }) {
         reduceOnly,
         positionMode,
         takeProfit: n(takeProfit) || undefined,
-        stopLoss: n(stopLoss) || undefined
+        stopLoss: n(stopLoss) || undefined,
+        externalOid: orderRef.current
       });
       const returnedOrderId = result?.data?.orderId || result?.data?.id || result?.orderId || (typeof result?.data === 'string' ? result.data : '');
       setVolume('');
+      orderRef.current = null;
       setTab(orderType === 'limit' ? 'orders' : 'positions');
 
       // The exchange has already accepted the order at this point. Account refreshes
