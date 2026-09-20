@@ -11,7 +11,8 @@ const pct = v => `${(n(v) * 100).toFixed(4)}%`;
 const normalize = s => String(s || '').toUpperCase().replace(/[-/]/g, '').replace(/_USDT$/, 'USDT').replace(/USDT$/, '_USDT');
 const displaySymbol = s => String(s || '').replace('_USDT', '/USDT');
 const arr = v => Array.isArray(v) ? v : (Array.isArray(v?.data) ? v.data : []);
-const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);\nconst unrealizedPnlValue = (p, mark, contractSize = 1) => { const entry=n(p?.holdAvgPrice||p?.openAvgPrice), volume=n(p?.holdVol), direction=n(p?.positionType)===1?1:-1; if(!entry||!mark||!volume)return 0; return (n(mark)-entry)*volume*n(contractSize||1)*direction; };
+const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);
+const unrealizedPnlValue = (p, mark, contractSize = 1) => { const entry=n(p?.holdAvgPrice||p?.openAvgPrice), volume=n(p?.holdVol), direction=n(p?.positionType)===1?1:-1; if(!entry||!mark||!volume)return 0; return (n(mark)-entry)*volume*n(contractSize||1)*direction; };
 
 async function api(action, state, extra = {}) {
   const response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }) });
