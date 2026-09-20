@@ -164,36 +164,35 @@ export default function PerpetualsPage({ user }) {
       });
       const returnedOrderId = result?.data?.orderId || result?.data?.id || result?.orderId || (typeof result?.data === 'string' ? result.data : '');
       setVolume('');
+      setTab(orderType === 'limit' ? 'orders' : 'positions');
+
+      // The exchange has already accepted the order at this point. Account refreshes
+      // are confirmation/UI work and must never turn a successful order into a false
+      // "order rejected" message because a secondary read endpoint is delayed or rate-limited.
       if (orderType === 'limit') {
-        // A limit order is not supposed to create a position until its price is reached.
-        // Confirm that MEXC actually placed it in Open Orders instead of silently treating
-        // the click as a success.
         let confirmed = [];
-        for (let i = 0; i < 4; i++) {
-          const refreshed = await api('orders', state);
-          confirmed = arr(refreshed);
-          setAccount(prev => ({ ...prev, orders: confirmed }));
-          if (confirmed.some(o => String(o.orderId || o.id) === String(returnedOrderId) || (normalize(o.symbol) === normalize(symbol) && n(o.vol) === vol))) break;
-          if (i < 3) await new Promise(r => setTimeout(r, 500));
+        for (let i = 0; i < 3; i++) {
+          try {
+            const refreshed = await api('orders', state);
+            confirmed = arr(refreshed);
+            setAccount(prev => ({ ...prev, orders: confirmed }));
+            if (returnedOrderId && confirmed.some(o => String(o.orderId || o.id) === String(returnedOrderId))) break;
+            if (!returnedOrderId && confirmed.some(o => normalize(o.symbol) === normalize(symbol) && n(o.vol) === vol)) break;
+          } catch {}
+          if (i < 2) await new Promise(r => setTimeout(r, 700));
         }
-        const matched = returnedOrderId
-          ? confirmed.find(o => String(o.orderId || o.id) === String(returnedOrderId))
-          : confirmed.find(o => normalize(o.symbol) === normalize(symbol) && n(o.vol) === vol);
-        if (!matched && returnedOrderId) {
-          throw new Error('MEXC accepted the request but the limit order could not be confirmed in Open Orders. Refresh and check the exchange before submitting it again.');
-        }
-        await loadAccount();
-        setTab('orders');
+        try { await loadAccount(); } catch {}
       } else {
-        for (let i = 0; i < 4; i++) {
-          const refreshed = await api('positions', state);
-          const rows = arr(refreshed);
-          setAccount(prev => ({ ...prev, positions: rows }));
-          if (rows.some(p => normalize(p.symbol) === normalize(symbol) && n(p.holdVol) > 0)) break;
-          if (i < 3) await new Promise(r => setTimeout(r, 650));
+        for (let i = 0; i < 3; i++) {
+          try {
+            const refreshed = await api('positions', state);
+            const rows = arr(refreshed);
+            setAccount(prev => ({ ...prev, positions: rows }));
+            if (rows.some(p => normalize(p.symbol) === normalize(symbol) && n(p.holdVol) > 0)) break;
+          } catch {}
+          if (i < 2) await new Promise(r => setTimeout(r, 700));
         }
-        await loadAccount();
-        setTab('positions');
+        try { await loadAccount(); } catch {}
       }
     } catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
   };
