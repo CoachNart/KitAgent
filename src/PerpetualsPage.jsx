@@ -11,7 +11,7 @@ const pct = v => `${(n(v) * 100).toFixed(4)}%`;
 const normalize = s => String(s || '').toUpperCase().replace(/[-/]/g, '').replace(/_USDT$/, 'USDT').replace(/USDT$/, '_USDT');
 const displaySymbol = s => String(s || '').replace('_USDT', '/USDT');
 const arr = v => Array.isArray(v) ? v : (Array.isArray(v?.data) ? v.data : []);
-const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);
+const positionPnl = (entry, target, volume, contractSize, positionType) => (n(target) - n(entry)) * n(volume) * n(contractSize || 1) * (n(positionType) === 1 ? 1 : -1);\nconst unrealizedPnlValue = (p, mark, contractSize = 1) => { const entry=n(p?.holdAvgPrice||p?.openAvgPrice), volume=n(p?.holdVol), direction=n(p?.positionType)===1?1:-1; if(!entry||!mark||!volume)return 0; return (n(mark)-entry)*volume*n(contractSize||1)*direction; };
 
 async function api(action, state, extra = {}) {
   const response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }) });
@@ -66,6 +66,8 @@ export default function PerpetualsPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [marketInfoOpen, setMarketInfoOpen] = useState(false);
+  const chartRef = useRef(null);
 
   const state = useMemo(() => ({ symbol, interval, key, secret }), [symbol, interval, key, secret]);
   const contract = useMemo(() => pairs.find(p => normalize(p.symbol) === normalize(symbol)), [pairs, symbol]);
@@ -144,15 +146,17 @@ export default function PerpetualsPage({ user }) {
     const price = orderType === 'market' ? 0 : n(limitPrice); if (orderType !== 'market' && !price) { setError('Enter a valid order price.'); return; }
     if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
     setBusy(true); setError('');
-    try { await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined }); setVolume(''); await loadAccount(); }
+    try { await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined }); setVolume(''); setTab(orderType === 'market' ? 'positions' : 'orders'); await loadAccount(); }
     catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
   };
 
   const openRiskManager = p => {
-    const existing = stopOrders.find(o => String(o.positionId) === String(p.positionId));
+    const related = stopOrders.filter(o => String(o.positionId) === String(p.positionId));
+    const tpOrder = related.find(o => n(o.takeProfitPrice) > 0);
+    const slOrder = related.find(o => n(o.stopLossPrice) > 0);
     setRiskPosition(p);
-    setRiskTp(existing?.takeProfitPrice ? String(existing.takeProfitPrice) : '');
-    setRiskSl(existing?.stopLossPrice ? String(existing.stopLossPrice) : '');
+    setRiskTp(tpOrder?.takeProfitPrice ? String(tpOrder.takeProfitPrice) : '');
+    setRiskSl(slOrder?.stopLossPrice ? String(slOrder.stopLossPrice) : '');
   };
 
   const saveRisk = async e => {
@@ -165,15 +169,14 @@ export default function PerpetualsPage({ user }) {
     if (positionType === 2 && ((sl && sl <= entry) || (tp && tp >= entry))) { setError('For a Short position, Stop Loss must be above entry and Take Profit below entry.'); return; }
     setBusy(true); setError('');
     try {
-      const existing = stopOrders.find(o => String(o.positionId) === String(riskPosition.positionId));
-      if (existing?.id || existing?.stopPlanOrderId) {
-        await api('changeStopOrder', state, { stopPlanOrderId: existing.id || existing.stopPlanOrderId, stopLoss: sl || undefined, takeProfit: tp || undefined });
-      } else {
-        const openType = n(riskPosition.openType) === 1 ? 'isolated' : 'cross';
-        const common = { positionId: riskPosition.positionId, positionType, marginMode: openType, volume: n(riskPosition.holdVol), leverage: n(riskPosition.leverage) || leverage, trend: 1 };
-        if (sl) await api('placeStopOrder', state, { ...common, triggerPrice: sl, triggerType: positionType === 1 ? 2 : 1 });
-        if (tp) await api('placeStopOrder', state, { ...common, triggerPrice: tp, triggerType: positionType === 1 ? 1 : 2 });
+      const related = stopOrders.filter(o => String(o.positionId) === String(riskPosition.positionId));
+      if (related.length) {
+        await api('cancelStopAll', state, { positionId: riskPosition.positionId });
+        await new Promise(r => setTimeout(r, 250));
       }
+      const common = { positionId: riskPosition.positionId, positionType, marginMode: n(riskPosition.openType) === 1 ? 'isolated' : 'cross', volume: n(riskPosition.holdVol), leverage: n(riskPosition.leverage) || leverage, trend: 1 };
+      if (sl) await api('placeStopOrder', state, { ...common, triggerPrice: sl, triggerType: positionType === 1 ? 2 : 1 });
+      if (tp) await api('placeStopOrder', state, { ...common, triggerPrice: tp, triggerType: positionType === 1 ? 1 : 2 });
       await loadAccount();
       setRiskPosition(null);
     } catch (e) { setError(e.message || 'Could not update position protection.'); }
@@ -182,11 +185,12 @@ export default function PerpetualsPage({ user }) {
 
   const removeRisk = async () => {
     if (!riskPosition) return;
-    const existing = stopOrders.find(o => String(o.positionId) === String(riskPosition.positionId));
-    if (!existing?.id && !existing?.stopPlanOrderId) { setRiskPosition(null); return; }
     setBusy(true); setError('');
-    try { await api('cancelStopOrder', state, { stopPlanOrderId: existing.id || existing.stopPlanOrderId }); await loadAccount(); setRiskPosition(null); }
-    catch (e) { setError(e.message || 'Could not remove protection.'); }
+    try {
+      await api('cancelStopAll', state, { positionId: riskPosition.positionId });
+      await loadAccount();
+      setRiskPosition(null);
+    } catch (e) { setError(e.message || 'Could not remove protection.'); }
     finally { setBusy(false); }
   };
 
@@ -198,26 +202,26 @@ export default function PerpetualsPage({ user }) {
     try {
       await api('closePosition', state, { positionId: p.positionId, positionType: n(p.positionType), openType: n(p.openType), volume: n(p.holdVol), positionMode: n(account.positionMode?.positionMode) || undefined });
       // A manually closed position must not retain its separate protective stop plans.
-      await api('cancelStopAll', state, { positionId: p.positionId });
+      try { await api('cancelStopAll', state, { positionId: p.positionId }); } catch {}
       await loadAccount();
       for (let i = 0; i < 3; i++) { await new Promise(r => setTimeout(r, 700)); await loadAccount(); }
     } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); }
   };
 
   const escapeSvg = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  const pnlValue = p => {
+    const supplied = p?.unRealizedPnl ?? p?.unrealizedPnl ?? p?.unrealisedPnl;
+    return supplied !== undefined && Number.isFinite(Number(supplied)) ? Number(supplied) : unrealizedPnlValue(p, displayMarkFor(p), orderContractSize);
+  };
   const pnlPercent = p => {
-    const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl);
-    const margin = n(p.im);
-    if (margin > 0) return (pnl / margin) * 100;
+    const pnl = pnlValue(p);
     const entry = n(p.holdAvgPrice || p.openAvgPrice);
-    const mark = displayMarkFor(p);
     const lev = n(p.leverage || p.leverageRatio) || 1;
-    if (!entry || !mark) return 0;
-    const direction = n(p.positionType) === 1 ? 1 : -1;
-    return ((mark - entry) / entry) * lev * 100 * direction;
+    const initialMargin = n(p.im) || (entry && n(p.holdVol) && orderContractSize ? (entry * n(p.holdVol) * orderContractSize) / lev : 0);
+    return initialMargin > 0 ? (pnl / initialMargin) * 100 : 0;
   };
 
-  const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png';
+  const KITSETUPS_LOGO_URL = '/kitsetups-logo.svg';
 
   const isClosedPosition = p => Boolean(p?.closeAvgPrice || p?.closeTime || p?.closeTimestamp || p?.closeVol || p?.realised !== undefined || p?.closeProfitLoss !== undefined);
 
@@ -495,21 +499,28 @@ export default function PerpetualsPage({ user }) {
       <button className="active">Futures</button>
     </div>
     <header className="mexc-topbar">
-      <div className="mexc-brand"><span className="mexc-logo">K</span><div><strong>KitSetups</strong><small>Futures · USDT-M</small></div></div>
+      <div className="mexc-brand"><img className="mexc-logo-image" src="/kitsetups-logo.svg" alt="KitSetups" /><div><strong>KitSetups</strong><small>Futures · USDT-M</small></div></div>
       <div className="mexc-pair-picker"><button className="mexc-pair-button" onClick={() => setPairOpen(v => !v)}><b>{displaySymbol(symbol)}</b><span>⌄</span></button>{pairOpen && <div className="mexc-pair-menu"><input autoFocus value={pairQuery} onChange={e => setPairQuery(e.target.value)} placeholder="Search futures pairs" />{filteredPairs.map(p => <button key={p.symbol} onClick={() => choosePair(p.symbol)}><b>{displaySymbol(p.symbol)}</b><span>max {n(p.maxLeverage || p.maxLeverageNum || p.leverageMax || 100)}x</span></button>)}{!filteredPairs.length && <div className="mexc-empty">No futures pair found</div>}</div>}</div>
       <div className="mexc-ticker"><b>{fmt(last)}</b><span className={n(ticker?.riseFallRate) >= 0 ? 'up' : 'down'}>{ticker?.riseFallRate != null ? `${(n(ticker.riseFallRate) * 100).toFixed(2)}%` : '—'}</span></div>
-      <div className="mexc-market-tools"><button type="button" title="Chart">◫</button><button type="button" title="More">•••</button></div>
+      <div className="mexc-market-tools"><button type="button" title="Chart" onClick={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>◫</button><button type="button" title="Market details" onClick={() => setMarketInfoOpen(true)}>•••</button></div>
       <div className="mexc-connection"><span className={ticker ? 'dot live' : 'dot'} /> {connected ? `Account connected · ${profileName}` : 'Market live'} <button onClick={() => connected ? disconnect() : setCredentialsOpen(true)}>{connected ? 'Disconnect' : 'Connect Exchange'}</button></div>
     </header>
     <section className="mexc-stats"><Stat label="24H High" value={fmt(ticker?.high24Price)} /><Stat label="24H Low" value={fmt(ticker?.lower24Price)} /><Stat label="24H Volume" value={fmt(ticker?.volume)} /><Stat label="24H Turnover" value={fmt(ticker?.amount)} /><Stat label="Mark / Fair" value={fmt(ticker?.fairPrice)} /><Stat label="Index" value={fmt(ticker?.indexPrice)} /><Stat label="Funding" value={pct(ticker?.fundingRate)} /><Stat label="Next Funding" value={ticker?.nextSettleTime ? new Date(n(ticker.nextSettleTime)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} /></section>
     <main className="mexc-main">
-      <section className="mexc-chart-panel"><div className="mexc-toolbar"><div className="mexc-timeframes">{['1m','5m','15m','30m','1h','4h','1d'].map(tf => <button key={tf} className={interval === tf ? 'active' : ''} onClick={() => setIntervalValue(tf)}>{tf}</button>)}</div><span>{loading ? 'Loading…' : '● Live'}</span></div><CandleChart data={candleData} /></section>
+      <section className="mexc-chart-panel" ref={chartRef}><div className="mexc-toolbar"><div className="mexc-timeframes">{['1m','5m','15m','30m','1h','4h','1d'].map(tf => <button key={tf} className={interval === tf ? 'active' : ''} onClick={() => setIntervalValue(tf)}>{tf}</button>)}</div><span>{loading ? 'Loading…' : '● Live'}</span></div><CandleChart data={candleData} /></section>
       <section className="mexc-book-panel"><div className="panel-title"><b>Order Book</b><span>USDT</span></div><div className="book-head"><span>Price</span><span>Size</span><span>Value</span></div>{arr(book?.asks).slice(0, 12).reverse().map((row, i) => <BookRow key={`a${i}`} row={row} ask />)}<div className="book-last">{fmt(last)} <small>Fair {fmt(ticker?.fairPrice)}</small></div>{arr(book?.bids).slice(0, 12).map((row, i) => <BookRow key={`b${i}`} row={row} />)}</section>
       <section className="mexc-order-panel"><div className="panel-title"><b>Place Order</b><span>{displaySymbol(symbol)} · Perpetual</span></div><div className="order-mode"><button className={!reduceOnly ? 'active' : ''} onClick={() => setReduceOnly(false)}>Open</button><button className={reduceOnly ? 'active close-mode' : ''} onClick={() => setReduceOnly(true)}>Close</button></div><div className="order-sides"><button className={side === 'buy' ? 'active buy' : ''} onClick={() => setSide('buy')}>Open Long</button><button className={side === 'sell' ? 'active sell' : ''} onClick={() => setSide('sell')}>Open Short</button></div><div className="trade-setting-grid"><div className="field-row"><label>Margin</label><select value={marginMode} onChange={e => setMarginMode(e.target.value)}><option value="cross">Cross</option><option value="isolated">Isolated</option></select></div><div className="field-row"><label>Available</label><div className="field-readonly">{fmt(usdt.availableBalance, 4)} USDT</div></div></div><div className="field"><label>Leverage <b>{leverage}x · {leveragePercent.toFixed(0)}% of max</b></label><input type="range" min="1" max={maxLeverage} value={leverage} onChange={e => setLeverage(Number(e.target.value))}/><div className="leverage-track"><span style={{ width: `${leveragePercent}%` }} /></div><div className="range-labels"><span>1x</span><span>{leverage}x</span><span>{maxLeverage}x</span></div></div><div className="field-row"><label>Order Type</label><select value={orderType} onChange={e => setOrderType(e.target.value)}><option value="market">Market</option><option value="limit">Limit</option></select></div>{orderType === 'limit' && <Field label="Price" value={limitPrice} onChange={setLimitPrice} placeholder={fmt(last)} />}<Field label="Size (contracts)" value={volume} onChange={setVolume} placeholder="Enter contract quantity" /><div className="quick-size">{[25,50,75,100].map(v => <button key={v} type="button" onClick={() => setVolume(String(Math.max(1, Math.floor(n(usdt.availableBalance) * v / 100 * n(leverage) / Math.max(last * orderContractSize, 1)))))}>{v}%</button>)}</div><div className="estimate"><span>Est. initial margin</span><b>{estimatedMargin ? `${fmt(estimatedMargin, 4)} USDT` : '—'}</b></div><div className="risk-entry-block"><div className="risk-entry-head"><div><b>Position Protection</b><small>Set your exit before you enter.</small></div><span>RISK</span></div><Field label="Take Profit" value={takeProfit} onChange={setTakeProfit} placeholder="Target price" />{takeProfit && <div className={`pnl-preview ${projectedTpPnl >= 0 ? 'positive' : 'negative'}`}>TP result: {projectedTpPnl >= 0 ? '+' : ''}{fmt(projectedTpPnl, 4)} USDT</div>}<Field label="Stop Loss" value={stopLoss} onChange={setStopLoss} placeholder="Required for protected entries" />{stopLoss && <div className={`pnl-preview ${projectedSlPnl >= 0 ? 'positive' : 'negative'}`}>SL result: {projectedSlPnl >= 0 ? '+' : ''}{fmt(projectedSlPnl, 4)} USDT</div>}{estimatedLiquidation ? <div className="liq-preview"><span>Est. liquidation</span><b>{fmt(estimatedLiquidation)}</b><small>Isolated estimate · exchange-calculated price appears after fill</small></div> : <div className="liq-preview"><span>Liquidation price</span><b>{marginMode === 'cross' ? 'Dynamic' : '—'}</b><small>{marginMode === 'cross' ? 'Cross-margin liquidation depends on account-level margin.' : 'Enter size and price to estimate liquidation.'}</small></div>}<label className="check risk-check"><input type="checkbox" checked={allowUnprotected} onChange={e => setAllowUnprotected(e.target.checked)} /> Open without Stop Loss</label></div><label className="check"><input type="checkbox" checked={reduceOnly} onChange={e => setReduceOnly(e.target.checked)} /> Reduce-only</label><button className={side === 'buy' ? 'submit buy-submit' : 'submit sell-submit'} onClick={placeOrder} disabled={busy}>{busy ? 'Processing…' : connected ? `${side === 'buy' ? 'Open Long' : 'Open Short'} ${displaySymbol(symbol)}` : 'Connect to Trade'}</button><div className="available"><span>Available <b>{fmt(usdt.availableBalance, 4)} USDT</b></span><span>Est. margin <b>{estimatedMargin ? `${fmt(estimatedMargin, 4)} USDT` : '—'}</b></span></div></section>
     </main>
     <section className="mexc-account-bar"><Metric label="Wallet Balance" value={`${fmt(usdt.cashBalance ?? usdt.equity)} USDT`} /><Metric label="Available" value={`${fmt(usdt.availableBalance)} USDT`} /><Metric label="Position Margin" value={`${fmt(usdt.positionMargin)} USDT`} /><Metric label="Unrealized PnL" value={`${fmt(usdt.unrealized)}`} /><Metric label="Equity" value={`${fmt(usdt.equity)} USDT`} /></section>
-    <section className="mexc-bottom"><div className="mexc-tabs">{[['positions','Positions'],['orders','Open Orders'],['history','Order History'],['positionHistory','Position History'],['funding','Funding'],['risk','Risk / Fees']].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'positions' && positions.length ? ` (${positions.length})` : ''}{id === 'orders' && openOrders.length ? ` (${openOrders.length})` : ''}</button>)}{tab === 'orders' && openOrders.length > 0 && <button className="cancel-all" onClick={cancelAll} disabled={busy}>Cancel All</button>}</div><div className="mexc-table-wrap">{tab === 'positions' && <Positions rows={positions} stopOrders={stopOrders} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} />}{tab === 'orders' && <Orders rows={openOrders} onCancel={cancel} />}{tab === 'history' && <Orders rows={account.history} history />}{tab === 'positionHistory' && <PositionHistory rows={account.positionHistory} onShare={p => setPnlSharePosition(p)} onDownload={p => downloadPnl(p)} />}{tab === 'funding' && <Funding rows={account.funding} />}{tab === 'risk' && <Risk risk={account.risk} fee={account.fee} positionMode={account.positionMode} contract={contract} />}</div></section>
+    <section className="mexc-bottom"><div className="mexc-tabs">{[['positions','Positions'],['orders','Open Orders'],['history','Order History'],['positionHistory','Position History'],['funding','Funding'],['risk','Risk / Fees']].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'positions' && positions.length ? ` (${positions.length})` : ''}{id === 'orders' && openOrders.length ? ` (${openOrders.length})` : ''}</button>)}{tab === 'orders' && openOrders.length > 0 && <button className="cancel-all" onClick={cancelAll} disabled={busy}>Cancel All</button>}</div><div className="mexc-table-wrap">{tab === 'positions' && <Positions rows={positions} stopOrders={stopOrders} contractSize={orderContractSize} mark={n(ticker?.fairPrice || ticker?.lastPrice) || last} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} />}{tab === 'orders' && <Orders rows={openOrders} onCancel={cancel} />}{tab === 'history' && <Orders rows={account.history} history />}{tab === 'positionHistory' && <PositionHistory rows={account.positionHistory} onShare={p => setPnlSharePosition(p)} onDownload={p => downloadPnl(p)} />}{tab === 'funding' && <Funding rows={account.funding} />}{tab === 'risk' && <Risk risk={account.risk} fee={account.fee} positionMode={account.positionMode} contract={contract} />}</div></section>
     {error && <div className="mexc-error"><span>{error}</span><button onClick={() => setError('')}>×</button></div>}
+    {marketInfoOpen && <div className="mexc-modal" onMouseDown={e => e.target === e.currentTarget && setMarketInfoOpen(false)}>
+      <div className="mexc-dialog" role="dialog" aria-label="Market details">
+        <div className="dialog-head"><div><h3>{displaySymbol(symbol)} · Market details</h3><p>Live values from the MEXC Futures market feed.</p></div><button type="button" onClick={() => setMarketInfoOpen(false)}>×</button></div>
+        <div className="risk-dialog-stats"><Metric label="Last price" value={fmt(last)} /><Metric label="Fair / Mark" value={fmt(ticker?.fairPrice)} /><Metric label="Index" value={fmt(ticker?.indexPrice)} /><Metric label="24H High" value={fmt(ticker?.high24Price)} /><Metric label="24H Low" value={fmt(ticker?.lower24Price)} /><Metric label="Funding" value={pct(ticker?.fundingRate)} /></div>
+        <button type="button" className="submit connect-submit" onClick={() => setMarketInfoOpen(false)}>Done</button>
+      </div>
+    </div>}
     {pnlSharePosition && (() => {
       const roi = pnlPercent(pnlSharePosition);
       const positive = roi >= 0;
@@ -552,9 +563,29 @@ function Field({ label, value, onChange, placeholder }) { return <div className=
 function Stat({ label, value }) { return <div className="mexc-stat"><small>{label}</small><b>{value}</b></div>; }
 function Metric({ label, value }) { return <div className="mexc-metric"><small>{label}</small><b>{value}</b></div>; }
 function BookRow({ row, ask }) { const price = n(row?.[0] ?? row?.price), size = n(row?.[1] ?? row?.size); return <div className="book-row"><span className={ask ? 'ask' : 'bid'}>{fmt(price)}</span><span>{fmt(size)}</span><span>{fmt(size * price, 2)}</span></div>; }
-function CandleChart({ data }) { const w = 1000, h = 460, pad = 30, max = Math.max(...data.map(x => x.high), 0), min = Math.min(...data.map(x => x.low), max || 1), range = max - min || 1, visible = data.slice(-120); return <div className="candle-wrap"><svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="candle-chart"><rect width="100%" height="100%" fill="#080c12"/>{[1,2,3,4].map(i => <line key={i} x1="0" x2={w} y1={(h / 5) * i} y2={(h / 5) * i} stroke="#18212d" />)}{visible.map((c, i) => { const x = pad + i * ((w - pad * 2) / Math.max(1, visible.length - 1)); const y = v => pad + ((max - v) / range) * (h - pad * 2); const up = c.close >= c.open; return <g key={c.time || i}><line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={up ? '#22c7a5' : '#f05b6b'} /><rect x={x - 2} y={Math.min(y(c.open), y(c.close))} width="4" height={Math.max(2, Math.abs(y(c.open) - y(c.close)))} fill={up ? '#22c7a5' : '#f05b6b'} /></g>; })}</svg>{!visible.length && <div className="chart-empty">Loading candles…</div>}</div>; }
+function CandleChart({ data }) { const w = 1000, h = 460, pad = 30, max = Math.max(...data.map(x => x.high), 0), min = Math.min(...data.map(x => x.low), max || 1), range = max - min || 1, visible = data.slice(-120); return <div className="candle-wrap"><svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="candle-chart"><rect width="100%" height="100%" fill="#080c12"/>{[1,2,3,4].map(i => <line key={i} x1="0" x2={w} y1={(h / 5) * i} y2={(h / 5) * i} stroke="#18212d" />)}{visible.map((c, i) => { const x = pad + i * ((w - pad * 2) / Math.max(1, visible.length - 1)); const y = v => pad + ((max - v) / range) * (h - pad * 2); const up = c.close >= c.open; return <g key={c.time || i}><line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={up ? '#18e0d0' : '#ff3f5f'} /><rect x={x - 2} y={Math.min(y(c.open), y(c.close))} width="4" height={Math.max(2, Math.abs(y(c.open) - y(c.close)))} fill={up ? '#18e0d0' : '#ff3f5f'} /></g>; })}</svg>{!visible.length && <div className="chart-empty">Loading candles…</div>}</div>; }
 function Empty({ text }) { return <div className="table-empty">{text}</div>; }
-function Positions({ rows, stopOrders, onClose, onShare, onDownload, onManageRisk }) { if (!rows.length) return <Empty text="No open positions for this contract." />; return <table><thead><tr><th>Contract</th><th>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Liquidation Price</th><th>Margin</th><th>Leverage</th><th>Margin Ratio</th><th>Unrealized PnL</th><th>Protection</th><th>Actions</th></tr></thead><tbody>{rows.map(p => { const pnl = n(p.unRealizedPnl ?? p.unrealizedPnl ?? p.unrealisedPnl); const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice); const risk = stopOrders.find(o => String(o.positionId) === String(p.positionId)); return <tr key={p.positionId}><td>{displaySymbol(p.symbol)}</td><td className={n(p.positionType) === 1 ? 'bid' : 'ask'}>{n(p.positionType) === 1 ? 'Long' : 'Short'}</td><td>{fmt(p.holdVol)}</td><td>{fmt(p.holdAvgPrice)}</td><td>{fmt(lastForPosition(p))}</td><td className="liq-price">{fmt(liq)}</td><td>{fmt(p.im)}</td><td className="leverage-cell">{fmt(p.leverage || p.leverageRatio, 0)}x</td><td>{pct(p.marginRatio)}</td><td className={pnl >= 0 ? 'bid' : 'ask'}>{pnl >= 0 ? '+' : ''}{fmt(pnl)}</td><td><div className="protection-cell"><span className={risk?.stopLossPrice ? 'protected' : 'unprotected'}>{risk?.stopLossPrice ? `SL ${fmt(risk.stopLossPrice)}` : 'No SL'}</span>{risk?.takeProfitPrice && <small>TP {fmt(risk.takeProfitPrice)}</small>}<button className="row-action protect" onClick={() => onManageRisk(p)}>{risk ? 'Adjust' : 'Protect'}</button></div></td><td><div className="position-actions"><button className="row-action" onClick={() => onShare(p)}>Share</button><button className="row-action" onClick={() => onDownload(p)}>Download</button><button className="row-action danger" onClick={() => onClose(p)}>Close</button></div></td></tr>; })}</tbody></table>; }
+function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onDownload, onManageRisk }) {
+  if (!rows.length) return <Empty text="No open positions for this contract." />;
+  return <table><thead><tr><th>Contract</th><th>Side</th><th>Size</th><th>Entry</th><th>Mark</th><th>Liquidation Price</th><th>Margin</th><th>Leverage</th><th>Margin Ratio</th><th>Unrealized PnL</th><th>ROI</th><th>TP / SL</th><th>Actions</th></tr></thead><tbody>{rows.map(p => {
+    const related = stopOrders.filter(o => String(o.positionId) === String(p.positionId));
+    const tp = related.find(o => n(o.takeProfitPrice) > 0)?.takeProfitPrice;
+    const sl = related.find(o => n(o.stopLossPrice) > 0)?.stopLossPrice;
+    const entry = n(p.holdAvgPrice || p.openAvgPrice);
+    const lev = n(p.leverage || p.leverageRatio) || 1;
+    const pnl = unrealizedPnlValue(p, n(p.markPrice || p.fairPrice) || mark, contractSize);
+    const initialMargin = n(p.im) || (entry && n(p.holdVol) ? (entry * n(p.holdVol) * n(contractSize || 1)) / lev : 0);
+    const roi = initialMargin ? (pnl / initialMargin) * 100 : 0;
+    const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
+    return <tr key={p.positionId}>
+      <td>{displaySymbol(p.symbol)}</td><td className={n(p.positionType) === 1 ? 'bid' : 'ask'}>{n(p.positionType) === 1 ? 'Long' : 'Short'}</td>
+      <td>{fmt(p.holdVol)}</td><td>{fmt(entry)}</td><td>{fmt(n(p.markPrice || p.fairPrice) || mark)}</td><td className="liq-price">{fmt(liq)}</td><td>{fmt(p.im)}</td><td className="leverage-cell">{fmt(lev, 0)}x</td><td>{p.marginRatio != null ? pct(p.marginRatio) : '—'}</td>
+      <td className={pnl >= 0 ? 'bid' : 'ask'}><b>{pnl >= 0 ? '+' : ''}{fmt(pnl, 4)} USDT</b></td><td className={roi >= 0 ? 'bid' : 'ask'}>{roi >= 0 ? '+' : ''}{roi.toFixed(2)}%</td>
+      <td><div className="protection-cell"><span className={sl ? 'protected' : 'unprotected'}>{sl ? 'SL ' + fmt(sl) : 'No SL'}</span>{tp ? <small className="protected">TP {fmt(tp)}</small> : <small className="unprotected">No TP</small>}<button className="row-action protect" onClick={() => onManageRisk(p)}> {sl || tp ? 'Adjust TP / SL' : 'Set TP / SL'} </button></div></td>
+      <td><div className="position-actions"><button className="row-action" onClick={() => onShare(p)}>Share</button><button className="row-action" onClick={() => onDownload(p)}>Download</button><button className="row-action danger" onClick={() => onClose(p)}>Close</button></div></td>
+    </tr>;
+  })}</tbody></table>;
+}
 function lastForPosition(p) { return n(p.markPrice || p.markPricePrice || p.fairPrice || p.lastPrice) || '—'; }
 function Orders({ rows, onCancel, history }) { if (!rows.length) return <Empty text={history ? 'No order history returned.' : 'No open orders.'} />; return <table><thead><tr><th>Order ID</th><th>Contract</th><th>Side</th><th>Type</th><th>Price</th><th>Size</th><th>Filled</th><th>Margin</th><th>Status</th>{!history && <th>Action</th>}</tr></thead><tbody>{rows.map(o => <tr key={o.orderId}><td>{String(o.orderId).slice(-12)}</td><td>{displaySymbol(o.symbol)}</td><td>{sideLabel(o.side)}</td><td>{n(o.orderType) === 1 ? 'Limit' : n(o.orderType) === 5 ? 'Market' : `Type ${o.orderType}`}</td><td>{fmt(o.price)}</td><td>{fmt(o.vol)}</td><td>{fmt(o.dealVol)}</td><td>{fmt(o.orderMargin || o.usedMargin)}</td><td>{history ? ({1:'Pending',2:'Unfilled',3:'Filled',4:'Canceled',5:'Invalid'}[n(o.state)] || '—') : 'Open'}</td>{!history && <td><button className="row-action danger" onClick={() => onCancel(o.orderId)}>Cancel</button></td>}</tr>)}</tbody></table>; }
 function PositionHistory({ rows, onShare, onDownload }) { if (!rows.length) return <Empty text="No position history returned." />; return <table><thead><tr><th>Contract</th><th>Side</th><th>Size</th><th>Entry</th><th>Close</th><th>Realized</th><th>Fees</th><th>Created</th><th>PNL Card</th></tr></thead><tbody>{rows.map((p, i) => <tr key={p.positionId || i}><td>{displaySymbol(p.symbol)}</td><td>{n(p.positionType) === 1 ? 'Long' : 'Short'}</td><td>{fmt(p.holdVol || p.closeVol)}</td><td>{fmt(p.holdAvgPrice || p.openAvgPrice)}</td><td>{fmt(p.closeAvgPrice)}</td><td>{fmt(p.realised || p.closeProfitLoss)}</td><td>{fmt(p.totalFee || p.fee)}</td><td>{p.createTime ? new Date(n(p.createTime)).toLocaleString() : '—'}</td><td><div className="position-actions"><button className="row-action" onClick={() => onShare(p)}>Share</button><button className="row-action" onClick={() => onDownload(p)}>Download</button></div></td></tr>)}</tbody></table>; }
