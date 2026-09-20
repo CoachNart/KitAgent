@@ -15,7 +15,17 @@ const positionPnl = (entry, target, volume, contractSize, positionType) => (n(ta
 const unrealizedPnlValue = (p, mark, contractSize = 1) => { const entry=n(p?.holdAvgPrice||p?.openAvgPrice), volume=n(p?.holdVol), direction=n(p?.positionType)===1?1:-1; if(!entry||!mark||!volume)return 0; return (n(mark)-entry)*volume*n(contractSize||1)*direction; };
 
 async function api(action, state, extra = {}) {
-  const response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }) });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  let response;
+  try {
+    response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }), signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error(`MEXC ${action} request timed out after 20 seconds. The exchange did not return a response.`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data?.error) throw new Error(data?.error || `Futures request failed (${response.status})`);
   return data;
@@ -136,7 +146,7 @@ export default function PerpetualsPage({ user }) {
   }, []);
   useEffect(() => { loadMarket(true); }, []);
   useEffect(() => { if (!pairs.length) return; localStorage.setItem('kitsetups_symbol', symbol); loadMarket(false); }, [symbol, interval]);
-  useEffect(() => { if (!connected) return undefined; loadAccount(); const timer = setInterval(loadAccount, 2500); return () => clearInterval(timer); }, [connected, loadAccount]);
+  useEffect(() => { if (!connected) return undefined; loadAccount(); const timer = setInterval(loadAccount, 10000); return () => clearInterval(timer); }, [connected, loadAccount]);
   useEffect(() => { const timer = setInterval(() => loadMarket(false), 2500); return () => clearInterval(timer); }, [loadMarket]);
 
   const connect = async e => { e?.preventDefault(); if (!key || !secret) { setError('Enter your exchange Access Key and Secret Key.'); return; } setBusy(true); setError(''); try { await api('connect', state); localStorage.setItem(MEXC_STORAGE_KEY, JSON.stringify({ key, secret })); setConnected(true); setCredentialsOpen(false); } catch (e) { setConnected(false); setError(e.message || 'Account connection failed.'); } finally { setBusy(false); } };
@@ -176,31 +186,26 @@ export default function PerpetualsPage({ user }) {
       // The exchange has already accepted the order at this point. Account refreshes
       // are confirmation/UI work and must never turn a successful order into a false
       // "order rejected" message because a secondary read endpoint is delayed or rate-limited.
+      // Refresh only the data affected by this order. The account dashboard polls separately;
+      // doing a full 10-endpoint refresh here can race the order request and flood the exchange.
       if (orderType === 'limit') {
-        let confirmed = [];
-        for (let i = 0; i < 3; i++) {
-          try {
-            const refreshed = await api('orders', state);
-            confirmed = arr(refreshed);
-            setAccount(prev => ({ ...prev, orders: confirmed }));
-            if (returnedOrderId && confirmed.some(o => String(o.orderId || o.id) === String(returnedOrderId))) break;
-            if (!returnedOrderId && confirmed.some(o => normalize(o.symbol) === normalize(symbol) && n(o.vol) === vol)) break;
-          } catch {}
-          if (i < 2) await new Promise(r => setTimeout(r, 700));
+        try {
+          const refreshed = await api('orders', state);
+          setAccount(prev => ({ ...prev, orders: arr(refreshed) }));
+          setTab('orders');
+        } catch (refreshError) {
+          console.warn('Order accepted; open-order refresh failed:', refreshError);
         }
-        try { await loadAccount(); } catch {}
       } else {
-        for (let i = 0; i < 3; i++) {
-          try {
-            const refreshed = await api('positions', state);
-            const rows = arr(refreshed);
-            setAccount(prev => ({ ...prev, positions: rows }));
-            if (rows.some(p => normalize(p.symbol) === normalize(symbol) && n(p.holdVol) > 0)) break;
-          } catch {}
-          if (i < 2) await new Promise(r => setTimeout(r, 700));
+        try {
+          const refreshed = await api('positions', state);
+          setAccount(prev => ({ ...prev, positions: arr(refreshed) }));
+          setTab('positions');
+        } catch (refreshError) {
+          console.warn('Order accepted; position refresh failed:', refreshError);
         }
-        try { await loadAccount(); } catch {}
       }
+      setError(returnedOrderId ? `Order submitted successfully · ${returnedOrderId}` : 'Order submitted successfully.');
     } catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
   };
 
