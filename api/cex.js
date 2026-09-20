@@ -28,6 +28,7 @@ const request = async (url, options = {}) => {
   try { data = JSON.parse(text); } catch { data = { message: text }; }
   if (!response.ok) throw new Error(data?.message || data?.msg || `MEXC request failed (${response.status})`);
   if (data?.success === false) throw new Error(data?.message || data?.msg || `MEXC request failed (${data?.code ?? 'unknown'})`);
+  if (data?.code !== undefined && Number(data.code) !== 0) throw new Error(data?.message || data?.msg || `MEXC request failed (${data.code})`);
   return data;
 };
 
@@ -64,6 +65,7 @@ const validateOperationResult = (result, fallback = 'MEXC operation failed.') =>
   const failed = candidates.find(item => Number(item?.errorCode || 0) !== 0 || item?.errorMsg);
   if (failed) throw new Error(failed.errorMsg || `MEXC operation failed (code ${failed.errorCode}).`);
   if (result?.errorCode && Number(result.errorCode) !== 0) throw new Error(result?.errorMsg || fallback);
+  if (result?.code !== undefined && Number(result.code) !== 0) throw new Error(result?.message || result?.msg || fallback);
   return result;
 };
 
@@ -141,43 +143,46 @@ export default async function handler(req, res) {
     }
 
     if (action === 'placeStopOrder') {
-      const positionType = Number(body.positionType || 1);
-      const closeSide = positionType === 1 ? 4 : 2;
       const payload = {
-        symbol,
+        positionId: Number(body.positionId),
         vol: Number(body.volume),
-        side: closeSide,
-        openType: body.marginMode === 'isolated' ? 1 : 2,
-        triggerPrice: Number(body.triggerPrice),
-        triggerType: Number(body.triggerType),
-        executeCycle: 2,
-        orderType: 5,
-        trend: Number(body.trend || 1),
-        positionId: body.positionId ? Number(body.positionId) : undefined,
-        leverage: body.leverage ? Number(body.leverage) : undefined
+        lossTrend: Number(body.lossTrend || 1),
+        profitTrend: Number(body.profitTrend || 1),
+        stopLossPrice: body.stopLossPrice ? Number(body.stopLossPrice) : undefined,
+        takeProfitPrice: body.takeProfitPrice ? Number(body.takeProfitPrice) : undefined,
+        priceProtect: body.priceProtect !== undefined ? Number(body.priceProtect) : 0,
+        profitLossVolType: 'SAME',
+        volType: 2,
+        takeProfitType: 0,
+        takeProfitOrderPrice: 0,
+        stopLossType: 0,
+        stopLossOrderPrice: 0
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
+      if (!payload.positionId || !payload.vol || (!payload.stopLossPrice && !payload.takeProfitPrice)) {
+        return json(res, 400, { error: 'A position, quantity, and at least one TP/SL price are required.' });
+      }
       return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/stoporder/place', payload), 'TP/SL order was rejected by MEXC.'));
     }
 
     if (action === 'placeStopLimit') {
-      const positionType = Number(body.positionType || 1);
-      const closeSide = positionType === 1 ? 4 : 2;
       const payload = {
-        symbol,
+        positionId: Number(body.positionId),
         vol: Number(body.volume),
-        side: closeSide,
-        openType: body.marginMode === 'isolated' ? 1 : 2,
-        triggerPrice: Number(body.triggerPrice),
-        triggerType: Number(body.triggerType),
-        executeCycle: 2,
-        orderType: 5,
-        trend: Number(body.trend || 1),
-        positionId: body.positionId ? Number(body.positionId) : undefined,
-        leverage: body.leverage ? Number(body.leverage) : undefined
+        lossTrend: Number(body.lossTrend || 1),
+        profitTrend: Number(body.profitTrend || 1),
+        stopLossPrice: body.stopLossPrice ? Number(body.stopLossPrice) : undefined,
+        takeProfitPrice: body.takeProfitPrice ? Number(body.takeProfitPrice) : undefined,
+        priceProtect: body.priceProtect !== undefined ? Number(body.priceProtect) : 0,
+        profitLossVolType: 'SAME',
+        volType: 2,
+        takeProfitType: 1,
+        takeProfitOrderPrice: body.takeProfitOrderPrice ? Number(body.takeProfitOrderPrice) : 0,
+        stopLossType: 1,
+        stopLossOrderPrice: body.stopLossOrderPrice ? Number(body.stopLossOrderPrice) : 0
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/place', payload));
+      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/stoporder/place', payload), 'TP/SL limit order was rejected by MEXC.'));
     }
 
     if (action === 'changeStopOrder') {
