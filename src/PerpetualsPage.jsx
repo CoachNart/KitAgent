@@ -274,7 +274,7 @@ export default function PerpetualsPage({ user }) {
     return initialMargin > 0 ? (pnl / initialMargin) * 100 : 0;
   };
 
-  const KITSETUPS_LOGO_URL = '/kitsetups-logo.svg';
+  const KITSETUPS_LOGO_URL = 'https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png';
 
   const isClosedPosition = p => Boolean(p?.closeAvgPrice || p?.closeTime || p?.closeTimestamp || p?.closeVol || p?.realised !== undefined || p?.closeProfitLoss !== undefined);
 
@@ -554,7 +554,7 @@ export default function PerpetualsPage({ user }) {
       <button className="active">Futures</button>
     </div>
     <header className="mexc-topbar">
-      <div className="mexc-brand"><img className="mexc-logo-image" src="/kitsetups-logo.svg" alt="KitSetups" /><div><strong>KitSetups</strong><small>Futures · USDT-M</small></div></div>
+      <div className="mexc-brand"><img className="mexc-logo-image" src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups" /><div><strong>KitSetups</strong><small>Futures · USDT-M</small></div></div>
       <div className="mexc-pair-picker"><button className="mexc-pair-button" onClick={() => setPairOpen(v => !v)}><b>{displaySymbol(symbol)}</b><span>⌄</span></button>{pairOpen && <div className="mexc-pair-menu"><input autoFocus value={pairQuery} onChange={e => setPairQuery(e.target.value)} placeholder="Search futures pairs" />{filteredPairs.map(p => <button key={p.symbol} onClick={() => choosePair(p.symbol)}><b>{displaySymbol(p.symbol)}</b><span>max {n(p.maxLeverage || p.maxLeverageNum || p.leverageMax || 100)}x</span></button>)}{!filteredPairs.length && <div className="mexc-empty">No futures pair found</div>}</div>}</div>
       <div className="mexc-ticker"><b>{fmt(last)}</b><span className={n(ticker?.riseFallRate) >= 0 ? 'up' : 'down'}>{ticker?.riseFallRate != null ? `${(n(ticker.riseFallRate) * 100).toFixed(2)}%` : '—'}</span></div>
       <div className="mexc-market-tools"><button type="button" title="Chart" onClick={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>◫</button><button type="button" title="Market details" onClick={() => setMarketInfoOpen(true)}>•••</button></div>
