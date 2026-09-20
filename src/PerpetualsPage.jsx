@@ -21,7 +21,7 @@ async function api(action, state, extra = {}) {
   try {
     response = await fetch('/api/cex', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, symbol: state.symbol, interval: state.interval, key: state.key, secret: state.secret, ...extra }), signal: controller.signal });
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error(`MEXC ${action} request timed out after 20 seconds. The exchange did not return a response.`);
+    if (error?.name === 'AbortError') throw new Error(`Exchange request timed out after 20 seconds. No response was received.`);
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -162,11 +162,11 @@ export default function PerpetualsPage({ user }) {
     const price = orderType === 'market' ? 0 : n(limitPrice); if (orderType !== 'market' && !price) { setError('Enter a valid order price.'); return; }
     if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
     setBusy(true); setError('');
-    setOrderStatus({ type: 'pending', text: 'Submitting order…', detail: 'Sending your order to MEXC Futures.' });
+    setOrderStatus({ type: 'pending', text: 'Submitting order…', detail: 'Sending your order to the exchange.' });
     if (!orderRef.current) orderRef.current = `kitagent-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
       const positionMode = n(account.positionMode?.positionMode ?? account.positionMode) || undefined;
-      setOrderStatus({ type: 'pending', text: 'Waiting for MEXC…', detail: 'The exchange is processing the order request.' });
+      setOrderStatus({ type: 'pending', text: 'Waiting for confirmation…', detail: 'The exchange is processing the order request.' });
       const result = await api('order', state, {
         side,
         intent: reduceOnly ? 'close' : 'open',
@@ -211,8 +211,12 @@ export default function PerpetualsPage({ user }) {
       const successText = returnedOrderId ? `Order accepted · ${returnedOrderId}` : 'Order accepted by MEXC.';
       setOrderStatus({ type: 'success', text: successText, detail: orderType === 'market' ? 'Position refresh requested.' : 'Open orders refreshed.' });
     } catch (e) {
-      const message = e.message || 'MEXC rejected the order.';
-      setOrderStatus({ type: 'error', text: 'Order not submitted', detail: message });
+      const rawMessage = e.message || 'The exchange rejected the order.';
+      const insufficient = /insufficient\s*(available\s*)?(balance|margin)/i.test(rawMessage);
+      const message = insufficient
+        ? `Insufficient available margin. Available: ${fmt(usdt.availableBalance, 4)} USDT · Estimated margin: ${fmt(estimatedMargin, 4)} USDT. If your funds are in Spot rather than Futures, transfer them to the Futures account before opening a position.`
+        : rawMessage.replace(/MEXC\s*/gi, 'Exchange ');
+      setOrderStatus({ type: 'error', text: insufficient ? 'Insufficient available margin' : 'Order not submitted', detail: message });
       setError(message);
     } finally { setBusy(false); }
   };
