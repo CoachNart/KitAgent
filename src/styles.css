@@ -78,3 +78,8 @@
 .auth-submit-signin{color:#ff3048!important;text-shadow:none!important}
 .auth-submit-signin span{color:#ff3048!important;font-weight:850!important}
 .auth-submit-signin svg{color:#ff3048!important;stroke:#ff3048!important;filter:none!important}
+
+/* Final auth button contrast */
+.auth-submit-signin{color:#061116!important;text-shadow:none!important}
+.auth-submit-signin span{color:#061116!important}
+.auth-submit-signin svg{color:#061116!important;stroke:#061116!important;filter:none!important}
