@@ -42,6 +42,7 @@
   align-items:center;gap:14px;padding:10px 16px;min-height:66px;background:#090d12;border-bottom:1px solid var(--ks-line);
 }
 .mexc-brand{display:flex;align-items:center;gap:9px;min-width:142px}
+.mexc-logo-image{width:34px;height:34px;object-fit:contain;border-radius:9px;display:block;filter:drop-shadow(0 0 10px rgba(24,224,208,.18))}
 .mexc-logo{
   width:32px;height:32px;display:grid;place-items:center;border-radius:9px;background:var(--ks-cyan);
   color:#061012;font-weight:950;font-size:16px;box-shadow:0 0 18px rgba(24,224,208,.2)
@@ -177,3 +178,7 @@
   .mexc-section-nav{gap:18px}.mexc-section-nav button{font-size:12px}.mexc-main{grid-template-columns:minmax(0,1.38fr) minmax(128px,.86fr)}.mexc-book-panel{font-size:8px}
   .book-head,.book-row{grid-template-columns:1.2fr .8fr;padding-left:0;padding-right:0}.book-head span:last-child,.book-row span:last-child{display:none}.mexc-stat{min-width:94px}.mexc-connection{font-size:8px}
 }
+
+/* Live PnL presentation */
+.mexc-table-wrap table th:nth-child(10),.mexc-table-wrap table th:nth-child(11){min-width:115px}
+.mexc-table-wrap table td:nth-child(10) b{font-weight:850}
