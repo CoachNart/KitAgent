@@ -38,11 +38,25 @@
 }
 .mexc-section-nav .nav-card{margin-left:auto;color:var(--ks-cyan);display:flex;align-items:center;gap:7px}
 .mexc-topbar{
+  position:relative;
   display:grid;grid-template-columns:auto minmax(150px,220px) auto auto minmax(0,1fr);
-  align-items:center;gap:14px;padding:10px 16px;min-height:66px;background:#090d12;border-bottom:1px solid var(--ks-line);
+  align-items:center;gap:14px;padding:10px 16px;min-height:76px;
+  background:rgba(9,13,18,.46);
+  border-bottom:1px solid rgba(255,255,255,.075);
+  box-shadow:0 10px 30px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.035);
+  backdrop-filter:blur(18px) saturate(135%);
+  -webkit-backdrop-filter:blur(18px) saturate(135%);
+  isolation:isolate;
 }
-.mexc-brand{display:flex;align-items:center;gap:9px;min-width:142px}
-.mexc-logo-image{width:28px;height:28px;object-fit:contain;border-radius:9px;display:block;filter:drop-shadow(0 0 10px rgba(24,224,208,.18))}
+.mexc-topbar::before{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(90deg,rgba(24,224,208,.035),transparent 32%,rgba(78,145,255,.045) 68%,transparent);
+}
+.mexc-brand{display:flex;align-items:center;gap:11px;min-width:152px}
+.mexc-logo-image{
+  width:42px;height:42px;object-fit:contain;border-radius:11px;display:block;
+  filter:drop-shadow(0 0 14px rgba(24,224,208,.22));
+}
 .mexc-logo{
   width:32px;height:32px;display:grid;place-items:center;border-radius:9px;background:var(--ks-cyan);
   color:#061012;font-weight:950;font-size:16px;box-shadow:0 0 18px rgba(24,224,208,.2)
@@ -161,7 +175,7 @@
 }
 @media(max-width:720px){
   .mexc-terminal{border-radius:0;border-left:0;border-right:0;box-shadow:none}.mexc-section-nav{height:50px;gap:25px;padding:0 12px}.mexc-section-nav button{font-size:13px}.mexc-section-nav .nav-card{margin-left:auto}
-  .mexc-topbar{grid-template-columns:auto minmax(0,1fr) auto;gap:9px;padding:8px 10px;min-height:60px}.mexc-brand{min-width:0}.mexc-brand div{display:none}.mexc-logo{width:28px;height:28px}
+  .mexc-topbar{grid-template-columns:auto minmax(0,1fr) auto;gap:9px;padding:8px 10px;min-height:68px;background:rgba(9,13,18,.42);backdrop-filter:blur(16px) saturate(135%);-webkit-backdrop-filter:blur(16px) saturate(135%)}.mexc-brand{min-width:0}.mexc-brand div{display:none}.mexc-logo{width:28px;height:28px}.mexc-logo-image{width:38px;height:38px;border-radius:10px}
   .mexc-pair-button{height:38px}.mexc-pair-button b{font-size:16px}.mexc-ticker{display:flex;flex-direction:column;align-items:flex-start;gap:0}.mexc-ticker b{font-size:12px}.mexc-ticker span{font-size:9px}.mexc-market-tools{display:none}
   .mexc-connection{grid-column:1/-1;justify-content:space-between;min-height:32px;padding-top:2px}.mexc-connection button{height:32px}
   .mexc-stats{padding-bottom:1px}.mexc-stat{min-width:102px;padding:8px 10px}.mexc-stat b{font-size:9px}
@@ -1125,4 +1139,36 @@
   .ks-metric-grid b{font-size:10px}
   .ks-protection-row b{font-size:8px;padding:5px 6px}
   .ks-action-dock{gap:5px}
+}
+
+
+/* KitSetups account activity rail — keeps the useful history surfaces reachable without clutter. */
+.ks-position-bar{
+  position:relative;
+  overflow:hidden;
+  background:rgba(9,13,18,.58);
+  border-top:1px solid rgba(255,255,255,.035);
+  border-bottom:1px solid rgba(255,255,255,.07);
+  backdrop-filter:blur(16px) saturate(125%);
+  -webkit-backdrop-filter:blur(16px) saturate(125%);
+}
+.ks-position-switch{
+  min-width:0;
+  overflow-x:auto;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+  padding-right:8px;
+}
+.ks-position-switch::-webkit-scrollbar{display:none}
+.ks-position-switch button{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+.ks-position-switch button.active::after{background:#4f8cff;box-shadow:0 0 10px rgba(79,140,255,.3)}
+@media(max-width:520px){
+  .ks-position-bar{gap:8px;padding:0 10px}
+  .ks-position-switch{gap:17px;overflow-x:auto}
+  .ks-position-switch button{font-size:12px}
+  .ks-position-switch span{min-width:18px;height:18px;font-size:10px}
+  .ks-close-all{flex:0 0 auto}
 }
