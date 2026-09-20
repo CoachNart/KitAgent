@@ -717,53 +717,51 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onM
     const marginRatio = p.marginRatio != null ? pct(p.marginRatio) : '—';
     const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
     const positive = pnl >= 0;
-    const isolated = String(p.marginMode || '').toLowerCase() === 'isolated' || n(p.openType) === 1;
+    const sideLong = n(p.positionType) === 1;
     return <article className="ks-position-card" key={p.positionId}>
+      <div className="ks-card-glow" aria-hidden="true" />
       <div className="ks-position-head">
         <div className="ks-position-contract">
-          <span className={n(p.positionType) === 1 ? 'ks-side long' : 'ks-side short'}>{n(p.positionType) === 1 ? 'L' : 'S'}</span>
-          <div><strong>{displaySymbol(p.symbol)}</strong><small>{isolated ? 'Isolated' : 'Cross'} · {fmt(lev, 0)}×</small></div>
+          <span className={sideLong ? 'ks-side long' : 'ks-side short'}>{sideLong ? 'L' : 'S'}</span>
+          <div>
+            <div className="ks-symbol-line"><strong>{displaySymbol(p.symbol)}</strong><span>{fmt(lev, 0)}×</span></div>
+            <small>{String(p.marginMode || '').toLowerCase() === 'isolated' || n(p.openType) === 1 ? 'Isolated' : 'Cross'} margin</small>
+          </div>
         </div>
         <div className="ks-position-tools">
-          <button type="button" aria-label="Open chart" title="Chart" onClick={onChart}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18V9M11 18V5M17 18v-7M3 18h18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-          </button>
-          <button type="button" className="ks-pnl-roller" aria-label="Open PnL card" title="PnL card · Share / Download" onClick={() => onShare(p)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="4" y="4" width="11" height="6" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8"/>
-              <path d="M15 7h3.5M18.5 7v8M18.5 15H14M14 15v4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-          <button type="button" aria-label="Refresh position" title="Refresh" onClick={() => void onRefresh?.()}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8V4m0 4h-4M19 4a8 8 0 1 0 1 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </button>
+          <button type="button" aria-label="Open chart" title="Chart" onClick={onChart}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V6m5 12V10m6 8V4m5 14v-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg></button>
+          <button type="button" className="ks-pnl-roller" aria-label="Open PnL card" title="PnL card · Share / Download" onClick={() => onShare(p)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h7a2 2 0 0 1 2 2v2M17 9l2-2 2 2M17 19H9a2 2 0 0 1-2-2v-2M7 15l-2 2 2 2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
+          <button type="button" aria-label="Refresh position" title="Refresh" onClick={() => void onRefresh?.()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8V4m0 4h-4M19 4a8 8 0 1 0 1 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
         </div>
       </div>
 
-      <div className="ks-position-pnl">
-        <div><span>UNREALIZED PNL</span><small>{positive ? 'In profit' : 'In loss'}</small></div>
-        <strong className={positive ? 'profit' : 'loss'}>{positive ? '+' : ''}{roi.toFixed(2)}%</strong>
+      <div className="ks-pnl-hero">
+        <div className="ks-pnl-copy"><span>UNREALIZED PNL</span><b>{positive ? '+' : ''}{pnl.toFixed(2)}</b></div>
+        <div className={positive ? 'ks-roi positive' : 'ks-roi negative'}>{positive ? '+' : ''}{roi.toFixed(2)}% <small>ROI</small></div>
       </div>
 
-      <div className="ks-position-values">
-        <div><small>Entry</small><b>{fmt(entry)}</b></div>
-        <div><small>Mark</small><b>{fmt(fair)}</b></div>
-        <div><small>Size</small><b>{fmt(p.holdVol * (contractSize || 1) * fair, 4)}</b></div>
-        <div><small>Margin</small><b>{fmt(p.im, 4)}</b></div>
-        <div><small>Liquidation</small><b>{fmt(liq)}</b></div>
-        <div><small>Margin ratio</small><b>{marginRatio}</b></div>
+      <div className="ks-market-strip">
+        <div><span>ENTRY</span><b>{fmt(entry)}</b></div>
+        <div className="ks-price-track"><i style={{width: '52%'}} /><em /></div>
+        <div className="right"><span>MARK</span><b>{fmt(fair)}</b></div>
       </div>
 
-      <div className="ks-position-protection">
-        <span>Protection</span>
-        <div><b className={sl ? 'set' : ''}>SL {sl ? fmt(sl) : '—'}</b><b className={tp ? 'set' : ''}>TP {tp ? fmt(tp) : '—'}</b></div>
+      <div className="ks-metric-grid">
+        <div><span>Size</span><b>{fmt(p.holdVol * (contractSize || 1), 4)}</b></div>
+        <div><span>Margin</span><b>{fmt(p.im, 4)}</b></div>
+        <div><span>Liq. price</span><b>{fmt(liq)}</b></div>
+        <div><span>Margin ratio</span><b>{marginRatio}</b></div>
       </div>
 
-      <div className="ks-position-actions">
-        <button type="button" onClick={() => onManageRisk(p)}>TP / SL</button>
-        <button type="button" onClick={() => onReverse(p)} disabled={!onReverse}>Reverse</button>
-        <button type="button" onClick={() => onClose(p)}>Close</button>
-        <button type="button" className="flash" onClick={() => onClose(p)}>Flash close</button>
+      <div className="ks-protection-row">
+        <div><span>Risk</span><div><b className={sl ? 'sl-set' : ''}><i />SL {sl ? fmt(sl) : 'Not set'}</b><b className={tp ? 'tp-set' : ''}><i />TP {tp ? fmt(tp) : 'Not set'}</b></div></div>
+        <button type="button" onClick={() => onManageRisk(p)}>Manage</button>
+      </div>
+
+      <div className="ks-action-dock">
+        <button type="button" onClick={() => onReverse(p)} disabled={!onReverse}><span>↕</span>Reverse</button>
+        <button type="button" onClick={() => onClose(p)}><span>×</span>Close</button>
+        <button type="button" className="flash" onClick={() => onClose(p)}><span>↯</span>Flash close</button>
       </div>
     </article>;
   })}</div>;
