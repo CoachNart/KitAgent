@@ -148,7 +148,7 @@ export default function PerpetualsPage({ user }) {
     if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
     setBusy(true); setError('');
     try {
-      const positionMode = n(account.positionMode?.positionMode) || undefined;
+      const positionMode = n(account.positionMode?.positionMode ?? account.positionMode) || undefined;
       const result = await api('order', state, {
         side,
         intent: reduceOnly ? 'close' : 'open',
@@ -222,9 +222,15 @@ export default function PerpetualsPage({ user }) {
         await api('cancelStopAll', state, { positionId: riskPosition.positionId });
         await new Promise(r => setTimeout(r, 250));
       }
-      const common = { positionId: riskPosition.positionId, positionType, marginMode: n(riskPosition.openType) === 1 ? 'isolated' : 'cross', volume: n(riskPosition.holdVol), leverage: n(riskPosition.leverage) || leverage, trend: 1 };
-      if (sl) await api('placeStopOrder', state, { ...common, triggerPrice: sl, triggerType: positionType === 1 ? 2 : 1 });
-      if (tp) await api('placeStopOrder', state, { ...common, triggerPrice: tp, triggerType: positionType === 1 ? 1 : 2 });
+      await api('placeStopOrder', state, {
+        positionId: riskPosition.positionId,
+        volume: n(riskPosition.holdVol),
+        stopLossPrice: sl || undefined,
+        takeProfitPrice: tp || undefined,
+        lossTrend: 1,
+        profitTrend: 1,
+        priceProtect: 0
+      });
       await loadAccount();
       setRiskPosition(null);
     } catch (e) { setError(e.message || 'Could not update position protection.'); }
