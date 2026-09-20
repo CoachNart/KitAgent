@@ -628,11 +628,16 @@ export default function PerpetualsPage({ user }) {
     <section className="mexc-account-bar"><Metric label="Wallet Balance" value={`${fmt(usdt.cashBalance ?? usdt.equity)} USDT`} /><Metric label="Available" value={`${fmt(usdt.availableBalance)} USDT`} /><Metric label="Position Margin" value={`${fmt(usdt.positionMargin)} USDT`} /><Metric label="Unrealized PnL" value={`${fmt(usdt.unrealized)}`} /><Metric label="Equity" value={`${fmt(usdt.equity)} USDT`} /></section>
     <section className="mexc-bottom">
       <div className="ks-position-bar">
-        <div className="ks-position-switch">
+        <div className="ks-position-switch" role="tablist" aria-label="Futures account activity">
           <button className={tab === 'positions' ? 'active' : ''} type="button" onClick={() => setTab('positions')}>Positions <span>{positions.length}</span></button>
           <button className={tab === 'orders' ? 'active' : ''} type="button" onClick={() => setTab('orders')}>Orders <span>{openOrders.length}</span></button>
+          <button className={tab === 'history' ? 'active' : ''} type="button" onClick={() => setTab('history')}>Order history</button>
+          <button className={tab === 'positionHistory' ? 'active' : ''} type="button" onClick={() => setTab('positionHistory')}>Position history</button>
+          <button className={tab === 'funding' ? 'active' : ''} type="button" onClick={() => setTab('funding')}>Funding</button>
+          <button className={tab === 'risk' ? 'active' : ''} type="button" onClick={() => setTab('risk')}>Risk</button>
         </div>
         {tab === 'positions' && <button type="button" className="ks-close-all" onClick={closeAllPositions} disabled={busy || !positions.length}>Close all</button>}
+        {tab === 'orders' && <button type="button" className="ks-close-all" onClick={cancelAll} disabled={busy || !openOrders.length}>Cancel all</button>}
       </div>
 
       {tab === 'positions' && <div className="ks-positions-view">
