@@ -26,9 +26,11 @@ const request = async (url, options = {}) => {
   const text = await response.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { message: text }; }
-  if (!response.ok) throw new Error(data?.message || data?.msg || `MEXC request failed (${response.status})`);
-  if (data?.success === false) throw new Error(data?.message || data?.msg || `MEXC request failed (${data?.code ?? 'unknown'})`);
-  if (data?.code !== undefined && Number(data.code) !== 0) throw new Error(data?.message || data?.msg || `MEXC request failed (${data.code})`);
+  const code = data?.code ?? data?.errorCode;
+  const message = data?.message || data?.msg || data?.errorMsg;
+  if (!response.ok) throw new Error(`MEXC [${code ?? response.status}] ${message || `request failed (${response.status})`}`);
+  if (data?.success === false) throw new Error(`MEXC [${code ?? 'unknown'}] ${message || 'request failed'}`);
+  if (code !== undefined && Number(code) !== 0) throw new Error(`MEXC [${code}] ${message || 'request failed'}`);
   return data;
 };
 
@@ -63,9 +65,9 @@ const privateGet = (key, secret, path, params = {}) => {
 const validateOperationResult = (result, fallback = 'MEXC operation failed.') => {
   const candidates = Array.isArray(result?.data) ? result.data : [result?.data];
   const failed = candidates.find(item => Number(item?.errorCode || 0) !== 0 || item?.errorMsg);
-  if (failed) throw new Error(failed.errorMsg || `MEXC operation failed (code ${failed.errorCode}).`);
-  if (result?.errorCode && Number(result.errorCode) !== 0) throw new Error(result?.errorMsg || fallback);
-  if (result?.code !== undefined && Number(result.code) !== 0) throw new Error(result?.message || result?.msg || fallback);
+  if (failed) throw new Error(`MEXC [${failed.errorCode ?? 'unknown'}] ${failed.errorMsg || fallback}`);
+  if (result?.errorCode && Number(result.errorCode) !== 0) throw new Error(`MEXC [${result.errorCode}] ${result?.errorMsg || fallback}`);
+  if (result?.code !== undefined && Number(result.code) !== 0) throw new Error(`MEXC [${result.code}] ${result?.message || result?.msg || fallback}`);
   return result;
 };
 
