@@ -766,7 +766,6 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onM
       <div className="ks-action-dock">
         <button type="button" onClick={() => onReverse(p)} disabled={!onReverse}><span>↕</span>Reverse</button>
         <button type="button" onClick={() => onClose(p)}><span>×</span>Close</button>
-        <button type="button" className="flash" onClick={() => onClose(p)}><span>↯</span>Flash close</button>
       </div>
     </article>;
   })}</div>;
