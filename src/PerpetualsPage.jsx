@@ -274,7 +274,7 @@ export default function PerpetualsPage({ user }) {
     return initialMargin > 0 ? (pnl / initialMargin) * 100 : 0;
   };
 
-  const KITSETUPS_LOGO_URL = '/kitagent-logo.svg';
+  const KITSETUPS_LOGO_URL = '/kitsetups-logo.svg';
 
   const isClosedPosition = p => Boolean(p?.closeAvgPrice || p?.closeTime || p?.closeTimestamp || p?.closeVol || p?.realised !== undefined || p?.closeProfitLoss !== undefined);
 
