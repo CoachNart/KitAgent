@@ -150,10 +150,13 @@ export default function PerpetualsPage({ user }) {
       await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined });
       setVolume('');
       for (let i = 0; i < (orderType === 'market' ? 3 : 1); i++) {
-        await loadAccount();
-        if (orderType !== 'market' || account.positions.some(p => normalize(p.symbol) === normalize(symbol))) break;
+        const refreshed = await api('positions', state);
+        const rows = arr(refreshed);
+        setAccount(prev => ({ ...prev, positions: rows }));
+        if (orderType !== 'market' || rows.some(p => normalize(p.symbol) === normalize(symbol) && n(p.holdVol) > 0)) break;
         if (i < 2) await new Promise(r => setTimeout(r, 650));
       }
+      await loadAccount();
       setTab(orderType === 'market' ? 'positions' : 'orders');
     } catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
   };
