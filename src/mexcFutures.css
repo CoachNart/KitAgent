@@ -42,7 +42,7 @@
   align-items:center;gap:14px;padding:10px 16px;min-height:66px;background:#090d12;border-bottom:1px solid var(--ks-line);
 }
 .mexc-brand{display:flex;align-items:center;gap:9px;min-width:142px}
-.mexc-logo-image{width:34px;height:34px;object-fit:contain;border-radius:9px;display:block;filter:drop-shadow(0 0 10px rgba(24,224,208,.18))}
+.mexc-logo-image{width:28px;height:28px;object-fit:contain;border-radius:9px;display:block;filter:drop-shadow(0 0 10px rgba(24,224,208,.18))}
 .mexc-logo{
   width:32px;height:32px;display:grid;place-items:center;border-radius:9px;background:var(--ks-cyan);
   color:#061012;font-weight:950;font-size:16px;box-shadow:0 0 18px rgba(24,224,208,.2)
@@ -161,7 +161,7 @@
 }
 @media(max-width:720px){
   .mexc-terminal{border-radius:0;border-left:0;border-right:0;box-shadow:none}.mexc-section-nav{height:50px;gap:25px;padding:0 12px}.mexc-section-nav button{font-size:13px}.mexc-section-nav .nav-card{margin-left:auto}
-  .mexc-topbar{grid-template-columns:auto minmax(0,1fr) auto;gap:9px;padding:8px 10px;min-height:60px}.mexc-brand{min-width:0}.mexc-brand div{display:none}.mexc-logo{width:32px;height:32px}
+  .mexc-topbar{grid-template-columns:auto minmax(0,1fr) auto;gap:9px;padding:8px 10px;min-height:60px}.mexc-brand{min-width:0}.mexc-brand div{display:none}.mexc-logo{width:28px;height:28px}
   .mexc-pair-button{height:38px}.mexc-pair-button b{font-size:16px}.mexc-ticker{display:flex;flex-direction:column;align-items:flex-start;gap:0}.mexc-ticker b{font-size:12px}.mexc-ticker span{font-size:9px}.mexc-market-tools{display:none}
   .mexc-connection{grid-column:1/-1;justify-content:space-between;min-height:32px;padding-top:2px}.mexc-connection button{height:32px}
   .mexc-stats{padding-bottom:1px}.mexc-stat{min-width:102px;padding:8px 10px}.mexc-stat b{font-size:9px}
