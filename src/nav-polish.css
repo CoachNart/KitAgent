@@ -124,3 +124,93 @@
   .top-header .connect-btn{font-size:0!important;padding:8px!important}
   .top-header .connect-btn svg{margin:0!important}
 }
+
+
+/* Global header pulse + compact profile control. */
+.top-header .header-pulse{
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+  padding:7px 9px!important;
+  border:1px solid rgba(255,255,255,.06)!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.025)!important;
+}
+.top-header .header-pulse i{
+  display:block!important;
+  width:7px!important;
+  height:7px!important;
+  border-radius:50%!important;
+  position:relative!important;
+}
+.top-header .header-pulse i:after{
+  content:""!important;
+  position:absolute!important;
+  inset:-3px!important;
+  border-radius:50%!important;
+  animation:ksPulse 1.8s ease-out infinite!important;
+}
+.top-header .pulse-green{background:#42e889!important;box-shadow:0 0 8px rgba(66,232,137,.8)!important}
+.top-header .pulse-green:after{border:1px solid rgba(66,232,137,.65)!important}
+.top-header .pulse-red{background:#ff5368!important;box-shadow:0 0 8px rgba(255,83,104,.72)!important;animation-delay:.9s!important}
+.top-header .pulse-red:after{border:1px solid rgba(255,83,104,.58)!important;animation-delay:.9s!important}
+@keyframes ksPulse{
+  0%{transform:scale(.7);opacity:.9}
+  70%{transform:scale(1.9);opacity:0}
+  100%{transform:scale(2);opacity:0}
+}
+.top-header .profile-avatar{
+  position:relative!important;
+  width:38px!important;
+  height:38px!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  border-radius:50%!important;
+  cursor:pointer!important;
+  display:grid!important;
+  place-items:center!important;
+  flex:0 0 38px!important;
+  transition:transform .18s ease!important;
+}
+.top-header .profile-avatar:hover{transform:translateY(-1px)!important}
+.top-header .profile-avatar-ring{
+  width:34px!important;
+  height:34px!important;
+  display:grid!important;
+  place-items:center!important;
+  border-radius:50%!important;
+  overflow:hidden!important;
+  color:#eefcff!important;
+  font-size:11px!important;
+  font-weight:800!important;
+  letter-spacing:.02em!important;
+  background:linear-gradient(145deg,rgba(70,226,219,.22),rgba(103,91,255,.22))!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  box-shadow:0 5px 16px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.12)!important;
+}
+.top-header .profile-avatar-ring img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+}
+.top-header .profile-status{
+  position:absolute!important;
+  right:1px!important;
+  bottom:1px!important;
+  width:8px!important;
+  height:8px!important;
+  border-radius:50%!important;
+  background:#42e889!important;
+  border:2px solid #0b1118!important;
+  box-shadow:0 0 7px rgba(66,232,137,.75)!important;
+}
+@media(max-width:760px){
+  .top-header .header-pulse{display:flex!important;padding:6px 8px!important;gap:6px!important}
+  .top-header .profile-avatar{width:34px!important;height:34px!important;flex-basis:34px!important}
+  .top-header .profile-avatar-ring{width:31px!important;height:31px!important}
+}
+@media(max-width:390px){
+  .top-header .header-pulse{padding:5px 7px!important}
+  .top-header .profile-avatar{width:33px!important;height:33px!important;flex-basis:33px!important}
+}
