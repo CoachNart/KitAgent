@@ -59,6 +59,14 @@ const privateGet = (key, secret, path, params = {}) => {
   const signedRequest = signed({ key, secret, path, params });
   return request(signedRequest.url, { headers: signedRequest.headers });
 };
+const validateOperationResult = (result, fallback = 'MEXC operation failed.') => {
+  const candidates = Array.isArray(result?.data) ? result.data : [result?.data];
+  const failed = candidates.find(item => Number(item?.errorCode || 0) !== 0 || item?.errorMsg);
+  if (failed) throw new Error(failed.errorMsg || `MEXC operation failed (code ${failed.errorCode}).`);
+  if (result?.errorCode && Number(result.errorCode) !== 0) throw new Error(result?.errorMsg || fallback);
+  return result;
+};
+
 const privatePost = (key, secret, path, payload) => {
   const body = JSON.stringify(payload);
   const signedRequest = signed({ key, secret, path, method: 'POST', body });
@@ -111,7 +119,7 @@ export default async function handler(req, res) {
     }
     if (action === 'balance') return json(res, 200, await privateGet(key, secret, '/api/v1/private/account/assets'));
     if (action === 'positions') return json(res, 200, await privateGet(key, secret, '/api/v1/private/position/open_positions', { symbol }));
-    if (action === 'orders') return json(res, 200, await privateGet(key, secret, '/api/v1/private/order/list/open_orders', { page_num: 1, page_size: 100 }));
+    if (action === 'orders') return json(res, 200, await privateGet(key, secret, `/api/v1/private/order/list/open_orders/${encodeURIComponent(symbol)}`, { page_num: 1, page_size: 100 }));
     if (action === 'stopOrders') return json(res, 200, await privateGet(key, secret, '/api/v1/private/stoporder/open_orders', { symbol }));
     if (action === 'history') return json(res, 200, await privateGet(key, secret, '/api/v1/private/order/list/history_orders', { page_num: 1, page_size: 100, symbol }));
     if (action === 'positionHistory') return json(res, 200, await privateGet(key, secret, '/api/v1/private/position/list/history_positions', { page_num: 1, page_size: 100, symbol }));
@@ -182,8 +190,8 @@ export default async function handler(req, res) {
       return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/change_plan_price', payload));
     }
 
-    if (action === 'cancelStopOrder') return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/cancel', [{ stopPlanOrderId: Number(body.stopPlanOrderId) }]));
-    if (action === 'cancelStopAll') return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/cancel_all', { positionId: body.positionId ? Number(body.positionId) : undefined, symbol }));
+    if (action === 'cancelStopOrder') return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/stoporder/cancel', [{ stopPlanOrderId: Number(body.stopPlanOrderId) }]), 'Could not cancel the stop order.'));
+    if (action === 'cancelStopAll') return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/stoporder/cancel_all', { positionId: body.positionId ? Number(body.positionId) : undefined, symbol }), 'Could not cancel position protection.'));
 
     if (action === 'closePosition') {
       const positionType = Number(body.positionType);
@@ -201,7 +209,7 @@ export default async function handler(req, res) {
         reduceOnly: positionMode === 2 ? true : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      const result = await privatePost(key, secret, '/api/v1/private/order/create', payload);
+      const result = validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/create', payload), 'Close order was rejected by MEXC.');
       return json(res, 200, { ok: true, orderId: result?.data ?? result });
     }
 
@@ -229,11 +237,11 @@ export default async function handler(req, res) {
         stpMode: body.stpMode !== undefined ? Number(body.stpMode) : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      return json(res, 200, await privatePost(key, secret, '/api/v1/private/order/create', payload));
+      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/create', payload), 'Order was rejected by MEXC.'));
     }
 
-    if (action === 'cancel') return json(res, 200, await privatePost(key, secret, '/api/v1/private/order/cancel', { orderIds: body.orderIds || [] }));
-    if (action === 'cancelAll') return json(res, 200, await privatePost(key, secret, '/api/v1/private/order/cancel_all', { symbol }));
+    if (action === 'cancel') return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/cancel', { orderIds: body.orderIds || [] }), 'Order cancellation was rejected by MEXC.'));
+    if (action === 'cancelAll') return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/cancel_all', { symbol }), 'Cancel-all was rejected by MEXC.'));
 
     return json(res, 400, { error: `Unsupported MEXC action: ${action}` });
   } catch (error) {
