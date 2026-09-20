@@ -627,32 +627,17 @@ export default function PerpetualsPage({ user }) {
     </main>
     <section className="mexc-account-bar"><Metric label="Wallet Balance" value={`${fmt(usdt.cashBalance ?? usdt.equity)} USDT`} /><Metric label="Available" value={`${fmt(usdt.availableBalance)} USDT`} /><Metric label="Position Margin" value={`${fmt(usdt.positionMargin)} USDT`} /><Metric label="Unrealized PnL" value={`${fmt(usdt.unrealized)}`} /><Metric label="Equity" value={`${fmt(usdt.equity)} USDT`} /></section>
     <section className="mexc-bottom">
-      <div className="mexc-position-appbar">
-        <div className="mexc-position-tabs">
-          <button className={tab === 'positions' ? 'active' : ''} onClick={() => { setTab('positions'); setMorePositionsOpen(false); }}>Positions({positions.length})</button>
-          <button className={tab === 'orders' ? 'active' : ''} onClick={() => { setTab('orders'); setMorePositionsOpen(false); }}>Open Orders({openOrders.length})</button>
-          <button className="mexc-ai-tab" type="button" aria-label="AI Strategy" onClick={() => setError('AI Strategy is not enabled for this Futures account yet.')}>AI Strategy(0)</button>
+      <div className="ks-position-bar">
+        <div className="ks-position-switch">
+          <button className={tab === 'positions' ? 'active' : ''} type="button" onClick={() => setTab('positions')}>Positions <span>{positions.length}</span></button>
+          <button className={tab === 'orders' ? 'active' : ''} type="button" onClick={() => setTab('orders')}>Orders <span>{openOrders.length}</span></button>
         </div>
-        <div className="mexc-position-more-wrap">
-          <button className="mexc-position-doc" type="button" aria-label="More account views" onClick={() => setMorePositionsOpen(v => !v)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h8l3 3v14h-11z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M14.5 3.5v3h3M9 11h6M9 15h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-          </button>
-          {morePositionsOpen && <div className="mexc-position-more-menu">
-            {[['history','Order History'],['positionHistory','Position History'],['funding','Funding'],['risk','Risk / Fees']].map(([id,label]) => <button key={id} type="button" onClick={() => { setTab(id); setMorePositionsOpen(false); }}>{label}</button>)}
-          </div>}
-        </div>
+        {tab === 'positions' && <button type="button" className="ks-close-all" onClick={closeAllPositions} disabled={busy || !positions.length}>Close all</button>}
       </div>
 
-      {tab === 'positions' && <div className="mexc-positions-view">
-        <div className="mexc-position-toolbar">
-          <label className="mexc-hide-pairs"><input type="checkbox" checked={hideOtherPairs} onChange={e => setHideOtherPairs(e.target.checked)} /><span className="mexc-checkmark" aria-hidden="true" />Hide other pairs</label>
-          <div className="mexc-position-toolbar-right">
-            <button type="button" className="mexc-close-all" onClick={closeAllPositions} disabled={busy || !positions.length}>Close All</button>
-            <button type="button" className="mexc-info-button" title="Position information" aria-label="Position information" onClick={() => setMarketInfoOpen(true)}>i</button>
-          </div>
-        </div>
-        <div className="mexc-position-list">
-          <Positions rows={positions} stopOrders={stopOrders} contractSize={orderContractSize} mark={n(ticker?.fairPrice || ticker?.lastPrice) || last} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} onReverse={reversePosition} onChart={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} onRefresh={loadAccount} />
+      {tab === 'positions' && <div className="ks-positions-view">
+        <div className="ks-position-list">
+          <Positions rows={positions} stopOrders={stopOrders} contractSize={orderContractSize} mark={n(ticker?.fairPrice || ticker?.lastPrice) || last} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onManageRisk={openRiskManager} onReverse={reversePosition} onChart={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} onRefresh={loadAccount} />
         </div>
       </div>}
 
@@ -714,9 +699,9 @@ function Metric({ label, value }) { return <div className="mexc-metric"><small>{
 function BookRow({ row, ask }) { const price = n(row?.[0] ?? row?.price), size = n(row?.[1] ?? row?.size); return <div className="book-row"><span className={ask ? 'ask' : 'bid'}>{fmt(price)}</span><span>{fmt(size)}</span><span>{fmt(size * price, 2)}</span></div>; }
 function CandleChart({ data }) { const w = 1000, h = 460, pad = 30, max = Math.max(...data.map(x => x.high), 0), min = Math.min(...data.map(x => x.low), max || 1), range = max - min || 1, visible = data.slice(-120); return <div className="candle-wrap"><svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="candle-chart"><rect width="100%" height="100%" fill="#080c12"/>{[1,2,3,4].map(i => <line key={i} x1="0" x2={w} y1={(h / 5) * i} y2={(h / 5) * i} stroke="#18212d" />)}{visible.map((c, i) => { const x = pad + i * ((w - pad * 2) / Math.max(1, visible.length - 1)); const y = v => pad + ((max - v) / range) * (h - pad * 2); const up = c.close >= c.open; return <g key={c.time || i}><line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={up ? '#18e0d0' : '#ff3f5f'} /><rect x={x - 2} y={Math.min(y(c.open), y(c.close))} width="4" height={Math.max(2, Math.abs(y(c.open) - y(c.close)))} fill={up ? '#18e0d0' : '#ff3f5f'} /></g>; })}</svg>{!visible.length && <div className="chart-empty">Loading candles…</div>}</div>; }
 function Empty({ text }) { return <div className="table-empty">{text}</div>; }
-function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onDownload, onManageRisk, onReverse, onChart, onRefresh }) {
+function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onManageRisk, onReverse, onChart, onRefresh }) {
   if (!rows.length) return <Empty text="No open positions for this contract." />;
-  return <div className="mexc-position-cards">{rows.map(p => {
+  return <div className="ks-position-cards">{rows.map(p => {
     const related = stopOrders.filter(o => String(o.positionId) === String(p.positionId));
     const tp = related.find(o => n(o.takeProfitPrice) > 0)?.takeProfitPrice;
     const sl = related.find(o => n(o.stopLossPrice) > 0)?.stopLossPrice;
@@ -733,55 +718,52 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onD
     const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
     const positive = pnl >= 0;
     const isolated = String(p.marginMode || '').toLowerCase() === 'isolated' || n(p.openType) === 1;
-    const autoMarginAvailable = isolated;
-    return <article className="mexc-position-card" key={p.positionId}>
-      <div className="mexc-position-head">
-        <div className="mexc-position-contract">
-          <span className={n(p.positionType) === 1 ? 'mexc-position-side long' : 'mexc-position-side short'}>{n(p.positionType) === 1 ? 'L' : 'S'}</span>
-          <strong>{displaySymbol(p.symbol)}</strong>
-          <span className="mexc-position-perpetual">Perpetual</span>
+    return <article className="ks-position-card" key={p.positionId}>
+      <div className="ks-position-head">
+        <div className="ks-position-contract">
+          <span className={n(p.positionType) === 1 ? 'ks-side long' : 'ks-side short'}>{n(p.positionType) === 1 ? 'L' : 'S'}</span>
+          <div><strong>{displaySymbol(p.symbol)}</strong><small>{isolated ? 'Isolated' : 'Cross'} · {fmt(lev, 0)}×</small></div>
         </div>
-        <div className="mexc-position-head-icons">
-          <button type="button" aria-label="Open chart" title="Open chart" onClick={onChart}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19V9M12 19V5M18 19v-8M4 19h16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+        <div className="ks-position-tools">
+          <button type="button" aria-label="Open chart" title="Chart" onClick={onChart}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18V9M11 18V5M17 18v-7M3 18h18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
           </button>
-          <button type="button" className="mexc-pnl-icon" aria-label="Open PnL card" title="PnL card" onClick={() => onShare(p)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18V9M12 18V5M19 18v-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M4 20h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg><span>%</span>
+          <button type="button" className="ks-pnl-roller" aria-label="Open PnL card" title="PnL card · Share / Download" onClick={() => onShare(p)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="4" width="11" height="6" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8"/>
+              <path d="M15 7h3.5M18.5 7v8M18.5 15H14M14 15v4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
-          <button type="button" aria-label="Refresh position" title="Refresh position" onClick={() => void onRefresh?.()}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 11V5m0 6h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <button type="button" aria-label="Refresh position" title="Refresh" onClick={() => void onRefresh?.()}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8V4m0 4h-4M19 4a8 8 0 1 0 1 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
         </div>
       </div>
 
-      <div className="mexc-position-mode">{isolated ? 'Isolated' : 'Cross'} <b>{fmt(lev, 0)}X</b><span>›</span></div>
-
-      <div className="mexc-position-pnl-row">
-        <div className="mexc-position-pnl-label">Unrealized PNL <span>F</span></div>
-        <strong className={positive ? 'profit' : 'loss'}>{positive ? '+' : ''}{pnl.toFixed(4)} <em>[{positive ? '+' : ''}{roi.toFixed(2)}%]</em></strong>
+      <div className="ks-position-pnl">
+        <div><span>UNREALIZED PNL</span><small>{positive ? 'In profit' : 'In loss'}</small></div>
+        <strong className={positive ? 'profit' : 'loss'}>{positive ? '+' : ''}{roi.toFixed(2)}%</strong>
       </div>
 
-      <div className="mexc-position-grid">
-        <div><small>Size (USDT)</small><b>{fmt(p.holdVol * (contractSize || 1) * fair, 4)}</b></div>
-        <div><small>Margin (USDT)</small><b>{fmt(p.im, 4)} <span className="mexc-margin-plus" aria-hidden="true">+</span></b></div>
-        <div><small>Margin Ratio</small><b>{marginRatio}</b></div>
-        <div><small>Avg. Price</small><b>{fmt(entry)}</b></div>
-        <div><small>Fair Price</small><b>{fmt(fair)}</b></div>
-        <div><small>Liq. Price</small><b>{fmt(liq)}</b></div>
+      <div className="ks-position-values">
+        <div><small>Entry</small><b>{fmt(entry)}</b></div>
+        <div><small>Mark</small><b>{fmt(fair)}</b></div>
+        <div><small>Size</small><b>{fmt(p.holdVol * (contractSize || 1) * fair, 4)}</b></div>
+        <div><small>Margin</small><b>{fmt(p.im, 4)}</b></div>
+        <div><small>Liquidation</small><b>{fmt(liq)}</b></div>
+        <div><small>Margin ratio</small><b>{marginRatio}</b></div>
       </div>
 
-      <div className="mexc-auto-margin">
-        <span>Auto Margin Addition</span>
-        <button type="button" className={autoMarginAvailable ? 'available' : ''} disabled aria-label="Auto Margin Addition is controlled by exchange">{autoMarginAvailable ? <span /> : <span />}</button>
+      <div className="ks-position-protection">
+        <span>Protection</span>
+        <div><b className={sl ? 'set' : ''}>SL {sl ? fmt(sl) : '—'}</b><b className={tp ? 'set' : ''}>TP {tp ? fmt(tp) : '—'}</b></div>
       </div>
 
-      <div className="mexc-position-expand" aria-hidden="true"><span>⌄</span></div>
-
-      <div className="mexc-position-actions">
-        <button type="button" onClick={() => onManageRisk(p)}>TP/SL</button>
+      <div className="ks-position-actions">
+        <button type="button" onClick={() => onManageRisk(p)}>TP / SL</button>
         <button type="button" onClick={() => onReverse(p)} disabled={!onReverse}>Reverse</button>
         <button type="button" onClick={() => onClose(p)}>Close</button>
-        <button type="button" className="flash" onClick={() => onClose(p)}>Flash Close</button>
+        <button type="button" className="flash" onClick={() => onClose(p)}>Flash close</button>
       </div>
     </article>;
   })}</div>;
