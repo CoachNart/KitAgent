@@ -619,7 +619,7 @@ export default function PerpetualsPage({ user }) {
           </div>
         </div>
         <div className="mexc-position-list">
-          <Positions rows={positions} stopOrders={stopOrders} contractSize={orderContractSize} mark={n(ticker?.fairPrice || ticker?.lastPrice) || last} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} />
+          <Positions rows={positions} stopOrders={stopOrders} contractSize={orderContractSize} mark={n(ticker?.fairPrice || ticker?.lastPrice) || last} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} onChart={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} onRefresh={loadAccount} />
         </div>
       </div>}
 
@@ -681,7 +681,7 @@ function Metric({ label, value }) { return <div className="mexc-metric"><small>{
 function BookRow({ row, ask }) { const price = n(row?.[0] ?? row?.price), size = n(row?.[1] ?? row?.size); return <div className="book-row"><span className={ask ? 'ask' : 'bid'}>{fmt(price)}</span><span>{fmt(size)}</span><span>{fmt(size * price, 2)}</span></div>; }
 function CandleChart({ data }) { const w = 1000, h = 460, pad = 30, max = Math.max(...data.map(x => x.high), 0), min = Math.min(...data.map(x => x.low), max || 1), range = max - min || 1, visible = data.slice(-120); return <div className="candle-wrap"><svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="candle-chart"><rect width="100%" height="100%" fill="#080c12"/>{[1,2,3,4].map(i => <line key={i} x1="0" x2={w} y1={(h / 5) * i} y2={(h / 5) * i} stroke="#18212d" />)}{visible.map((c, i) => { const x = pad + i * ((w - pad * 2) / Math.max(1, visible.length - 1)); const y = v => pad + ((max - v) / range) * (h - pad * 2); const up = c.close >= c.open; return <g key={c.time || i}><line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={up ? '#18e0d0' : '#ff3f5f'} /><rect x={x - 2} y={Math.min(y(c.open), y(c.close))} width="4" height={Math.max(2, Math.abs(y(c.open) - y(c.close)))} fill={up ? '#18e0d0' : '#ff3f5f'} /></g>; })}</svg>{!visible.length && <div className="chart-empty">Loading candles…</div>}</div>; }
 function Empty({ text }) { return <div className="table-empty">{text}</div>; }
-function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onDownload, onManageRisk }) {
+function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onDownload, onManageRisk, onChart, onRefresh }) {
   if (!rows.length) return <Empty text="No open positions for this contract." />;
   return <div className="mexc-position-cards">{rows.map(p => {
     const related = stopOrders.filter(o => String(o.positionId) === String(p.positionId));
@@ -699,7 +699,8 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onD
     const marginRatio = p.marginRatio != null ? pct(p.marginRatio) : '—';
     const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
     const positive = pnl >= 0;
-    const autoMarginAvailable = String(p.marginMode || p.openType || '').toLowerCase() === '1' || String(p.marginMode || '').toLowerCase() === 'isolated';
+    const isolated = String(p.marginMode || '').toLowerCase() === 'isolated' || n(p.openType) === 1;
+    const autoMarginAvailable = isolated;
     return <article className="mexc-position-card" key={p.positionId}>
       <div className="mexc-position-head">
         <div className="mexc-position-contract">
@@ -708,20 +709,20 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onD
           <span className="mexc-position-perpetual">Perpetual</span>
         </div>
         <div className="mexc-position-head-icons">
-          <button type="button" aria-label="Open chart" title="Open chart" onClick={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          <button type="button" aria-label="Open chart" title="Open chart" onClick={onChart}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19V9M12 19V5M18 19v-8M4 19h16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
           </button>
-          <button type="button" aria-label="Refresh position" title="Refresh position" onClick={() => void loadAccount()}>
+          <button type="button" aria-label="Refresh position" title="Refresh position" onClick={() => void onRefresh?.()}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 11V5m0 6h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
         </div>
       </div>
 
-      <div className="mexc-position-mode">{p.marginMode || p.openType === 1 ? 'Isolated' : 'Cross'} <b>{fmt(lev, 0)}X</b><span>›</span></div>
+      <div className="mexc-position-mode">{isolated ? 'Isolated' : 'Cross'} <b>{fmt(lev, 0)}X</b><span>›</span></div>
 
       <div className="mexc-position-pnl-row">
         <div className="mexc-position-pnl-label">Unrealized PNL <span>F</span></div>
-        <strong className={positive ? 'profit' : 'loss'}>{positive ? '' : ''}{pnl.toFixed(4)} <em>[{roi.toFixed(2)}%]</em></strong>
+        <strong className={positive ? 'profit' : 'loss'}>{positive ? '+' : ''}{pnl.toFixed(4)} <em>[{positive ? '+' : ''}{roi.toFixed(2)}%]</em></strong>
       </div>
 
       <div className="mexc-position-grid">
