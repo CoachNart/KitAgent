@@ -146,8 +146,37 @@
 .submit{width:100%;height:42px;border:0;border-radius:9px;font-weight:900;cursor:pointer;margin-top:5px;box-shadow:0 4px 16px rgba(0,0,0,.22)}.submit:disabled{opacity:.55;cursor:not-allowed}
 .buy-submit,.connect-submit{background:var(--ks-cyan);color:#061012}.sell-submit{background:var(--ks-red);color:#fff}
 .available{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:var(--ks-muted);font-size:8px;font-variant-numeric:tabular-nums}.available b{color:var(--ks-ink)}
-.mexc-account-bar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--ks-line);border-top:1px solid var(--ks-line)}
-.mexc-metric{background:#0a0f14;padding:11px 12px}.mexc-metric b{display:block;font-size:10px;margin-top:4px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mexc-account-bar{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;
+  margin:0;padding:10px 12px;
+  background:linear-gradient(180deg,#070b10,#090e14);
+  border-top:1px solid rgba(255,255,255,.055);
+  border-bottom:1px solid rgba(255,255,255,.045)
+}
+.mexc-metric{
+  position:relative;min-width:0;padding:12px 13px;
+  border:1px solid rgba(255,255,255,.055);
+  border-radius:12px;
+  background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.018));
+  box-shadow:inset 0 1px rgba(255,255,255,.025);
+  overflow:hidden
+}
+.mexc-metric:after{
+  content:"";position:absolute;width:80px;height:80px;right:-42px;top:-48px;
+  border-radius:50%;background:rgba(0,199,254,.055);filter:blur(18px);pointer-events:none
+}
+.mexc-metric small{
+  display:block;color:#697683;font-size:7px;text-transform:uppercase;
+  letter-spacing:.12em;font-weight:750
+}
+.mexc-metric b{
+  display:block;color:#e8eef2;font-size:13px;font-weight:750;
+  margin-top:8px;white-space:nowrap;font-variant-numeric:tabular-nums;
+  letter-spacing:-.015em
+}
+.mexc-metric:nth-child(4) b{color:#18e0d0}
+.ks-action-dock{grid-template-columns:1fr 1fr}
+.ks-action-dock button{height:36px;border-radius:10px}
 .mexc-bottom{border-top:1px solid var(--ks-line);background:#090d12}.mexc-tabs{display:flex;align-items:center;gap:3px;padding:9px 10px 0;overflow:auto;white-space:nowrap}
 .mexc-tabs .cancel-all{margin-left:auto;color:var(--ks-red);border-color:var(--ks-red-line)}
 .mexc-table-wrap{padding:8px 10px;overflow:auto;min-height:145px}.mexc-table-wrap table{width:100%;border-collapse:collapse;font-size:8px}
