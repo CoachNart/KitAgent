@@ -40,7 +40,7 @@ function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPass
        <span><strong>KitSetups</strong><small>Your Crypto Command Center</small></span>
      </div>
      <div className="auth-heading">
-       <h1>{isSignin?'Welcome back':'Get started'}</h1>
+       <h1>{isSignin?'Good To See You!':'Get started'}</h1>
        <p>{isSignin?'Sign in to continue.':'Create your KitSetups account.'}</p>
      </div>
      <div className="auth-divider"/>
