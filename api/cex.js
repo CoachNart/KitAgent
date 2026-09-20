@@ -239,7 +239,7 @@ export default async function handler(req, res) {
         marketCeiling: Boolean(body.marketCeiling),
         flashClose: Boolean(body.flashClose),
         bboTypeNum: body.bboTypeNum !== undefined ? Number(body.bboTypeNum) : undefined,
-        stpMode: body.stpMode !== undefined ? Number(body.stpMode) : undefined
+        stpMode: body.stpMode !== undefined ? Number(body.stpMode) : undefined,
         externalOid: body.externalOid ? String(body.externalOid) : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
