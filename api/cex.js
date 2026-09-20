@@ -137,7 +137,7 @@ export default async function handler(req, res) {
         symbol,
         positionType: Number(body.positionType || 1)
       };
-      return json(res, 200, await privatePost(key, secret, '/api/v1/private/position/change_leverage', payload));
+      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/position/change_leverage', payload), 'Leverage change was rejected by MEXC.'));
     }
 
     if (action === 'placeStopOrder') {
@@ -157,7 +157,7 @@ export default async function handler(req, res) {
         leverage: body.leverage ? Number(body.leverage) : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/place', payload));
+      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/stoporder/place', payload), 'TP/SL order was rejected by MEXC.'));
     }
 
     if (action === 'placeStopLimit') {
@@ -187,7 +187,7 @@ export default async function handler(req, res) {
         takeProfitPrice: body.takeProfit ? Number(body.takeProfit) : undefined
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      return json(res, 200, await privatePost(key, secret, '/api/v1/private/stoporder/change_plan_price', payload));
+      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/stoporder/change_plan_price', payload), 'TP/SL adjustment was rejected by MEXC.'));
     }
 
     if (action === 'cancelStopOrder') return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/stoporder/cancel', [{ stopPlanOrderId: Number(body.stopPlanOrderId) }]), 'Could not cancel the stop order.'));
