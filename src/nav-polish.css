@@ -234,6 +234,7 @@
 .header-brand b{font-size:14px!important}
 .header-actions{
   gap:7px!important;
+  margin-right:12px!important;
 }
 .top-header .header-pulse{
   padding:5px 7px!important;
