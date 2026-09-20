@@ -264,6 +264,39 @@ export default function PerpetualsPage({ user }) {
     } catch (e) { setError(e.message || 'Close position failed.'); } finally { setBusy(false); }
   };
 
+  const reversePosition = async p => {
+    if (!p?.positionId || !n(p.holdVol)) { setError('Position details are incomplete; refresh the account and try again.'); return; }
+    if (!connected) { setError('Connect your Futures account before reversing a position.'); return; }
+    setBusy(true); setError('');
+    try {
+      const positionMode = n(account.positionMode?.positionMode ?? account.positionMode) || undefined;
+      await api('closePosition', state, {
+        positionId: p.positionId,
+        positionType: n(p.positionType),
+        openType: n(p.openType),
+        volume: n(p.holdVol),
+        positionMode
+      });
+      try { await api('cancelStopAll', state, { positionId: p.positionId }); } catch {}
+      await new Promise(r => setTimeout(r, 500));
+      const reverseSide = n(p.positionType) === 1 ? 'sell' : 'buy';
+      await api('order', state, {
+        intent: 'open',
+        side: reverseSide,
+        volume: n(p.holdVol),
+        leverage: n(p.leverage || p.leverageRatio) || leverage,
+        type: 5,
+        marginMode: n(p.openType) === 1 ? 'isolated' : 'cross',
+        positionMode
+      });
+      await loadAccount();
+    } catch (e) {
+      setError(e.message || 'Reverse position failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const closeAllPositions = async () => {
     if (!positions.length) return;
     setBusy(true); setError('');
@@ -619,7 +652,7 @@ export default function PerpetualsPage({ user }) {
           </div>
         </div>
         <div className="mexc-position-list">
-          <Positions rows={positions} stopOrders={stopOrders} contractSize={orderContractSize} mark={n(ticker?.fairPrice || ticker?.lastPrice) || last} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} onChart={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} onRefresh={loadAccount} />
+          <Positions rows={positions} stopOrders={stopOrders} contractSize={orderContractSize} mark={n(ticker?.fairPrice || ticker?.lastPrice) || last} onClose={closePosition} onShare={p => setPnlSharePosition(p)} onDownload={downloadPnl} onManageRisk={openRiskManager} onReverse={reversePosition} onChart={() => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} onRefresh={loadAccount} />
         </div>
       </div>}
 
@@ -681,7 +714,7 @@ function Metric({ label, value }) { return <div className="mexc-metric"><small>{
 function BookRow({ row, ask }) { const price = n(row?.[0] ?? row?.price), size = n(row?.[1] ?? row?.size); return <div className="book-row"><span className={ask ? 'ask' : 'bid'}>{fmt(price)}</span><span>{fmt(size)}</span><span>{fmt(size * price, 2)}</span></div>; }
 function CandleChart({ data }) { const w = 1000, h = 460, pad = 30, max = Math.max(...data.map(x => x.high), 0), min = Math.min(...data.map(x => x.low), max || 1), range = max - min || 1, visible = data.slice(-120); return <div className="candle-wrap"><svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="candle-chart"><rect width="100%" height="100%" fill="#080c12"/>{[1,2,3,4].map(i => <line key={i} x1="0" x2={w} y1={(h / 5) * i} y2={(h / 5) * i} stroke="#18212d" />)}{visible.map((c, i) => { const x = pad + i * ((w - pad * 2) / Math.max(1, visible.length - 1)); const y = v => pad + ((max - v) / range) * (h - pad * 2); const up = c.close >= c.open; return <g key={c.time || i}><line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={up ? '#18e0d0' : '#ff3f5f'} /><rect x={x - 2} y={Math.min(y(c.open), y(c.close))} width="4" height={Math.max(2, Math.abs(y(c.open) - y(c.close)))} fill={up ? '#18e0d0' : '#ff3f5f'} /></g>; })}</svg>{!visible.length && <div className="chart-empty">Loading candles…</div>}</div>; }
 function Empty({ text }) { return <div className="table-empty">{text}</div>; }
-function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onDownload, onManageRisk, onChart, onRefresh }) {
+function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onDownload, onManageRisk, onReverse, onChart, onRefresh }) {
   if (!rows.length) return <Empty text="No open positions for this contract." />;
   return <div className="mexc-position-cards">{rows.map(p => {
     const related = stopOrders.filter(o => String(o.positionId) === String(p.positionId));
@@ -711,6 +744,9 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onD
         <div className="mexc-position-head-icons">
           <button type="button" aria-label="Open chart" title="Open chart" onClick={onChart}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19V9M12 19V5M18 19v-8M4 19h16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          </button>
+          <button type="button" className="mexc-pnl-icon" aria-label="Open PnL card" title="PnL card" onClick={() => onShare(p)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18V9M12 18V5M19 18v-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M4 20h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg><span>%</span>
           </button>
           <button type="button" aria-label="Refresh position" title="Refresh position" onClick={() => void onRefresh?.()}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 11V5m0 6h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -743,7 +779,7 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onD
 
       <div className="mexc-position-actions">
         <button type="button" onClick={() => onManageRisk(p)}>TP/SL</button>
-        <button type="button" onClick={() => onClose(p)}>Reverse</button>
+        <button type="button" onClick={() => onReverse(p)} disabled={!onReverse}>Reverse</button>
         <button type="button" onClick={() => onClose(p)}>Close</button>
         <button type="button" className="flash" onClick={() => onClose(p)}>Flash Close</button>
       </div>
