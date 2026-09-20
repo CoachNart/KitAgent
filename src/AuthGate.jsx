@@ -34,41 +34,25 @@ function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPass
    <div className="auth-noise" aria-hidden="true"/>
    <div className="auth-orbit auth-orbit-one" aria-hidden="true"/>
    <div className="auth-orbit auth-orbit-two" aria-hidden="true"/>
-   <div className="auth-layout">
-     <section className="auth-story">
-       <div className="auth-story-brand">
-         <img src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups"/>
-         <div><b>KitSetups</b><span>TRADING INTELLIGENCE</span></div>
-       </div>
-       <div className="auth-story-copy">
-         <span className="auth-eyebrow"><i/> PRIVATE MARKET ACCESS</span>
-         <h1>Trade with a<br/><em>clearer edge.</em></h1>
-         <p>One focused workspace for live markets, structured setups, and the tools behind every decision.</p>
-       </div>
-       <div className="auth-story-footer">
-         <span><ShieldCheck size={14}/> Secure authentication</span>
-         <span><i/> Systems online</span>
-       </div>
-     </section>
-     <section className="auth-card">
-       <div className="auth-card-top">
-         <div>
-           <span className="auth-card-kicker">{isSignin?'WELCOME BACK':'START HERE'}</span>
-           <h2>{isSignin?'Sign in':'Create account'}</h2>
-         </div>
-         <div className="auth-index">{isSignin?'01':'02'}<span>/02</span></div>
-       </div>
-       {interactive&&<p className="auth-intro">{isSignin?'Enter your credentials to return to your trading workspace.':'Create your KitSetups account and get your workspace ready in a few seconds.'}</p>}
-       {interactive&&<form onSubmit={onSubmit} className="auth-form">
-         <label className="auth-field"><span>EMAIL ADDRESS</span><div className="auth-input-wrap"><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete={isSignin?'email':'email'}/><i>@</i></div></label>
-         <label className="auth-field"><span>PASSWORD</span><div className="auth-input-wrap"><input required minLength={6} type={showPassword?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={isSignin?'Enter your password':'At least 6 characters'} autoComplete={isSignin?'current-password':'new-password'}/><button type="button" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'} title={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></label>
-         {message&&<div className="auth-error">{message}</div>}
-         <button disabled={busy} className="auth-submit" type="submit"><span>{busy?'Securing access…':isSignin?'Enter workspace':'Create my account'}</span>{busy?<LoaderCircle size={16}/>:<LogIn size={16}/>}</button>
-         <div className="auth-switch-row"><span>{isSignin?'New to KitSetups?':'Already have an account?'}</span><button type="button" onClick={()=>{setMode(isSignin?'signup':'signin');setMessage('');setShowPassword(false)}}>{isSignin?'Create an account':'Sign in'}</button></div>
-       </form>}
-       {!interactive&&<div className="auth-error">{message}</div>}
-       <div className="auth-trust"><ShieldCheck size={14}/><span>Your credentials are protected by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</span></div>
-     </section>
-   </div>
+   <main className="auth-layout">
+     <div className="auth-brand">
+       <img src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups"/>
+       <span>KitSetups</span>
+     </div>
+     <div className="auth-heading">
+       <h1>{isSignin?'Welcome back':'Get started'}</h1>
+       <p>{isSignin?'Sign in to continue.':'Create your KitSetups account.'}</p>
+     </div>
+     <div className="auth-divider"/>
+     {interactive&&<form onSubmit={onSubmit} className="auth-form">
+       <label className="auth-field"><span>Email</span><div className="auth-input-wrap"><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/><i>@</i></div></label>
+       <label className="auth-field"><span>Password</span><div className="auth-input-wrap"><input required minLength={6} type={showPassword?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={isSignin?'Your password':'At least 6 characters'} autoComplete={isSignin?'current-password':'new-password'}/><button type="button" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'} title={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>
+       {message&&<div className="auth-error">{message}</div>}
+       <button disabled={busy} className="auth-submit" type="submit"><span>{busy?'Please wait…':isSignin?'Sign in':'Create account'}</span>{busy?<LoaderCircle size={15}/>:<LogIn size={15}/>}</button>
+       <div className="auth-switch-row"><span>{isSignin?'New here?':'Already have an account?'}</span><button type="button" onClick={()=>{setMode(isSignin?'signup':'signin');setMessage('');setShowPassword(false)}}>{isSignin?'Create account':'Sign in'}</button></div>
+     </form>}
+     {!interactive&&<div className="auth-error">{message}</div>}
+     <div className="auth-trust"><ShieldCheck size={13}/><span>Secure authentication</span></div>
+   </main>
  </div>
 }
