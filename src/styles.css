@@ -60,3 +60,11 @@
 .auth-trust svg{color:#5d969f}
 @media(max-width:480px){.auth-screen{padding:10px}.auth-layout{width:min(100%,390px);padding:25px 22px 18px;border-radius:21px}.auth-heading{margin-top:21px}.auth-heading h1{font-size:29px}.auth-divider{margin:20px 0 18px}}
 @media(max-width:350px){.auth-layout{padding:22px 18px 16px}.auth-brand img{width:34px;height:34px}.auth-brand span{font-size:14px}.auth-heading h1{font-size:27px}.auth-input-wrap input,.auth-submit{height:43px}}
+
+/* Auth brand tagline + sign-in accent */
+.auth-brand>span{display:flex!important;flex-direction:column!important;align-items:flex-start!important;text-align:left!important;line-height:1!important}
+.auth-brand>span strong{font-size:15px!important;font-weight:800!important;letter-spacing:-.04em!important}
+.auth-brand>span small{margin-top:4px!important;color:#68777d!important;font-size:6px!important;font-weight:600!important;letter-spacing:.09em!important;white-space:nowrap!important}
+.auth-submit-signin{color:#ff5368!important}
+.auth-submit-signin svg{color:#ff5368!important;stroke:currentColor!important}
+.auth-submit-signin span{color:#ff5368!important}
