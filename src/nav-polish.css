@@ -214,3 +214,94 @@
   .top-header .header-pulse{padding:5px 7px!important}
   .top-header .profile-avatar{width:33px!important;height:33px!important;flex-basis:33px!important}
 }
+
+
+/* Final global header tightening — keep the chrome minimal and balanced. */
+.top-header{
+  min-height:70px!important;
+  padding:8px 16px!important;
+  gap:12px!important;
+}
+.header-brand{
+  min-width:0!important;
+  gap:9px!important;
+}
+.header-brand img{
+  width:42px!important;
+  height:42px!important;
+  border-radius:11px!important;
+}
+.header-brand b{font-size:14px!important}
+.header-actions{
+  gap:7px!important;
+}
+.top-header .header-pulse{
+  padding:5px 7px!important;
+  gap:6px!important;
+  border-color:rgba(255,255,255,.045)!important;
+  background:rgba(255,255,255,.018)!important;
+}
+.top-header .header-pulse i{
+  width:6px!important;
+  height:6px!important;
+}
+.top-header .profile-avatar{
+  width:34px!important;
+  height:34px!important;
+  flex-basis:34px!important;
+}
+.top-header .profile-avatar-ring{
+  width:30px!important;
+  height:30px!important;
+  font-size:10px!important;
+}
+.top-header .profile-status{
+  width:7px!important;
+  height:7px!important;
+  right:1px!important;
+  bottom:1px!important;
+}
+@media(max-width:760px){
+  .top-header{
+    min-height:62px!important;
+    padding:7px 10px!important;
+    gap:7px!important;
+  }
+  .header-brand img{
+    width:37px!important;
+    height:37px!important;
+    border-radius:10px!important;
+  }
+  .header-brand b{font-size:12px!important}
+  .header-actions{gap:5px!important}
+  .top-header .header-pulse{
+    padding:5px 6px!important;
+    gap:5px!important;
+  }
+  .top-header .profile-avatar{
+    width:32px!important;
+    height:32px!important;
+    flex-basis:32px!important;
+  }
+  .top-header .profile-avatar-ring{
+    width:29px!important;
+    height:29px!important;
+  }
+}
+@media(max-width:390px){
+  .top-header{
+    min-height:58px!important;
+    padding:6px 9px!important;
+  }
+  .header-brand img{
+    width:35px!important;
+    height:35px!important;
+  }
+  .top-header .header-pulse{padding:4px 6px!important}
+  .top-header .profile-avatar{
+    width:30px!important;
+    height:30px!important;
+    flex-basis:30px!important;
+  }
+  .top-header .profile-avatar-ring{width:27px!important;height:27px!important}
+}
