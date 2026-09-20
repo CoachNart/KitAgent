@@ -73,3 +73,8 @@
 .auth-submit-signin{color:#ff1838!important;text-shadow:0 0 14px rgba(255,24,56,.18)!important}
 .auth-submit-signin span{color:#ff1838!important}
 .auth-submit-signin svg{color:#ff1838!important;stroke:#ff1838!important}
+
+/* Refined sign-in red */
+.auth-submit-signin{color:#ff3048!important;text-shadow:none!important}
+.auth-submit-signin span{color:#ff3048!important;font-weight:850!important}
+.auth-submit-signin svg{color:#ff3048!important;stroke:#ff3048!important;filter:none!important}
