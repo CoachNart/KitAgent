@@ -26,4 +26,49 @@ export default function AuthGate({children}){const [user,setUser]=useState(null)
  const submit=async event=>{event.preventDefault();if(!auth||!db)return;setBusy(true);setMessage('');const cleanEmail=email.trim().toLowerCase();try{await setPersistence(auth,browserLocalPersistence);if(mode==='signup'){const deviceId=await getDeviceBindingId();const response=await fetch('/api/register-account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:cleanEmail,password,deviceId,referralCode:getReferral()})});let payload={};try{payload=await response.json()}catch{}if(!response.ok)throw Object.assign(new Error(payload.error||'Account creation failed.'),{code:payload.code||'auth/registration-failed'});await signInWithCustomToken(auth,payload.customToken)}else{await signInWithEmailAndPassword(auth,cleanEmail,password)}}catch(error){const code=error?.code||'';const friendly={'ACCOUNT_ALREADY_EXISTS':'An account already exists for this email identity. Sign in instead.','NETWORK_ACCOUNT_EXISTS':'An account has already been created from this network. Sign in instead.','DEVICE_ALREADY_REGISTERED':'This device is already registered to another KitSetups account. Sign in to that account instead.','DEVICE_ID_INVALID':'This device could not be verified. Please refresh and try again.','ACCOUNT_ALREADY_BOUND':'This account is already bound to another device.','DEVICE_REGISTRATION_FAILED':'Device verification could not be completed. Please try again.','auth/email-already-in-use':'An account already exists with this email. Sign in instead.','auth/invalid-credential':'Email or password is incorrect.','auth/invalid-email':'Enter a valid email address.','auth/weak-password':'Use a stronger password (at least 6 characters).','auth/network-request-failed':'Network error. Check your connection and try again.','auth/too-many-requests':'Too many attempts. Please wait a moment and try again.','auth/registration-failed':'Account creation could not be completed. Please try again.'};setMessage(friendly[code]||error?.message||'Authentication failed.')}finally{setBusy(false)}};
  if(!firebaseConfigured)return <AuthScreen title="KitSetups setup required" message="Firebase is not configured for this deployment. Add the VITE_FIREBASE_* environment variables in Vercel, then redeploy."/>;if(!ready)return typeof children==='function'?children(null):cloneElement(children,{user:null});if(!user)return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} busy={busy} message={message} onSubmit={submit}/>;return typeof children==='function'?children(user):cloneElement(children,{user})}
 
-function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPassword,busy=false,message='',onSubmit,title='KitSetups'}){const interactive=Boolean(onSubmit);const [showPassword,setShowPassword]=useState(false);return <div className="auth-screen"><div className="auth-glow"/><div className="auth-card"><div className="auth-brand"><img src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups"/><div><b>KitSetups</b><small>The Crypto Command Center</small></div></div><div className="auth-kicker"><ShieldCheck size={14}/> SECURE ACCOUNT ACCESS</div><h1>{title}</h1>{interactive&&<p className="auth-intro">{mode==='signin'?'Sign in to continue to your command center.':'Create your account and KitSetups will generate your username and unique visual avatar automatically.'}</p>}{interactive&&<form onSubmit={onSubmit}><label className="auth-label">EMAIL<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label className="auth-label">PASSWORD<div style={{position:'relative'}}><input required minLength={6} type={showPassword?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" style={{paddingRight:44}}/><button type="button" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'} title={showPassword?'Hide password':'Show password'} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:28,height:28,padding:0,border:0,background:'transparent',color:'#7c9299',cursor:'pointer'}}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></label>{message&&<div className="auth-error">{message}</div>}<button disabled={busy} className="auth-submit" type="submit">{busy?<LoaderCircle size={16}/>:mode==='signin'?<LogIn size={16}/>:<UserPlus size={16}/>} {busy?'Securing account…':mode==='signin'?'Sign in':'Create account'}</button><button type="button" onClick={()=>{setMode(mode==='signin'?'signup':'signin');setMessage('');setShowPassword(false)}} className="auth-switch">{mode==='signin'?'New to KitSetups? Create an account':'Already have an account? Sign in'}</button></form>}{!interactive&&<div className="auth-error">{message}</div>}<div className="auth-foot">Your account is secured by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</div></div></div>}
+function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPassword,busy=false,message='',onSubmit,title='KitSetups'}){
+ const interactive=Boolean(onSubmit);
+ const [showPassword,setShowPassword]=useState(false);
+ const isSignin=mode==='signin';
+ return <div className="auth-screen">
+   <div className="auth-noise" aria-hidden="true"/>
+   <div className="auth-orbit auth-orbit-one" aria-hidden="true"/>
+   <div className="auth-orbit auth-orbit-two" aria-hidden="true"/>
+   <div className="auth-layout">
+     <section className="auth-story">
+       <div className="auth-story-brand">
+         <img src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups"/>
+         <div><b>KitSetups</b><span>TRADING INTELLIGENCE</span></div>
+       </div>
+       <div className="auth-story-copy">
+         <span className="auth-eyebrow"><i/> PRIVATE MARKET ACCESS</span>
+         <h1>Trade with a<br/><em>clearer edge.</em></h1>
+         <p>One focused workspace for live markets, structured setups, and the tools behind every decision.</p>
+       </div>
+       <div className="auth-story-footer">
+         <span><ShieldCheck size={14}/> Secure authentication</span>
+         <span><i/> Systems online</span>
+       </div>
+     </section>
+     <section className="auth-card">
+       <div className="auth-card-top">
+         <div>
+           <span className="auth-card-kicker">{isSignin?'WELCOME BACK':'START HERE'}</span>
+           <h2>{isSignin?'Sign in':'Create account'}</h2>
+         </div>
+         <div className="auth-index">{isSignin?'01':'02'}<span>/02</span></div>
+       </div>
+       {interactive&&<p className="auth-intro">{isSignin?'Enter your credentials to return to your trading workspace.':'Create your KitSetups account and get your workspace ready in a few seconds.'}</p>}
+       {interactive&&<form onSubmit={onSubmit} className="auth-form">
+         <label className="auth-field"><span>EMAIL ADDRESS</span><div className="auth-input-wrap"><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete={isSignin?'email':'email'}/><i>@</i></div></label>
+         <label className="auth-field"><span>PASSWORD</span><div className="auth-input-wrap"><input required minLength={6} type={showPassword?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={isSignin?'Enter your password':'At least 6 characters'} autoComplete={isSignin?'current-password':'new-password'}/><button type="button" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'} title={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></label>
+         {message&&<div className="auth-error">{message}</div>}
+         <button disabled={busy} className="auth-submit" type="submit"><span>{busy?'Securing access…':isSignin?'Enter workspace':'Create my account'}</span>{busy?<LoaderCircle size={16}/>:<LogIn size={16}/>}</button>
+         <div className="auth-switch-row"><span>{isSignin?'New to KitSetups?':'Already have an account?'}</span><button type="button" onClick={()=>{setMode(isSignin?'signup':'signin');setMessage('');setShowPassword(false)}}>{isSignin?'Create an account':'Sign in'}</button></div>
+       </form>}
+       {!interactive&&<div className="auth-error">{message}</div>}
+       <div className="auth-trust"><ShieldCheck size={14}/><span>Your credentials are protected by Firebase Authentication. KitSetups never asks for your seed phrase or private key.</span></div>
+     </section>
+   </div>
+ </div>
+}
