@@ -148,17 +148,53 @@ export default function PerpetualsPage({ user }) {
     if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
     setBusy(true); setError('');
     try {
-      await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined });
+      const positionMode = n(account.positionMode?.positionMode) || undefined;
+      const result = await api('order', state, {
+        side,
+        intent: reduceOnly ? 'close' : 'open',
+        type: orderType === 'market' ? 5 : 1,
+        marginMode,
+        leverage,
+        volume: vol,
+        price,
+        reduceOnly,
+        positionMode,
+        takeProfit: n(takeProfit) || undefined,
+        stopLoss: n(stopLoss) || undefined
+      });
+      const returnedOrderId = result?.data?.orderId || result?.data?.id || result?.orderId || (typeof result?.data === 'string' ? result.data : '');
       setVolume('');
-      for (let i = 0; i < (orderType === 'market' ? 3 : 1); i++) {
-        const refreshed = await api('positions', state);
-        const rows = arr(refreshed);
-        setAccount(prev => ({ ...prev, positions: rows }));
-        if (orderType !== 'market' || rows.some(p => normalize(p.symbol) === normalize(symbol) && n(p.holdVol) > 0)) break;
-        if (i < 2) await new Promise(r => setTimeout(r, 650));
+      if (orderType === 'limit') {
+        // A limit order is not supposed to create a position until its price is reached.
+        // Confirm that MEXC actually placed it in Open Orders instead of silently treating
+        // the click as a success.
+        let confirmed = [];
+        for (let i = 0; i < 4; i++) {
+          const refreshed = await api('orders', state);
+          confirmed = arr(refreshed);
+          setAccount(prev => ({ ...prev, orders: confirmed }));
+          if (confirmed.some(o => String(o.orderId || o.id) === String(returnedOrderId) || (normalize(o.symbol) === normalize(symbol) && n(o.vol) === vol))) break;
+          if (i < 3) await new Promise(r => setTimeout(r, 500));
+        }
+        const matched = returnedOrderId
+          ? confirmed.find(o => String(o.orderId || o.id) === String(returnedOrderId))
+          : confirmed.find(o => normalize(o.symbol) === normalize(symbol) && n(o.vol) === vol);
+        if (!matched && returnedOrderId) {
+          throw new Error('MEXC accepted the request but the limit order could not be confirmed in Open Orders. Refresh and check the exchange before submitting it again.');
+        }
+        await loadAccount();
+        setTab('orders');
+      } else {
+        for (let i = 0; i < 4; i++) {
+          const refreshed = await api('positions', state);
+          const rows = arr(refreshed);
+          setAccount(prev => ({ ...prev, positions: rows }));
+          if (rows.some(p => normalize(p.symbol) === normalize(symbol) && n(p.holdVol) > 0)) break;
+          if (i < 3) await new Promise(r => setTimeout(r, 650));
+        }
+        await loadAccount();
+        setTab('positions');
       }
-      await loadAccount();
-      setTab(orderType === 'market' ? 'positions' : 'orders');
     } catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
   };
 
@@ -233,7 +269,7 @@ export default function PerpetualsPage({ user }) {
     return initialMargin > 0 ? (pnl / initialMargin) * 100 : 0;
   };
 
-  const KITSETUPS_LOGO_URL = '/kitsetups-logo.svg';
+  const KITSETUPS_LOGO_URL = '/kitagent-logo.svg';
 
   const isClosedPosition = p => Boolean(p?.closeAvgPrice || p?.closeTime || p?.closeTimestamp || p?.closeVol || p?.realised !== undefined || p?.closeProfitLoss !== undefined);
 
