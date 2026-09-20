@@ -146,8 +146,16 @@ export default function PerpetualsPage({ user }) {
     const price = orderType === 'market' ? 0 : n(limitPrice); if (orderType !== 'market' && !price) { setError('Enter a valid order price.'); return; }
     if (!reduceOnly && !allowUnprotected && !n(stopLoss)) { setError('Protect this position with a Stop Loss before opening it. Enable “Open without Stop Loss” only if you intentionally want an unprotected position.'); return; }
     setBusy(true); setError('');
-    try { await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined }); setVolume(''); setTab(orderType === 'market' ? 'positions' : 'orders'); await loadAccount(); }
-    catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
+    try {
+      await api('order', state, { side, intent: reduceOnly ? 'close' : 'open', type: orderType === 'market' ? 5 : 1, marginMode, leverage, volume: vol, price, reduceOnly, takeProfit: n(takeProfit) || undefined, stopLoss: n(stopLoss) || undefined });
+      setVolume('');
+      for (let i = 0; i < (orderType === 'market' ? 3 : 1); i++) {
+        await loadAccount();
+        if (orderType !== 'market' || account.positions.some(p => normalize(p.symbol) === normalize(symbol))) break;
+        if (i < 2) await new Promise(r => setTimeout(r, 650));
+      }
+      setTab(orderType === 'market' ? 'positions' : 'orders');
+    } catch (e) { setError(e.message || 'Order was rejected.'); } finally { setBusy(false); }
   };
 
   const openRiskManager = p => {
@@ -227,12 +235,14 @@ export default function PerpetualsPage({ user }) {
 
   const protectionFor = p => {
     const closed = isClosedPosition(p);
-    const risk = !closed ? stopOrders.find(o => String(o.positionId) === String(p.positionId)) : null;
+    const related = !closed ? stopOrders.filter(o => String(o.positionId) === String(p.positionId)) : [];
     const historyOrders = account.history.filter(o => String(o.positionId || '') === String(p.positionId || ''));
     const first = historyOrders.find(o => o.stopLossPrice || o.takeProfitPrice || o.lossPrice || o.profitPrice) || {};
+    const slOrder = related.find(o => n(o.stopLossPrice) > 0);
+    const tpOrder = related.find(o => n(o.takeProfitPrice) > 0);
     return {
-      sl: p?.stopLossPrice ?? p?.stopLoss ?? p?.slPrice ?? risk?.stopLossPrice ?? first?.stopLossPrice ?? first?.lossPrice ?? '',
-      tp: p?.takeProfitPrice ?? p?.takeProfit ?? p?.tpPrice ?? risk?.takeProfitPrice ?? first?.takeProfitPrice ?? first?.profitPrice ?? ''
+      sl: p?.stopLossPrice ?? p?.stopLoss ?? p?.slPrice ?? slOrder?.stopLossPrice ?? first?.stopLossPrice ?? first?.lossPrice ?? '',
+      tp: p?.takeProfitPrice ?? p?.takeProfit ?? p?.tpPrice ?? tpOrder?.takeProfitPrice ?? first?.takeProfitPrice ?? first?.profitPrice ?? ''
     };
   };
 
