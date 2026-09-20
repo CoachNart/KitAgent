@@ -491,12 +491,8 @@ export default function PerpetualsPage({ user }) {
   const filteredPairs = pairs.filter(p => normalize(p.symbol).includes(normalize(pairQuery || symbol).replace('_USDT', ''))).slice(0, 80);
 
   return <div className="mexc-terminal">
-    <div className="mexc-section-nav" role="navigation" aria-label="Markets">
+    <div className="mexc-section-nav" role="navigation" aria-label="Market">
       <button className="active">Futures</button>
-      <button>Stocks</button>
-      <button>TradFi</button>
-      <button>Metals</button>
-      <button className="nav-card">▣ <span>Card</span></button>
     </div>
     <header className="mexc-topbar">
       <div className="mexc-brand"><span className="mexc-logo">K</span><div><strong>KitSetups</strong><small>Futures · USDT-M</small></div></div>
