@@ -909,3 +909,45 @@
   }
   .app-sticky-search{height:32px!important}
 }
+
+
+/* Final top-space kill + premium banner motion. */
+.kit-main{
+  padding-top:0!important;
+}
+
+.app-header-ad-frame{
+  isolation:isolate;
+}
+.app-header-ad-frame img{
+  transform:scale(1.035) translate3d(0,0,0);
+  transform-origin:center center;
+  will-change:transform;
+  animation:ksAdKenBurns 11s cubic-bezier(.45,0,.2,1) infinite alternate;
+}
+.app-header-ad-frame::after{
+  content:"";
+  position:absolute;
+  inset:-25% -35%;
+  z-index:2;
+  pointer-events:none;
+  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.025) 44%,rgba(255,255,255,.14) 49%,rgba(255,255,255,.025) 54%,transparent 61%);
+  transform:translateX(-62%) skewX(-12deg);
+  animation:ksAdSheen 6.5s cubic-bezier(.55,.05,.25,1) infinite;
+  mix-blend-mode:screen;
+}
+@keyframes ksAdKenBurns{
+  0%{transform:scale(1.035) translate3d(-.35%,0,0)}
+  100%{transform:scale(1.09) translate3d(.45%,-.7%,0)}
+}
+@keyframes ksAdSheen{
+  0%,18%{transform:translateX(-62%) skewX(-12deg);opacity:0}
+  25%{opacity:.2}
+  48%{transform:translateX(62%) skewX(-12deg);opacity:.72}
+  58%,100%{transform:translateX(62%) skewX(-12deg);opacity:0}
+}
+@media(prefers-reduced-motion:reduce){
+  .app-header-ad-frame img,.app-header-ad-frame::after{
+    animation:none!important;
+  }
+}
