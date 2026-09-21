@@ -1311,3 +1311,29 @@
     color:#f0ffff!important;
   }
 }
+
+
+/* FINAL 5TH NAV BUTTON FIX — remove the purple history override without changing button geometry. */
+@media(max-width:760px){
+  .kit-sidebar nav>.side-link:nth-child(5),
+  .kit-sidebar nav>.side-link:nth-child(5).selected,
+  .kit-sidebar nav>.side-link:nth-child(5):hover{
+    background:transparent!important;
+    border-color:transparent!important;
+    box-shadow:none!important;
+    color:#788594!important;
+  }
+  .kit-sidebar nav>.side-link:nth-child(5) svg,
+  .kit-sidebar nav>.side-link:nth-child(5).selected svg,
+  .kit-sidebar nav>.side-link:nth-child(5):hover svg{
+    color:#63e9e3!important;
+    filter:drop-shadow(0 0 5px rgba(99,233,227,.22))!important;
+    opacity:1!important;
+  }
+  .kit-sidebar nav>.side-link:nth-child(5).selected{
+    background:rgba(99,233,227,.10)!important;
+    border-color:rgba(99,233,227,.28)!important;
+    color:#f0ffff!important;
+    box-shadow:none!important;
+  }
+}
