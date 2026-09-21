@@ -1411,3 +1411,30 @@
   .kit-sidebar nav>.side-link:nth-child(3)::before,
   .kit-sidebar nav>.side-link:nth-child(3).selected::before{background-color:#63e9e3!important}
 }
+
+
+/* HISTORY MOBILE PURPLE KILL — final override. */
+@media (max-width:760px){
+  .kit-sidebar nav > .side-link:nth-child(5),
+  .kit-sidebar nav > .side-link:nth-child(5):hover,
+  .kit-sidebar nav > .side-link:nth-child(5).selected,
+  .kit-sidebar nav > .side-link:nth-child(5):focus,
+  .kit-sidebar nav > .side-link:nth-child(5):active{
+    background:transparent!important;
+    background-image:none!important;
+    border-color:transparent!important;
+    color:#788594!important;
+    box-shadow:none!important;
+  }
+  .kit-sidebar nav > .side-link:nth-child(5) svg,
+  .kit-sidebar nav > .side-link:nth-child(5):hover svg,
+  .kit-sidebar nav > .side-link:nth-child(5).selected svg,
+  .kit-sidebar nav > .side-link:nth-child(5):focus svg,
+  .kit-sidebar nav > .side-link:nth-child(5):active svg{
+    color:#63e9e3!important;
+    stroke:#63e9e3!important;
+    fill:none!important;
+    filter:drop-shadow(0 0 5px rgba(99,233,227,.22))!important;
+    opacity:1!important;
+  }
+}
