@@ -1239,3 +1239,12 @@
   .ks-order-status strong{font-size:11px}
   .ks-order-status small{font-size:9px}
 }
+
+
+/* FINAL CEX CYAN ALIGNMENT — use the same true cyan as homepage assets. */
+.mexc-terminal{
+  --ks-cyan:#00c7fe;
+  --ks-cyan-bright:#72ddff;
+  --ks-cyan-soft:rgba(0,199,254,.12);
+  --ks-cyan-line:rgba(0,199,254,.22);
+}
