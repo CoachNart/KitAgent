@@ -2,7 +2,8 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {auth} from './firebase.js';
 import DailyLearning from './DailyLearning.jsx';
 import './daily-learning.css';
-import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Zap,Activity,Target,ShieldCheck} from 'lucide-react';
+import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Zap,Activity,Target,ShieldCheck,BookOpen} from 'lucide-react';
+import {KIT_LESSONS} from './kitLessons.js';
 
 const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT'];
 const api=(op,p={})=>fetch(`/api/bybit?${new URLSearchParams({op,...p})}`,{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
@@ -10,8 +11,6 @@ const money=(v,d=2)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(und
 const pct=v=>Number.isFinite(Number(v))?`${Number(v)>=0?'+':''}${Number(v).toFixed(2)}%`:'—';
 function CountUp({value,duration=2600}){const target=Number(value)||0;const ref=useRef(null);const [visible,setVisible]=useState(false);const [shown,setShown]=useState(0);useEffect(()=>{const el=ref.current;if(!el)return;const io=new IntersectionObserver(([entry])=>{if(entry.isIntersecting){setVisible(true);io.disconnect()}},{threshold:.35});io.observe(el);return()=>io.disconnect()},[]);useEffect(()=>{if(!visible)return;let raf=0,start=performance.now();const tick=now=>{const p=Math.min(1,(now-start)/duration);const eased=1-Math.pow(1-p,3);setShown(Math.round(target*eased));if(p<1)raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf)},[visible,target,duration]);return <b ref={ref} className="snapshot-number" aria-label={String(target)}>{shown.toLocaleString()}</b>}
 
-
-function T3KitBanner(){const [show,setShow]=useState(true);const [leaving,setLeaving]=useState(false);useEffect(()=>{if(!show)return;const hide=setTimeout(()=>setLeaving(true),9000);const remove=setTimeout(()=>setShow(false),9500);const loop=setTimeout(()=>setShow(true),18000);return()=>{clearTimeout(hide);clearTimeout(remove);clearTimeout(loop)}} ,[show]);if(!show)return null;return <aside className={`t3kit-float${leaving?' t3kit-leaving':''}`} aria-label="T3Kit promotion"><div className="t3kit-float-top"><span className="t3kit-brand"><img className="t3kit-logo" src="https://www.t3kit.xyz/assets/images/logo.webp" alt="T3Kit" /></span><button className="t3kit-close" onClick={()=>setShow(false)} aria-label="Close">×</button></div><h4>Your Web3 journey starts here.</h4><p>Learn Web3 from the ground up — guides, tools and opportunities.</p><a className="t3kit-cta" href="https://t3kit.xyz" target="_blank" rel="noreferrer">Explore T3Kit ↗</a></aside>}
 
 export default function HomePage({go,wallet,onLesson}){
  const [tickers,setTickers]=useState([]),[busy,setBusy]=useState(false),[updated,setUpdated]=useState(Date.now());
@@ -25,7 +24,8 @@ export default function HomePage({go,wallet,onLesson}){
  const displayName=useMemo(()=>{const clean=String(rawDisplayName).trim().replace(/[._-]+/g,' ');const first=clean.split(/\s+/)[0]||'Trader';return first.charAt(0).toUpperCase()+first.slice(1).toLowerCase()},[rawDisplayName]);
  const [signalStats,setSignalStats]=useState({total:0,long:0,short:0,ready:0}),[recentSignals,setRecentSignals]=useState([]);
  useEffect(()=>{let cancelled=false;(async()=>{try{if(!auth?.currentUser)return;const token=await auth.currentUser.getIdToken();const r=await fetch('/api/signals',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});if(!r.ok)return;const j=await r.json();const rows=Array.isArray(j.signals)?j.signals:[];if(!cancelled){setSignalStats({total:rows.length,long:rows.filter(x=>x?.direction==='LONG').length,short:rows.filter(x=>x?.direction==='SHORT').length,ready:rows.filter(x=>x?.status==='open'&&x?.entry!=null).length});setRecentSignals(rows.slice(0,3));}}catch{} })();return()=>{cancelled=true}},[]);
- return <div className="home-page"><DailyLearning onReadMore={onLesson} /><T3KitBanner />
+ const openDailyTek=()=>{if(!KIT_LESSONS.length)return;const lesson=KIT_LESSONS[Math.floor(Math.random()*KIT_LESSONS.length)];onLesson?.(lesson.id)};
+ return <div className="home-page">
   <section className="home-top">
    <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you, {displayName}.</h1><p>Markets are moving. Stay ahead.</p></div>
    <button className="home-refresh" onClick={refresh} disabled={busy} aria-label="Refresh markets"><RefreshCw size={17} className={busy?'spin':''}/></button>
@@ -38,10 +38,12 @@ export default function HomePage({go,wallet,onLesson}){
    <div className="balance-foot"><span>BTC/USDT perpetual</span><span>Updated {new Date(updated).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>
   </section>
   <section className="home-actions" aria-label="Quick actions">
-   <button className="home-action-btn" onClick={()=>go('perps')} aria-label="Perpetuals"><span className="action-icon cyan"><Zap size={18}/></span><b>Perpetuals</b><ChevronRight size={15}/></button>
+   <button className="home-action-btn" onClick={()=>go('perps')} aria-label="Perpetuals"><span className="action-icon"><Zap size={18}/></span><b>Perpetuals</b><ChevronRight size={15}/></button>
    <button className="home-action-btn" onClick={()=>go('market')} aria-label="Market analysis"><span className="action-icon"><BarChart3 size={18}/></span><b>Market analysis</b><ChevronRight size={15}/></button>
    <button className="home-action-btn" onClick={()=>go('history')} aria-label="Activity"><span className="action-icon"><Clock3 size={18}/></span><b>Activity</b><ChevronRight size={15}/></button>
    <button className="home-action-btn" onClick={()=>go('profile')} aria-label="Settings"><span className="action-icon"><ShieldCheck size={18}/></span><b>Settings</b><ChevronRight size={15}/></button>
+   <button className="home-action-btn home-promo-btn" onClick={openDailyTek} aria-label="Daily TEK"><span className="action-icon"><BookOpen size={18}/></span><b>Daily TEK</b><ChevronRight size={15}/></button>
+   <a className="home-action-btn home-promo-btn" href="https://t3kit.xyz" target="_blank" rel="noreferrer" aria-label="T3Kit"><span className="action-icon"><span className="t3kit-mini-mark">T3</span></span><b>T3Kit</b><ChevronRight size={15}/></a>
   </section>
   <div className="home-section-head"><div><span className="tiny-label">MARKETS</span><h2>What's moving</h2></div><button onClick={()=>go('market')}>View analysis <ChevronRight size={15}/></button></div>
   <section className="market-list">{tickers.map(x=><button key={x.symbol} className="market-row" onClick={()=>go('market')}><span className="coin-mark">{x.symbol.slice(0,-4).slice(0,1)}</span><span className="coin-name"><b>{x.symbol.replace('USDT','')}</b><small>USDT</small></span><span className={x.change>=0?"coin-price up":"coin-price down"}>{money(x.last, x.last<1?4:2)}</span><span className={x.change>=0?'coin-change up':'coin-change down'}>{pct(x.change)}</span></button>)}</section>
