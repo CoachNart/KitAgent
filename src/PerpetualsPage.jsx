@@ -222,37 +222,33 @@ export default function PerpetualsPage({ user }) {
       orderRef.current = null;
       setTab(orderType === 'limit' ? 'orders' : 'positions');
 
-      // The exchange has already accepted the order at this point. Account refreshes
-      // are confirmation/UI work and must never turn a successful order into a false
-      // "order rejected" message because a secondary read endpoint is delayed or rate-limited.
-      // Refresh only the data affected by this order. The account dashboard polls separately;
-      // doing a full 10-endpoint refresh here can race the order request and flood the exchange.
-      if (orderType === 'limit') {
-        try {
-          const refreshed = await api('orders', state);
-          setAccount(prev => ({ ...prev, orders: arr(refreshed) }));
-          setTab('orders');
-        } catch (refreshError) {
-          console.warn('Order accepted; open-order refresh failed:', refreshError);
-        }
-      } else {
-        try {
-          const refreshed = await api('positions', state);
-          setAccount(prev => ({ ...prev, positions: arr(refreshed) }));
-          setTab('positions');
-        } catch (refreshError) {
-          console.warn('Order accepted; position refresh failed:', refreshError);
-        }
-      }
+      // MEXC has already accepted the order. Do NOT make the user wait on a
+      // secondary account-read request before showing success. Those reads can be
+      // slow/rate-limited and previously made a successful order look permanently
+      // stuck on "Waiting for confirmation…".
       const successText = returnedOrderId ? `Order accepted · ${returnedOrderId}` : 'Order accepted by the exchange.';
-      setOrderStatus({ type: 'success', text: successText, detail: orderType === 'market' ? 'Position refresh requested.' : 'Open orders refreshed.' });
+      setOrderStatus({ type: 'success', text: successText, detail: orderType === 'market' ? 'Position submitted. Account data will refresh automatically.' : 'Open order submitted. Account data will refresh automatically.' });
+      setTab(orderType === 'limit' ? 'orders' : 'positions');
+      void (async () => {
+        try {
+          if (orderType === 'limit') {
+            const refreshed = await api('orders', state);
+            setAccount(prev => ({ ...prev, orders: arr(refreshed) }));
+          } else {
+            const refreshed = await api('positions', state);
+            setAccount(prev => ({ ...prev, positions: arr(refreshed) }));
+          }
+        } catch (refreshError) {
+          console.warn('Order accepted; post-order account refresh failed:', refreshError);
+        }
+      })();
     } catch (e) {
       const rawMessage = e.message || 'The exchange rejected the order.';
       // Preserve the exchange's authoritative rejection instead of inventing a
       // local margin estimate that can disagree with MEXC's risk tier, fee, or
       // funding rules.
       const message = rawMessage.replace(/MEXC\s*/gi, 'Exchange ');
-      setOrderStatus({ type: 'error', text: insufficient ? 'Insufficient available margin' : 'Order not submitted', detail: message });
+      setOrderStatus({ type: 'error', text: /balance|margin|insufficient/i.test(rawMessage) ? 'Insufficient available margin' : 'Order not submitted', detail: message });
       setError(message);
     } finally { setBusy(false); }
   };
