@@ -59,7 +59,7 @@ export default function PerpetualsPage({ user }) {
   const [side, setSide] = useState('buy');
   const [orderType, setOrderType] = useState('market');
   const [marginMode, setMarginMode] = useState('cross');
-  const [leverage, setLeverage] = useState(5);
+  const [leverage, setLeverage] = useState(500);
   const [volume, setVolume] = useState('');
   const [limitPrice, setLimitPrice] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
@@ -94,22 +94,36 @@ export default function PerpetualsPage({ user }) {
   const riskType = side === 'buy' ? 1 : 2;
   const leverageRows = riskRowsForSymbol.filter(r => n(r.positionType) === riskType || r.positionType == null);
   const requestedContracts = Math.max(0, n(volume));
-  const applicableRiskRows = leverageRows.filter(r => {
-    const maxVol = n(r.maxVol);
-    return !maxVol || requestedContracts <= maxVol;
-  });
+  // MEXC risk limits are tiered: choose the first tier whose maxVol
+  // contains the requested size. Do not take the highest leverage across
+  // every eligible row, because that can incorrectly show 500x for a size
+  // that belongs to a lower-leverage tier.
+  const applicableRiskRows = leverageRows
+    .filter(r => {
+      const maxVol = n(r.maxVol);
+      return !maxVol || requestedContracts <= maxVol;
+    })
+    .sort((a, b) => {
+      const av = n(a.maxVol), bv = n(b.maxVol);
+      if (!av) return 1;
+      if (!bv) return -1;
+      return av - bv;
+    });
+  const selectedRiskRow = applicableRiskRows[0];
   const maxLeverage = Math.max(
     1,
     Math.floor(
-      (applicableRiskRows.length
-        ? Math.max(...applicableRiskRows.map(r => n(r.maxLeverage)))
-        : leverageRows.length
-          ? Math.max(...leverageRows.map(r => n(r.maxLeverage)))
-          : (normalize(symbol) === 'BTC_USDT' || normalize(symbol) === 'ETH_USDT')
-            ? 500
-            : n(contract?.maxLeverage || contract?.maxLeverageNum || contract?.leverageMax || 100))
+      n(selectedRiskRow?.maxLeverage) ||
+      (leverageRows.length
+        ? Math.max(...leverageRows.map(r => n(r.maxLeverage)))
+        : (normalize(symbol) === 'BTC_USDT' || normalize(symbol) === 'ETH_USDT')
+          ? 500
+          : n(contract?.maxLeverage || contract?.maxLeverageNum || contract?.leverageMax || 100))
     )
   );
+  useEffect(() => {
+    setLeverage(current => Math.min(Math.max(1, current), maxLeverage));
+  }, [maxLeverage]);
   const leveragePercent = Math.min(100, Math.max(0, (leverage / maxLeverage) * 100));
   const usdt = account.assets.find(x => String(x.currency || '').toUpperCase() === 'USDT') || {};
   const allOpenPositions = account.positions.filter(p => n(p.holdVol) > 0);
@@ -234,10 +248,10 @@ export default function PerpetualsPage({ user }) {
       setOrderStatus({ type: 'success', text: successText, detail: orderType === 'market' ? 'Position refresh requested.' : 'Open orders refreshed.' });
     } catch (e) {
       const rawMessage = e.message || 'The exchange rejected the order.';
-      const insufficient = /insufficient\s*(available\s*)?(balance|margin)/i.test(rawMessage);
-      const message = insufficient
-        ? `Insufficient available margin. Available: ${fmt(usdt.availableBalance, 4)} USDT · Estimated margin: ${fmt(estimatedMargin, 4)} USDT. If your funds are in Spot rather than Futures, transfer them to the Futures account before opening a position.`
-        : rawMessage.replace(/MEXC\s*/gi, 'Exchange ');
+      // Preserve the exchange's authoritative rejection instead of inventing a
+      // local margin estimate that can disagree with MEXC's risk tier, fee, or
+      // funding rules.
+      const message = rawMessage.replace(/MEXC\s*/gi, 'Exchange ');
       setOrderStatus({ type: 'error', text: insufficient ? 'Insufficient available margin' : 'Order not submitted', detail: message });
       setError(message);
     } finally { setBusy(false); }
