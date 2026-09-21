@@ -564,3 +564,96 @@
   .app-sticky-actions .profile-avatar{width:32px!important;height:32px!important;flex-basis:32px!important}
   .app-sticky-actions .profile-avatar-ring{width:28px!important;height:28px!important}
 }
+
+
+/* Hard-fix the app utility rail: sticky inside the actual scrolling workspace. */
+.kit-shell,.kit-main{min-height:100vh!important}
+.kit-shell{overflow:visible!important}
+.kit-main{overflow:visible!important}
+.app-sticky-tools{
+  position:-webkit-sticky!important;
+  position:sticky!important;
+  top:0!important;
+  inset-block-start:0!important;
+  z-index:999999!important;
+  align-self:flex-start!important;
+  isolation:isolate!important;
+}
+.app-sticky-search-wrap{position:relative!important;width:100%!important;max-width:720px!important;justify-self:center!important}
+.app-sticky-search-wrap .app-sticky-search{max-width:none!important;justify-self:stretch!important}
+.app-search-results{
+  position:absolute!important;
+  top:calc(100% + 7px)!important;
+  left:0!important;
+  right:0!important;
+  z-index:1000000!important;
+  overflow:hidden!important;
+  padding:5px!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  border-radius:14px!important;
+  background:rgba(10,15,22,.98)!important;
+  box-shadow:0 18px 42px rgba(0,0,0,.42)!important;
+  backdrop-filter:blur(18px)!important;
+  -webkit-backdrop-filter:blur(18px)!important;
+}
+.app-search-result{
+  width:100%!important;
+  min-height:45px!important;
+  display:grid!important;
+  grid-template-columns:30px minmax(0,1fr) 16px!important;
+  align-items:center!important;
+  gap:9px!important;
+  padding:7px 9px!important;
+  border:0!important;
+  border-radius:10px!important;
+  background:transparent!important;
+  color:#e9f1f5!important;
+  text-align:left!important;
+  cursor:pointer!important;
+}
+.app-search-result:hover{background:rgba(255,255,255,.055)!important}
+.app-search-result-icon{
+  width:30px!important;height:30px!important;display:grid!important;place-items:center!important;
+  border-radius:9px!important;background:rgba(255,255,255,.045)!important;color:#70e7df!important;
+}
+.app-search-result-icon.workspace{color:#9b8cff!important}
+.app-search-result-icon.network{color:#72a9ff!important}
+.app-search-result span:nth-child(2){min-width:0!important;display:flex!important;flex-direction:column!important;gap:2px!important}
+.app-search-result b{font-size:11px!important;font-weight:750!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.app-search-result small{font-size:9px!important;color:#748196!important}
+.app-search-result>svg{color:#667487!important}
+.app-search-empty{padding:14px 10px!important;font-size:10px!important;color:#748196!important;text-align:center!important}
+.app-search-clear{
+  width:25px!important;height:25px!important;display:grid!important;place-items:center!important;
+  flex:0 0 25px!important;padding:0!important;border:0!important;border-radius:7px!important;
+  background:rgba(255,255,255,.05)!important;color:#8290a1!important;cursor:pointer!important;
+}
+/* Keep the avatar entirely inside its control box; status dot is contained too. */
+.app-sticky-actions .profile-avatar{
+  position:relative!important;
+  width:34px!important;height:34px!important;flex:0 0 34px!important;
+  min-width:34px!important;min-height:34px!important;
+  padding:0!important;margin:0!important;
+  display:grid!important;place-items:center!important;
+  overflow:hidden!important;
+  border-radius:50%!important;
+}
+.app-sticky-actions .profile-avatar-ring{
+  width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;
+  overflow:hidden!important;border-radius:50%!important;
+}
+.app-sticky-actions .profile-status{
+  position:absolute!important;
+  right:1px!important;bottom:1px!important;
+  width:7px!important;height:7px!important;
+  border-radius:50%!important;
+  border:2px solid #0a0f16!important;
+  box-sizing:content-box!important;
+}
+@media(max-width:760px){
+  .app-sticky-tools{top:0!important;min-height:54px!important}
+  .app-sticky-search-wrap{max-width:none!important}
+  .app-sticky-actions .profile-avatar{width:32px!important;height:32px!important;flex-basis:32px!important;min-width:32px!important;min-height:32px!important}
+  .app-sticky-actions .profile-avatar-ring{width:28px!important;height:28px!important;min-width:28px!important;min-height:28px!important}
+  .app-sticky-actions .profile-status{right:0!important;bottom:0!important;width:6px!important;height:6px!important}
+}
