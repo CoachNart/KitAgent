@@ -38,7 +38,7 @@ export default function NotificationCenter({user,embedded=false}){
  const enable=async()=>{try{const r=await enableKitSetupsNotifications(user);setPermission(r.enabled?'granted':(typeof Notification!=='undefined'?Notification.permission:'denied'))}catch(error){console.warn('KitSetups notifications could not be enabled:',error);setPermission(typeof Notification!=='undefined'?Notification.permission:'denied')}};
  const add=()=>{const n=Number(target);if(!Number.isFinite(n)||n<=0)return;setAlerts(a=>[...a,{id:crypto.randomUUID(),symbol,direction,target:n,createdAt:Date.now(),triggered:false}]);setTarget('')};
  return <div style={embedded?wrapEmbedded:wrapFloating}>
-  <button aria-label="Open live activity and notifications" title="Live activity & alerts" onClick={()=>setOpen(v=>!v)} style={embedded?buttonEmbedded:button}>{count?<BellRing size={17}/>:<Bell size={17}/>} {count>0&&<span style={badge}>{count}</span>}</button>
+  <button aria-label="Open live activity and notifications" title="Live activity & alerts" onClick={()=>setOpen(v=>!v)} style={embedded?buttonEmbedded:button}>{count?<BellRing size={16}/>:<Bell size={16}/>}<span style={liveLabel}>LIVE</span>{count>0&&<span style={badge}>{count}</span>}</button>
   {open&&<div style={embedded?panelEmbedded:panel}>
    <div style={head}><div><strong>Live activity</strong><div style={sub}>Real-time structure, alerts & scheduled news</div></div><button onClick={()=>setOpen(false)} style={close}><X size={16}/></button></div>
    <div style={statusCard}><div style={statusTop}><span><Radio size={12}/> BYBIT LIVE</span><small>{market.checkedAt?`Checked ${fmtTime(market.checkedAt)}`:'Starting monitor…'}</small></div><div style={statusGrid}><div><b>{liveMarkets.filter(x=>x.ok).length}/{SYMBOLS.length}</b><span>symbols online</span></div><div><b>5m</b><span>structure</span></div><div><b>{upcoming.length}</b><span>high impact</span></div></div>{market.error&&<div style={error}>{market.error}</div>}</div>
@@ -56,7 +56,8 @@ export default function NotificationCenter({user,embedded=false}){
 
 const wrapEmbedded={position:'relative',display:'flex',alignItems:'center',flexShrink:0};
 const wrapFloating={display:'none'};
-const buttonEmbedded={fontFamily:'"DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',position:'relative',width:32,height:32,borderRadius:9,border:'1px solid rgba(255,255,255,.09)',background:'transparent',color:'rgba(255,255,255,.72)',display:'grid',placeItems:'center',cursor:'pointer',padding:0};
+const liveLabel={fontFamily:'inherit',fontSize:7,fontWeight:900,letterSpacing:'.1em',color:'#63e9e3'};
+const buttonEmbedded={fontFamily:'"DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',position:'relative',width:52,height:32,borderRadius:9,border:'1px solid rgba(255,255,255,.09)',background:'transparent',color:'rgba(255,255,255,.72)',display:'grid',placeItems:'center',cursor:'pointer',padding:0};
 const button={display:'none'};
 const badge={position:'absolute',right:-2,top:-2,minWidth:14,height:14,borderRadius:99,background:'#ef4444',fontSize:8,fontWeight:800,display:'grid',placeItems:'center',padding:'0 2px'};
 const panelEmbedded={fontFamily:'"DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',position:'absolute',right:0,top:'calc(100% + 7px)',zIndex:1400,width:'min(310px,calc(100vw - 20px))',maxWidth:'calc(100vw - 20px)',border:'1px solid rgba(255,255,255,.12)',borderRadius:12,background:'rgba(12,16,23,.98)',backdropFilter:'blur(18px)',color:'#fff',boxShadow:'0 16px 38px rgba(0,0,0,.42)',padding:10,boxSizing:'border-box',overflow:'hidden'};
