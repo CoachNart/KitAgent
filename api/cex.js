@@ -87,7 +87,7 @@ export default async function handler(req, res) {
     const secret = String(body.secret || '');
 
     if (action === 'pairs') {
-      const result = await publicGet('/api/v1/contract/detail');
+      const result = await publicGet('/api/v1/contract/detail/country');
       const data = Array.isArray(result?.data) ? result.data : [];
       return json(res, 200, { ...result, data: data.filter(x => String(x?.state ?? x?.status ?? 0) === '0' || x?.state == null) });
     }
@@ -101,7 +101,7 @@ export default async function handler(req, res) {
     if (action === 'market') {
       const [ticker, contract, funding, index, fair] = await Promise.all([
         publicGet(`/api/v1/contract/ticker?symbol=${encodeURIComponent(symbol)}`),
-        publicGet(`/api/v1/contract/detail?symbol=${encodeURIComponent(symbol)}`),
+        publicGet(`/api/v1/contract/detail/country?symbol=${encodeURIComponent(symbol)}`),
         publicGet(`/api/v1/contract/funding_rate/${encodeURIComponent(symbol)}`),
         publicGet(`/api/v1/contract/index_price/${encodeURIComponent(symbol)}`),
         publicGet(`/api/v1/contract/fair_price/${encodeURIComponent(symbol)}`)
