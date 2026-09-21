@@ -87,7 +87,29 @@ export default function PerpetualsPage({ user }) {
   const state = useMemo(() => ({ symbol, interval, key, secret }), [symbol, interval, key, secret]);
   const contract = useMemo(() => pairs.find(p => normalize(p.symbol) === normalize(symbol)), [pairs, symbol]);
   const last = n(ticker?.lastPrice || ticker?.last || ticker?.fairPrice);
-  const maxLeverage = Math.max(1, Math.floor(n(contract?.maxLeverage || contract?.maxLeverageNum || contract?.leverageMax || 100)));
+  const riskRowsForSymbol = useMemo(() => {
+    const raw = account.risk?.[symbol] || account.risk?.[normalize(symbol)] || [];
+    return Array.isArray(raw) ? raw : [];
+  }, [account.risk, symbol]);
+  const riskType = side === 'buy' ? 1 : 2;
+  const leverageRows = riskRowsForSymbol.filter(r => n(r.positionType) === riskType || r.positionType == null);
+  const requestedContracts = Math.max(0, n(volume));
+  const applicableRiskRows = leverageRows.filter(r => {
+    const maxVol = n(r.maxVol);
+    return !maxVol || requestedContracts <= maxVol;
+  });
+  const maxLeverage = Math.max(
+    1,
+    Math.floor(
+      (applicableRiskRows.length
+        ? Math.max(...applicableRiskRows.map(r => n(r.maxLeverage)))
+        : leverageRows.length
+          ? Math.max(...leverageRows.map(r => n(r.maxLeverage)))
+          : (normalize(symbol) === 'BTC_USDT' || normalize(symbol) === 'ETH_USDT')
+            ? 500
+            : n(contract?.maxLeverage || contract?.maxLeverageNum || contract?.leverageMax || 100))
+    )
+  );
   const leveragePercent = Math.min(100, Math.max(0, (leverage / maxLeverage) * 100));
   const usdt = account.assets.find(x => String(x.currency || '').toUpperCase() === 'USDT') || {};
   const allOpenPositions = account.positions.filter(p => n(p.holdVol) > 0);
@@ -747,7 +769,12 @@ function Positions({ rows, stopOrders, contractSize, mark, onClose, onShare, onM
     const pnl = suppliedPnl !== undefined && Number.isFinite(Number(suppliedPnl))
       ? Number(suppliedPnl)
       : unrealizedPnlValue(p, fair, contractSize);
-    const initialMargin = n(p.im) || (entry && n(p.holdVol) ? (entry * n(p.holdVol) * n(contractSize || 1)) / lev : 0);
+    // Calculate initial margin from actual position economics instead of trusting
+    // the exchange im field, which can represent a different accounting value
+    // depending on cross/isolated mode and can be misleading in the UI.
+    const initialMargin = entry && n(p.holdVol)
+      ? (entry * n(p.holdVol) * n(contractSize || 1)) / lev
+      : 0;
     const roi = initialMargin ? (pnl / initialMargin) * 100 : 0;
     const marginRatio = p.marginRatio != null ? pct(p.marginRatio) : '—';
     const liq = n(p.liquidatePrice ?? p.liquidationPrice ?? p.liqPrice);
