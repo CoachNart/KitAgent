@@ -12,8 +12,8 @@ function readWatchlist() {
   }
 }
 
-function saveWatchlist(items) {
-  try { localStorage.setItem(WATCH_KEY, JSON.stringify(items.slice(0, 12))); } catch {}
+function saveWatchlist(key, items) {
+  try { localStorage.setItem(key, JSON.stringify(items.slice(0, 12))); } catch {}
 }
 
 export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
@@ -21,7 +21,7 @@ export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
   const [items, setItems] = useState(() => { try { const value = JSON.parse(localStorage.getItem(storageKey) || '[]'); return Array.isArray(value) ? value.filter(Boolean).slice(0, 12) : []; } catch { return []; } });
   const saved = items.includes(symbol);
 
-  useEffect(() => saveWatchlist(items), [items]);
+  useEffect(() => saveWatchlist(storageKey, items), [storageKey, items]);
   useEffect(() => { try { const value = JSON.parse(localStorage.getItem(storageKey) || '[]'); setItems(Array.isArray(value) ? value.filter(Boolean).slice(0, 12) : []); } catch { setItems([]); } }, [storageKey]);
 
   const toggle = () => {
