@@ -306,3 +306,23 @@
   }
   .top-header .profile-avatar-ring{width:27px!important;height:27px!important}
 }
+
+
+/* Navigation icon identity palette — each workspace destination has its own accent. */
+.kit-sidebar nav>.side-link:nth-child(2) svg,
+.kit-sidebar nav>.side-link:nth-child(2).selected svg{color:#3B82F6!important}
+.kit-sidebar nav>.side-link:nth-child(4) svg,
+.kit-sidebar nav>.side-link:nth-child(4).selected svg{color:#8B5CF6!important}
+.kit-sidebar nav>.side-link:nth-child(5) svg,
+.kit-sidebar nav>.side-link:nth-child(5).selected svg{color:#10B981!important}
+.kit-sidebar .side-bottom>.side-link svg,
+.kit-sidebar .side-bottom>.side-link:hover svg{color:#F59E0B!important}
+@media(max-width:760px){
+  .kit-sidebar nav>.side-link:nth-child(2) svg,
+  .kit-sidebar nav>.side-link:nth-child(2).selected svg{color:#3B82F6!important}
+  .kit-sidebar nav>.side-link:nth-child(4) svg,
+  .kit-sidebar nav>.side-link:nth-child(4).selected svg{color:#8B5CF6!important}
+  .kit-sidebar nav>.side-link:nth-child(5) svg,
+  .kit-sidebar nav>.side-link:nth-child(5).selected svg{color:#10B981!important}
+  .kit-sidebar .side-bottom>.side-link svg{color:#F59E0B!important}
+}
