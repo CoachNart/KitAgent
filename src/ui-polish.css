@@ -136,3 +136,37 @@
     min-height:0!important;
   }
 }
+
+
+/* HARD PAGE-TAIL RESET.
+   The shell may occupy the viewport, but individual app pages must not be
+   forced to remain viewport-height. This also neutralizes page roots that
+   inherited min-height from older layouts. */
+.kit-main{
+  min-height:0!important;
+  height:auto!important;
+}
+.content{
+  min-height:0!important;
+  height:auto!important;
+  padding-bottom:12px!important;
+}
+.content > *{
+  min-height:0!important;
+  height:auto!important;
+}
+.content > .command-page{
+  min-height:0!important;
+  height:auto!important;
+}
+.content > .command-page > *{
+  min-height:0!important;
+}
+@media(max-width:760px){
+  .content{
+    padding-bottom:8px!important;
+  }
+  body{
+    padding-bottom:calc(54px + env(safe-area-inset-bottom))!important;
+  }
+}
