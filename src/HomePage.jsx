@@ -1,7 +1,5 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {auth} from './firebase.js';
-import DailyLearning from './DailyLearning.jsx';
-import './daily-learning.css';
 import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Zap,Activity,Target,ShieldCheck,BookOpen} from 'lucide-react';
 import {KIT_LESSONS} from './kitLessons.js';
 
