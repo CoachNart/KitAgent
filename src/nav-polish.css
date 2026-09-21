@@ -1860,3 +1860,67 @@
     box-shadow:0 0 15px rgba(99,233,227,.04)!important;
   }
 }
+
+
+/* FINAL NAV MOTION — premium, restrained, not a glowing box.
+   Rest stays quiet. Motion is carried by the icon, a soft edge sheen,
+   and a very small lift rather than a loud cyan tile. */
+.kit-sidebar nav>.side-link{
+  position:relative!important;
+  overflow:hidden!important;
+  transition:
+    color .28s cubic-bezier(.22,1,.36,1),
+    background .28s ease,
+    border-color .28s ease,
+    box-shadow .32s ease,
+    transform .32s cubic-bezier(.22,1,.36,1)!important;
+}
+.kit-sidebar nav>.side-link::after{
+  content:""!important;
+  position:absolute!important;
+  inset:0!important;
+  pointer-events:none!important;
+  border-radius:inherit!important;
+  background:linear-gradient(105deg,transparent 20%,rgba(99,233,227,.09) 48%,transparent 72%)!important;
+  transform:translateX(-130%)!important;
+  opacity:0!important;
+}
+.kit-sidebar nav>.side-link:hover::after,
+.kit-sidebar nav>.side-link:focus-visible::after,
+.kit-sidebar nav>.side-link.selected::after{
+  opacity:1!important;
+  animation:kitNavSheen 1.15s cubic-bezier(.22,1,.36,1) forwards!important;
+}
+@keyframes kitNavSheen{
+  from{transform:translateX(-130%)}
+  to{transform:translateX(130%)}
+}
+.kit-sidebar nav>.side-link:hover{
+  transform:translateY(-1px)!important;
+  background:rgba(255,255,255,.026)!important;
+  border-color:rgba(99,233,227,.10)!important;
+  box-shadow:
+    0 7px 22px rgba(0,0,0,.14),
+    inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+.kit-sidebar nav>.side-link:hover svg{
+  transform:translateX(1px) scale(1.035)!important;
+  filter:drop-shadow(0 0 7px rgba(99,233,227,.24))!important;
+  transition:transform .32s cubic-bezier(.22,1,.36,1),filter .32s ease!important;
+}
+.kit-sidebar nav>.side-link.selected{
+  animation:kitNavBreath 3.2s ease-in-out infinite!important;
+}
+@keyframes kitNavBreath{
+  0%,100%{box-shadow:0 7px 22px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.035)}
+  50%{box-shadow:0 9px 28px rgba(0,0,0,.14),0 0 18px rgba(99,233,227,.055),inset 0 1px 0 rgba(255,255,255,.05)}
+}
+.kit-sidebar nav>.side-link:active{
+  transform:scale(.965)!important;
+  transition-duration:.12s!important;
+}
+@media(prefers-reduced-motion:reduce){
+  .kit-sidebar nav>.side-link,
+  .kit-sidebar nav>.side-link svg{transition:none!important;animation:none!important}
+  .kit-sidebar nav>.side-link::after{display:none!important}
+}
