@@ -223,13 +223,64 @@ export default async function handler(req, res) {
     if (action === 'order') {
       const opening = body.intent !== 'close';
       const side = opening ? (body.side === 'buy' ? 1 : 3) : (body.side === 'buy' ? 4 : 2);
+
+      // MEXC expects numeric type codes. Accept both the terminal's orderType string
+      // and the raw API type so a Limit selection can never silently become Market.
+      const rawType = body.type ?? body.orderType;
+      const typeMap = { market: 5, limit: 1, postonly: 2, 'post-only': 2, ioc: 3, fok: 4 };
+      const orderType = typeof rawType === 'string'
+        ? (typeMap[rawType.toLowerCase()] ?? Number(rawType))
+        : Number(rawType ?? 5);
+      if (![1,2,3,4,5].includes(orderType)) {
+        return json(res, 400, { error: 'Invalid futures order type.' });
+      }
+
+      const volume = Number(body.volume);
+      const price = Number(body.price);
+      if (!Number.isFinite(volume) || volume <= 0) {
+        return json(res, 400, { error: 'Enter a valid contract quantity.' });
+      }
+      if (orderType === 1 && (!Number.isFinite(price) || price <= 0)) {
+        return json(res, 400, { error: 'A valid limit price is required for a limit order.' });
+      }
+
+      // Use live contract rules so quantity/price match MEXC's min/max/step constraints.
+      const contractResult = await publicGet(\`/api/v1/contract/detail/country?symbol=\${encodeURIComponent(symbol)}\`);
+      const contract = Array.isArray(contractResult?.data) ? contractResult.data[0] : contractResult?.data;
+      if (!contract) return json(res, 400, { error: \`Contract rules unavailable for \${symbol}.\` });
+      if (contract.apiAllowed === false) return json(res, 400, { error: \`\${symbol} does not allow API futures trading.\` });
+      if (Number(contract.state) !== 0) return json(res, 400, { error: \`\${symbol} is not currently tradable.\` });
+
+      const volUnit = Number(contract.volUnit) || 1;
+      const minVol = Number(contract.minVol) || volUnit;
+      const maxVol = Number(contract.maxVol) || Number.POSITIVE_INFINITY;
+      const normalizedVol = Math.floor((volume + 1e-12) / volUnit) * volUnit;
+      if (normalizedVol < minVol) {
+        return json(res, 400, { error: \`Order size is below the \${minVol} contract minimum for \${symbol}.\` });
+      }
+      if (normalizedVol > maxVol) {
+        return json(res, 400, { error: \`Order size exceeds the \${maxVol} contract maximum for \${symbol}.\` });
+      }
+
+      let normalizedPrice = orderType === 5 ? 0 : price;
+      if (orderType !== 5) {
+        const priceUnit = Number(contract.priceUnit) || 0;
+        if (priceUnit > 0) normalizedPrice = Math.round(price / priceUnit) * priceUnit;
+        if (!(normalizedPrice > 0)) return json(res, 400, { error: 'Limit price is invalid after tick-size normalization.' });
+      }
+
+      const leverage = opening ? Number(body.leverage) : undefined;
+      if (opening && (!Number.isFinite(leverage) || leverage < Number(contract.minLeverage || 1) || leverage > Number(contract.maxLeverage || 500))) {
+        return json(res, 400, { error: \`Leverage must be between \${contract.minLeverage || 1}x and \${contract.maxLeverage || 500}x for \${symbol}.\` });
+      }
+
       const payload = {
         symbol,
-        price: Number(body.price || 0),
-        vol: Number(body.volume),
-        leverage: opening ? Number(body.leverage) : undefined,
+        price: normalizedPrice,
+        vol: normalizedVol,
+        leverage: opening ? leverage : undefined,
         side,
-        type: Number(body.type || 5),
+        type: orderType,
         openType: body.marginMode === 'isolated' ? 1 : 2,
         positionId: body.positionId ? Number(body.positionId) : undefined,
         stopLossPrice: body.stopLoss ? Number(body.stopLoss) : undefined,
@@ -242,10 +293,15 @@ export default async function handler(req, res) {
         flashClose: Boolean(body.flashClose),
         bboTypeNum: body.bboTypeNum !== undefined ? Number(body.bboTypeNum) : undefined,
         stpMode: body.stpMode !== undefined ? Number(body.stpMode) : undefined,
-        externalOid: body.externalOid ? String(body.externalOid) : undefined
+        externalOid: body.externalOid ? String(body.externalOid) : \`kitsetups-\${Date.now()}-\${Math.random().toString(36).slice(2,10)}\`
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
-      return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/create', payload), 'Order was rejected by MEXC.'));
+
+      const result = validateOperationResult(
+        await privatePost(key, secret, '/api/v1/private/order/create', payload),
+        'Order was rejected by MEXC.'
+      );
+      return json(res, 200, { ok: true, orderId: result?.data?.orderId ?? result?.data ?? result, order: result?.data ?? null });
     }
 
     if (action === 'cancel') return json(res, 200, validateOperationResult(await privatePost(key, secret, '/api/v1/private/order/cancel', { orderIds: body.orderIds || [] }), 'Order cancellation was rejected by MEXC.'));
