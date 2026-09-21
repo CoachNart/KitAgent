@@ -1460,3 +1460,26 @@
     transform:translateY(-1px)!important;
   }
 }
+
+
+/* MOBILE HISTORY HOVER + UNIFORM INTERACTION */
+@media(max-width:760px){
+  .kit-sidebar nav>.side-link:nth-child(5){
+    background:transparent!important;
+    border-color:transparent!important;
+    color:#8b97a8!important;
+    box-shadow:none!important;
+    transform:none!important;
+  }
+  .kit-sidebar nav>.side-link:nth-child(5) svg{color:#10B981!important;opacity:.86!important}
+  .kit-sidebar nav>.side-link:nth-child(5):hover{
+    background:rgba(255,255,255,.055)!important;
+    border-color:rgba(255,255,255,.10)!important;
+    color:#e9f1f5!important;
+    box-shadow:0 0 14px rgba(99,233,227,.055)!important;
+    transform:translateY(-1px)!important;
+  }
+  .kit-sidebar nav>.side-link:nth-child(5):hover svg{color:#63e9e3!important;opacity:1!important;transform:scale(1.04)!important;filter:drop-shadow(0 0 6px rgba(99,233,227,.28))!important}
+  .kit-sidebar nav>.side-link:nth-child(5).selected{background:rgba(52,225,218,.105)!important;border-color:rgba(83,224,219,.22)!important;color:#ecffff!important;box-shadow:none!important;transform:none!important}
+  .kit-sidebar nav>.side-link:nth-child(5).selected svg{color:#63e9e3!important}
+}
