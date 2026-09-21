@@ -63,7 +63,7 @@ export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
 }
 
 export function SetupWhy({ setup, market, symbol }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const rows = useMemo(() => {
     if (!setup) return [];
     const direction = setup.bias && setup.bias !== 'WAIT' ? setup.bias : setup.directionBias;
