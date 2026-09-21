@@ -80,7 +80,9 @@ export default function VoiceTour() {
     stopSpeech();
     clearTimeout(timerRef.current);
     setActive(false);
-    if (completed) localStorage.setItem(STORAGE_KEY, 'completed');
+    // A tour is a first-visit experience. Starting, finishing, or skipping it
+    // counts as seen so a refresh can never trigger it again.
+    localStorage.setItem(STORAGE_KEY, completed ? 'completed' : 'seen');
   };
 
   const locateTarget = (target = step.target) => {
@@ -131,6 +133,7 @@ export default function VoiceTour() {
   };
 
   const startTour = () => {
+    localStorage.setItem(STORAGE_KEY, 'seen');
     setActive(true);
     setStepIndex(0);
     setTimeout(() => runStep(0), 180);
