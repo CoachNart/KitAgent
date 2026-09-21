@@ -105,3 +105,17 @@
 .mexc-terminal table{font-size:10px}
 .mexc-terminal th{font-size:8px}
 .mexc-terminal td{font-size:10px}
+
+/* Ambient depth without changing layout geometry. */
+.kit-shell{background:
+ radial-gradient(900px 520px at 74% -8%,rgba(38,207,220,.055),transparent 62%),
+ radial-gradient(760px 520px at 10% 88%,rgba(87,83,180,.035),transparent 65%),
+ #05090c!important;}
+.kit-main{position:relative;background:transparent!important}
+.kit-main:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(520px 320px at 62% 28%,rgba(255,255,255,.018),transparent 72%);opacity:.9}
+.kit-main>.content,.kit-main>.app-sticky-rail{position:relative;z-index:1}
+.kit-sidebar{box-shadow:10px 0 45px rgba(0,0,0,.18),inset -1px 0 rgba(255,255,255,.025)!important}
+.app-sticky-rail{box-shadow:0 12px 35px rgba(0,0,0,.12)!important}
+@media(max-width:760px){
+ .kit-main:before{background:radial-gradient(400px 260px at 80% 18%,rgba(38,207,220,.035),transparent 72%)}
+}
