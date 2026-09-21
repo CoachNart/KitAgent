@@ -823,3 +823,41 @@
   .app-sticky-actions .profile-avatar{width:32px!important;height:32px!important;min-width:32px!important;min-height:32px!important;flex-basis:32px!important}
   .app-sticky-actions .profile-avatar-ring{width:28px!important;height:28px!important;min-width:28px!important;min-height:28px!important}
 }
+
+/* Native app header ad — compact, responsive and isolated from page layout. */
+.app-header-ad{
+  width:100%;
+  box-sizing:border-box;
+  padding:0 12px 8px;
+  margin:0;
+}
+.app-header-ad-frame{
+  position:relative;
+  width:100%;
+  max-width:1180px;
+  height:92px;
+  margin:0 auto;
+  overflow:hidden;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.07);
+  background:#0b1119;
+  box-shadow:0 7px 24px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.04);
+}
+.app-header-ad-frame img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+}
+@media(max-width:760px){
+  .app-header-ad{padding:0 9px 7px}
+  .app-header-ad-frame{
+    height:64px;
+    border-radius:12px;
+  }
+}
+@media(max-width:390px){
+  .app-header-ad{padding:0 8px 6px}
+  .app-header-ad-frame{height:58px;border-radius:11px}
+}
