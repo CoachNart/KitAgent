@@ -418,3 +418,66 @@
   }
   .top-header .profile-avatar-ring{width:28px!important;height:28px!important}
 }
+
+
+/* Mobile app-shell: remove the separate header treatment and let its controls live on the page as a sticky utility row. */
+@media(max-width:760px){
+  .kit-main{position:relative!important;min-width:0!important}
+  .top-header{
+    position:sticky!important;
+    top:0!important;
+    z-index:1200!important;
+    width:100%!important;
+    min-height:46px!important;
+    height:46px!important;
+    box-sizing:border-box!important;
+    padding:6px 9px!important;
+    margin:0!important;
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+    backdrop-filter:none!important;
+    -webkit-backdrop-filter:none!important;
+    isolation:auto!important;
+  }
+  .top-header:before{display:none!important}
+  .top-header .menu-btn{
+    width:34px!important;
+    height:34px!important;
+    flex:0 0 34px!important;
+    border-radius:10px!important;
+    background:rgba(10,15,22,.86)!important;
+    border:1px solid rgba(255,255,255,.07)!important;
+    box-shadow:0 5px 16px rgba(0,0,0,.16)!important;
+  }
+  .header-brand{
+    flex:1 1 auto!important;
+    min-width:0!important;
+  }
+  .header-brand img{
+    width:32px!important;
+    height:32px!important;
+    border-radius:9px!important;
+  }
+  .header-brand b{display:none!important}
+  .header-actions{margin-left:auto!important;gap:5px!important}
+  .top-header .header-pulse{
+    padding:4px 6px!important;
+    background:rgba(10,15,22,.86)!important;
+    border-color:rgba(255,255,255,.07)!important;
+    box-shadow:0 5px 16px rgba(0,0,0,.16)!important;
+  }
+  .top-header .profile-avatar{
+    width:32px!important;
+    height:32px!important;
+    flex-basis:32px!important;
+  }
+  .top-header .profile-avatar-ring{width:28px!important;height:28px!important}
+}
+@media(max-width:390px){
+  .top-header{min-height:44px!important;height:44px!important;padding:5px 8px!important}
+  .top-header .menu-btn{width:32px!important;height:32px!important;flex-basis:32px!important}
+  .header-brand img{width:30px!important;height:30px!important}
+  .top-header .profile-avatar{width:30px!important;height:30px!important;flex-basis:30px!important}
+  .top-header .profile-avatar-ring{width:27px!important;height:27px!important}
+}
