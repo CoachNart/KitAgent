@@ -1,0 +1,107 @@
+/* KitSetups UI polish — readability, depth and responsive notification surface. */
+.notification-center.embedded{position:relative!important}
+.notification-center .notification-trigger{
+  width:72px!important;height:36px!important;border-radius:11px!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;
+  background:rgba(255,255,255,.035)!important;border:1px solid rgba(255,255,255,.10)!important;
+  color:#d9e5e7!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 8px 22px rgba(0,0,0,.12)!important;
+  transition:.18s ease!important;
+}
+.notification-center .notification-trigger:hover{background:rgba(99,233,227,.065)!important;border-color:rgba(99,233,227,.20)!important;transform:translateY(-1px)!important}
+.notification-center .notification-trigger svg{width:15px!important;height:15px!important;color:#63e9e3!important}
+.notification-center .notification-panel{
+  width:min(370px,calc(100vw - 24px))!important;max-height:min(690px,calc(100dvh - 82px))!important;
+  overflow:auto!important;padding:14px!important;border-radius:18px!important;
+  background:linear-gradient(155deg,rgba(14,22,28,.94),rgba(7,12,16,.96))!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.055)!important;
+  backdrop-filter:blur(26px) saturate(145%)!important;-webkit-backdrop-filter:blur(26px) saturate(145%)!important;
+  scrollbar-width:thin!important;
+}
+.notification-center .notification-head{margin-bottom:12px!important}
+.notification-center .notification-head strong{font-size:14px!important;letter-spacing:-.02em!important;color:#f2f8f8!important}
+.notification-center .notification-head>div>div{font-size:10px!important;line-height:1.35!important;color:#7d9098!important}
+.notification-center .notification-head button{width:28px!important;height:28px!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:8px!important;background:rgba(255,255,255,.035)!important;color:#9aabb0!important}
+.notification-center .notification-status{padding:11px!important;border-radius:12px!important;background:linear-gradient(145deg,rgba(66,230,160,.075),rgba(66,230,160,.025))!important;border-color:rgba(66,230,160,.18)!important}
+.notification-center .notification-status span{font-size:9px!important;font-weight:800!important;color:#7cf0b8!important;letter-spacing:.06em!important}
+.notification-center .notification-status small{font-size:9px!important;color:#74868d!important}
+.notification-center .notification-status-grid{gap:7px!important}
+.notification-center .notification-status-grid>div{padding:7px 4px!important;border-radius:9px!important;background:rgba(0,0,0,.12)!important}
+.notification-center .notification-status-grid b{display:block!important;font-size:14px!important;color:#eaf5f4!important;line-height:1.1!important}
+.notification-center .notification-status-grid span{display:block!important;margin-top:4px!important;font-size:9px!important;color:#789098!important;letter-spacing:0!important}
+.notification-center .notification-event{padding:10px!important;border-radius:11px!important}
+.notification-center .notification-event b{display:block!important;font-size:11px!important;color:#eaf8fa!important}
+.notification-center .notification-event span{display:block!important;margin-top:4px!important;font-size:9px!important;color:#82969e!important;line-height:1.35!important}
+.notification-center .notification-section{padding-top:11px!important;margin-top:11px!important}
+.notification-center .notification-section-title{font-size:8px!important;letter-spacing:.14em!important;color:#71858d!important;margin-bottom:7px!important}
+.notification-center .notification-item{padding:9px!important;border-radius:9px!important}
+.notification-center .notification-item b{display:block!important;font-size:10px!important;color:#dbe7e9!important}
+.notification-center .notification-item span{display:block!important;margin-top:4px!important;font-size:9px!important;color:#74878f!important}
+.notification-center .notification-enable,.notification-center .notification-enabled{min-height:38px!important;padding:8px 10px!important;border-radius:9px!important;font-size:10px!important}
+.notification-center .notification-enabled{color:#82edbb!important}
+.notification-center select,.notification-center input{min-height:38px!important;font-size:11px!important;border-radius:9px!important;background:rgba(255,255,255,.045)!important}
+.notification-center select{color:#e8f0f1!important}
+.notification-center .notification-alert-item{padding:9px!important;border-radius:9px!important;font-size:10px!important}
+.notification-center .notification-alert-item strong{font-size:11px!important;color:#eef7f7!important}
+.notification-center .notification-alert-item .meta{font-size:9px!important;color:#70838b!important}
+.notification-center .notification-footer{font-size:9px!important;line-height:1.45!important;color:#64777f!important}
+.notification-center .notification-panel::-webkit-scrollbar{width:5px}
+.notification-center .notification-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:99px}
+
+@media(max-width:760px){
+ .notification-center .notification-panel{position:fixed!important;right:10px!important;top:62px!important;width:min(390px,calc(100vw - 20px))!important;max-height:calc(100dvh - 76px)!important}
+ .notification-center .notification-trigger{width:68px!important;height:35px!important}
+}
+@media(max-width:390px){
+ .notification-center .notification-panel{right:8px!important;width:calc(100vw - 16px)!important;padding:12px!important;border-radius:16px!important}
+ .notification-center .notification-head strong{font-size:13px!important}
+ .notification-center .notification-status-grid b{font-size:13px!important}
+}
+
+/* Readability pass: preserve hierarchy, but stop important UI from becoming microtext. */
+.account-page .account-section-label{font-size:9px!important;color:#71838b!important}
+.account-page .account-name-block p{font-size:10px!important;color:#7f9198!important}
+.account-page .account-live-state{font-size:9px!important}
+.account-page .subscription-label,.account-page .trial-dates,.account-page .premium-price span{font-size:8px!important}
+.account-page .subscription-live>div:first-child,.account-page .payment-heading{font-size:9px!important}
+.account-page .payment-address,.account-page .payment-input-wrap input{font-size:10px!important}
+.account-page .payment-input-wrap span,.account-page .payment-feedback,.account-page .tool-kicker{font-size:8px!important}
+.account-page .tool-card p,.account-page .premium-copy p{font-size:9px!important;color:#74858c!important}
+.account-page .tool-card h3,.account-page .premium-copy h2{font-size:13px!important}
+.account-page .coming-soon,.account-page .wallet-action{font-size:8px!important}
+
+.home-page .home-section-head h2{font-size:19px!important}
+.home-page .home-section-head button,.home-page .coin-name small,.home-page .balance-foot{font-size:10px!important}
+.home-page .coin-name b,.home-page .coin-price{font-size:13px!important}
+.home-page .coin-change{font-size:12px!important}
+.home-page .home-action-btn b{font-size:10px!important}
+.home-page .signal-feed-main b,.home-page .signal-feed-value b{font-size:11px!important}
+.home-page .signal-feed-main small,.home-page .signal-feed-value small{font-size:9px!important}
+.home-page .insight-stat span{font-size:8px!important}
+.home-page .insight-intro p{font-size:9px!important}
+
+.signal-history .history-hero p{font-size:12px!important;color:#8d9ba1!important}
+.signal-history .history-summary span{font-size:8px!important;color:#71838a!important}
+.signal-history .history-summary small{font-size:9px!important;color:#71838a!important}
+.signal-history .history-view-tabs button,.signal-history .history-filter-row button{font-size:9px!important}
+.signal-history .history-search input{font-size:10px!important}
+.signal-history .signal-id,.signal-history .signal-time{font-size:8px!important}
+.signal-history .signal-meta-row{font-size:8px!important}
+.signal-history .signal-level-grid span{font-size:7px!important}
+.signal-history .signal-level-grid b{font-size:10px!important}
+.signal-history .result-context{font-size:9px!important}
+.signal-history .signal-card-footer button{font-size:9px!important}
+.signal-history .footer-source{font-size:7px!important}
+.signal-history .activity-card b{font-size:11px!important}
+.signal-history .activity-card small{font-size:8px!important}
+.signal-history .activity-card code{font-size:7px!important}
+
+.mexc-terminal{
+  color:#e9f1f2;
+}
+.mexc-terminal button,.mexc-terminal input,.mexc-terminal select{font-size:10px}
+.mexc-terminal label,.mexc-terminal small{font-size:9px}
+.mexc-terminal [class*="label"],.mexc-terminal [class*="hint"],.mexc-terminal [class*="meta"]{font-size:9px}
+.mexc-terminal table{font-size:10px}
+.mexc-terminal th{font-size:8px}
+.mexc-terminal td{font-size:10px}
