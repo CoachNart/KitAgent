@@ -44,6 +44,7 @@ export default function App({user}){
   {searchOpen&&appSearch&&<div className="app-search-results">{searchResults.length?searchResults.map(item=><button type="button" key={item.type+'-'+item.label} className="app-search-result" onMouseDown={e=>e.preventDefault()} onClick={()=>selectSearchResult(item)}><span className={'app-search-result-icon '+item.type}><Search size={13}/></span><span><b>{item.label}</b><small>{item.meta}</small></span><ArrowRight size={13}/></button>):<div className="app-search-empty">No matching markets or workspace items.</div>}</div>}
 </div>
   <div className="app-sticky-actions">
+    <NotificationCenter user={user} embedded/>
     <div className="header-pulse" aria-label="System pulse"><i className="pulse-green"/><i className="pulse-red"/></div>
     <button type="button" className="profile-avatar" aria-label="Open profile" title="Profile" onClick={()=>go('profile')}><span className="profile-avatar-ring">{(displayUser?.photoURL||displayUser?.photoUrl||displayUser?.avatarUrl)?<img src={displayUser.photoURL||displayUser.photoUrl||displayUser.avatarUrl} alt="" referrerPolicy="no-referrer"/>:<span>{initials(displayUser?.displayName||displayUser?.email||'K')}</span>}</span><i className="profile-status"/></button>
   </div>
