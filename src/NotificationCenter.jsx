@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bell, BellRing, CheckCircle2, Radio, X, Zap } from 'lucide-react';
 import { enableKitSetupsNotifications } from './notifications.js';
-import { getMarketAlertSnapshot } from './marketAlerts.js';
+import { getMarketAlertSnapshot, startMarketAlerts } from './marketAlerts.js';
 
 const KEY='kitsetups-market-alerts-v2';
 const ACTIVITY_KEY='kitsetups-live-activity-v1';
@@ -15,6 +15,7 @@ export default function NotificationCenter({user,embedded=false}){
  const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[activity,setActivity]=useState(readActivity),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot());
  useEffect(()=>localStorage.setItem(KEY,JSON.stringify(alerts)),[alerts]);
  useEffect(()=>localStorage.setItem(ACTIVITY_KEY,JSON.stringify(activity.slice(0,12))),[activity]);
+ useEffect(()=>{try{startMarketAlerts()}catch(error){console.warn('KitSetups live activity monitor could not start:',error)}},[]);
  useEffect(()=>{
    const onUpdate=e=>{const next=e.detail||getMarketAlertSnapshot();setMarket(next);const event=next.lastConfirmed||next.lastEvent;if(event?.symbol){setActivity(a=>{const key=event.symbol+'-'+event.direction+'-'+(event.time||event.detectedAt)+'-'+(event.timeframe||'');if(a.some(x=>x.key===key))return a;return [{key,symbol:event.symbol,direction:event.direction,type:event.type||'BOS',level:event.level,detectedAt:event.detectedAt||Date.now(),timeframe:event.timeframe||'live'},...a].slice(0,12)})}};
    window.addEventListener('kitagent:market-alert-update',onUpdate);
