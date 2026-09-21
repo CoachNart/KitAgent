@@ -3,8 +3,7 @@ import './lesson-detail.css';
 import {getDailyTekLesson} from './kitLessons.js';
 
 export default function LessonDetail({lessonId,onBack}){
- const dailyLesson=getDailyTekLesson();
- const lesson=dailyLesson?.id===lessonId?dailyLesson:dailyLesson;
+ const lesson=getDailyTekLesson();
  if(!lesson)return <main className="lesson-page"><button className="lesson-back" onClick={onBack}><ArrowLeft size={16}/> Back</button><div className="lesson-empty"><BookOpen size={28}/><h2>Daily Tek is unavailable</h2><p>There is no lesson available in the current learning library.</p></div></main>;
  const today=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
  return <main className="lesson-page">
