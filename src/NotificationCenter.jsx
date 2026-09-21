@@ -4,16 +4,19 @@ import { enableKitSetupsNotifications } from './notifications.js';
 import { getMarketAlertSnapshot } from './marketAlerts.js';
 
 const KEY='kitsetups-market-alerts-v2';
+const ACTIVITY_KEY='kitsetups-live-activity-v1';
 const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT'];
 const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}};
+const readActivity=()=>{try{const v=JSON.parse(localStorage.getItem(ACTIVITY_KEY)||'[]');return Array.isArray(v)?v.slice(0,12):[]}catch{return[]}};
 const fmtPrice=(v)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)<10?4:2})}`:'—';
 const fmtTime=(v)=>v?new Date(v).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—';
 
 export default function NotificationCenter({user,embedded=false}){
- const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot());
+ const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[activity,setActivity]=useState(readActivity),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot());
  useEffect(()=>localStorage.setItem(KEY,JSON.stringify(alerts)),[alerts]);
+ useEffect(()=>localStorage.setItem(ACTIVITY_KEY,JSON.stringify(activity.slice(0,12))),[activity]);
  useEffect(()=>{
-   const onUpdate=e=>setMarket(e.detail||getMarketAlertSnapshot());
+   const onUpdate=e=>{const next=e.detail||getMarketAlertSnapshot();setMarket(next);const event=next.lastConfirmed||next.lastEvent;if(event?.symbol){setActivity(a=>{const key=event.symbol+'-'+event.direction+'-'+(event.time||event.detectedAt)+'-'+(event.timeframe||'');if(a.some(x=>x.key===key))return a;return [{key,symbol:event.symbol,direction:event.direction,type:event.type||'BOS',level:event.level,detectedAt:event.detectedAt||Date.now(),timeframe:event.timeframe||'live'},...a].slice(0,12)})}};
    window.addEventListener('kitagent:market-alert-update',onUpdate);
    setMarket(getMarketAlertSnapshot());
    return()=>window.removeEventListener('kitagent:market-alert-update',onUpdate);
@@ -30,15 +33,17 @@ export default function NotificationCenter({user,embedded=false}){
  },[]);
  const count=useMemo(()=>alerts.filter(a=>!a.triggered).length,[alerts]);
  const liveMarkets=market.markets||[];
+ const liveEvent=market.lastConfirmed||market.lastEvent;
  const upcoming=market.news||[];
  const enable=async()=>{try{const r=await enableKitSetupsNotifications(user);setPermission(r.enabled?'granted':(typeof Notification!=='undefined'?Notification.permission:'denied'))}catch(error){console.warn('KitSetups notifications could not be enabled:',error);setPermission(typeof Notification!=='undefined'?Notification.permission:'denied')}};
  const add=()=>{const n=Number(target);if(!Number.isFinite(n)||n<=0)return;setAlerts(a=>[...a,{id:crypto.randomUUID(),symbol,direction,target:n,createdAt:Date.now(),triggered:false}]);setTarget('')};
  return <div style={embedded?wrapEmbedded:wrapFloating}>
-  <button aria-label="Open notifications" onClick={()=>setOpen(v=>!v)} style={embedded?buttonEmbedded:button}>{count?<BellRing size={17}/>:<Bell size={17}/>} {count>0&&<span style={badge}>{count}</span>}</button>
+  <button aria-label="Open live activity and notifications" title="Live activity & alerts" onClick={()=>setOpen(v=>!v)} style={embedded?buttonEmbedded:button}>{count?<BellRing size={17}/>:<Bell size={17}/>} {count>0&&<span style={badge}>{count}</span>}</button>
   {open&&<div style={embedded?panelEmbedded:panel}>
-   <div style={head}><div><strong>Market alerts</strong><div style={sub}>Live structure + scheduled news</div></div><button onClick={()=>setOpen(false)} style={close}><X size={16}/></button></div>
+   <div style={head}><div><strong>Live activity</strong><div style={sub}>Real-time structure, alerts & scheduled news</div></div><button onClick={()=>setOpen(false)} style={close}><X size={16}/></button></div>
    <div style={statusCard}><div style={statusTop}><span><Radio size={12}/> BYBIT LIVE</span><small>{market.checkedAt?`Checked ${fmtTime(market.checkedAt)}`:'Starting monitor…'}</small></div><div style={statusGrid}><div><b>{liveMarkets.filter(x=>x.ok).length}/{SYMBOLS.length}</b><span>symbols online</span></div><div><b>5m</b><span>structure</span></div><div><b>{upcoming.length}</b><span>high impact</span></div></div>{market.error&&<div style={error}>{market.error}</div>}</div>
-   {market.lastEvent&&<div style={eventCard}><div style={eventIcon}><Zap size={13}/></div><div><b>{market.lastEvent.symbol?.replace('USDT','')} {market.lastEvent.direction} BOS</b><span>{fmtPrice(market.lastEvent.level)} · detected {fmtTime(market.lastEvent.detectedAt)}</span></div></div>}
+   {liveEvent&&<div style={eventCard}><div style={eventIcon}><Zap size={13}/></div><div><b>{liveEvent.symbol?.replace('USDT','')} {liveEvent.direction} {liveEvent.type||'BOS'}</b><span>{fmtPrice(liveEvent.level)} · {liveEvent.timeframe||'live'} · detected {fmtTime(liveEvent.detectedAt)}</span></div></div>}
+   {activity.length>0&&<div style={section}><div style={sectionTitle}>RECENT ACTIVITY</div>{activity.slice(0,4).map(a=><div style={newsItem} key={a.key}><div><b>{a.symbol?.replace('USDT','')} {a.direction} {a.type}</b><span>{a.timeframe} · {fmtTime(a.detectedAt)}</span></div></div>)}</div>}
    {upcoming.length>0&&<div style={section}><div style={sectionTitle}>UPCOMING HIGH-IMPACT</div>{upcoming.slice(0,3).map(n=><div style={newsItem} key={n.id}><div><b>{n.country||'Market'} · {n.title||'Economic release'}</b><span>{fmtTime(n.when)} · scheduled</span></div></div>)}</div>}
    {permission!=='granted'&&<button onClick={enable} style={enableBtn}><Bell size={14}/> Enable browser notifications</button>}
    {permission==='granted'&&<div style={enabledNotice}><CheckCircle2 size={13}/> Browser notifications enabled</div>}
