@@ -336,22 +336,11 @@ export default async function handler(req, res) {
       const normalizedTakeProfit = normalizeOptionalPrice(body.takeProfit);
 
       const leverage = opening ? Number(body.leverage) : undefined;
-      let allowedMaxLeverage = Number(contract.maxLeverage || contract.maxLeverageNum || contract.leverageMax || 0);
-      if (opening) {
-        try {
-          const riskResult = await privateGet(key, secret, '/api/v1/private/account/risk_limit', { symbol });
-          const riskRows = riskRowsFor(riskResult, symbol);
-          const positionType = side === 1 ? 1 : 2;
-          const matchingRows = riskRows
-            .filter(row => Number(row?.positionType) === positionType || row?.positionType == null)
-            .filter(row => !Number(row?.maxVol) || normalizedVol <= Number(row.maxVol));
-          const row = matchingRows.sort((a, b) => Number(a?.maxVol || Infinity) - Number(b?.maxVol || Infinity))[0];
-          if (row?.maxLeverage) allowedMaxLeverage = Number(row.maxLeverage);
-        } catch {
-          // Contract metadata remains the fallback if the private risk-limit feed is unavailable.
-        }
-      }
-      if (!allowedMaxLeverage && (symbol === 'BTC_USDT' || symbol === 'ETH_USDT')) allowedMaxLeverage = 500;
+      // Keep order creation single-hop. A separate private risk-limit request
+      // immediately before create-order can stall a valid order. MEXC performs
+      // the authoritative live risk-tier validation on order creation.
+      const allowedMaxLeverage = Number(contract.maxLeverage || contract.maxLeverageNum || contract.leverageMax || 0)
+        || ((symbol === 'BTC_USDT' || symbol === 'ETH_USDT') ? 500 : 0);
       if (opening && (!Number.isFinite(leverage) || leverage < Number(contract.minLeverage || 1) || leverage > allowedMaxLeverage)) {
         return json(res, 400, { error: `Leverage must be between ${contract.minLeverage || 1}x and ${allowedMaxLeverage || 500}x for ${symbol}.` });
       }
