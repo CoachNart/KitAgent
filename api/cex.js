@@ -16,21 +16,19 @@ const bodyOf = async req => {
 
 const request = async (url, options = {}) => {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 10000);
   let response;
   try {
     response = await fetch(url, {
       ...options,
       signal: controller.signal,
-      headers: {
-        ...(options.headers || {}),
-        'User-Agent': 'KitAgent-MEXC-Futures/2.0',
-        'Language': 'English'
-      }
+      headers: { ...(options.headers || {}) }
     });
   } catch (error) {
     if (error?.name === 'AbortError') {
-      throw new Error('MEXC request timed out after 15 seconds. The exchange did not confirm the request.');
+      const timeoutError = new Error('MEXC request timed out after 10 seconds.');
+      timeoutError.code = 'MEXC_TIMEOUT';
+      throw timeoutError;
     }
     throw error;
   } finally {
@@ -91,7 +89,7 @@ const signed = ({ path, method = 'GET', params = {}, body = '', key, secret }) =
   const query = method === 'GET' && parameterString ? `?${parameterString}` : '';
   return {
     url: `${BASE}${path}${query}`,
-    headers: { ApiKey: key, 'Request-Time': timestamp, Signature: signature, 'Recv-Window': '10000', 'Content-Type': 'application/json', Language: 'English' }
+    headers: { ApiKey: key, 'Request-Time': timestamp, Signature: signature, 'Recv-Window': '10000', 'Content-Type': 'application/json' }
   };
 };
 
@@ -336,14 +334,13 @@ export default async function handler(req, res) {
       const normalizedTakeProfit = normalizeOptionalPrice(body.takeProfit);
 
       const leverage = opening ? Number(body.leverage) : undefined;
-      // Keep order creation single-hop. A separate private risk-limit request
-      // immediately before create-order can stall a valid order. MEXC performs
-      // the authoritative live risk-tier validation on order creation.
-      const allowedMaxLeverage = Number(contract.maxLeverage || contract.maxLeverageNum || contract.leverageMax || 0)
-        || ((symbol === 'BTC_USDT' || symbol === 'ETH_USDT') ? 500 : 0);
-      if (opening && (!Number.isFinite(leverage) || leverage < Number(contract.minLeverage || 1) || leverage > allowedMaxLeverage)) {
-        return json(res, 400, { error: `Leverage must be between ${contract.minLeverage || 1}x and ${allowedMaxLeverage || 500}x for ${symbol}.` });
+      if (opening && (!Number.isInteger(leverage) || leverage < 1)) {
+        return json(res, 400, { error: 'Leverage must be a whole number of at least 1x.' });
       }
+
+      // Let MEXC perform the authoritative leverage/risk-tier and funding checks.
+      // Contract metadata is not used as a local maximum because the live risk tier
+      // can vary with position size and account state.
 
       // Let MEXC perform the authoritative funding check at order creation.
       // The exchange calculates opening cost from the actual contract, leverage,
@@ -361,22 +358,44 @@ export default async function handler(req, res) {
         positionId: body.positionId ? Number(body.positionId) : undefined,
         stopLossPrice: normalizedStopLoss,
         takeProfitPrice: normalizedTakeProfit,
-        lossTrend: body.lossTrend ? Number(body.lossTrend) : undefined,
-        profitTrend: body.profitTrend ? Number(body.profitTrend) : undefined,
         positionMode: body.positionMode ? Number(body.positionMode) : undefined,
-        reduceOnly: Boolean(body.reduceOnly),
-        marketCeiling: Boolean(body.marketCeiling),
-        flashClose: Boolean(body.flashClose),
-        bboTypeNum: body.bboTypeNum !== undefined ? Number(body.bboTypeNum) : undefined,
-        stpMode: body.stpMode !== undefined ? Number(body.stpMode) : undefined,
+        reduceOnly: body.positionMode === 1 ? undefined : Boolean(body.reduceOnly),
         externalOid: body.externalOid ? String(body.externalOid) : `kitsetups-${Date.now()}-${Math.random().toString(36).slice(2,10)}`
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
 
-      const result = validateOperationResult(
-        await privatePost(key, secret, '/api/v1/private/order/create', payload),
-        'Order was rejected by MEXC.'
-      );
+      let result;
+      try {
+        result = validateOperationResult(
+          await privatePost(key, secret, '/api/v1/private/order/create', payload),
+          'Order was rejected by MEXC.'
+        );
+      } catch (error) {
+        // A timed-out create request is ambiguous: MEXC may have accepted the
+        // order while the response was lost. Reconcile by externalOid before
+        // reporting failure; never blindly submit the order a second time.
+        if (error?.code === 'MEXC_TIMEOUT') {
+          try {
+            const existing = await privateGet(
+              key,
+              secret,
+              `/api/v1/private/order/external/${encodeURIComponent(symbol)}/${encodeURIComponent(String(payload.externalOid))}`
+            );
+            const found = existing?.data;
+            if (found && (found.orderId || found.id || found.externalOid)) {
+              return json(res, 200, {
+                ok: true,
+                reconciled: true,
+                orderId: found.orderId ?? found.id ?? found,
+                order: found
+              });
+            }
+          } catch {
+            // Preserve the original timeout if reconciliation is unavailable.
+          }
+        }
+        throw error;
+      }
       return json(res, 200, { ok: true, orderId: result?.data?.orderId ?? result?.data ?? result, order: result?.data ?? null });
     }
 
