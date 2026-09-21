@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {auth} from './firebase.js';
 import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,TrendingUp,Zap,Activity,Target,ShieldCheck,BookOpen} from 'lucide-react';
-import {KIT_LESSONS} from './kitLessons.js';
+import {getDailyTekLesson} from './kitLessons.js';
 
 const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT'];
 const api=(op,p={})=>fetch(`/api/bybit?${new URLSearchParams({op,...p})}`,{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
@@ -22,7 +22,7 @@ export default function HomePage({go,wallet,onLesson}){
  const displayName=useMemo(()=>{const clean=String(rawDisplayName).trim().replace(/[._-]+/g,' ');const first=clean.split(/\s+/)[0]||'Trader';return first.charAt(0).toUpperCase()+first.slice(1).toLowerCase()},[rawDisplayName]);
  const [signalStats,setSignalStats]=useState({total:0,long:0,short:0,ready:0}),[recentSignals,setRecentSignals]=useState([]);
  useEffect(()=>{let cancelled=false;(async()=>{try{if(!auth?.currentUser)return;const token=await auth.currentUser.getIdToken();const r=await fetch('/api/signals',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});if(!r.ok)return;const j=await r.json();const rows=Array.isArray(j.signals)?j.signals:[];if(!cancelled){setSignalStats({total:rows.length,long:rows.filter(x=>x?.direction==='LONG').length,short:rows.filter(x=>x?.direction==='SHORT').length,ready:rows.filter(x=>x?.status==='open'&&x?.entry!=null).length});setRecentSignals(rows.slice(0,3));}}catch{} })();return()=>{cancelled=true}},[]);
- const openDailyTek=()=>{if(!KIT_LESSONS.length)return;const lesson=KIT_LESSONS[Math.floor(Math.random()*KIT_LESSONS.length)];onLesson?.(lesson.id)};
+ const openDailyTek=()=>{const lesson=getDailyTekLesson();if(lesson)onLesson?.(lesson.id)};
  return <div className="home-page">
   <section className="home-top">
    <div><span className="tiny-label">MARKET OVERVIEW</span><h1>Good to see you, {displayName}.</h1><p>Markets are moving. Stay ahead.</p></div>
