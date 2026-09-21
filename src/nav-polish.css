@@ -1609,3 +1609,75 @@
     opacity:.9!important;
   }
 }
+
+
+/* FINAL SURGICAL MOBILE NAV PASS — Chart Terminal pseudo-icon + glass click motion. */
+@media(max-width:760px){
+  .kit-sidebar nav > .side-link:nth-child(3)::before,
+  .kit-sidebar nav > .side-link:nth-child(3):hover::before,
+  .kit-sidebar nav > .side-link:nth-child(3):focus::before,
+  .kit-sidebar nav > .side-link:nth-child(3):focus-visible::before,
+  .kit-sidebar nav > .side-link:nth-child(3):active::before,
+  .kit-sidebar nav > .side-link:nth-child(3).selected::before{
+    background-color:#63e9e3!important;
+    filter:drop-shadow(0 0 5px rgba(99,233,227,.22))!important;
+    opacity:1!important;
+  }
+
+  .kit-sidebar nav > .side-link:nth-child(3),
+  .kit-sidebar nav > .side-link:nth-child(5){
+    background:rgba(255,255,255,.018)!important;
+    border-color:rgba(255,255,255,.035)!important;
+    backdrop-filter:blur(14px) saturate(125%)!important;
+    -webkit-backdrop-filter:blur(14px) saturate(125%)!important;
+  }
+
+  .kit-sidebar nav > .side-link:nth-child(3):hover,
+  .kit-sidebar nav > .side-link:nth-child(5):hover{
+    background:rgba(99,233,227,.035)!important;
+    border-color:rgba(99,233,227,.09)!important;
+  }
+}
+
+/* Quiet glass treatment + tactile click animation for every nav destination. */
+.kit-sidebar nav > .side-link{
+  background:rgba(255,255,255,.016)!important;
+  border-color:rgba(255,255,255,.045)!important;
+  backdrop-filter:blur(12px) saturate(120%)!important;
+  -webkit-backdrop-filter:blur(12px) saturate(120%)!important;
+  transition:
+    background .18s ease,
+    border-color .18s ease,
+    color .18s ease,
+    box-shadow .18s ease,
+    transform .14s ease!important;
+  -webkit-tap-highlight-color:transparent!important;
+}
+.kit-sidebar nav > .side-link:active{
+  transform:scale(.965)!important;
+  background:rgba(99,233,227,.075)!important;
+  border-color:rgba(99,233,227,.16)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.07),
+    0 0 18px rgba(99,233,227,.08)!important;
+}
+.kit-sidebar nav > .side-link:focus-visible{
+  outline:none!important;
+  box-shadow:
+    0 0 0 2px rgba(99,233,227,.12),
+    inset 0 1px 0 rgba(255,255,255,.05)!important;
+}
+@media(max-width:760px){
+  .kit-sidebar nav > .side-link{
+    background:rgba(255,255,255,.016)!important;
+    border-color:rgba(255,255,255,.025)!important;
+    backdrop-filter:blur(16px) saturate(125%)!important;
+    -webkit-backdrop-filter:blur(16px) saturate(125%)!important;
+  }
+  .kit-sidebar nav > .side-link:active{
+    transform:scale(.94)!important;
+    background:rgba(99,233,227,.075)!important;
+    border-color:rgba(99,233,227,.15)!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 0 16px rgba(99,233,227,.07)!important;
+  }
+}
