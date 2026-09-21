@@ -259,3 +259,25 @@
   opacity:.68!important;
   filter:grayscale(.65) saturate(.42) brightness(.9)!important;
 }
+
+
+/* FINAL HOME QUICK-ACTION SCALE — smaller, cleaner icons. */
+.home-page .home-action-btn .action-icon{
+  width:25px!important;
+  height:25px!important;
+  border-radius:7px!important;
+}
+.home-page .home-action-btn .action-icon svg{
+  width:13px!important;
+  height:13px!important;
+}
+.home-page .home-action-btn .t3kit-logo{
+  width:15px!important;
+  height:15px!important;
+  opacity:1!important;
+  filter:none!important;
+}
+.home-page .home-action-btn:hover .t3kit-logo{
+  opacity:1!important;
+  filter:none!important;
+}
