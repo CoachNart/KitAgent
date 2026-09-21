@@ -23,3 +23,25 @@
 .home-actions .home-action-btn:nth-child(2):hover .action-icon{background:rgba(59,130,246,.16)!important}
 .home-actions .home-action-btn:nth-child(3):hover .action-icon{background:rgba(16,185,129,.16)!important}
 .home-actions .home-action-btn:nth-child(4):hover .action-icon{background:rgba(245,158,11,.16)!important}
+
+
+/* Home quick actions: six equal destinations, three per row. Promos are part of the grid, never floating. */
+.home-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}
+.home-action-btn{min-height:58px!important}
+.home-promo-btn{text-decoration:none!important}
+.home-promo-btn .action-icon{background:rgba(255,255,255,.055)!important;color:#cfd7e2!important}
+.home-actions .home-action-btn:nth-child(5) .action-icon{color:#67d9ff!important;background:rgba(103,217,255,.10)!important}
+.home-actions .home-action-btn:nth-child(6) .action-icon{color:#b9a4ff!important;background:rgba(185,164,255,.10)!important}
+.t3kit-mini-mark{font-size:9px;font-weight:900;letter-spacing:-.08em}
+@media(max-width:850px){
+ .home-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ .home-action-btn{min-height:56px!important;padding:8px 9px!important}
+ .home-action-btn b{font-size:10px!important}
+}
+@media(max-width:560px){
+ .home-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+ .home-action-btn{min-height:54px!important;padding:8px 7px!important;gap:6px!important;border-radius:13px!important}
+ .home-action-btn b{font-size:9px!important}
+ .home-action-btn>svg{width:13px!important;height:13px!important}
+ .action-icon{width:27px!important;height:27px!important;border-radius:8px!important}
+}
