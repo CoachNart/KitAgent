@@ -119,3 +119,20 @@
 @media(max-width:760px){
  .kit-main:before{background:radial-gradient(400px 260px at 80% 18%,rgba(38,207,220,.035),transparent 72%)}
 }
+
+
+/* App pages should end with their content, not a forced viewport-sized tail. */
+.content{
+  padding-bottom:20px!important;
+}
+.command-page{
+  min-height:0!important;
+}
+@media(max-width:760px){
+  .content{
+    padding-bottom:76px!important;
+  }
+  .command-page{
+    min-height:0!important;
+  }
+}
