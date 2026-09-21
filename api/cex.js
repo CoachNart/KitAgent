@@ -245,21 +245,21 @@ export default async function handler(req, res) {
       }
 
       // Use live contract rules so quantity/price match MEXC's min/max/step constraints.
-      const contractResult = await publicGet(\`/api/v1/contract/detail/country?symbol=\${encodeURIComponent(symbol)}\`);
+      const contractResult = await publicGet(`/api/v1/contract/detail/country?symbol=${encodeURIComponent(symbol)}`);
       const contract = Array.isArray(contractResult?.data) ? contractResult.data[0] : contractResult?.data;
-      if (!contract) return json(res, 400, { error: \`Contract rules unavailable for \${symbol}.\` });
-      if (contract.apiAllowed === false) return json(res, 400, { error: \`\${symbol} does not allow API futures trading.\` });
-      if (Number(contract.state) !== 0) return json(res, 400, { error: \`\${symbol} is not currently tradable.\` });
+      if (!contract) return json(res, 400, { error: `Contract rules unavailable for ${symbol}.` });
+      if (contract.apiAllowed === false) return json(res, 400, { error: `${symbol} does not allow API futures trading.` });
+      if (Number(contract.state) !== 0) return json(res, 400, { error: `${symbol} is not currently tradable.` });
 
       const volUnit = Number(contract.volUnit) || 1;
       const minVol = Number(contract.minVol) || volUnit;
       const maxVol = Number(contract.maxVol) || Number.POSITIVE_INFINITY;
       const normalizedVol = Math.floor((volume + 1e-12) / volUnit) * volUnit;
       if (normalizedVol < minVol) {
-        return json(res, 400, { error: \`Order size is below the \${minVol} contract minimum for \${symbol}.\` });
+        return json(res, 400, { error: `Order size is below the ${minVol} contract minimum for ${symbol}.` });
       }
       if (normalizedVol > maxVol) {
-        return json(res, 400, { error: \`Order size exceeds the \${maxVol} contract maximum for \${symbol}.\` });
+        return json(res, 400, { error: `Order size exceeds the ${maxVol} contract maximum for ${symbol}.` });
       }
 
       let normalizedPrice = price;
@@ -275,7 +275,7 @@ export default async function handler(req, res) {
 
       const leverage = opening ? Number(body.leverage) : undefined;
       if (opening && (!Number.isFinite(leverage) || leverage < Number(contract.minLeverage || 1) || leverage > Number(contract.maxLeverage || 500))) {
-        return json(res, 400, { error: \`Leverage must be between \${contract.minLeverage || 1}x and \${contract.maxLeverage || 500}x for \${symbol}.\` });
+        return json(res, 400, { error: `Leverage must be between ${contract.minLeverage || 1}x and ${contract.maxLeverage || 500}x for ${symbol}.` });
       }
 
       const payload = {
@@ -297,7 +297,7 @@ export default async function handler(req, res) {
         flashClose: Boolean(body.flashClose),
         bboTypeNum: body.bboTypeNum !== undefined ? Number(body.bboTypeNum) : undefined,
         stpMode: body.stpMode !== undefined ? Number(body.stpMode) : undefined,
-        externalOid: body.externalOid ? String(body.externalOid) : \`kitsetups-\${Date.now()}-\${Math.random().toString(36).slice(2,10)}\`
+        externalOid: body.externalOid ? String(body.externalOid) : `kitsetups-${Date.now()}-${Math.random().toString(36).slice(2,10)}`
       };
       Object.keys(payload).forEach(k => payload[k] === undefined || payload[k] === null || payload[k] === '' ? delete payload[k] : null);
 
