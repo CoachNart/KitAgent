@@ -206,7 +206,7 @@ export default async function handler(req, res) {
       const positionMode = body.positionMode ? Number(body.positionMode) : undefined;
       const payload = {
         symbol,
-        price: 0,
+        price: Number(body.price) > 0 ? Number(body.price) : Number((await publicGet(`/api/v1/contract/ticker?symbol=${encodeURIComponent(symbol)}`))?.data?.lastPrice || 0),
         vol: Number(body.volume),
         side: positionType === 1 ? 4 : 2,
         type: 5,
@@ -262,8 +262,12 @@ export default async function handler(req, res) {
         return json(res, 400, { error: \`Order size exceeds the \${maxVol} contract maximum for \${symbol}.\` });
       }
 
-      let normalizedPrice = orderType === 5 ? 0 : price;
-      if (orderType !== 5) {
+      let normalizedPrice = price;
+      if (orderType === 5) {
+        const tickerResult = await publicGet(`/api/v1/contract/ticker?symbol=${encodeURIComponent(symbol)}`);
+        normalizedPrice = Number(tickerResult?.data?.lastPrice || tickerResult?.data?.fairPrice || 0);
+        if (!(normalizedPrice > 0)) return json(res, 400, { error: `Live market price unavailable for ${symbol}.` });
+      } else {
         const priceUnit = Number(contract.priceUnit) || 0;
         if (priceUnit > 0) normalizedPrice = Math.round(price / priceUnit) * priceUnit;
         if (!(normalizedPrice > 0)) return json(res, 400, { error: 'Limit price is invalid after tick-size normalization.' });
