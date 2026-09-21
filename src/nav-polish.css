@@ -1438,3 +1438,27 @@
     opacity:1!important;
   }
 }
+
+/* NAV HOVER RESTORED — interaction only, never a resting box. */
+.kit-sidebar nav>.side-link:hover{
+  background:rgba(99,233,227,.045)!important;
+  border-color:rgba(99,233,227,.10)!important;
+  color:#efffff!important;
+  box-shadow:0 0 16px rgba(99,233,227,.045)!important;
+  transform:translateY(-1px)!important;
+}
+.kit-sidebar nav>.side-link:hover svg{
+  color:#63e9e3!important;
+  filter:drop-shadow(0 0 6px rgba(99,233,227,.28))!important;
+  opacity:1!important;
+}
+@media(max-width:760px){
+  @media(hover:hover) and (pointer:fine){
+    .kit-sidebar nav>.side-link:hover{
+      background:rgba(99,233,227,.045)!important;
+      border-color:rgba(99,233,227,.10)!important;
+      box-shadow:0 0 14px rgba(99,233,227,.04)!important;
+      transform:translateY(-1px)!important;
+    }
+  }
+}
