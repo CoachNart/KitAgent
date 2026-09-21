@@ -38,6 +38,31 @@ const symbolOf = value => String(value || 'BTCUSDT').toUpperCase().replace(/[-/]
 const intervalOf = value => ({ '1m':'Min1', '5m':'Min5', '15m':'Min15', '30m':'Min30', '1h':'Min60', '4h':'Hour4', '1d':'Day1' }[String(value || '5m').toLowerCase()] || 'Min5');
 const list = value => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : []);
 
+const decimalPlaces = value => {
+  const s = String(value ?? '').toLowerCase();
+  if (!s || !Number.isFinite(Number(value))) return 0;
+  if (s.includes('e')) {
+    const [coefficient, exponentText] = s.split('e');
+    const exponent = Number(exponentText);
+    return Math.max(0, (coefficient.split('.')[1] || '').length - exponent);
+  }
+  return (s.split('.')[1] || '').length;
+};
+
+const normalizeStep = (value, step, mode = 'round') => {
+  const v = Number(value);
+  const s = Number(step);
+  if (!Number.isFinite(v) || !Number.isFinite(s) || s <= 0) return v;
+  const places = Math.min(18, Math.max(decimalPlaces(v), decimalPlaces(s)));
+  const scale = 10 ** places;
+  const scaledV = Math.round(v * scale);
+  const scaledStep = Math.max(1, Math.round(s * scale));
+  const units = mode === 'floor'
+    ? Math.floor(scaledV / scaledStep)
+    : Math.round(scaledV / scaledStep);
+  return Number((units * scaledStep / scale).toFixed(places));
+};
+
 const signed = ({ path, method = 'GET', params = {}, body = '', key, secret }) => {
   const timestamp = String(Date.now());
   let parameterString = '';
@@ -266,7 +291,8 @@ export default async function handler(req, res) {
       const volUnit = Number(contract.volUnit) || 1;
       const minVol = Number(contract.minVol) || volUnit;
       const maxVol = Number(contract.maxVol) || Number.POSITIVE_INFINITY;
-      const normalizedVol = Math.floor((volume + 1e-12) / volUnit) * volUnit;
+      // Normalize quantity to the exchange volume step without binary floating-point tails.
+      const normalizedVol = normalizeStep(volume, volUnit, 'floor');
       if (normalizedVol < minVol) {
         return json(res, 400, { error: `Order size is below the ${minVol} contract minimum for ${symbol}.` });
       }
@@ -274,16 +300,27 @@ export default async function handler(req, res) {
         return json(res, 400, { error: `Order size exceeds the ${maxVol} contract maximum for ${symbol}.` });
       }
 
+      const priceUnit = Number(contract.priceUnit) || 0;
       let normalizedPrice = price;
       if (orderType === 5) {
         const tickerResult = await publicGet(`/api/v1/contract/ticker?symbol=${encodeURIComponent(symbol)}`);
-        normalizedPrice = Number(tickerResult?.data?.lastPrice || tickerResult?.data?.fairPrice || 0);
-        if (!(normalizedPrice > 0)) return json(res, 400, { error: `Live market price unavailable for ${symbol}.` });
+        const livePrice = Number(tickerResult?.data?.lastPrice || tickerResult?.data?.fairPrice || 0);
+        if (!(livePrice > 0)) return json(res, 400, { error: `Live market price unavailable for ${symbol}.` });
+        normalizedPrice = priceUnit > 0 ? normalizeStep(livePrice, priceUnit, 'round') : livePrice;
       } else {
-        const priceUnit = Number(contract.priceUnit) || 0;
-        if (priceUnit > 0) normalizedPrice = Math.round(price / priceUnit) * priceUnit;
+        normalizedPrice = priceUnit > 0 ? normalizeStep(price, priceUnit, 'round') : price;
         if (!(normalizedPrice > 0)) return json(res, 400, { error: 'Limit price is invalid after tick-size normalization.' });
       }
+
+      // TP/SL are prices too. Normalize them to the exact MEXC tick size.
+      const normalizeOptionalPrice = value => {
+        if (value === undefined || value === null || value === '') return undefined;
+        const parsed = Number(value);
+        if (!(parsed > 0)) return undefined;
+        return priceUnit > 0 ? normalizeStep(parsed, priceUnit, 'round') : parsed;
+      };
+      const normalizedStopLoss = normalizeOptionalPrice(body.stopLoss);
+      const normalizedTakeProfit = normalizeOptionalPrice(body.takeProfit);
 
       const leverage = opening ? Number(body.leverage) : undefined;
       let allowedMaxLeverage = Number(contract.maxLeverage || contract.maxLeverageNum || contract.leverageMax || 0);
@@ -315,8 +352,8 @@ export default async function handler(req, res) {
         type: orderType,
         openType: body.marginMode === 'isolated' ? 1 : 2,
         positionId: body.positionId ? Number(body.positionId) : undefined,
-        stopLossPrice: body.stopLoss ? Number(body.stopLoss) : undefined,
-        takeProfitPrice: body.takeProfit ? Number(body.takeProfit) : undefined,
+        stopLossPrice: normalizedStopLoss,
+        takeProfitPrice: normalizedTakeProfit,
         lossTrend: body.lossTrend ? Number(body.lossTrend) : undefined,
         profitTrend: body.profitTrend ? Number(body.profitTrend) : undefined,
         positionMode: body.positionMode ? Number(body.positionMode) : undefined,
