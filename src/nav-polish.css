@@ -487,3 +487,31 @@
   .top-header{display:none!important}
   .content{padding-top:0!important}
 }
+
+
+/* Final header behavior — keep every existing header control visible and sticky on all screen sizes. */
+.top-header{
+  display:flex!important;
+  position:sticky!important;
+  top:0!important;
+  z-index:1200!important;
+}
+@media(max-width:760px){
+  .top-header{
+    display:flex!important;
+    position:sticky!important;
+    top:0!important;
+    z-index:1200!important;
+    min-height:58px!important;
+    height:58px!important;
+    padding:6px 9px!important;
+    background:rgba(8,12,18,.94)!important;
+    border-bottom:1px solid rgba(255,255,255,.07)!important;
+    box-shadow:0 8px 24px rgba(0,0,0,.18)!important;
+    backdrop-filter:blur(18px) saturate(140%)!important;
+    -webkit-backdrop-filter:blur(18px) saturate(140%)!important;
+  }
+  .content{
+    padding-top:0!important;
+  }
+}
