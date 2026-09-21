@@ -170,3 +170,37 @@
     padding-bottom:calc(54px + env(safe-area-inset-bottom))!important;
   }
 }
+
+
+/* FINAL PAGE-TAIL LOCK — remove artificial mobile breathing room. */
+.kit-shell,
+.kit-main,
+.content{
+  min-height:0!important;
+}
+@media(max-width:760px){
+  .kit-shell{
+    padding-bottom:0!important;
+    min-height:0!important;
+  }
+  .kit-main{
+    min-height:0!important;
+    height:auto!important;
+  }
+  .content{
+    min-height:0!important;
+    height:auto!important;
+    padding-bottom:0!important;
+    margin-bottom:0!important;
+  }
+  body{
+    padding-bottom:0!important;
+    margin-bottom:0!important;
+  }
+  .content > *,
+  .content > .command-page,
+  .content > .command-page > *{
+    min-height:0!important;
+    margin-bottom:0!important;
+  }
+}
