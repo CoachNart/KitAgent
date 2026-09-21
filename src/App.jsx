@@ -47,7 +47,7 @@ export default function App({user}){
   </div>
 </div>{page==='home'&&<div className="app-header-ad" aria-label="Featured KitSetups advertisement">
   <div className="app-header-ad-frame">
-    <img src="https://i.postimg.cc/QCvrTBSF/IMG-20260914-WA0068.jpg" alt="" loading="eager" decoding="async"/>
+    <img src="https://i.postimg.cc/k5c3cM79/IMG-20260921-WA0037.jpg" alt="" loading="eager" decoding="async"/>
   </div>
 </div>}{walletMessage&&<div className="wallet-message"><ShieldAlert size={14}/>{walletMessage}<button onClick={()=>setWalletMessage('')}><X size={14}/></button></div>}<div className="content">{page==='home'&&<HomePage go={go} wallet={wallet} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='defi'&&<ChartTerminal/>} {page==='perps'&&<PerpetualsPage user={user} wallet={wallet} connectWallet={connectWallet}/>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent wallet={wallet} connectWallet={connectWallet} user={user}/>}</div></main>{pendingAction&&<PermissionModal action={pendingAction} wallet={wallet} onCancel={()=>setPendingAction(null)} onApprove={executeAction}/>} {toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
 }
