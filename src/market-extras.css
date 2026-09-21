@@ -55,3 +55,10 @@
   .watchlist-title strong{font-size:13px!important}
   .watch-chip{min-height:36px!important}
 }
+
+
+/* Watchlist marker: gold = something worth watching, not an alert/error. */
+.watch-dot{
+  background:#d8ad52!important;
+  box-shadow:0 0 7px rgba(216,173,82,.32)!important;
+}
