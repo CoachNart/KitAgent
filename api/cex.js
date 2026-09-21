@@ -15,14 +15,27 @@ const bodyOf = async req => {
 };
 
 const request = async (url, options = {}) => {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      'User-Agent': 'KitAgent-MEXC-Futures/2.0',
-      'Language': 'English'
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...(options.headers || {}),
+        'User-Agent': 'KitAgent-MEXC-Futures/2.0',
+        'Language': 'English'
+      }
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('MEXC request timed out after 15 seconds. The exchange did not confirm the request.');
     }
-  });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await response.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { message: text }; }
