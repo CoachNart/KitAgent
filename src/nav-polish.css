@@ -1483,3 +1483,60 @@
   .kit-sidebar nav>.side-link:nth-child(5).selected{background:rgba(52,225,218,.105)!important;border-color:rgba(83,224,219,.22)!important;color:#ecffff!important;box-shadow:none!important;transform:none!important}
   .kit-sidebar nav>.side-link:nth-child(5).selected svg{color:#63e9e3!important}
 }
+
+
+/* Final nav calm pass — quiet glass, no loud tiles. */
+.kit-sidebar nav>.side-link{
+  background:rgba(255,255,255,.012)!important;
+  border-color:rgba(255,255,255,.035)!important;
+  color:#7d8995!important;
+  box-shadow:none!important;
+}
+.kit-sidebar nav>.side-link svg{
+  color:#8c99a5!important;
+  opacity:.68!important;
+}
+.kit-sidebar nav>.side-link:hover{
+  background:rgba(255,255,255,.028)!important;
+  border-color:rgba(255,255,255,.065)!important;
+  color:#c7d0d5!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+  transform:none!important;
+}
+.kit-sidebar nav>.side-link:hover svg{color:#aebbc4!important;opacity:.82!important}
+.kit-sidebar nav>.side-link.selected{
+  background:rgba(255,255,255,.042)!important;
+  border-color:rgba(255,255,255,.075)!important;
+  color:#e0e8eb!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 8px 24px rgba(0,0,0,.08)!important;
+}
+.kit-sidebar nav>.side-link.selected svg{color:#63d9d5!important;opacity:.9!important}
+@media(max-width:760px){
+  .kit-sidebar nav>.side-link,.kit-sidebar nav>.side-link:nth-child(n){
+    background:rgba(255,255,255,.012)!important;
+    border-color:transparent!important;
+    color:#7f8a96!important;
+    box-shadow:none!important;
+  }
+  .kit-sidebar nav>.side-link:hover{
+    background:rgba(255,255,255,.035)!important;
+    border-color:rgba(255,255,255,.045)!important;
+    color:#c8d1d6!important;
+    box-shadow:none!important;
+  }
+  .kit-sidebar nav>.side-link.selected,
+  .kit-sidebar nav>.side-link:nth-child(5).selected{
+    background:rgba(255,255,255,.052)!important;
+    border-color:rgba(255,255,255,.075)!important;
+    color:#e3eaed!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+  }
+  .kit-sidebar nav>.side-link svg,
+  .kit-sidebar nav>.side-link:nth-child(n) svg,
+  .kit-sidebar nav>.side-link:nth-child(5) svg{
+    color:#8f9ca7!important;
+    opacity:.72!important;
+  }
+  .kit-sidebar nav>.side-link.selected svg,
+  .kit-sidebar nav>.side-link:nth-child(5).selected svg{color:#63d9d5!important;opacity:.9!important}
+}
