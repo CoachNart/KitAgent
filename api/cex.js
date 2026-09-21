@@ -62,6 +62,18 @@ const privateGet = (key, secret, path, params = {}) => {
   const signedRequest = signed({ key, secret, path, params });
   return request(signedRequest.url, { headers: signedRequest.headers });
 };
+const riskRowsFor = (result, symbol) => {
+  const raw = result?.data || result;
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') {
+    const direct = raw[symbol] || raw[String(symbol).replace('_USDT', 'USDT')] || raw[String(symbol).replace('USDT', '_USDT')];
+    if (Array.isArray(direct)) return direct;
+    const nested = Object.values(raw).find(v => Array.isArray(v));
+    if (Array.isArray(nested)) return nested;
+  }
+  return [];
+};
+
 const validateOperationResult = (result, fallback = 'MEXC operation failed.') => {
   const candidates = Array.isArray(result?.data) ? result.data : [result?.data];
   const failed = candidates.find(item => Number(item?.errorCode || 0) !== 0 || item?.errorMsg);
@@ -274,8 +286,24 @@ export default async function handler(req, res) {
       }
 
       const leverage = opening ? Number(body.leverage) : undefined;
-      if (opening && (!Number.isFinite(leverage) || leverage < Number(contract.minLeverage || 1) || leverage > Number(contract.maxLeverage || 500))) {
-        return json(res, 400, { error: `Leverage must be between ${contract.minLeverage || 1}x and ${contract.maxLeverage || 500}x for ${symbol}.` });
+      let allowedMaxLeverage = Number(contract.maxLeverage || contract.maxLeverageNum || contract.leverageMax || 0);
+      if (opening) {
+        try {
+          const riskResult = await privateGet(key, secret, '/api/v1/private/account/risk_limit', { symbol });
+          const riskRows = riskRowsFor(riskResult, symbol);
+          const positionType = side === 1 ? 1 : 2;
+          const matchingRows = riskRows
+            .filter(row => Number(row?.positionType) === positionType || row?.positionType == null)
+            .filter(row => !Number(row?.maxVol) || normalizedVol <= Number(row.maxVol));
+          const row = matchingRows.sort((a, b) => Number(a?.maxVol || Infinity) - Number(b?.maxVol || Infinity))[0];
+          if (row?.maxLeverage) allowedMaxLeverage = Number(row.maxLeverage);
+        } catch {
+          // Contract metadata remains the fallback if the private risk-limit feed is unavailable.
+        }
+      }
+      if (!allowedMaxLeverage && (symbol === 'BTC_USDT' || symbol === 'ETH_USDT')) allowedMaxLeverage = 500;
+      if (opening && (!Number.isFinite(leverage) || leverage < Number(contract.minLeverage || 1) || leverage > allowedMaxLeverage)) {
+        return json(res, 400, { error: `Leverage must be between ${contract.minLeverage || 1}x and ${allowedMaxLeverage || 500}x for ${symbol}.` });
       }
 
       const payload = {
