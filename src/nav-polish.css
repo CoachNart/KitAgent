@@ -326,3 +326,95 @@
   .kit-sidebar nav>.side-link:nth-child(5).selected svg{color:#10B981!important}
   .kit-sidebar .side-bottom>.side-link svg{color:#F59E0B!important}
 }
+
+
+/* App-shell header refinement — preserve every existing control, remove the website-like treatment. */
+.top-header{
+  position:sticky!important;
+  top:0!important;
+  z-index:1200!important;
+  min-height:58px!important;
+  height:58px!important;
+  box-sizing:border-box!important;
+  padding:6px 14px!important;
+  gap:10px!important;
+  background:#0a0f16!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+.top-header:before{display:none!important}
+.top-header .menu-btn{
+  width:34px!important;
+  height:34px!important;
+  flex:0 0 34px!important;
+  border-radius:10px!important;
+  background:rgba(255,255,255,.035)!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+}
+.header-brand{
+  gap:8px!important;
+  min-width:0!important;
+}
+.header-brand img{
+  width:34px!important;
+  height:34px!important;
+  border-radius:9px!important;
+  filter:none!important;
+}
+.header-brand b{
+  font-size:13px!important;
+  font-weight:750!important;
+  letter-spacing:-.02em!important;
+}
+.header-actions{
+  margin-left:auto!important;
+  margin-right:0!important;
+  gap:8px!important;
+}
+.top-header .header-pulse{
+  padding:5px 8px!important;
+  border-radius:9px!important;
+  background:rgba(255,255,255,.025)!important;
+  border:1px solid rgba(255,255,255,.05)!important;
+}
+.top-header .profile-avatar{
+  width:34px!important;
+  height:34px!important;
+  flex-basis:34px!important;
+}
+.top-header .profile-avatar-ring{
+  width:30px!important;
+  height:30px!important;
+  box-shadow:none!important;
+}
+.top-header .profile-status{
+  border-color:#0a0f16!important;
+}
+@media(max-width:760px){
+  .top-header{
+    min-height:54px!important;
+    height:54px!important;
+    padding:5px 9px!important;
+    background:#0a0f16!important;
+  }
+  .top-header .menu-btn{
+    width:32px!important;
+    height:32px!important;
+    flex-basis:32px!important;
+  }
+  .header-brand img{
+    width:32px!important;
+    height:32px!important;
+  }
+  .header-brand b{font-size:12px!important}
+  .header-actions{gap:5px!important}
+  .top-header .header-pulse{padding:4px 6px!important}
+  .top-header .profile-avatar{
+    width:32px!important;
+    height:32px!important;
+    flex-basis:32px!important;
+  }
+  .top-header .profile-avatar-ring{width:28px!important;height:28px!important}
+}
