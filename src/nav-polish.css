@@ -1248,3 +1248,66 @@
 .kit-sidebar nav>.side-link:nth-child(3)::before{
   background-color:#63e9e3!important;
 }
+
+
+/* ABSOLUTE FINAL NAV COLOR LOCK — every navigation button uses the exact same cyan. */
+.kit-sidebar nav>.side-link,
+.kit-sidebar nav>.side-link:nth-child(n),
+.kit-sidebar nav>.side-link:nth-child(n).selected,
+.kit-sidebar nav>.side-link:nth-child(n):hover{
+  --nav-cyan:#63e9e3;
+}
+.kit-sidebar nav>.side-link:nth-child(1),
+.kit-sidebar nav>.side-link:nth-child(2),
+.kit-sidebar nav>.side-link:nth-child(3),
+.kit-sidebar nav>.side-link:nth-child(4),
+.kit-sidebar nav>.side-link:nth-child(5),
+.kit-sidebar nav>.side-link:nth-child(6),
+.kit-sidebar nav>.side-link:nth-child(1).selected,
+.kit-sidebar nav>.side-link:nth-child(2).selected,
+.kit-sidebar nav>.side-link:nth-child(3).selected,
+.kit-sidebar nav>.side-link:nth-child(4).selected,
+.kit-sidebar nav>.side-link:nth-child(5).selected,
+.kit-sidebar nav>.side-link:nth-child(6).selected{
+  background:rgba(99,233,227,.10)!important;
+  border-color:rgba(99,233,227,.28)!important;
+  color:#f0ffff!important;
+}
+.kit-sidebar nav>.side-link:nth-child(1) svg,
+.kit-sidebar nav>.side-link:nth-child(2) svg,
+.kit-sidebar nav>.side-link:nth-child(3) svg,
+.kit-sidebar nav>.side-link:nth-child(4) svg,
+.kit-sidebar nav>.side-link:nth-child(5) svg,
+.kit-sidebar nav>.side-link:nth-child(6) svg,
+.kit-sidebar nav>.side-link:nth-child(1).selected svg,
+.kit-sidebar nav>.side-link:nth-child(2).selected svg,
+.kit-sidebar nav>.side-link:nth-child(3).selected svg,
+.kit-sidebar nav>.side-link:nth-child(4).selected svg,
+.kit-sidebar nav>.side-link:nth-child(5).selected svg,
+.kit-sidebar nav>.side-link:nth-child(6).selected svg{
+  color:#63e9e3!important;
+  filter:drop-shadow(0 0 5px rgba(99,233,227,.22))!important;
+  opacity:1!important;
+}
+.kit-sidebar nav>.side-link:nth-child(3)::before,
+.kit-sidebar nav>.side-link:nth-child(3).selected::before{
+  background-color:#63e9e3!important;
+}
+@media(max-width:760px){
+  .kit-sidebar nav>.side-link:nth-child(1),
+  .kit-sidebar nav>.side-link:nth-child(2),
+  .kit-sidebar nav>.side-link:nth-child(3),
+  .kit-sidebar nav>.side-link:nth-child(4),
+  .kit-sidebar nav>.side-link:nth-child(5),
+  .kit-sidebar nav>.side-link:nth-child(6),
+  .kit-sidebar nav>.side-link:nth-child(1).selected,
+  .kit-sidebar nav>.side-link:nth-child(2).selected,
+  .kit-sidebar nav>.side-link:nth-child(3).selected,
+  .kit-sidebar nav>.side-link:nth-child(4).selected,
+  .kit-sidebar nav>.side-link:nth-child(5).selected,
+  .kit-sidebar nav>.side-link:nth-child(6).selected{
+    background:rgba(99,233,227,.10)!important;
+    border-color:rgba(99,233,227,.28)!important;
+    color:#f0ffff!important;
+  }
+}
