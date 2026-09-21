@@ -951,3 +951,25 @@
     animation:none!important;
   }
 }
+
+
+/* Homepage banner v2 — stronger, unmistakable motion while keeping the creative readable. */
+.app-header-ad-frame img{
+  transform:scale(1.02) translate3d(-1.5%,0,0);
+  animation:ksAdPanZoom 7s cubic-bezier(.42,0,.18,1) infinite alternate!important;
+}
+.app-header-ad-frame::after{
+  inset:-45% -45%;
+  background:linear-gradient(105deg,transparent 34%,rgba(255,255,255,.04) 42%,rgba(255,255,255,.34) 49%,rgba(255,255,255,.07) 55%,transparent 64%);
+  animation:ksAdSweep 3.8s cubic-bezier(.55,.02,.25,1) infinite!important;
+}
+@keyframes ksAdPanZoom{
+  0%{transform:scale(1.02) translate3d(-1.8%,.25%,0)}
+  100%{transform:scale(1.115) translate3d(1.8%,-.9%,0)}
+}
+@keyframes ksAdSweep{
+  0%,12%{transform:translate3d(-75%,0,0) skewX(-12deg);opacity:0}
+  20%{opacity:.3}
+  52%{transform:translate3d(72%,0,0) skewX(-12deg);opacity:.9}
+  64%,100%{transform:translate3d(88%,0,0) skewX(-12deg);opacity:0}
+}
