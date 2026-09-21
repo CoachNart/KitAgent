@@ -45,3 +45,66 @@
  .home-action-btn>svg{width:13px!important;height:13px!important}
  .action-icon{width:27px!important;height:27px!important;border-radius:8px!important}
 }
+
+
+@media(max-width:760px){
+  .top-header{display:none!important}
+  .content{padding-top:0!important}
+}
+.home-action-btn{
+  display:grid!important;
+  grid-template-columns:28px minmax(0,1fr) 14px!important;
+  align-items:center!important;
+  column-gap:8px!important;
+}
+.home-action-btn .action-icon{
+  width:28px!important;
+  height:28px!important;
+  display:grid!important;
+  place-items:center!important;
+  margin:0!important;
+}
+.home-action-btn b{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  line-height:1!important;
+}
+.home-action-btn>svg{
+  width:14px!important;
+  height:14px!important;
+  justify-self:end!important;
+  flex:none!important;
+}
+.home-promo-btn .t3kit-logo{
+  width:19px!important;
+  height:19px!important;
+  object-fit:contain!important;
+  display:block!important;
+  border-radius:4px!important;
+}
+@media(max-width:560px){
+  .home-action-btn{
+    grid-template-columns:25px minmax(0,1fr) 11px!important;
+    column-gap:5px!important;
+    padding:8px 6px!important;
+  }
+  .home-action-btn .action-icon{
+    width:25px!important;
+    height:25px!important;
+    border-radius:8px!important;
+  }
+  .home-action-btn b{
+    font-size:8.5px!important;
+    text-align:left!important;
+  }
+  .home-action-btn>svg{
+    width:11px!important;
+    height:11px!important;
+  }
+  .home-promo-btn .t3kit-logo{
+    width:17px!important;
+    height:17px!important;
+  }
+}
