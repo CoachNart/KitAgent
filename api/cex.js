@@ -343,6 +343,43 @@ export default async function handler(req, res) {
         return json(res, 400, { error: `Leverage must be between ${contract.minLeverage || 1}x and ${allowedMaxLeverage || 500}x for ${symbol}.` });
       }
 
+      // Preflight the same USDT futures wallet that MEXC uses for order funding.
+      // This prevents the UI from showing a misleading margin estimate and then
+      // letting MEXC reject an otherwise valid order with error 2005.
+      if (opening) {
+        const assetsResult = await privateGet(key, secret, '/api/v1/private/account/assets');
+        const assets = list(assetsResult);
+        const usdtAsset = assets.find(asset => String(asset?.currency || '').toUpperCase() === 'USDT') || {};
+        const availableBalance = Number(usdtAsset.availableBalance || 0);
+
+        let requiredImr = leverage > 0 ? 1 / leverage : 1;
+        try {
+          const matchingRisk = riskRowsFor(await privateGet(key, secret, '/api/v1/private/account/risk_limit', { symbol }), symbol)
+            .filter(row => Number(row?.positionType) === (side === 1 ? 1 : 2) || row?.positionType == null)
+            .filter(row => !Number(row?.maxVol) || normalizedVol <= Number(row.maxVol))
+            .sort((a, b) => Number(a?.maxVol || Infinity) - Number(b?.maxVol || Infinity))[0];
+          if (Number(matchingRisk?.imr) > 0) requiredImr = Number(matchingRisk.imr);
+        } catch {
+          // Leverage-derived IMR remains the fallback.
+        }
+
+        const fundingPrice = normalizedPrice > 0 ? normalizedPrice : Number(contract?.fairPrice || 0);
+        const notional = fundingPrice * normalizedVol * (Number(contract.contractSize) || 1);
+        const estimatedRequiredMargin = notional * requiredImr;
+        const estimatedApiFee = notional * 0.0008;
+        const requiredWithBuffer = estimatedRequiredMargin + estimatedApiFee;
+
+        if (availableBalance > 0 && requiredWithBuffer > availableBalance) {
+          return json(res, 400, {
+            error: `Insufficient Futures USDT balance. Available ${availableBalance.toFixed(6)} USDT; estimated required ${requiredWithBuffer.toFixed(6)} USDT for this order.`,
+            code: 2005,
+            availableBalance,
+            estimatedRequiredMargin,
+            estimatedApiFee
+          });
+        }
+      }
+
       const payload = {
         symbol,
         price: normalizedPrice,
