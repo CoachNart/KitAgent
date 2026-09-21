@@ -973,3 +973,42 @@
   52%{transform:translate3d(72%,0,0) skewX(-12deg);opacity:.9}
   64%,100%{transform:translate3d(88%,0,0) skewX(-12deg);opacity:0}
 }
+
+
+/* Minimal navigation palette — keep the home screen's color hierarchy clean. */
+.kit-sidebar nav>.side-link svg,
+.kit-sidebar nav>.side-link:nth-child(n) svg,
+.kit-sidebar nav>.side-link:nth-child(n).selected svg,
+.kit-sidebar .side-bottom>.side-link svg{
+  color:#8f9ba7!important;
+}
+.kit-sidebar nav>.side-link.selected{
+  background:rgba(255,255,255,.055)!important;
+  border-color:rgba(255,255,255,.10)!important;
+  color:#f1f5f7!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+.kit-sidebar nav>.side-link.selected svg,
+.kit-sidebar nav>.side-link:hover svg{
+  color:#d7e0e5!important;
+}
+@media(max-width:760px){
+  .kit-sidebar nav>.side-link:nth-child(5),
+  .kit-sidebar nav>.side-link:nth-child(5).selected{
+    background:transparent!important;
+    border-color:transparent!important;
+    color:#8b97a8!important;
+  }
+  .kit-sidebar nav>.side-link:nth-child(5) svg,
+  .kit-sidebar nav>.side-link:nth-child(5).selected svg{
+    color:#8f9ba7!important;
+  }
+  .kit-sidebar nav>.side-link.selected{
+    background:rgba(255,255,255,.065)!important;
+    border-color:rgba(255,255,255,.10)!important;
+    color:#eef3f5!important;
+  }
+  .kit-sidebar nav>.side-link.selected svg{
+    color:#d7e0e5!important;
+  }
+}
