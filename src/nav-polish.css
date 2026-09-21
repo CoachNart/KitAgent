@@ -515,3 +515,52 @@
     padding-top:0!important;
   }
 }
+
+
+/* App utility rail: no website header — only persistent controls. */
+.top-header{display:none!important}
+.app-sticky-tools{
+  position:sticky!important;
+  top:0!important;
+  z-index:1200!important;
+  width:100%!important;
+  min-height:58px!important;
+  box-sizing:border-box!important;
+  display:grid!important;
+  grid-template-columns:auto minmax(220px,1fr) auto!important;
+  align-items:center!important;
+  gap:14px!important;
+  padding:7px 14px!important;
+  background:rgba(8,12,18,.88)!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+  backdrop-filter:blur(18px) saturate(140%)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(140%)!important;
+}
+.app-sticky-brand{display:flex!important;align-items:center!important;justify-content:center!important}
+.app-sticky-brand img{width:34px!important;height:34px!important;object-fit:contain!important;border-radius:9px!important;display:block!important}
+.app-sticky-search{
+  width:100%!important;max-width:720px!important;justify-self:center!important;
+  height:38px!important;display:flex!important;align-items:center!important;gap:9px!important;
+  padding:0 13px!important;border:1px solid rgba(255,255,255,.07)!important;
+  border-radius:12px!important;background:rgba(255,255,255,.035)!important;color:#758296!important;
+}
+.app-sticky-search input{width:100%!important;border:0!important;outline:0!important;background:transparent!important;color:#e8eef5!important;font:inherit!important;font-size:12px!important}
+.app-sticky-search input::placeholder{color:#697587!important}
+.app-sticky-actions{display:flex!important;align-items:center!important;gap:9px!important}
+.app-sticky-actions .header-pulse{display:flex!important;align-items:center!important}
+@media(max-width:760px){
+  .app-sticky-tools{
+    grid-template-columns:auto minmax(0,1fr) auto!important;
+    min-height:54px!important;
+    padding:6px 9px!important;
+    gap:8px!important;
+  }
+  .app-sticky-brand img{width:31px!important;height:31px!important}
+  .app-sticky-search{height:36px!important;border-radius:11px!important;padding:0 10px!important}
+  .app-sticky-search input{font-size:11px!important}
+  .app-sticky-search input::placeholder{font-size:10px!important}
+  .app-sticky-actions{gap:5px!important}
+  .app-sticky-actions .header-pulse{padding:4px 6px!important}
+  .app-sticky-actions .profile-avatar{width:32px!important;height:32px!important;flex-basis:32px!important}
+  .app-sticky-actions .profile-avatar-ring{width:28px!important;height:28px!important}
+}
