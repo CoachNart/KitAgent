@@ -20,7 +20,9 @@ const actions=[{id:'swap-eth',kind:'swap',title:'Swap ETH → USDC',summary:'Pre
 const nfts=[['Vault Pass #1842','KitSetups Genesis','0.84 ETH','List for sale'],['Signal #091','Signal Objects','0.31 ETH','Sell NFT'],['Agent Key #402','Agent Keys','0.12 ETH','Transfer NFT']];
 
 export default function App({user}){
-  const [page,setPage]=useState('home'),[lessonId,setLessonId]=useState(null),[mobile,setMobile]=useState(false),[wallet,setWallet]=useState(''),[walletBusy,setWalletBusy]=useState(false),[walletMessage,setWalletMessage]=useState(''),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[pendingAction,setPendingAction]=useState(null),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(true),[pair,setPair]=useState('BTC/USDT'),[tf,setTf]=useState('4H'),[analyzed,setAnalyzed]=useState(false),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
+  const [profileOverride,setProfileOverride]=useState(null),[page,setPage]=useState('home'),[lessonId,setLessonId]=useState(null),[mobile,setMobile]=useState(false),[wallet,setWallet]=useState(''),[walletBusy,setWalletBusy]=useState(false),[walletMessage,setWalletMessage]=useState(''),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[pendingAction,setPendingAction]=useState(null),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(true),[pair,setPair]=useState('BTC/USDT'),[tf,setTf]=useState('4H'),[analyzed,setAnalyzed]=useState(false),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
+  useEffect(()=>{const handler=e=>setProfileOverride(e.detail||null);window.addEventListener('kitsetups:profile-updated',handler);return()=>window.removeEventListener('kitsetups:profile-updated',handler)},[]);
+  const displayUser=profileOverride?{...user,...profileOverride}:user;
   useEffect(()=>{const t=setTimeout(()=>setShowLoader(false),2300);return()=>clearTimeout(t)},[]);
   useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),3600);return()=>clearTimeout(t)},[toast]);
   const go=p=>{setPage(p);setMobile(false)}; const openLesson=id=>{setLessonId(id);setPage('lesson');setMobile(false)};
@@ -43,7 +45,7 @@ export default function App({user}){
 </div>
   <div className="app-sticky-actions">
     <div className="header-pulse" aria-label="System pulse"><i className="pulse-green"/><i className="pulse-red"/></div>
-    <button type="button" className="profile-avatar" aria-label="Open profile" title="Profile" onClick={()=>go('profile')}><span className="profile-avatar-ring">{(user?.photoURL||user?.photoUrl||user?.avatarUrl)?<img src={user.photoURL||user.photoUrl||user.avatarUrl} alt="" referrerPolicy="no-referrer"/>:<span>{initials(user?.displayName||user?.email||'K')}</span>}</span><i className="profile-status"/></button>
+    <button type="button" className="profile-avatar" aria-label="Open profile" title="Profile" onClick={()=>go('profile')}><span className="profile-avatar-ring">{(displayUser?.photoURL||displayUser?.photoUrl||displayUser?.avatarUrl)?<img src={displayUser.photoURL||displayUser.photoUrl||displayUser.avatarUrl} alt="" referrerPolicy="no-referrer"/>:<span>{initials(displayUser?.displayName||displayUser?.email||'K')}</span>}</span><i className="profile-status"/></button>
   </div>
 </div>{page==='home'&&<div className="app-header-ad" aria-label="Featured KitSetups advertisement">
   <div className="app-header-ad-frame">
