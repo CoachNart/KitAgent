@@ -1540,3 +1540,72 @@
   .kit-sidebar nav>.side-link.selected svg,
   .kit-sidebar nav>.side-link:nth-child(5).selected svg{color:#63d9d5!important;opacity:.9!important}
 }
+
+
+/* HARD MOBILE OVERRIDE — Chart Terminal (3) + History (5).
+   These two are explicitly reset after every earlier nav rule so legacy
+   page-specific colors cannot win the cascade. */
+@media(max-width:760px){
+  .kit-sidebar nav > .side-link:nth-child(3),
+  .kit-sidebar nav > .side-link:nth-child(3):hover,
+  .kit-sidebar nav > .side-link:nth-child(3):focus,
+  .kit-sidebar nav > .side-link:nth-child(3):focus-visible,
+  .kit-sidebar nav > .side-link:nth-child(3):active,
+  .kit-sidebar nav > .side-link:nth-child(3).selected,
+  .kit-sidebar nav > .side-link:nth-child(5),
+  .kit-sidebar nav > .side-link:nth-child(5):hover,
+  .kit-sidebar nav > .side-link:nth-child(5):focus,
+  .kit-sidebar nav > .side-link:nth-child(5):focus-visible,
+  .kit-sidebar nav > .side-link:nth-child(5):active,
+  .kit-sidebar nav > .side-link:nth-child(5).selected{
+    background:rgba(255,255,255,.012)!important;
+    background-image:none!important;
+    border:1px solid transparent!important;
+    color:#7f8a96!important;
+    box-shadow:none!important;
+    transform:none!important;
+    text-shadow:none!important;
+  }
+  .kit-sidebar nav > .side-link:nth-child(3) svg,
+  .kit-sidebar nav > .side-link:nth-child(3):hover svg,
+  .kit-sidebar nav > .side-link:nth-child(3):focus svg,
+  .kit-sidebar nav > .side-link:nth-child(3):active svg,
+  .kit-sidebar nav > .side-link:nth-child(3).selected svg,
+  .kit-sidebar nav > .side-link:nth-child(5) svg,
+  .kit-sidebar nav > .side-link:nth-child(5):hover svg,
+  .kit-sidebar nav > .side-link:nth-child(5):focus svg,
+  .kit-sidebar nav > .side-link:nth-child(5):active svg,
+  .kit-sidebar nav > .side-link:nth-child(5).selected svg{
+    color:#8f9ca7!important;
+    stroke:#8f9ca7!important;
+    fill:none!important;
+    opacity:.72!important;
+    filter:none!important;
+    transform:none!important;
+  }
+  .kit-sidebar nav > .side-link:nth-child(3):hover,
+  .kit-sidebar nav > .side-link:nth-child(5):hover{
+    background:rgba(255,255,255,.035)!important;
+    border-color:rgba(255,255,255,.045)!important;
+    color:#c8d1d6!important;
+  }
+  .kit-sidebar nav > .side-link:nth-child(3):hover svg,
+  .kit-sidebar nav > .side-link:nth-child(5):hover svg{
+    color:#aebbc4!important;
+    stroke:#aebbc4!important;
+    opacity:.82!important;
+  }
+  .kit-sidebar nav > .side-link:nth-child(3).selected,
+  .kit-sidebar nav > .side-link:nth-child(5).selected{
+    background:rgba(255,255,255,.052)!important;
+    border-color:rgba(255,255,255,.075)!important;
+    color:#e3eaed!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+  }
+  .kit-sidebar nav > .side-link:nth-child(3).selected svg,
+  .kit-sidebar nav > .side-link:nth-child(5).selected svg{
+    color:#63d9d5!important;
+    stroke:#63d9d5!important;
+    opacity:.9!important;
+  }
+}
