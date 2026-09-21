@@ -12,3 +12,14 @@
 .home-balance .balance-change.up svg{color:#18e0ff!important;stroke:#18e0ff!important}
 .home-balance .balance-change.down svg{color:#ff5570!important;stroke:#ff5570!important}
 .home-balance .balance-change span{color:#727c8c!important}
+
+
+/* Quick-action card icon palette — distinct identity per destination. */
+.home-actions .home-action-btn:nth-child(1) .action-icon{color:#8B5CF6!important;background:rgba(139,92,246,.11)!important}
+.home-actions .home-action-btn:nth-child(2) .action-icon{color:#3B82F6!important;background:rgba(59,130,246,.11)!important}
+.home-actions .home-action-btn:nth-child(3) .action-icon{color:#10B981!important;background:rgba(16,185,129,.11)!important}
+.home-actions .home-action-btn:nth-child(4) .action-icon{color:#F59E0B!important;background:rgba(245,158,11,.11)!important}
+.home-actions .home-action-btn:nth-child(1):hover .action-icon{background:rgba(139,92,246,.16)!important}
+.home-actions .home-action-btn:nth-child(2):hover .action-icon{background:rgba(59,130,246,.16)!important}
+.home-actions .home-action-btn:nth-child(3):hover .action-icon{background:rgba(16,185,129,.16)!important}
+.home-actions .home-action-btn:nth-child(4):hover .action-icon{background:rgba(245,158,11,.16)!important}
