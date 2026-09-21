@@ -83,3 +83,47 @@
 .auth-submit-signin{color:#061116!important;text-shadow:none!important}
 .auth-submit-signin span{color:#061116!important}
 .auth-submit-signin svg{color:#061116!important;stroke:#061116!important;filter:none!important}
+
+
+/* ROOT CONTENT HEIGHT FIX — pages must size to their actual content.
+   The old 100vh shell + mobile nav padding created artificial bottom space. */
+html,body,#root{
+  min-height:0!important;
+}
+body{
+  min-height:0!important;
+  padding-bottom:0!important;
+  margin-bottom:0!important;
+}
+.kit-shell{
+  min-height:0!important;
+  height:auto!important;
+  padding-bottom:0!important;
+}
+.kit-main{
+  min-height:0!important;
+  height:auto!important;
+}
+.content{
+  min-height:0!important;
+  height:auto!important;
+  padding-bottom:0!important;
+  margin-bottom:0!important;
+}
+.command-page{
+  min-height:0!important;
+  height:auto!important;
+}
+@media(max-width:760px){
+  .kit-shell,.kit-main,.content,.command-page{
+    min-height:0!important;
+    height:auto!important;
+  }
+  .kit-shell{
+    padding-bottom:0!important;
+  }
+  .content{
+    padding-bottom:0!important;
+    margin-bottom:0!important;
+  }
+}
