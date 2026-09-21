@@ -481,3 +481,9 @@
   .top-header .profile-avatar{width:30px!important;height:30px!important;flex-basis:30px!important}
   .top-header .profile-avatar-ring{width:27px!important;height:27px!important}
 }
+
+
+@media(max-width:760px){
+  .top-header{display:none!important}
+  .content{padding-top:0!important}
+}
