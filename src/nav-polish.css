@@ -1166,3 +1166,63 @@
   }
   .kit-sidebar nav>.side-link span{font-size:7px!important}
 }
+
+
+/* Subtle cyan navigation glow — shared across every button, intentionally restrained. */
+.kit-sidebar nav>.side-link svg,
+.kit-sidebar nav>.side-link:nth-child(n) svg,
+.kit-sidebar nav>.side-link:nth-child(n).selected svg,
+.kit-sidebar .side-bottom>.side-link svg{
+  color:#63e9e3!important;
+  filter:drop-shadow(0 0 4px rgba(99,233,227,.16))!important;
+  opacity:.82!important;
+}
+.kit-sidebar nav>.side-link{
+  transition:background .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease!important;
+}
+.kit-sidebar nav>.side-link:hover{
+  background:rgba(63,224,218,.028)!important;
+  border-color:rgba(99,233,227,.08)!important;
+  color:#dff9f8!important;
+  box-shadow:0 0 14px rgba(70,226,219,.035),inset 0 0 12px rgba(70,226,219,.018)!important;
+}
+.kit-sidebar nav>.side-link:hover svg{
+  color:#71eee8!important;
+  filter:drop-shadow(0 0 5px rgba(99,233,227,.24))!important;
+  opacity:.95!important;
+}
+.kit-sidebar nav>.side-link.selected{
+  background:rgba(63,224,218,.055)!important;
+  border-color:rgba(99,233,227,.12)!important;
+  color:#efffff!important;
+  box-shadow:0 0 18px rgba(70,226,219,.055),inset 0 1px 0 rgba(130,255,250,.035),inset 0 0 16px rgba(70,226,219,.018)!important;
+}
+.kit-sidebar nav>.side-link.selected svg{
+  color:#69ebe5!important;
+  filter:drop-shadow(0 0 6px rgba(99,233,227,.30))!important;
+  opacity:1!important;
+}
+@media(max-width:760px){
+  .kit-sidebar nav>.side-link svg,
+  .kit-sidebar nav>.side-link:nth-child(n) svg,
+  .kit-sidebar nav>.side-link:nth-child(n).selected svg{
+    color:#63e9e3!important;
+    filter:drop-shadow(0 0 4px rgba(99,233,227,.15))!important;
+    opacity:.82!important;
+  }
+  .kit-sidebar nav>.side-link:hover{
+    background:rgba(63,224,218,.025)!important;
+    border-color:rgba(99,233,227,.07)!important;
+    box-shadow:0 0 12px rgba(70,226,219,.03)!important;
+  }
+  .kit-sidebar nav>.side-link.selected{
+    background:rgba(63,224,218,.06)!important;
+    border-color:rgba(99,233,227,.11)!important;
+    box-shadow:0 0 16px rgba(70,226,219,.045),inset 0 0 14px rgba(70,226,219,.015)!important;
+  }
+  .kit-sidebar nav>.side-link.selected svg{
+    color:#69ebe5!important;
+    filter:drop-shadow(0 0 5px rgba(99,233,227,.26))!important;
+    opacity:1!important;
+  }
+}
