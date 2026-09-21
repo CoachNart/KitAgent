@@ -1226,3 +1226,25 @@
     opacity:1!important;
   }
 }
+
+
+/* Unified cyan navigation accents — no blue, purple, or multicolor active states. */
+.kit-sidebar nav>.side-link.selected{
+  background:rgba(52,225,218,.10)!important;
+  border-color:rgba(71,222,217,.28)!important;
+  color:#f0ffff!important;
+}
+.kit-sidebar nav>.side-link.selected svg{
+  color:#63e9e3!important;
+}
+.kit-sidebar nav>.side-link:nth-child(1) svg,
+.kit-sidebar nav>.side-link:nth-child(2) svg,
+.kit-sidebar nav>.side-link:nth-child(3) svg,
+.kit-sidebar nav>.side-link:nth-child(4) svg,
+.kit-sidebar nav>.side-link:nth-child(5) svg,
+.kit-sidebar nav>.side-link:nth-child(6) svg{
+  color:#63e9e3!important;
+}
+.kit-sidebar nav>.side-link:nth-child(3)::before{
+  background-color:#63e9e3!important;
+}
