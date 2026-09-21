@@ -16,11 +16,13 @@ function saveWatchlist(items) {
   try { localStorage.setItem(WATCH_KEY, JSON.stringify(items.slice(0, 12))); } catch {}
 }
 
-export function MarketWatchlist({ symbol, onSelect }) {
-  const [items, setItems] = useState(readWatchlist);
+export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
+  const storageKey = `${WATCH_KEY}-${market}`;
+  const [items, setItems] = useState(() => { try { const value = JSON.parse(localStorage.getItem(storageKey) || '[]'); return Array.isArray(value) ? value.filter(Boolean).slice(0, 12) : []; } catch { return []; } });
   const saved = items.includes(symbol);
 
   useEffect(() => saveWatchlist(items), [items]);
+  useEffect(() => { try { const value = JSON.parse(localStorage.getItem(storageKey) || '[]'); setItems(Array.isArray(value) ? value.filter(Boolean).slice(0, 12) : []); } catch { setItems([]); } }, [storageKey]);
 
   const toggle = () => {
     setItems(current => current.includes(symbol)
