@@ -7,14 +7,14 @@ export const FOREX=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJP
 export const CRYPTO=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
 export const TIMEFRAMES=['1m','5m','15m','30m','1H','4H','1D','1W'];
 const TIMEFRAME_GUIDE={
- '1m':{title:'1M scalping execution',desc:'Uses 15M directional bias, 5M market structure and 1M execution to find a real scalping entry.'},
- '5m':{title:'5M scalping execution',desc:'Uses 1H directional bias, 15M market structure and 5M execution to find a real scalping entry.'},
- '15m':{title:'15M execution',desc:'Uses the 1H directional structure and 15M market structure to find a real 15M entry.'},
- '30m':{title:'30M execution',desc:'Uses the 4H directional structure and 1H/30M structure to find a real 30M entry.'},
- '1H':{title:'1H execution',desc:'Uses confirmed 4H structure to find a real 1H entry.'},
- '4H':{title:'Structure read',desc:'Reads the 1D directional bias and builds the 1H execution plan.'},
- '1D':{title:'Higher-timeframe structure',desc:'Establishes the daily structure and uses 4H to refine the setup.'},
- '1W':{title:'Market regime',desc:'Establishes the weekly directional context before looking for 1D structure.'}
+ '1m':{title:'1M opportunity horizon',desc:'Hunts very short-term opportunities. The selected strategy decides how 1M structure is interpreted and what context it needs.'},
+ '5m':{title:'5M opportunity horizon',desc:'Hunts short-term opportunities. The selected strategy owns the analysis and can pull higher-timeframe context when required.'},
+ '15m':{title:'15M opportunity horizon',desc:'Hunts intraday opportunities with the selected strategy. Higher context is handled automatically when that strategy needs it.'},
+ '30m':{title:'30M opportunity horizon',desc:'Hunts more developed intraday opportunities. Strategy rules determine the supporting context and confirmation.'},
+ '1H':{title:'1H opportunity horizon',desc:'Hunts larger intraday opportunities. The selected strategy determines the structure, confirmation and entry logic.'},
+ '4H':{title:'4H opportunity horizon',desc:'Hunts swing opportunities. The selected strategy automatically chooses any higher context it needs.'},
+ '1D':{title:'1D opportunity horizon',desc:'Hunts multi-day opportunities. Strategy rules remain in control while higher context is handled automatically.'},
+ '1W':{title:'1W opportunity horizon',desc:'Hunts longer-term opportunities. The selected strategy decides what constitutes a valid setup.'}
 };
 const MARKET_TABS=[['forex','Forex'],['metals','Metal / CFD'],['perpetual','Crypto']];
 const CFD_CATEGORIES={XAUUSD:'Metals',XAGUSD:'Metals',USOIL:'Oil',UKOIL:'Oil',US30:'Indices',US500:'Indices',NAS100:'Indices',UK100:'Indices',GER40:'Indices',FRA40:'Indices',JP225:'Indices',HK50:'Indices'};
