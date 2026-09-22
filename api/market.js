@@ -281,7 +281,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   const last=current.at(-1),closes=current.map(x=>x.close),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(current);
   if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
   const higherStructure=marketStructure(biasCandles),selectedStructure=marketStructure(structure),entryStructure=marketStructure(current);
-  const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure),bias=higherBias!=='WAIT'?higherBias:selectedBias;
+  const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure),bias=higherBias;
   const evidence=[],failures=[]; let trade=null,orderType='NO_SETUP',entry=null,reason='';
   const validTrade=(t,tradeBias=bias,marketPrice=livePrice,tradeOrderType='')=>{
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<2.25)return false;
