@@ -57,7 +57,7 @@ export default function NotificationCenter({user,embedded=false}){
  const liveEvent=market.lastConfirmed||market.lastEvent;
  const upcoming=market.news||[];
  const enable=async()=>{try{const r=await enableKitSetupsNotifications(user);setPermission(r.enabled?'granted':(typeof Notification!=='undefined'?Notification.permission:'denied'))}catch(error){console.warn('KitSetups notifications could not be enabled:',error);setPermission(typeof Notification!=='undefined'?Notification.permission:'denied')}};
- const add=()=>{const n=Number(target);if(!Number.isFinite(n)||n<=0)return;setAlerts(a=>[...a,{id:crypto.randomUUID(),symbol,direction,target:n,createdAt:Date.now(),triggered:false}]);setTarget('')};
+ const add=async()=>{const n=Number(target);if(!Number.isFinite(n)||n<=0)return;if(permission!=='granted'){try{const r=await enableKitSetupsNotifications(user);setPermission(r.enabled?'granted':(typeof Notification!=='undefined'?Notification.permission:'denied'))}catch{}}setAlerts(a=>[...a,{id:crypto.randomUUID(),symbol,direction,target:n,createdAt:Date.now(),triggered:false}]);setTarget('')};
  return <div className={embedded?'notification-center embedded':'notification-center'} style={embedded?wrapEmbedded:wrapFloating}>
   <button aria-label="Open live activity and notifications" title="Live activity & alerts" onClick={()=>setOpen(v=>!v)} className="notification-trigger" style={embedded?buttonEmbedded:button}>{count?<BellRing size={16}/>:<Bell size={16}/>}<span style={liveLabel}>LIVE</span>{count>0&&<span style={badge}>{count}</span>}</button>
   {open&&<div className="notification-panel" style={embedded?panelEmbedded:panel}>
