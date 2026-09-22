@@ -373,7 +373,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         const fallback=FOREX_INSTRUMENTS.map(symbol=>({symbol,providerSymbol:`${symbol}=X`,name:`${symbol.slice(0,3)} / ${symbol.slice(3)}`,type:'FOREX'}));
         return json(res,200,{ok:true,instruments:normalizeInstrumentList([...discovered,...fallback])});
       }
-      if(market==='perpetual'){
+      if(market==='perpetual'||market==='crypto'){
         const r=await fetch('https://api.bybit.com/v5/market/instruments-info?category=linear&status=Trading&limit=1000',{headers:{Accept:'application/json'}});
         if(!r.ok)return json(res,502,{error:'Bybit perpetual instrument provider unavailable'});
         const body=await r.json();
