@@ -1,4 +1,6 @@
-/* KitSetups native navigation — exactly the six routed destinations. */
+/* KitSetups native navigation — exactly the six routed destinations.
+   Reference motion: one translucent glass active capsule slides between the
+   six icon buttons. No extra controls, no extra destinations. */
 .kit-nav{
   position:fixed;
   left:50%;
@@ -9,22 +11,48 @@
   pointer-events:none;
 }
 .kit-nav-inner{
+  position:relative;
   width:100%;
   min-height:66px;
   padding:7px;
   display:grid;
   grid-template-columns:repeat(6,minmax(0,1fr));
   gap:4px;
-  border:1px solid rgba(255,255,255,.09);
+  box-sizing:border-box;
+  border:1px solid rgba(255,255,255,.10);
   border-radius:24px;
-  background:rgba(7,12,16,.82);
-  box-shadow:0 22px 60px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.055);
-  backdrop-filter:blur(24px) saturate(150%);
-  -webkit-backdrop-filter:blur(24px) saturate(150%);
+  background:rgba(7,12,16,.72);
+  box-shadow:0 22px 60px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter:blur(26px) saturate(155%);
+  -webkit-backdrop-filter:blur(26px) saturate(155%);
   pointer-events:auto;
+  isolation:isolate;
+}
+.kit-nav-active-glass{
+  position:absolute;
+  z-index:0;
+  top:7px;
+  left:7px;
+  width:calc((100% - 34px)/6);
+  height:52px;
+  box-sizing:border-box;
+  border:1px solid rgba(0,199,254,.38);
+  border-radius:18px;
+  background:linear-gradient(135deg,rgba(0,199,254,.14),rgba(99,233,227,.075));
+  box-shadow:
+    0 8px 24px rgba(0,199,254,.11),
+    inset 0 1px 0 rgba(255,255,255,.14),
+    inset 0 -1px 0 rgba(0,199,254,.08);
+  backdrop-filter:blur(18px) saturate(165%);
+  -webkit-backdrop-filter:blur(18px) saturate(165%);
+  transform:translateX(calc(var(--nav-index) * (100% + 4px)));
+  transition:transform .56s cubic-bezier(.22,1,.36,1);
+  will-change:transform;
+  pointer-events:none;
 }
 .kit-nav-item{
   position:relative;
+  z-index:1;
   min-width:0;
   height:52px;
   border:0;
@@ -33,11 +61,22 @@
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:5px;
+  gap:6px;
   background:transparent;
-  color:#7d8b94;
+  color:#718189;
   cursor:pointer;
-  transition:color .24s ease,background .24s ease,box-shadow .28s ease,transform .24s cubic-bezier(.22,1,.36,1);
+  transition:
+    color .32s ease,
+    transform .42s cubic-bezier(.22,1,.36,1),
+    opacity .32s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.kit-nav-item:hover{
+  color:#a6b9bf;
+  transform:translateY(-1px);
+}
+.kit-nav-item:active{
+  transform:translateY(0) scale(.96);
 }
 .kit-nav-icon{
   width:20px;
@@ -51,7 +90,16 @@
   height:18px;
   stroke-width:1.75;
   color:currentColor;
-  transition:transform .24s cubic-bezier(.22,1,.36,1);
+  transition:
+    transform .42s cubic-bezier(.22,1,.36,1),
+    filter .32s ease;
+}
+.kit-nav-item.active{
+  color:#8beeff;
+}
+.kit-nav-item.active .kit-nav-icon svg{
+  transform:scale(1.03);
+  filter:drop-shadow(0 0 7px rgba(0,199,254,.22));
 }
 .kit-nav-label{
   min-width:0;
@@ -59,21 +107,30 @@
   white-space:nowrap;
   text-overflow:ellipsis;
   font-size:9px;
+  line-height:1;
   font-weight:750;
   letter-spacing:-.01em;
-  opacity:.9;
+  color:#9ceeff;
+  opacity:0;
+  max-width:0;
+  transform:translateX(-4px);
+  transition:
+    opacity .28s ease,
+    max-width .42s cubic-bezier(.22,1,.36,1),
+    transform .42s cubic-bezier(.22,1,.36,1);
 }
-.kit-nav-item:hover{
-  color:#b9c8cd;
-  background:rgba(255,255,255,.035);
+.kit-nav-item.active .kit-nav-label{
+  opacity:1;
+  max-width:82px;
+  transform:translateX(0);
 }
-.kit-nav-item:hover .kit-nav-icon svg{transform:scale(1.045)}
-.kit-nav-item.active{
-  color:#062025;
-  background:linear-gradient(135deg,#7be9e3,#54d8d3);
-  box-shadow:0 9px 28px rgba(0,199,254,.16),inset 0 1px 0 rgba(255,255,255,.34);
+.kit-nav-item:not(.active) .kit-nav-icon svg{
+  opacity:.92;
 }
-.kit-nav-item.active .kit-nav-icon svg{transform:scale(.98)}
+.kit-nav-item:not(.active):hover .kit-nav-icon svg{
+  transform:scale(1.05);
+  filter:drop-shadow(0 0 5px rgba(0,199,254,.14));
+}
 .kit-main{
   width:100%;
   min-width:0;
@@ -89,25 +146,55 @@
   .kit-nav-inner{
     min-height:62px;
     padding:5px;
+    gap:5px;
     border-radius:21px;
+  }
+  .kit-nav-active-glass{
+    top:5px;
+    left:5px;
+    width:calc((100% - 35px)/6);
+    height:50px;
+    border-radius:16px;
   }
   .kit-nav-item{
     height:50px;
     padding:0 3px;
     border-radius:16px;
-    gap:3px;
+    gap:0;
   }
-  .kit-nav-icon,.kit-nav-icon svg{width:19px;height:19px}
+  .kit-nav-icon,
+  .kit-nav-icon svg{
+    width:19px;
+    height:19px;
+  }
   .kit-nav-icon{flex-basis:19px}
-  .kit-nav-label{font-size:8px}
+  /* Mobile is icons-only: no visible text on any of the six buttons. */
+  .kit-nav-label,
+  .kit-nav-item.active .kit-nav-label{
+    display:none!important;
+  }
+  .kit-nav-item.active .kit-nav-icon svg{
+    transform:scale(1.04);
+  }
   .content{padding-bottom:94px!important}
 }
 @media(max-width:380px){
   .kit-nav{width:calc(100vw - 8px)}
-  .kit-nav-inner{padding:4px;border-radius:19px}
-  .kit-nav-item{height:48px;padding:0 2px;gap:2px}
-  .kit-nav-label{font-size:7.5px}
+  .kit-nav-inner{padding:4px;gap:4px;border-radius:19px}
+  .kit-nav-active-glass{
+    top:4px;
+    left:4px;
+    width:calc((100% - 28px)/6);
+    height:48px;
+    border-radius:15px;
+  }
+  .kit-nav-item{height:48px;padding:0 2px}
 }
 @media(prefers-reduced-motion:reduce){
-  .kit-nav-item,.kit-nav-item .kit-nav-icon svg{transition:none!important}
+  .kit-nav-active-glass,
+  .kit-nav-item,
+  .kit-nav-item .kit-nav-icon svg,
+  .kit-nav-label{
+    transition:none!important;
+  }
 }
