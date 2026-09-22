@@ -11,10 +11,10 @@ import LiveMarketComponent from './LiveMarketPage.jsx';
 import NotificationCenter from './NotificationCenter.jsx';
 import './ui-polish.css';
 import './header-polish.css';
-import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, Wallet, X, Zap, CandlestickChart } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, Wallet, X, Zap } from 'lucide-react';
 
 const ROBINHOOD_CHAIN={name:'Robinhood Chain',chainId:4663,hex:'0x1237',rpcUrl:'https://rpc.mainnet.chain.robinhood.com',explorer:'https://robinhoodchain.blockscout.com',nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18}};
-const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',Layers3],['perps','Perpetuals',CandlestickChart],['history','History',History],['profile','Profile',CircleUserRound]];
+const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',Layers3],['perps','Perpetuals',CircleDollarSign],['history','History',History],['profile','Profile',CircleUserRound]];
 const pairs=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','MATIC/USDT','DOT/USDT','TRX/USDT','UNI/USDT','AAVE/USDT','ARB/USDT','OP/USDT','SUI/USDT','PEPE/USDT'];
 const timeframes=['1m','5m','15m','30m','1H','4H','1D','1W'];
 const appSearchItems=[...pairs.map(value=>({type:'market',label:value,meta:'Market analysis',action:'market'})),...nav.map(([id,label])=>({type:'workspace',label,meta:'Workspace',action:id})),{type:'network',label:'Robinhood Chain',meta:'Network · Mainnet 4663',action:'home'}];
