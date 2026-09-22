@@ -241,7 +241,7 @@ function marketDataFresh(c,timeframe,market=''){
   if(!Number.isFinite(last)||!interval)return false;
   const age=Date.now()-last;
   if(age<0)return false;
-  const maxAge=sourceTimeframe==='1W'?14*86400000:sourceTimeframe==='1D'?3*86400000:interval*4;
+  const maxAge=['1W','1wk','1w'].includes(sourceTimeframe)?14*86400000:['1D','1d'].includes(sourceTimeframe)?3*86400000:interval*4;
   return age<=maxAge;
 }
 function candleEngulfing(c,bias){
