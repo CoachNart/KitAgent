@@ -147,3 +147,27 @@
 .live-market .setup-why.open{border-color:var(--ks-cyan-line)!important;background:var(--ks-cyan-soft)!important}
 .live-market .setup-why-icon,.live-market .setup-why-summary>span,.live-market .setup-why-note svg{color:var(--ks-cyan)!important}
 .live-market .live-error button{border-color:var(--ks-cyan-line)!important;color:var(--ks-cyan-bright)!important}
+
+
+/* Global readability refinement — clearer hierarchy without changing layout density. */
+.side-link{font-size:11px}
+.side-section-label,.tiny-label{font-size:9px}
+.top-header .page-heading h1{font-size:17px}
+.system{font-size:9px}
+.connect-btn,.outline-btn,.upgrade-btn,.filter-btn,.period{font-size:10px}
+.content{line-height:1.45}
+.section-intro h2{font-size:30px}
+.section-intro p{font-size:11px;line-height:1.65}
+.action-card h3{font-size:13px}
+.action-card p{font-size:9px}
+.analysis-head h3,.result-top h3{font-size:15px}
+.field label{font-size:9px}
+.select-wrap select{font-size:10px}
+.analyze-btn{font-size:10px}
+.analysis-empty b{font-size:11px}
+.analysis-empty span{font-size:9px}
+.result-note p,.insight-card p{font-size:9px}
+.structure-card h3{font-size:13px}
+.structure-card>p{font-size:9px}
+.safety-row b{font-size:9px}
+.safety-row small{font-size:8px}
