@@ -299,6 +299,7 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
     const bos=structureBreak(current,bias,36),fresh=bos&&bos.breakIndex>=current.length-12,disp=displacement(current,bias);
     strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
     valid=Boolean(validTrade(strategyTrade)&&bos&&fresh&&disp);
+    if(valid){planEntry=last.close;planOrder='MARKET';}
     planReason=valid?'A structure level closed through with current displacement; the breakout is still actionable.':'Waiting for a decisive close through structure with displacement. Wick-only breaks are rejected.';
     evidence.push(bos?'Recent BOS detected.':'No recent BOS.',disp?'Displacement confirmed.':'No displacement confirmation.',fresh?'Break is recent.':'Break is stale.');
   } else if(key==='SMC'){
@@ -306,6 +307,7 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
     const smcZone=zones[0],smcEntry=smcZone?.mid??last.close;
     strategyTrade=evaluateTrade(current,bias,smcEntry,a,2.25);
     valid=Boolean(validTrade(strategyTrade)&&sweep&&bos&&disp&&(zones.length||base.orderType==='MARKET'));
+    if(valid){planEntry=smcEntry;planOrder=smcZone?'LIMIT':'MARKET';}
     planReason=valid?'Liquidity was swept, displacement followed and structure confirmed; the entry is tied to a fresh SMC point of interest.':'Waiting for the full SMC sequence: liquidity sweep, displacement, BOS and a fresh POI.';
     evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',disp?'Displacement confirmed.':'No displacement.',bos?'BOS confirmed.':'No BOS.',zones[0]?.type||'No fresh FVG/order block.');
   } else if(key==='MSNR'){
@@ -313,18 +315,21 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
     const msnrEntry=level?.level??last.close;
     strategyTrade=evaluateTrade(current,bias,msnrEntry,a,2.25);
     valid=Boolean(validTrade(strategyTrade)&&htfBias===bias&&level&&confirm);
+    if(valid){planEntry=msnrEntry;planOrder=msnrEntry!==last.close?'LIMIT':'MARKET';}
     planReason=valid?'Price tapped a fresh MSNR level and lower-timeframe confirmation is present.':'Waiting for a fresh MSNR support/resistance level to be tapped and confirmed on the lower timeframe.';
     evidence.push(htfBias===bias?'HTF storyline agrees with direction.':'HTF storyline does not support this direction.',level?level.type+' level at '+roundPrice(level.level):'No fresh MSNR level in range.',formation||'No V/A formation detected.',confirm?'Lower-timeframe confirmation present.':'No BOS, engulfing or rejection confirmation.');
   } else if(key==='PRICE_ACTION'){
     const level=msnrLevels(current,bias)[0],engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
     strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
     valid=Boolean(validTrade(strategyTrade)&&level&&(engulf||reject));
+    if(valid){planEntry=last.close;planOrder='MARKET';}
     planReason=valid?'Price interacted with a recent structural level and printed a confirming candle.':'Waiting for price to reach a meaningful structure level and print rejection or engulfing confirmation.';
     evidence.push(level?'Recent structural level is nearby.':'No nearby structural level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
   } else if(key==='LIQUIDITY_REVERSAL'){
     const sweep=liquiditySweep(current,bias),disp=displacement(current,bias),reclaim=sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level));
     strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
     valid=Boolean(validTrade(strategyTrade)&&sweep&&disp&&reclaim);
+    if(valid){planEntry=last.close;planOrder='MARKET';}
     planReason=valid?'A recent liquidity sweep was reclaimed with displacement; reversal execution is confirmed.':'Waiting for a genuine liquidity sweep, reclaim and displacement before considering a reversal.';
     evidence.push(sweep?sweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim yet.',disp?'Displacement confirms reversal.':'No displacement.');
   }
