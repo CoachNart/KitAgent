@@ -22,19 +22,36 @@ export async function marketKlines(signal) {
     if(!symbol||!Number.isFinite(startMs))return [];
     const now=Date.now();
     if(!['crypto','perpetual'].includes(String(signal.market||'').toLowerCase()))return [];
-    const u=new URL('https://api.bybit.com/v5/market/kline');
-    u.searchParams.set('category','linear');
-    u.searchParams.set('symbol',symbol);
-    u.searchParams.set('interval','1');
-    u.searchParams.set('start',String(startMs));
-    u.searchParams.set('end',String(now));
-    u.searchParams.set('limit','1000');
-    const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
-    if(!r.ok)return [];
-    const body=await r.json();
-    if(body?.retCode!==0||!Array.isArray(body?.result?.list))return [];
-    return body.result.list.slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
-      .filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));
+    const all=[];
+    let pageEnd=now,pages=0;
+    // Bybit caps each kline response at 1,000 rows. A single request cannot
+    // reliably resolve signals older than ~16h on 1-minute candles.
+    // Page backwards so outcome verification never silently loses the beginning
+    // of a trade's lifecycle.
+    while(pageEnd>=startMs&&pages<48){
+      const u=new URL('https://api.bybit.com/v5/market/kline');
+      u.searchParams.set('category','linear');
+      u.searchParams.set('symbol',symbol);
+      u.searchParams.set('interval','1');
+      u.searchParams.set('start',String(startMs));
+      u.searchParams.set('end',String(pageEnd));
+      u.searchParams.set('limit','1000');
+      const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
+      if(!r.ok)break;
+      const body=await r.json();
+      if(body?.retCode!==0||!Array.isArray(body?.result?.list)||!body.result.list.length)break;
+      const rows=body.result.list.slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
+        .filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));
+      if(!rows.length)break;
+      all.push(...rows);
+      const oldest=rows[0].time;
+      if(oldest<=startMs||rows.length<1000)break;
+      pageEnd=oldest-1;
+      pages+=1;
+    }
+    return [...new Map(all.map(c=>[c.time,c])).values()]
+      .filter(c=>c.time>=startMs&&c.time<=now)
+      .sort((a,b)=>a.time-b.time);
   } catch { return []; }
 }
 
@@ -81,9 +98,13 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   } else return {...signal,currentPrice:price,status:'watching'};
   if(!active)return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
   let ambiguous=false;
+  const activationCandleStart=Math.floor(Number(activatedAt)/60000)*60000;
   for(const candle of candles){
     if(candle.time<activatedAt)continue;
-    if(candle.time===activatedAt && order==='LIMIT')continue;
+    // A MARKET signal may be generated part-way through a 1-minute candle.
+    // OHLC cannot tell whether TP/SL was touched before or after generation,
+    // so the overlapping candle is excluded unless generation happened exactly at its start.
+    if(candle.time===activationCandleStart&&Number(activatedAt)>candle.time)continue;
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
