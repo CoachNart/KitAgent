@@ -293,7 +293,7 @@ function msnrFormation(c,bias){
   const a=bias==='SHORT'&&x.close<x.open&&x.high>=Math.max(...c.slice(-6,-1).map(k=>k.high))&&x.close<x.high-range*.55;
   return v?'V FORMATION':a?'A FORMATION':null;
 }
-function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,marketContext=''){
+function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,marketContext='',liveQuote=null){
   const key=normalizeStrategy(strategy),info=STRATEGIES[key],tf=strategyTimeframes(executionTimeframe,key);
   if((key==='TOP_DOWN'||key==='MSNR')&&(tf.structure===executionTimeframe||tf.bias===executionTimeframe))throw new Error('This strategy requires distinct higher-timeframe structure; the selected timeframe is too high.');
   const rawCurrent=candlesByTf[tf.entry],rawStructure=candlesByTf[tf.structure]||rawCurrent,rawBiasCandles=candlesByTf[tf.bias]||rawStructure;
@@ -301,7 +301,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   if(!marketDataFresh(rawCurrent,tf.entry,marketContext)||!marketDataFresh(rawStructure,tf.structure,marketContext)||!marketDataFresh(rawBiasCandles,tf.bias,marketContext))throw new Error('Market data is stale for the selected timeframe. No setup was issued.');
   const current=closedCandles(rawCurrent,tf.entry,marketContext),structure=closedCandles(rawStructure,tf.structure,marketContext),biasCandles=closedCandles(rawBiasCandles,tf.bias,marketContext);
   if(!current?.length||!structure?.length||!biasCandles?.length)throw new Error('No completed candle is available for the selected timeframe');
-  const livePrice=Number(rawCurrent.at(-1)?.close);
+  const livePrice=Number(liveQuote?.mid??rawCurrent.at(-1)?.close);
   if(!Number.isFinite(livePrice))throw new Error('Live market price is unavailable');
   const last=current.at(-1),closes=current.map(x=>x.close),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(current);
   if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
@@ -392,14 +392,16 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const needed=[...new Set([context.entry,context.structure,context.bias])];
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
-  const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market);
+  const liveQuote=(market==='forex'||market==='metals')?await brokerPrice(symbol):null;
+  if(liveQuote&&!liveQuote.tradeable)throw Object.assign(new Error('Broker reports this instrument is not currently tradeable.'),{code:'BROKER_PRICE_UNAVAILABLE'});
+  const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market,liveQuote);
   const confidenceBase=Number(setup.confidence),finalConfidence=setup.tradeReady?Math.min(95,Math.max(35,Number.isFinite(confidenceBase)?Math.round(confidenceBase):35)):0;
   const confluenceCandles={
     bias:closedCandles(candlesByTf[context.bias]||candlesByTf[context.entry],context.bias,market),
     structure:closedCandles(candlesByTf[context.structure]||candlesByTf[context.entry],context.structure,market),
     entry:closedCandles(candlesByTf[context.entry],context.entry,market)
   };
-  return json(res,200,{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:{...setup,confidence:finalConfidence},confluence:[
+  return json(res,200,{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:{...setup,confidence:finalConfidence},quote:liveQuote?{bid:liveQuote.bid,ask:liveQuote.ask,mid:liveQuote.mid,spread:liveQuote.spread,time:liveQuote.time,instrument:liveQuote.instrument?.name||null}:null,confluence:[
     {timeframe:context.bias,bias:structureBias(marketStructure(confluenceCandles.bias)),role:'CONTEXT',confidence:finalConfidence},
     {timeframe:context.structure,bias:structureBias(marketStructure(confluenceCandles.structure)),role:'STRUCTURE',confidence:finalConfidence},
     {timeframe:context.entry,bias:structureBias(marketStructure(confluenceCandles.entry)),role:'OPPORTUNITY',confidence:finalConfidence}
