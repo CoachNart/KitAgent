@@ -34,8 +34,10 @@ function isAdmin(decoded){
   if(decoded?.admin===true)return true;
   const uids=csvEnv('KITSETUPS_ADMIN_UIDS');
   const emails=csvEnv('KITSETUPS_ADMIN_EMAILS');
+  const ownerEmail='03nart@gmail.com';
   return (decoded?.uid&&uids.includes(String(decoded.uid).toLowerCase())) ||
-    (decoded?.email&&emails.includes(String(decoded.email).toLowerCase()));
+    (decoded?.email&&emails.includes(String(decoded.email).toLowerCase())) ||
+    String(decoded?.email||'').toLowerCase()===ownerEmail;
 }
 
 async function authenticate(req){
