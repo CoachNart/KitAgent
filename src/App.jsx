@@ -22,7 +22,7 @@ const actions=[{id:'swap-eth',kind:'swap',title:'Swap ETH → USDC',summary:'Pre
 const nfts=[['Vault Pass #1842','KitSetups Genesis','0.84 ETH','List for sale'],['Signal #091','Signal Objects','0.31 ETH','Sell NFT'],['Agent Key #402','Agent Keys','0.12 ETH','Transfer NFT']];
 
 export default function App({user}){
-  const [profileOverride,setProfileOverride]=useState(null),[page,setPage]=useState('home'),[lessonId,setLessonId]=useState(null),[wallet,setWallet]=useState(''),[walletBusy,setWalletBusy]=useState(false),[walletMessage,setWalletMessage]=useState(''),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[pendingAction,setPendingAction]=useState(null),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(true),[pair,setPair]=useState('BTC/USDT'),[tf,setTf]=useState('4H'),[analyzed,setAnalyzed]=useState(false),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
+  const [profileOverride,setProfileOverride]=useState(null),[headerPair,setHeaderPair]=useState('BTC/USDT'),[page,setPage]=useState('home'),[lessonId,setLessonId]=useState(null),[wallet,setWallet]=useState(''),[walletBusy,setWalletBusy]=useState(false),[walletMessage,setWalletMessage]=useState(''),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[pendingAction,setPendingAction]=useState(null),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(true),[pair,setPair]=useState('BTC/USDT'),[tf,setTf]=useState('4H'),[analyzed,setAnalyzed]=useState(false),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
   useEffect(()=>{const handler=e=>setProfileOverride(e.detail||null);window.addEventListener('kitsetups:profile-updated',handler);return()=>window.removeEventListener('kitsetups:profile-updated',handler)},[]);
   const displayUser=profileOverride?{...user,...profileOverride}:user;
   useEffect(()=>{const t=setTimeout(()=>setShowLoader(false),2300);return()=>clearTimeout(t)},[]);
@@ -38,13 +38,11 @@ export default function App({user}){
   if(showLoader)return <LoaderScreen/>;
   return <div className="kit-shell"><KitNavigation page={page} go={go}/><main className="kit-main"><div className="app-sticky-rail" aria-label="App controls">
   <div className="app-sticky-brand"><img src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups"/></div>
-  <div className="app-sticky-search-wrap">
-  <div className="app-sticky-search">
-    <Search size={16}/><input aria-label="Search KitSetups" value={appSearch} onFocus={()=>setSearchOpen(true)} onChange={e=>{setAppSearch(e.target.value);setSearchOpen(true)}} onKeyDown={e=>{if(e.key==='Enter')submitSearch();if(e.key==='Escape'){setSearchOpen(false);setAppSearch('')}}} placeholder="Search markets, assets, workspace..." />
-    {appSearch&&<button type="button" className="app-search-clear" aria-label="Clear search" onClick={()=>{setAppSearch('');setSearchOpen(false)}}><X size={14}/></button>}
+  <div className="app-sticky-market" aria-label="Live market rotation">
+    <span className="app-sticky-market-dot" aria-hidden="true"/>
+    <span className="app-sticky-market-pair" key={headerPair}>{headerPair}</span>
+    <span className="app-sticky-market-state">LIVE</span>
   </div>
-  {searchOpen&&appSearch&&<div className="app-search-results">{searchResults.length?searchResults.map(item=><button type="button" key={item.type+'-'+item.label} className="app-search-result" onMouseDown={e=>e.preventDefault()} onClick={()=>selectSearchResult(item)}><span className={'app-search-result-icon '+item.type}><Search size={13}/></span><span><b>{item.label}</b><small>{item.meta}</small></span><ArrowRight size={13}/></button>):<div className="app-search-empty">No matching markets or workspace items.</div>}</div>}
-</div>
   <div className="app-sticky-actions">
     <NotificationCenter user={user} embedded/>
     <div className="header-pulse" aria-label="System pulse"><i className="pulse-green"/><i className="pulse-red"/></div>
