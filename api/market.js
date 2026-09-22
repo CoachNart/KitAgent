@@ -84,7 +84,8 @@ function orderBlockCandidates(c,bias){
   }return out;
 }
 function zoneIsUnmitigated(c,z,bias){
-  for(let i=z.index+1;i<c.length;i++){
+  const from=z.type?.includes('ORDER BLOCK')?z.index+2:z.index+1;
+  for(let i=from;i<c.length;i++){
     if(bias==='LONG'&&c[i].low<=z.high)return false;
     if(bias==='SHORT'&&c[i].high>=z.low)return false;
   }
@@ -126,7 +127,7 @@ function liquidityCandidates(c,bias,entry,a){
 }
 function chooseLiquidityTarget(c,bias,entry,a){const candidates=liquidityCandidates(c,bias,entry,a);if(!candidates.length)return null;const chosen=candidates[0],buffer=Math.max(a*.08,entry*.00015),target=bias==='LONG'?chosen.level-buffer:chosen.level+buffer;if((bias==='LONG'&&target<=entry)||(bias==='SHORT'&&target>=entry))return null;return{target,type:chosen.type,liquidityLevel:chosen.level,touches:chosen.touches,distancePct:Number((chosen.distance*100).toFixed(2)),reason:`Targeting ${chosen.type.toLowerCase()} at ${roundPrice(chosen.level)}; TP is placed just before the liquidity to account for reaction.`}}
 function protectiveStop(c,bias,entry,a){
-  const st=marketStructure(c),sweep=liquiditySweep(c,bias),buffer=Math.max(a*.16,entry*.00025);
+  const st=marketStructure(c),sweep=liquiditySweep(c,bias,20,12),buffer=Math.max(a*.16,entry*.00025);
   const swings=bias==='LONG'?st.lows:st.highs;
   const recent=swings.filter(x=>x.i>=Math.max(0,c.length-50)&& (bias==='LONG'?x.p<entry:x.p>entry));
   let invalidation=bias==='LONG'
@@ -278,17 +279,27 @@ function msnrLevels(c,bias){
   const st=marketStructure(c),levels=[],last=c.at(-1)?.close;
   const source=bias==='LONG'?st.lows:st.highs;
   for(const x of source.slice(-10)){
-    if((bias==='LONG'&&x.p<last)||(bias==='SHORT'&&x.p>last))levels.push({level:x.p,index:x.i,type:bias==='LONG'?'SUPPORT':'RESISTANCE'});
+    if(!((bias==='LONG'&&x.p<last)||(bias==='SHORT'&&x.p>last)))continue;
+    const prior=c.slice(x.i+1,-1);
+    const touched=prior.some(k=>bias==='LONG'?k.low<=x.p:k.high>=x.p);
+    if(!touched)levels.push({level:x.p,index:x.i,type:bias==='LONG'?'SUPPORT':'RESISTANCE'});
   }
   const oppositeSource=bias==='LONG'?st.highs:st.lows;
   for(const x of oppositeSource.slice(-10)){
-    const later=c.slice(x.i+1);
-    const flipped=bias==='LONG'?later.some(k=>k.close>x.p)&&last>x.p:later.some(k=>k.close<x.p)&&last<x.p;
-    if(flipped)levels.push({level:x.p,index:x.i,type:bias==='LONG'?'RBS':'SBR'});
+    const later=c.slice(x.i+1),flipIndex=later.findIndex(k=>bias==='LONG'?k.close>x.p:k.close<x.p);
+    if(flipIndex<0)continue;
+    const absoluteFlip=x.i+1+flipIndex;
+    if(!((bias==='LONG'&&last>x.p)||(bias==='SHORT'&&last<x.p)))continue;
+    const retest=c.slice(absoluteFlip+1,-1).some(k=>bias==='LONG'?k.low<=x.p:k.high>=x.p);
+    if(!retest)levels.push({level:x.p,index:absoluteFlip,type:bias==='LONG'?'RBS':'SBR'});
   }
   for(let i=Math.max(1,c.length-30);i<c.length-1;i++){
     const a=c[i],b=c[i+1],overlapLow=Math.max(a.low,b.low),overlapHigh=Math.min(a.high,b.high);
-    if(overlapLow<overlapHigh)levels.push({level:(overlapLow+overlapHigh)/2,index:i,type:'KISSING CANDLE BASE'});
+    if(overlapLow<overlapHigh){
+      const level=(overlapLow+overlapHigh)/2,prior=c.slice(i+1,-1);
+      const tested=prior.some(k=>bias==='LONG'?k.low<=overlapHigh:k.high>=overlapLow);
+      if(!tested)levels.push({level,index:i,type:'KISSING CANDLE BASE'});
+    }
   }
   return levels.filter(x=>Number.isFinite(x.level)&&c.length-1-x.index<=80).sort((a,b)=>Math.abs(last-a.level)-Math.abs(last-b.level));
 }
@@ -364,8 +375,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   }
   const confidence=trade?Math.min(95,Math.max(38,Math.round(48+(higherBias===bias?12:0)+(selectedBias===bias?8:0)+(displacement(current,bias)?8:0)+(trade?.rr>=3?8:0)))):0;
   if(!trade||!validTrade(trade,bias,livePrice,orderType)){for(const x of evidence)if(/No |Waiting|conflict|stale/i.test(x))failures.push(x);return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:reason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:reason||'No strategy-valid setup is present.',bias,directionBias:bias,confidence,higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry};}
-  const riskPct=entry>0?(trade.risk/entry)*100:null,stopDistance=Math.abs(entry-trade.stop),instrumentKey=String(instrumentSymbol||''),priceUnitLabel=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?'pips':'price units',pipMultiplier=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?(instrumentKey.includes('JPY')?100:10000):1;
-  return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:reason,entry:roundPrice(entry),limitEntry:orderType==='LIMIT'?roundPrice(entry):null,stopLoss:roundPrice(trade.stop),takeProfit1:roundPrice(trade.target),takeProfit2:roundPrice(trade.target2),riskReward:'1:'+Number(trade.rr).toFixed(2),riskRewardValue:Number(trade.rr.toFixed(2)),orderType,tradeReady:true,setupStatus:'TRADE READY',setupReason:reason,bias,directionBias:bias,confidence,riskPercent:riskPct!=null?Number(riskPct.toFixed(2)):null,stopDistance:roundPrice(stopDistance),stopDistancePct:entry?Number((stopDistance/entry*100).toFixed(3)):null,stopDistanceUnits:Number((stopDistance*pipMultiplier).toFixed(2)),priceUnitLabel,structuralInvalidation:roundPrice(trade.stop),marketEntry:roundPrice(livePrice),price:roundPrice(livePrice),liquidityTarget:roundPrice(trade.targetLiquidity),liquidityType:'STRUCTURAL LIQUIDITY',liquidityTouches:0,liquidityDistancePct:Number((Math.abs((trade.targetLiquidity??trade.target)-entry)*100/entry).toFixed(2)),liquidityReason:'Target is derived from a qualified structural/liquidity level.',confirmation:{bos:Boolean(structureBreak(current,bias,48)),sweep:Boolean(liquiditySweep(current,bias)),displacement:Boolean(displacement(current,bias))},higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry,timestamp:last.time};
+  const riskPct=entry>0?(trade.risk/entry)*100:null,stopDistance=Math.abs(entry-trade.stop),instrumentKey=String(instrumentSymbol||''),isForexInstrument=/^[A-Z]{6}$/.test(instrumentKey)||instrumentKey.includes('/')&&!instrumentKey.includes('USDT'),priceUnitLabel=isForexInstrument?'pips':'price units',pipMultiplier=isForexInstrument?(instrumentKey.includes('JPY')?100:10000):1;
+  return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:reason,entry:roundPrice(entry),limitEntry:orderType==='LIMIT'?roundPrice(entry):null,stopLoss:roundPrice(trade.stop),takeProfit1:roundPrice(trade.target),takeProfit2:roundPrice(trade.target2),riskReward:'1:'+Number(trade.rr).toFixed(2),riskRewardValue:Number(trade.rr.toFixed(2)),orderType,tradeReady:true,setupStatus:'TRADE READY',setupReason:reason,bias,directionBias:bias,confidence,riskPercent:riskPct!=null?Number(riskPct.toFixed(2)):null,stopDistance:roundPrice(stopDistance),stopDistancePct:entry?Number((stopDistance/entry*100).toFixed(3)):null,stopDistanceUnits:Number((stopDistance*pipMultiplier).toFixed(2)),priceUnitLabel,structuralInvalidation:roundPrice(trade.stop),marketEntry:roundPrice(livePrice),price:roundPrice(livePrice),liquidityTarget:roundPrice(trade.targetLiquidity),liquidityType:'STRUCTURAL LIQUIDITY',liquidityTouches:0,liquidityDistancePct:Number((Math.abs((trade.targetLiquidity??trade.target)-entry)*100/entry).toFixed(2)),liquidityReason:'Target is derived from a qualified structural/liquidity level.',confirmation:{bos:Boolean(structureBreak(current,bias,48,12)),sweep:Boolean(liquiditySweep(current,bias,20,12)),displacement:Boolean(displacement(current,bias))},higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry,timestamp:last.time};
 }
 export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{if(String(req.query?.action||'')==='header'){const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear',{headers:{Accept:'application/json'}});if(!r.ok)return json(res,502,{error:'Bybit ticker provider unavailable'});const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list))return json(res,502,{error:body?.retMsg||'Bybit ticker provider unavailable'});const wanted=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT']);const result=body.result.list.filter(x=>wanted.has(x.symbol)).map(x=>({symbol:x.symbol,lastPrice:x.lastPrice,price24hPcnt:x.price24hPcnt}));return json(res,200,{ok:true,result});} const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(req.query?.action==='instruments'){
       if(market==='metals'){
@@ -396,7 +407,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
   const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market);
-  const confidenceBase=setup.confidence||50,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase)));
+  const confidenceBase=Number(setup.confidence),finalConfidence=setup.tradeReady?Math.min(95,Math.max(35,Number.isFinite(confidenceBase)?Math.round(confidenceBase):35)):0;
   return json(res,200,{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:{...setup,confidence:finalConfidence},confluence:[
     {timeframe:context.bias,bias:structureBias(marketStructure(candlesByTf[context.bias]||candlesByTf[context.entry])),role:'CONTEXT',confidence:finalConfidence},
     {timeframe:context.structure,bias:structureBias(marketStructure(candlesByTf[context.structure]||candlesByTf[context.entry])),role:'STRUCTURE',confidence:finalConfidence},
