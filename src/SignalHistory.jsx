@@ -15,8 +15,8 @@ function statusOf(s){
   return {label:'AWAITING ENTRY',tone:'watching',closed:false};
 }
 function isTrade(s){return ['MARKET','LIMIT'].includes(String(s.orderType||'').toUpperCase());}
-function isRecorded(s){return isTrade(s)&&['open','target_hit','stop_hit'].includes(String(s.status||''));}
-function isClosed(s){return ['target_hit','stop_hit'].includes(String(s.status||''));}
+function isRecorded(s){return isTrade(s)&&['open','target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
+function isClosed(s){return ['target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
 
 export default function SignalHistory({activity=[]}){
   const [signals,setSignals]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('signals'),[query,setQuery]=useState(''),[clearOpen,setClearOpen]=useState(false),[clearText,setClearText]=useState(''),[clearing,setClearing]=useState(false);
