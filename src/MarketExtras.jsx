@@ -14,13 +14,16 @@ const STRATEGY_LIBRARY=[
 
 export function StrategySelector({value,onChange}){
  const item=STRATEGY_LIBRARY.find(x=>x.key===value)||STRATEGY_LIBRARY[0];
- return <section className="strategy-selector" aria-label="Strategy">
-  <div className="strategy-selector-head">
-   <div><span className="extras-kicker"><Target size={11}/> STRATEGY</span><strong>Choose how KitSetups hunts the setup</strong><small>The selected rules are applied to the live market read. This changes the setup model, not just the label.</small></div>
-   <div className="strategy-select-wrap"><select value={value} onChange={e=>onChange(e.target.value)} aria-label="Select setup strategy">{STRATEGY_LIBRARY.map(x=><option key={x.key} value={x.key}>{x.name}</option>)}</select><ChevronDown size={15}/></div>
-  </div>
-  <div className="strategy-selected"><div><b>{item.name}</b><span>{item.short}</span></div><em>RULE-BASED</em></div>
- </section>
+ return <label className="strategy-selector live-field" aria-label="Strategy">
+   <span>STRATEGY</span>
+   <div className="strategy-select-wrap">
+     <select value={value} onChange={e=>onChange(e.target.value)} aria-label="Select setup strategy">
+       {STRATEGY_LIBRARY.map(x=><option key={x.key} value={x.key}>{x.name}</option>)}
+     </select>
+     <ChevronDown size={15}/>
+   </div>
+   <small>{item.short}</small>
+ </label>
 }
 
 export function StrategyExplanation({setup,strategy}){
@@ -115,48 +118,3 @@ export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
   );
 }
 
-export function SetupWhy({ setup, market, symbol }) {
-  const [open, setOpen] = useState(true);
-  const rows = useMemo(() => {
-    if (!setup) return [];
-    const direction = setup.bias && setup.bias !== 'WAIT' ? setup.bias : setup.directionBias;
-    return [
-      { label:'Higher-timeframe structure', value:setup.higherBias||'WAIT', detail:setup.higherTimeframe ? `${setup.higherTimeframe} directional context` : 'Top-down structure' },
-      { label:'Middle structure', value:setup.middleBias||'WAIT', detail:setup.middleTimeframe ? `${setup.middleTimeframe} confirmation layer` : 'Structure confirmation' },
-      { label:'Entry alignment', value:setup.entryAligned?'ALIGNED':'WATCHING', detail:setup.entryTimeframe ? `${setup.entryTimeframe} execution layer` : 'Execution conditions' },
-      { label:'Liquidity target', value:setup.liquidityType||'—', detail:'Derived from the available market structure' },
-      { label:'Risk / reward', value:setup.riskReward||'—', detail:setup.stopDistanceUnits!=null ? `${setup.stopDistanceUnits} ${setup.priceUnitLabel==='pips'?'pips':'points'} risk distance` : 'Calculated from entry and invalidation' },
-      { label:'Engine confidence', value:setup.confidence!=null?`${setup.confidence}%`:'—', detail:direction?`${direction} setup context`:'No directional setup' }
-    ];
-  }, [setup]);
-
-  if (!setup) return null;
-  const reason = setup.structureConflict
-    ? 'Higher-timeframe direction is not yet confirmed by lower structure, so execution is being withheld.'
-    : setup.entryAligned
-      ? 'Entry conditions are aligned with the broader structure. Levels come from the live market read.'
-      : setup.setupReason || 'The engine is monitoring this market for a cleaner execution condition.';
-
-  return (
-    <section className={open ? 'setup-why open' : 'setup-why'}>
-      <button type="button" className="setup-why-toggle" onClick={() => setOpen(v => !v)} aria-expanded={open}>
-        <span className="setup-why-icon"><CircleHelp size={15} /></span>
-        <span><b>Why this setup?</b><small>Live evidence behind this market read</small></span>
-        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-      </button>
-      {open && (
-        <div className="setup-why-body">
-          <div className="setup-why-summary">
-            <span>{market || 'MARKET'} · {symbol || '—'}</span>
-            <p>{reason}</p>
-          </div>
-          <div className="setup-evidence-grid">
-            {rows.map(row => <div className="setup-evidence" key={row.label}><span>{row.label}</span><b>{row.value}</b><small>{row.detail}</small></div>)}
-          </div>
-          {setup.structuralInvalidation != null && <div className="setup-invalidation"><span>INVALIDATION</span><b>{setup.structuralInvalidation}</b><small>If structure reaches this level, the current thesis is no longer valid.</small></div>}
-          <div className="setup-why-note"><Check size={13} /><span>Evidence is taken from the same live setup payload used for the levels above.</span></div>
-        </div>
-      )}
-    </section>
-  );
-}
