@@ -60,3 +60,5 @@ function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPass
    </main>
  </div>
 }
+
+// Auth recovery: Firebase password reset + refresh-safe authenticated requests.
