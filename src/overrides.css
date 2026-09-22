@@ -130,3 +130,20 @@
   letter-spacing: 0 !important;
   word-spacing: normal;
 }
+
+
+/* MARKET ANALYSIS — use the same cyan language as the CEX terminal. */
+.live-market{--ks-cyan:#00c7fe;--ks-cyan-bright:#72ddff;--ks-cyan-soft:rgba(0,199,254,.08);--ks-cyan-line:rgba(0,199,254,.22)}
+.live-market .live-tabs button.active,.live-market .live-tabs button:hover{color:var(--ks-cyan-bright)!important;border-color:var(--ks-cyan-line)!important;background:var(--ks-cyan-soft)!important}
+.live-market .live-analyze{background:var(--ks-cyan)!important;color:#031014!important;border-color:var(--ks-cyan)!important;box-shadow:0 10px 28px rgba(0,199,254,.12)!important}
+.live-market .live-analyze:hover{background:var(--ks-cyan-bright)!important;border-color:var(--ks-cyan-bright)!important}
+.live-market .live-empty svg,.live-market .live-loading .loading-orb,.live-market .setup-v2-bias,.live-market .setup-v2-confidence b,.live-market .setup-v2-footer b{color:var(--ks-cyan)!important}
+.live-market .instrument-trigger:focus,.live-market .instrument-trigger:hover,.live-market .instrument-results button:hover,.live-market .instrument-results button.selected{border-color:var(--ks-cyan-line)!important;color:var(--ks-cyan-bright)!important}
+.live-market .setup-v2-card .setup-v2-confidence,.live-market .setup-v2-confidence{border-color:var(--ks-cyan-line)!important;background:var(--ks-cyan-soft)!important}
+.live-market .mtf-structure-strip>div.active{border-color:var(--ks-cyan-line)!important;background:var(--ks-cyan-soft)!important;color:var(--ks-cyan-bright)!important}
+.live-market .execution-type-card.limit{border-color:var(--ks-cyan-line)!important;background:var(--ks-cyan-soft)!important}
+.live-market .execution-type-card.limit strong,.live-market .setup-v2-banner.ready{color:var(--ks-cyan-bright)!important}
+.live-market .v2-level.tp b{color:var(--ks-cyan)!important}
+.live-market .setup-why.open{border-color:var(--ks-cyan-line)!important;background:var(--ks-cyan-soft)!important}
+.live-market .setup-why-icon,.live-market .setup-why-summary>span,.live-market .setup-why-note svg{color:var(--ks-cyan)!important}
+.live-market .live-error button{border-color:var(--ks-cyan-line)!important;color:var(--ks-cyan-bright)!important}
