@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase.js';
 import { Bell, BellRing, CheckCircle2, Radio, X, Zap } from 'lucide-react';
 import { enableKitSetupsNotifications } from './notifications.js';
 import { getMarketAlertSnapshot, startMarketAlerts } from './marketAlerts.js';
@@ -12,8 +14,26 @@ const fmtPrice=(v)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(unde
 const fmtTime=(v)=>v?new Date(v).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—';
 
 export default function NotificationCenter({user,embedded=false}){
- const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[activity,setActivity]=useState(readActivity),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot());
+ const [open,setOpen]=useState(false),[alerts,setAlerts]=useState(read),[alertsHydrated,setAlertsHydrated]=useState(false),[activity,setActivity]=useState(readActivity),[symbol,setSymbol]=useState('BTCUSDT'),[direction,setDirection]=useState('above'),[target,setTarget]=useState(''),[permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'default'),[market,setMarket]=useState(()=>getMarketAlertSnapshot());
  useEffect(()=>localStorage.setItem(KEY,JSON.stringify(alerts)),[alerts]);
+ useEffect(()=>{
+   let dead=false;
+   (async()=>{
+     if(!user?.uid||!db){if(!dead)setAlertsHydrated(true);return;}
+     try{
+       const snap=await getDoc(doc(db,'users',user.uid));
+       const remote=snap.exists()?snap.data()?.priceAlerts:null;
+       if(!dead&&remote&&typeof remote==='object')setAlerts(Object.values(remote).filter(x=>x&&x.id).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0)));
+     }catch(error){console.warn('KitSetups price alerts could not be loaded:',error)}
+     if(!dead)setAlertsHydrated(true);
+   })();
+   return()=>{dead=true};
+ },[user?.uid]);
+ useEffect(()=>{
+   if(!alertsHydrated||!user?.uid||!db)return;
+   const priceAlerts=Object.fromEntries(alerts.map(x=>[x.id,x]));
+   setDoc(doc(db,'users',user.uid),{priceAlerts,notificationSettings:{enabled:permission==='granted',browser:true,updatedAt:serverTimestamp()}},{merge:true}).catch(error=>console.warn('KitSetups price alerts could not be saved:',error));
+ },[alerts,alertsHydrated,user?.uid,permission]);
  useEffect(()=>localStorage.setItem(ACTIVITY_KEY,JSON.stringify(activity.slice(0,12))),[activity]);
  useEffect(()=>{try{startMarketAlerts()}catch(error){console.warn('KitSetups live activity monitor could not start:',error)}},[]);
  useEffect(()=>{
