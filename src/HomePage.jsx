@@ -4,7 +4,7 @@ import {ArrowDownRight,ArrowUpRight,BarChart3,ChevronRight,Clock3,RefreshCw,Tren
 import {getDailyTekLesson} from './kitLessons.js';
 
 const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT'];
-const api=(op,p={})=>fetch(`/api/bybit?${new URLSearchParams({op,...p})}`,{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
+const api=()=>fetch('/api/market?action=header',{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
 const money=(v,d=2)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})}`:'—';
 const pct=v=>Number.isFinite(Number(v))?`${Number(v)>=0?'+':''}${Number(v).toFixed(2)}%`:'—';
 export default function HomePage({go,wallet,onLesson}){
@@ -12,7 +12,7 @@ export default function HomePage({go,wallet,onLesson}){
  const [openTrades,setOpenTrades]=useState([]);
  const loadOpenTrades=async()=>{try{let creds={};try{creds=JSON.parse(localStorage.getItem('kitsetups_mexc_credentials_v2')||'{}')}catch{}if(!creds.key||!creds.secret){setOpenTrades([]);return}const r=await fetch('/api/cex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'positions',key:creds.key,secret:creds.secret})});const j=await r.json();if(!r.ok||j?.error)throw Error(j?.error||'Unable to load positions');const rows=Array.isArray(j?.data)?j.data:Array.isArray(j?.data?.data)?j.data.data:Array.isArray(j?.result)?j.result:[];setOpenTrades(rows.filter(p=>Number(p.holdVol??p.vol??p.size??0)>0))}catch{setOpenTrades([])}};
  useEffect(()=>{loadOpenTrades();const t=setInterval(loadOpenTrades,5000);return()=>clearInterval(t)},[]);
- const refresh=async()=>{setBusy(true);try{const rows=await Promise.all(COINS.map(async symbol=>{const j=await api('ticker',{symbol});const x=j.list?.[0]||{};return {symbol,last:Number(x.lastPrice),change:Number(x.price24hPcnt)*100,turnover:Number(x.turnover24h)}}));setTickers(rows);setUpdated(Date.now())}finally{setBusy(false)}};
+ const refresh=async()=>{setBusy(true);try{const j=await api(),rows=(Array.isArray(j.result)?j.result:[]).filter(x=>COINS.includes(x.symbol)).map(x=>({symbol:x.symbol,last:Number(x.lastPrice),change:Number(x.price24hPcnt)*100,turnover:Number(x.turnover24h)}));setTickers(rows);setUpdated(Date.now())}finally{setBusy(false)}};
  useEffect(()=>{refresh();const t=setInterval(refresh,10000);return()=>clearInterval(t)},[]);
  const btc=useMemo(()=>tickers.find(x=>x.symbol==='BTCUSDT')||{},[tickers]);
  const rawDisplayName=auth?.currentUser?.displayName||auth?.currentUser?.email?.split('@')[0]||'Trader';
