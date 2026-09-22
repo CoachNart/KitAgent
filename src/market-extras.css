@@ -77,3 +77,18 @@
 .strategy-explanation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.strategy-explanation-grid>div{border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;background:rgba(255,255,255,.018)}.strategy-explanation-grid b{display:block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:rgba(232,239,248,.42);margin-bottom:7px}.strategy-explanation-grid span{display:block;font-size:11px;line-height:1.55;color:rgba(232,239,248,.72)}.strategy-explanation-grid em{display:block;font-style:normal;margin:0 0 5px}.strategy-explanation-grid em:last-child{margin-bottom:0}
 @media(max-width:800px){.strategy-explanation-grid{grid-template-columns:1fr}.strategy-selector-head,.strategy-explanation-head{flex-direction:column}.strategy-select-wrap{width:100%}}
 @media(max-width:480px){.strategy-selector{padding:13px}.strategy-explanation{padding:14px}}
+
+/* Strategy selector: compact control that belongs in the analysis toolbar. */
+.strategy-selector.live-field{display:grid;gap:5px;min-width:170px;position:relative;margin:0!important;padding:0!important;border:0!important;background:none!important;box-shadow:none!important}
+.strategy-selector.live-field>span{display:block;font-size:8px;letter-spacing:.12em;color:rgba(255,255,255,.42);font-weight:800}
+.strategy-selector.live-field small{font-size:8px;color:rgba(255,255,255,.36);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strategy-selector .strategy-select-wrap{min-width:0;width:100%}
+.strategy-selector .strategy-select-wrap select{height:40px;padding:0 34px 0 11px;border-radius:10px;background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.075);color:#eef7f7;font-size:11px;font-weight:750}
+.strategy-selector .strategy-select-wrap svg{right:10px;color:#79dff5}
+.strategy-explanation{margin:16px 0 0!important;padding:18px!important;border-radius:18px!important;border:1px solid rgba(255,255,255,.075)!important;background:linear-gradient(145deg,rgba(255,255,255,.032),rgba(255,255,255,.012))!important;box-shadow:0 18px 45px rgba(0,0,0,.16)!important}
+.strategy-explanation-head{padding-bottom:13px;border-bottom:1px solid rgba(255,255,255,.055)}
+.strategy-explanation-head h3{font-size:18px!important;letter-spacing:-.02em}
+.strategy-explanation-grid{margin-top:13px!important}
+.strategy-explanation-grid>div{background:rgba(255,255,255,.02)!important}
+@media(max-width:800px){.strategy-selector.live-field{min-width:145px}.strategy-selector.live-field small{display:none}}
+@media(max-width:620px){.strategy-selector.live-field{width:100%;min-width:0}.strategy-explanation{padding:14px!important}}
