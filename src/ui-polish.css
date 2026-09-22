@@ -307,3 +307,64 @@
 .notification-center .notification-enable,.notification-center .notification-enabled{min-height:34px!important;padding:7px 9px!important;font-size:9px!important}
 .notification-center .notification-footer{font-size:8px!important;margin-top:7px!important}
 @media(max-width:760px){.notification-center .notification-panel{top:60px!important;right:8px!important;width:min(332px,calc(100vw - 16px))!important;max-height:calc(100dvh - 70px)!important}.notification-center.embedded .notification-trigger{width:46px!important;height:31px!important}}
+
+
+/* HOME QUICK ACTIONS — compact rounded controls, not large rectangular cards. */
+.home-page .home-actions{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:8px!important;
+  margin:14px 0 22px!important;
+}
+.home-page .home-action-btn{
+  min-height:40px!important;
+  height:40px!important;
+  box-sizing:border-box!important;
+  padding:0 11px!important;
+  border-radius:999px!important;
+  border:1px solid rgba(255,255,255,.075)!important;
+  background:rgba(255,255,255,.025)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  overflow:hidden!important;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease,box-shadow .2s ease!important;
+}
+.home-page .home-action-btn b{
+  min-width:0!important;
+  flex:1 1 auto!important;
+  overflow:hidden!important;
+  white-space:nowrap!important;
+  text-overflow:ellipsis!important;
+  font-size:10px!important;
+  font-weight:700!important;
+  color:#d9e4e6!important;
+  text-align:left!important;
+}
+.home-page .home-action-btn>svg:last-child{flex:0 0 auto!important;width:13px!important;height:13px!important;color:#71858c!important}
+.home-page .home-action-btn .action-icon{
+  flex:0 0 25px!important;
+  width:25px!important;height:25px!important;
+  border-radius:50%!important;
+  display:grid!important;place-items:center!important;
+  background:rgba(255,255,255,.035)!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+}
+.home-page .home-action-btn:hover{
+  transform:translateY(-1px)!important;
+  background:rgba(0,199,254,.045)!important;
+  border-color:rgba(0,199,254,.18)!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.05)!important;
+}
+.home-page .home-action-btn:active{transform:translateY(0) scale(.985)!important}
+@media(max-width:760px){
+  .home-page .home-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;margin:12px 0 18px!important}
+  .home-page .home-action-btn{height:38px!important;min-height:38px!important;padding:0 9px!important;gap:7px!important}
+  .home-page .home-action-btn b{font-size:9px!important}
+}
+@media(max-width:390px){
+  .home-page .home-actions{gap:6px!important}
+  .home-page .home-action-btn{height:36px!important;min-height:36px!important;padding:0 8px!important}
+  .home-page .home-action-btn .action-icon{width:23px!important;height:23px!important;flex-basis:23px!important}
+}
