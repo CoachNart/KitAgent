@@ -2,16 +2,21 @@ import { authenticate, requireActiveAccess } from '../server/access.js';
 const FOREX_INSTRUMENTS=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJPY','CHFJPY','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','EURUSD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','GBPUSD','NZDCAD','NZDCHF','NZDJPY','NZDUSD','USDCAD','USDCHF','USDJPY','USDNOK','USDSEK','USDZAR','USDSGD','EURPLN','EURSEK','EURNOK','EURTRY','GBPPLN','GBPSEK','GBPNOK','NOKSEK','NZDSGD','SGDJPY','CHFSGD','CADSGD','AUDSGD','AUDNOK','AUDSEK','CADNOK','CADSEK','CHFPLN','CHFZAR','EURSGD','GBPZAR','NZDZAR','USDHKD','USDMXN','USDTRY','USDTHB','USDHUF','USDCNH'];
 const CRYPTO_INSTRUMENTS=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
 const TIMEFRAME_MAP={'1m':{forex:'5m',crypto:'1m',metals:'5m'},'5m':{forex:'5m',crypto:'5m',metals:'5m'},'15m':{forex:'15m',crypto:'15m',metals:'15m'},'30m':{forex:'30m',crypto:'30m',metals:'30m'},'1H':{forex:'1h',crypto:'1h',metals:'1h'},'4H':{forex:'4h',crypto:'4h',metals:'4h'},'1D':{forex:'1d',crypto:'1d',metals:'1d'},'1W':{forex:'1wk',crypto:'1w',metals:'1wk'}};
-const TIMEFRAME_LADDER={
-  '1W':{bias:'1W',structure:'1D',entry:'4H'},
-  '1D':{bias:'1D',structure:'4H',entry:'1H'},
-  '4H':{bias:'1D',structure:'4H',entry:'1H'},
-  '1H':{bias:'4H',structure:'1H',entry:'1H'},
-  '30m':{bias:'4H',structure:'1H',entry:'30m'},
-  '15m':{bias:'1H',structure:'15m',entry:'15m'},
-  '5m':{bias:'1H',structure:'15m',entry:'5m'},
-  '1m':{bias:'15m',structure:'5m',entry:'1m'}
-};
+const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
+function adjacentTimeframe(tf,steps=1){const i=Math.max(0,TIMEFRAME_ORDER.indexOf(tf));return TIMEFRAME_ORDER[Math.min(TIMEFRAME_ORDER.length-1,i+steps)]||'1H';}
+function strategyTimeframes(tf,strategy){
+  const higher=adjacentTimeframe(tf,1),higher2=adjacentTimeframe(tf,2);
+  switch(normalizeStrategy(strategy)){
+    case 'TOP_DOWN': return {entry:tf,structure:higher,bias:higher2};
+    case 'PULLBACK': return {entry:tf,structure:tf,bias:higher};
+    case 'BREAKOUT': return {entry:tf,structure:tf,bias:higher};
+    case 'SMC': return {entry:tf,structure:tf,bias:higher};
+    case 'MSNR': return {entry:tf,structure:higher,bias:higher2};
+    case 'PRICE_ACTION': return {entry:tf,structure:tf,bias:higher};
+    case 'LIQUIDITY_REVERSAL': return {entry:tf,structure:tf,bias:higher};
+    default: return {entry:tf,structure:tf,bias:higher};
+  }
+}
 const allowedIntervals=new Set(['1m','5m','15m','30m','4H','1H','1D','1W']);
 function json(res,status,payload){res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store, max-age=0');res.end(JSON.stringify(payload))}
 function sma(v,n){if(v.length<n)return null;return v.slice(-n).reduce((a,b)=>a+b,0)/n}
@@ -277,128 +282,54 @@ function msnrFormation(c,bias){
   const a=bias==='SHORT'&&x.close<x.open&&x.high>=Math.max(...c.slice(-6,-1).map(k=>k.high))&&x.close<x.high-range*.55;
   return v?'V FORMATION':a?'A FORMATION':null;
 }
-function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executionTimeframe){
-  const key=normalizeStrategy(strategy),info=STRATEGIES[key],htf=candlesByTf[ladder.bias],mtf=candlesByTf[ladder.structure],ltf=candlesByTf[ladder.entry],current=candlesByTf[executionTimeframe];
-  const base=analyzeCandles(current,bias,instrumentSymbol,executionTimeframe),a=atr(current),last=current.at(-1);
-  const htfBias=structureBias(marketStructure(htf)),evidence=[],failures=[];
-  let valid=false,planEntry=base.entry,planOrder=base.orderType,planReason='',strategyTrade=null;
-  const baseReady=Boolean(base.tradeReady&&base.entry!=null&&base.stopLoss!=null&&base.takeProfit1!=null);
+function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe){
+  const key=normalizeStrategy(strategy),info=STRATEGIES[key],tf=strategyTimeframes(executionTimeframe,key);
+  const current=candlesByTf[tf.entry],structure=candlesByTf[tf.structure]||current,biasCandles=candlesByTf[tf.bias]||structure;
+  if(!current?.length)throw new Error('Selected timeframe market data is unavailable');
+  const last=current.at(-1),closes=current.map(x=>x.close),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(current);
+  if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
+  const higherStructure=marketStructure(biasCandles),selectedStructure=marketStructure(structure),entryStructure=marketStructure(current);
+  const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure),bias=higherBias!=='WAIT'?higherBias:selectedBias;
+  const evidence=[],failures=[]; let trade=null,orderType='NO_SETUP',entry=null,reason='';
   const validTrade=t=>Boolean(t&&t.rr>=2.25&&Number.isFinite(t.stop)&&Number.isFinite(t.target));
-  if(key==='TOP_DOWN'){
-    valid=baseReady;
-    planReason=valid?'Higher-timeframe structure is confirmed and the base execution engine has a valid trade plan.':'Directional context exists, but no fully validated execution plan is present.';
-    evidence.push('Higher timeframe establishes direction.','Middle timeframe is checked for conflict.','Execution timeframe supplies the final trade condition.');
+  const chooseLimit=items=>{for(const x of items||[]){const t=evaluateTrade(current,bias,x.entry,a,2.25);if(validTrade(t))return {trade:t,entry:x.entry};}return null;};
+  if(bias==='WAIT'){reason='No decisive directional structure is present for the selected strategy and timeframe.';evidence.push('No clear directional structure.');}
+  else if(key==='TOP_DOWN'){
+    const middleBias=structureBias(selectedStructure),entryBias=structureBias(entryStructure),conflict=middleBias!=='WAIT'&&opposite(bias,middleBias),confirmed=entryBias===bias||entryBias==='WAIT';
+    const marketTrade=evaluateTrade(current,bias,last.close,a,2.25);
+    if(!conflict&&confirmed){if(marketTrade&&displacement(current,bias)){trade=marketTrade;entry=last.close;orderType='MARKET';}else{const z=chooseLimit(entryZones(current,bias,last.close,a,36).map(x=>({entry:x.mid,zone:x})));if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}}
+    reason=trade?'Top-Down context agrees with the selected timeframe and a valid execution plan is available.':'Waiting for higher-timeframe direction, aligned structure and a real execution level.';
+    evidence.push('Bias timeframe '+tf.bias+': '+higherBias+'.','Structure timeframe '+tf.structure+': '+middleBias+'.','Selected '+executionTimeframe+' execution: '+entryBias+'.',conflict?'Structure conflicts with higher-timeframe direction.':'Structure does not conflict.');
   } else if(key==='PULLBACK'){
-    const impulse=structureBreak(current,bias,48),zones=entryZones(current,bias,last.close,a,24),zone=zones[0],distance=zone?Math.abs(last.close-zone.mid):Infinity;
-    strategyTrade=zone?evaluateTrade(current,bias,zone.mid,a,2.25):null;
-    valid=Boolean(validTrade(strategyTrade)&&impulse&&zone&&distance>Math.max(a*.12,last.close*.0004));
-    if(valid){planEntry=zone.mid;planOrder='LIMIT';planReason='A recent directional impulse is retracing into a fresh FVG/order-block zone.'}
-    else planReason='Waiting for a fresh pullback into a qualified, executable FVG/order-block zone after a real impulse.';
-    evidence.push(impulse?'Recent directional impulse confirmed.':'No recent directional impulse.',zone?zone.type+' remains available.':'No fresh pullback zone is available.');
+    const impulse=structureBreak(structure,bias,48),zones=entryZones(current,bias,last.close,a,40),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,last.close,a,2.25);
+    if(impulse&&z){trade=z.trade;entry=z.entry;orderType='LIMIT';}else if(impulse&&marketTrade&&displacement(current,bias)){trade=marketTrade;entry=last.close;orderType='MARKET';}
+    reason=trade?'A directional impulse and executable retracement are present on the selected timeframe.':'Waiting for a real impulse followed by a fresh executable pullback.';evidence.push(impulse?'Directional impulse confirmed.':'No qualifying impulse.',zones[0]?.type||'No fresh FVG/order block.');
   } else if(key==='BREAKOUT'){
-    const bos=structureBreak(current,bias,36),fresh=bos&&bos.breakIndex>=current.length-12,disp=displacement(current,bias);
-    strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
-    valid=Boolean(validTrade(strategyTrade)&&bos&&fresh&&disp);
-    if(valid){planEntry=last.close;planOrder='MARKET';}
-    planReason=valid?'A structure level closed through with current displacement; the breakout is still actionable.':'Waiting for a decisive close through structure with displacement. Wick-only breaks are rejected.';
-    evidence.push(bos?'Recent BOS detected.':'No recent BOS.',disp?'Displacement confirmed.':'No displacement confirmation.',fresh?'Break is recent.':'Break is stale.');
+    const bos=structureBreak(current,bias,48),disp=displacement(current,bias),fresh=Boolean(bos&&bos.breakIndex>=current.length-12),marketTrade=evaluateTrade(current,bias,last.close,a,2.25);
+    if(bos&&fresh&&disp&&marketTrade){trade=marketTrade;entry=last.close;orderType='MARKET';}else if(bos&&fresh){const t=evaluateTrade(current,bias,bos.level,a,2.25);if(validTrade(t)){trade=t;entry=bos.level;orderType='LIMIT';}}
+    reason=trade?'The selected timeframe has a confirmed structural breakout with displacement and a valid risk model.':'Waiting for a decisive close through structure with displacement; wick-only breaks are rejected.';evidence.push(bos?'BOS detected.':'No recent BOS.',disp?'Displacement confirmed.':'No displacement.',fresh?'Break is fresh.':'Break is stale.');
   } else if(key==='SMC'){
-    const sweep=liquiditySweep(current,bias),bos=structureBreak(current,bias,48),disp=displacement(current,bias),zones=[...fairValueGaps(current,bias),...orderBlockCandidates(current,bias)].filter(z=>z.index>=current.length-25);
-    const smcZone=zones[0],smcEntry=smcZone?.mid??last.close;
-    strategyTrade=evaluateTrade(current,bias,smcEntry,a,2.25);
-    valid=Boolean(validTrade(strategyTrade)&&sweep&&bos&&disp&&(zones.length||base.orderType==='MARKET'));
-    if(valid){planEntry=smcEntry;planOrder=smcZone?'LIMIT':'MARKET';}
-    planReason=valid?'Liquidity was swept, displacement followed and structure confirmed; the entry is tied to a fresh SMC point of interest.':'Waiting for the full SMC sequence: liquidity sweep, displacement, BOS and a fresh POI.';
-    evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',disp?'Displacement confirmed.':'No displacement.',bos?'BOS confirmed.':'No BOS.',zones[0]?.type||'No fresh FVG/order block.');
+    const sweep=liquiditySweep(current,bias),disp=displacement(current,bias),bos=structureBreak(current,bias,60),zones=[...fairValueGaps(current,bias),...orderBlockCandidates(current,bias)].filter(z=>z.index>=current.length-60),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,last.close,a,2.25),reclaim=Boolean(sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level)));
+    if(sweep&&disp&&bos&&z){trade=z.trade;entry=z.entry;orderType='LIMIT';}else if(sweep&&disp&&bos&&reclaim&&marketTrade){trade=marketTrade;entry=last.close;orderType='MARKET';}
+    reason=trade?'The selected timeframe completed the SMC sequence and has a valid point of interest.':'Waiting for liquidity sweep → displacement → BOS → fresh POI.';evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',disp?'Displacement confirmed.':'No displacement.',bos?'BOS confirmed.':'No BOS.',zones[0]?.type||'No fresh POI.');
   } else if(key==='MSNR'){
-    const levels=msnrLevels(htf,bias),level=levels.find(z=>Math.abs(last.close-z.level)<=Math.max(a*1.5,last.close*.0025)),formation=msnrFormation(ltf,bias),bos=structureBreak(ltf,bias,24),engulf=candleEngulfing(ltf,bias),confirm=Boolean(bos||engulf);
-    const msnrEntry=level?.level??last.close;
-    strategyTrade=evaluateTrade(current,bias,msnrEntry,a,2.25);
-    valid=Boolean(validTrade(strategyTrade)&&htfBias===bias&&level&&confirm);
-    if(valid){planEntry=msnrEntry;planOrder=msnrEntry!==last.close?'LIMIT':'MARKET';}
-    planReason=valid?'Price tapped a fresh MSNR level and lower-timeframe confirmation is present.':'Waiting for a fresh MSNR support/resistance level to be tapped and confirmed on the lower timeframe.';
-    evidence.push(htfBias===bias?'HTF storyline agrees with direction.':'HTF storyline does not support this direction.',level?level.type+' level at '+roundPrice(level.level):'No fresh MSNR level in range.',formation||'No V/A formation detected.',confirm?'Lower-timeframe confirmation present.':'No BOS, engulfing or rejection confirmation.');
+    const levels=msnrLevels(biasCandles,bias),level=levels.find(x=>Math.abs(last.close-x.level)<=Math.max(a*2,last.close*.0025)),formation=msnrFormation(current,bias),bos=structureBreak(current,bias,30),engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias),confirm=Boolean(bos||engulf||reject);
+    if(level&&confirm){const t=evaluateTrade(current,bias,level.level,a,2.25);if(validTrade(t)){trade=t;entry=level.level;orderType=Math.abs(level.level-last.close)<=a*.08?'MARKET':'LIMIT';}}
+    reason=trade?'A strategy-valid MSNR level has been confirmed on the selected timeframe.':'Waiting for a fresh MSNR level and lower-timeframe confirmation.';evidence.push(level?level.type+' identified.':'No nearby qualified MSNR level.',formation||'No V/A formation.',confirm?'Confirmation present.':'No BOS, engulfing or rejection confirmation.');
   } else if(key==='PRICE_ACTION'){
     const level=msnrLevels(current,bias)[0],engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
-    strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
-    valid=Boolean(validTrade(strategyTrade)&&level&&(engulf||reject));
-    if(valid){planEntry=last.close;planOrder='MARKET';}
-    planReason=valid?'Price interacted with a recent structural level and printed a confirming candle.':'Waiting for price to reach a meaningful structure level and print rejection or engulfing confirmation.';
-    evidence.push(level?'Recent structural level is nearby.':'No nearby structural level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
+    if(level&&(engulf||reject)){const t=evaluateTrade(current,bias,last.close,a,2.25);if(validTrade(t)){trade=t;entry=last.close;orderType='MARKET';}else{const z=chooseLimit([{entry:level.level,zone:level}]);if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}}
+    reason=trade?'A structural level and price-action confirmation are present on the selected timeframe.':'Waiting for meaningful structure plus rejection or engulfing confirmation.';evidence.push(level?'Structural level identified.':'No meaningful structural level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
   } else if(key==='LIQUIDITY_REVERSAL'){
-    const sweep=liquiditySweep(current,bias),disp=displacement(current,bias),reclaim=sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level));
-    strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
-    valid=Boolean(validTrade(strategyTrade)&&sweep&&disp&&reclaim);
-    if(valid){planEntry=last.close;planOrder='MARKET';}
-    planReason=valid?'A recent liquidity sweep was reclaimed with displacement; reversal execution is confirmed.':'Waiting for a genuine liquidity sweep, reclaim and displacement before considering a reversal.';
-    evidence.push(sweep?sweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim yet.',disp?'Displacement confirms reversal.':'No displacement.');
+    const sweep=liquiditySweep(current,bias),reclaim=Boolean(sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level))),disp=displacement(current,bias),marketTrade=evaluateTrade(current,bias,last.close,a,2.25);
+    if(sweep&&reclaim&&disp&&marketTrade){trade=marketTrade;entry=last.close;orderType='MARKET';}
+    reason=trade?'Liquidity was swept and reclaimed with displacement on the selected timeframe.':'Waiting for a genuine liquidity sweep, reclaim and displacement.';evidence.push(sweep?sweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim.',disp?'Displacement confirmed.':'No displacement.');
   }
-  // A strategy may be valid for a pending LIMIT even when the current candle is not a MARKET trigger.
-  // Only use real structural levels/POIs with a complete stop/target calculation; never invent an entry.
-  // The important distinction is that a strategy should be allowed to surface a *pending*
-  // opportunity when the market has already formed the structure but has not yet reached
-  // the execution level. The old engine only did this for a subset of strategies, which
-  // made valid Top-Down and Price Action opportunities disappear entirely.
-  if(!valid && bias!=='WAIT' && htfBias===bias){
-    const currentPrice=last.close;
-    const maxZoneDistance=Math.max(a*3.5,currentPrice*.03);
-    let candidate=null,candidateTrade=null,candidateReason='';
-    if(key==='TOP_DOWN'){
-      const zones=entryZones(current,bias,currentPrice,a,60).filter(z=>Math.abs(currentPrice-z.mid)<=maxZoneDistance);
-      for(const z of zones){
-        const t=evaluateTrade(current,bias,z.mid,a,2.25);
-        if(validTrade(t)){candidate={...z,entry:z.mid};candidateTrade=t;break;}
-      }
-      if(!candidate){
-        const bos=structureBreak(current,bias,60);
-        if(bos&&Math.abs(currentPrice-bos.level)<=maxZoneDistance){
-          const t=evaluateTrade(current,bias,bos.level,a,2.25);
-          if(validTrade(t)){candidate={entry:bos.level,type:'STRUCTURE RETEST',index:bos.breakIndex};candidateTrade=t;}
-        }
-      }
-      if(candidate){
-        candidateReason='Higher-timeframe direction is intact and a real structural execution level is available. The limit is staged at that level rather than waiting for the exact trigger candle.';
-        evidence.push(candidate.type+' is a live Top-Down execution opportunity.');
-      }
-    } else if(key==='PULLBACK'){
-      const zones=entryZones(current,bias,currentPrice,a,60).filter(z=>Math.abs(currentPrice-z.mid)<=maxZoneDistance);
-      for(const z of zones){const t=evaluateTrade(current,bias,z.mid,a,2.25);if(validTrade(t)){candidate={...z,entry:z.mid};candidateTrade=t;break;}}
-      if(candidate){candidateReason='A live directional pullback zone is available. The limit order is anchored to the real FVG/order block and invalidated beyond structure.';evidence.push(candidate.type+' is a live executable pullback zone.');}
-    } else if(key==='BREAKOUT'){
-      const bos=structureBreak(current,bias,60);
-      if(bos&&bos.breakIndex>=Math.max(0,current.length-36)){const t=evaluateTrade(current,bias,bos.level,a,2.25);if(validTrade(t)){candidate={entry:bos.level,type:'BREAKOUT RETEST',index:bos.breakIndex};candidateTrade=t;candidateReason='The structure break is confirmed; the order is staged at the broken level for a retest instead of chasing the current price.';evidence.push('Confirmed BOS is available for a retest LIMIT.');}}
-    } else if(key==='SMC'){
-      const zones=[...fairValueGaps(current,bias),...orderBlockCandidates(current,bias)].filter(z=>z.index>=current.length-60).filter(z=>Math.abs(currentPrice-z.mid)<=maxZoneDistance);
-      const zone=zones[0];
-      if(zone){const t=evaluateTrade(current,bias,zone.mid,a,2.25);if(validTrade(t)){candidate={...zone,entry:zone.mid};candidateTrade=t;candidateReason='A fresh SMC point of interest is available below/above current price; the limit is anchored to that real FVG/order block while price is away from execution.';evidence.push(zone.type+' is a live SMC point of interest.');}}
-    } else if(key==='MSNR'){
-      const levels=msnrLevels(htf,bias).filter(z=>Math.abs(currentPrice-z.level)<=maxZoneDistance);
-      const level=levels[0];
-      if(level&&Math.abs(currentPrice-level.level)<=Math.max(a*.75,currentPrice*.0015)){const t=evaluateTrade(current,bias,level.level,a,2.25);if(validTrade(t)){candidate={entry:level.level,type:level.type,index:level.index};candidateTrade=t;candidateReason='Price is at a qualified MSNR level. The limit is anchored to the real level and invalidated beyond structure.';evidence.push(level.type+' is a live MSNR execution level.');}}
-    } else if(key==='PRICE_ACTION'){
-      const level=msnrLevels(current,bias).find(z=>Math.abs(currentPrice-z.level)<=maxZoneDistance);
-      if(level){
-        const t=evaluateTrade(current,bias,level.level,a,2.25);
-        if(validTrade(t)){
-          candidate={entry:level.level,type:level.type,index:level.index};
-          candidateTrade=t;
-          candidateReason='A real structural level is available with a complete risk/target model. The limit waits for price to return to the level, while candle confirmation remains the trigger.';
-          evidence.push(level.type+' is a live Price Action level.');
-        }
-      }
-    }
-    if(candidate&&candidateTrade){
-      valid=true;strategyTrade=candidateTrade;planEntry=candidate.entry;planOrder='LIMIT';planReason=candidateReason;
-    }
-  }
-  if(!valid){
-    for(const x of evidence)if(/No |Waiting|not support|stale/i.test(x))failures.push(x);
-    return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:planReason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:planReason||'No strategy-valid setup is present.'};
-  }
-  const finalTrade=strategyTrade||base;
-  return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:planReason,entry:planEntry??finalTrade.entry,limitEntry:planOrder==='LIMIT'?(planEntry??finalTrade.entry):null,stopLoss:roundPrice(finalTrade.stop??base.stopLoss),takeProfit1:roundPrice(finalTrade.target??base.takeProfit1),takeProfit2:roundPrice(finalTrade.target2??base.takeProfit2),riskReward:finalTrade.rr!=null?'1:'+Number(finalTrade.rr).toFixed(2):base.riskReward,riskRewardValue:finalTrade.rr??base.riskRewardValue,orderType:planOrder,tradeReady:true,setupStatus:'TRADE READY',setupReason:planReason};
+  const confidence=Math.min(95,Math.max(38,Math.round(48+(higherBias===bias?12:0)+(selectedBias===bias?8:0)+(displacement(current,bias)?8:0)+(trade?.rr>=3?8:0))));
+  if(!trade||!validTrade(trade)){for(const x of evidence)if(/No |Waiting|conflict|stale/i.test(x))failures.push(x);return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:reason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:reason||'No strategy-valid setup is present.',bias,directionBias:bias,confidence,higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry};}
+  const riskPct=entry>0?(trade.risk/entry)*100:null,stopDistance=Math.abs(entry-trade.stop),instrumentKey=String(instrumentSymbol||''),priceUnitLabel=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?'pips':'price units',pipMultiplier=(instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))?(instrumentKey.includes('JPY')?100:10000):1;
+  return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:reason,entry:roundPrice(entry),limitEntry:orderType==='LIMIT'?roundPrice(entry):null,stopLoss:roundPrice(trade.stop),takeProfit1:roundPrice(trade.target),takeProfit2:roundPrice(trade.target2),riskReward:'1:'+Number(trade.rr).toFixed(2),riskRewardValue:Number(trade.rr.toFixed(2)),orderType,tradeReady:true,setupStatus:'TRADE READY',setupReason:reason,bias,directionBias:bias,confidence,riskPercent:riskPct!=null?Number(riskPct.toFixed(2)):null,stopDistance:roundPrice(stopDistance),stopDistancePct:entry?Number((stopDistance/entry*100).toFixed(3)):null,stopDistanceUnits:Number((stopDistance*pipMultiplier).toFixed(2)),priceUnitLabel,structuralInvalidation:roundPrice(trade.stop),marketEntry:roundPrice(last.close),price:roundPrice(last.close),liquidityTarget:roundPrice(trade.targetLiquidity),liquidityType:'STRUCTURAL LIQUIDITY',liquidityTouches:0,liquidityDistancePct:Number((Math.abs((trade.targetLiquidity??trade.target)-entry)*100/entry).toFixed(2)),liquidityReason:'Target is derived from a qualified structural/liquidity level.',confirmation:{bos:Boolean(structureBreak(current,bias,48)),sweep:Boolean(liquiditySweep(current,bias)),displacement:Boolean(displacement(current,bias))},higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry,timestamp:last.time};
 }
-
 function analyzeCandles(c,forcedBias=null,instrumentSymbol='',executionTimeframe='1H'){
   if(c.length<60)throw new Error('Not enough candles for a reliable setup ('+c.length+' received)');
   const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
@@ -478,48 +409,18 @@ export default async function handler(req,res){if(req.method!=='GET')return json
       }
       return json(res,400,{error:'Instrument discovery is only available for Forex, Crypto, or Metal / CFD'});
     }if(!['forex','crypto','perpetual','metals'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});
-  const ladder=TIMEFRAME_LADDER[timeframe]||TIMEFRAME_LADDER['1H'];
-  const needed=[...new Set([timeframe,ladder.bias,ladder.structure,ladder.entry])];
+  const strategy=normalizeStrategy(req.query?.strategy);
+  const context=strategyTimeframes(timeframe,strategy);
+  const needed=[...new Set([context.entry,context.structure,context.bias])];
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
-  const current=candlesByTf[timeframe],topDown=buildTopDown(candlesByTf,ladder);
-  const strategy=normalizeStrategy(req.query?.strategy);
-  let setup=strategyPlan(candlesByTf,ladder,strategy,topDown.bias,symbol,timeframe);
-  const entryStructure=topDown.entryBias, middleStructure=topDown.middleBias;
-  const structureConflict=topDown.conflict;
-  // A countertrend entry-timeframe structure can be the pullback that creates a valid LIMIT.
-  const entryAligned=topDown.bias!=='WAIT'&&!structureConflict;
-  const isLimitSetup=setup.orderType==='LIMIT'&&setup.limitEntry!=null&&setup.takeProfit1!=null;
-  const marketReady=setup.orderType==='MARKET'&&entryAligned;
-  const limitReady=isLimitSetup&&entryAligned;
-  const canTrade=marketReady||limitReady;
-  if(!canTrade){
-    const directionBias=topDown.bias;
-    const reason=directionBias==='WAIT'
-      ? 'No confirmed higher-timeframe market structure is present. There is no setup to trade.'
-      : structureConflict
-        ? 'Higher-timeframe direction is established, but the lower-timeframe structure conflicts with it. No setup is available until structure realigns.'
-        : 'Directional bias is established, but the selected execution timeframe has no quality market or limit entry with a legitimate structural target.';
-    setup={
-      ...setup,
-      bias:directionBias,
-      directionBias,
-      tradeReady:false,
-      orderType:'NO_SETUP',
-      entry:null,
-      limitEntry:null,
-      stopLoss:null,
-      takeProfit1:null,
-      takeProfit2:null,
-      riskReward:'—',
-      riskRewardValue:null,
-      quality:'NO SETUP',
-      setupStatus:'NO SETUP',
-      setupReason:reason
-    };
-  } else {
-    setup={...setup,directionBias:topDown.bias};
-  }
+  const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe);
+  const confidenceBase=setup.confidence||50,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase)));
+  return json(res,200,{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:{...setup,confidence:finalConfidence},confluence:[
+    {timeframe:context.bias,bias:structureBias(marketStructure(candlesByTf[context.bias]||candlesByTf[context.entry])),role:'CONTEXT',confidence:finalConfidence},
+    {timeframe:context.structure,bias:structureBias(marketStructure(candlesByTf[context.structure]||candlesByTf[context.entry])),role:'STRUCTURE',confidence:finalConfidence},
+    {timeframe:context.entry,bias:structureBias(marketStructure(candlesByTf[context.entry])),role:'OPPORTUNITY',confidence:finalConfidence}
+  ],aligned:setup.tradeReady?3:0,totalTimeframes:3,source:market==='forex'||market==='metals'?'Yahoo Finance chart data':'Bybit linear perpetuals',generatedAt:new Date().toISOString()})
   const confidenceBase=setup.confidence,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase+(topDown.structureAligned?8:0)-(structureConflict?8:0))));
   return json(res,200,{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'||market==='metals'?'Yahoo Finance chart data':'Bybit linear perpetuals',generatedAt:new Date().toISOString()})
 }catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
