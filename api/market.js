@@ -281,41 +281,50 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
   const key=normalizeStrategy(strategy),info=STRATEGIES[key],htf=candlesByTf[ladder.bias],mtf=candlesByTf[ladder.structure],ltf=candlesByTf[ladder.entry],current=candlesByTf[executionTimeframe];
   const base=analyzeCandles(current,bias,instrumentSymbol,executionTimeframe),a=atr(current),last=current.at(-1);
   const htfBias=structureBias(marketStructure(htf)),evidence=[],failures=[];
-  let valid=false,planEntry=base.entry,planOrder=base.orderType,planReason='';
+  let valid=false,planEntry=base.entry,planOrder=base.orderType,planReason='',strategyTrade=null;
   const baseReady=Boolean(base.tradeReady&&base.entry!=null&&base.stopLoss!=null&&base.takeProfit1!=null);
+  const validTrade=t=>Boolean(t&&t.rr>=2.25&&Number.isFinite(t.stop)&&Number.isFinite(t.target));
   if(key==='TOP_DOWN'){
     valid=baseReady;
     planReason=valid?'Higher-timeframe structure is confirmed and the base execution engine has a valid trade plan.':'Directional context exists, but no fully validated execution plan is present.';
     evidence.push('Higher timeframe establishes direction.','Middle timeframe is checked for conflict.','Execution timeframe supplies the final trade condition.');
   } else if(key==='PULLBACK'){
     const impulse=structureBreak(current,bias,48),zones=entryZones(current,bias,last.close,a,24),zone=zones[0],distance=zone?Math.abs(last.close-zone.mid):Infinity;
-    valid=Boolean(baseReady&&impulse&&zone&&distance>Math.max(a*.12,last.close*.0004));
+    strategyTrade=zone?evaluateTrade(current,bias,zone.mid,a,2.25):null;
+    valid=Boolean(validTrade(strategyTrade)&&impulse&&zone&&distance>Math.max(a*.12,last.close*.0004));
     if(valid){planEntry=zone.mid;planOrder='LIMIT';planReason='A recent directional impulse is retracing into a fresh FVG/order-block zone.'}
     else planReason='Waiting for a fresh pullback into a qualified, executable FVG/order-block zone after a real impulse.';
     evidence.push(impulse?'Recent directional impulse confirmed.':'No recent directional impulse.',zone?zone.type+' remains available.':'No fresh pullback zone is available.');
   } else if(key==='BREAKOUT'){
     const bos=structureBreak(current,bias,36),fresh=bos&&bos.breakIndex>=current.length-12,disp=displacement(current,bias);
-    valid=Boolean(baseReady&&bos&&fresh&&disp);
+    strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
+    valid=Boolean(validTrade(strategyTrade)&&bos&&fresh&&disp);
     planReason=valid?'A structure level closed through with current displacement; the breakout is still actionable.':'Waiting for a decisive close through structure with displacement. Wick-only breaks are rejected.';
     evidence.push(bos?'Recent BOS detected.':'No recent BOS.',disp?'Displacement confirmed.':'No displacement confirmation.',fresh?'Break is recent.':'Break is stale.');
   } else if(key==='SMC'){
     const sweep=liquiditySweep(current,bias),bos=structureBreak(current,bias,48),disp=displacement(current,bias),zones=[...fairValueGaps(current,bias),...orderBlockCandidates(current,bias)].filter(z=>z.index>=current.length-25);
-    valid=Boolean(baseReady&&sweep&&bos&&disp&&(zones.length||base.orderType==='MARKET'));
+    const smcZone=zones[0],smcEntry=smcZone?.mid??last.close;
+    strategyTrade=evaluateTrade(current,bias,smcEntry,a,2.25);
+    valid=Boolean(validTrade(strategyTrade)&&sweep&&bos&&disp&&(zones.length||base.orderType==='MARKET'));
     planReason=valid?'Liquidity was swept, displacement followed and structure confirmed; the entry is tied to a fresh SMC point of interest.':'Waiting for the full SMC sequence: liquidity sweep, displacement, BOS and a fresh POI.';
     evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',disp?'Displacement confirmed.':'No displacement.',bos?'BOS confirmed.':'No BOS.',zones[0]?.type||'No fresh FVG/order block.');
   } else if(key==='MSNR'){
-    const levels=msnrLevels(htf,bias),level=levels.find(z=>Math.abs(last.close-z.level)<=Math.max(a*1.5,last.close*.01)),formation=msnrFormation(ltf,bias),bos=structureBreak(ltf,bias,24),engulf=candleEngulfing(ltf,bias),confirm=Boolean(bos||engulf||rejectionCandle(ltf,bias));
-    valid=Boolean(baseReady&&htfBias===bias&&level&&confirm);
+    const levels=msnrLevels(htf,bias),level=levels.find(z=>Math.abs(last.close-z.level)<=Math.max(a*1.5,last.close*.0025)),formation=msnrFormation(ltf,bias),bos=structureBreak(ltf,bias,24),engulf=candleEngulfing(ltf,bias),confirm=Boolean(bos||engulf);
+    const msnrEntry=level?.level??last.close;
+    strategyTrade=evaluateTrade(current,bias,msnrEntry,a,2.25);
+    valid=Boolean(validTrade(strategyTrade)&&htfBias===bias&&level&&confirm);
     planReason=valid?'Price tapped a fresh MSNR level and lower-timeframe confirmation is present.':'Waiting for a fresh MSNR support/resistance level to be tapped and confirmed on the lower timeframe.';
     evidence.push(htfBias===bias?'HTF storyline agrees with direction.':'HTF storyline does not support this direction.',level?level.type+' level at '+roundPrice(level.level):'No fresh MSNR level in range.',formation||'No V/A formation detected.',confirm?'Lower-timeframe confirmation present.':'No BOS, engulfing or rejection confirmation.');
   } else if(key==='PRICE_ACTION'){
     const level=msnrLevels(current,bias)[0],engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
-    valid=Boolean(baseReady&&level&&(engulf||reject));
+    strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
+    valid=Boolean(validTrade(strategyTrade)&&level&&(engulf||reject));
     planReason=valid?'Price interacted with a recent structural level and printed a confirming candle.':'Waiting for price to reach a meaningful structure level and print rejection or engulfing confirmation.';
     evidence.push(level?'Recent structural level is nearby.':'No nearby structural level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
   } else if(key==='LIQUIDITY_REVERSAL'){
     const sweep=liquiditySweep(current,bias),disp=displacement(current,bias),reclaim=sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level));
-    valid=Boolean(baseReady&&sweep&&disp&&reclaim);
+    strategyTrade=evaluateTrade(current,bias,last.close,a,2.25);
+    valid=Boolean(validTrade(strategyTrade)&&sweep&&disp&&reclaim);
     planReason=valid?'A recent liquidity sweep was reclaimed with displacement; reversal execution is confirmed.':'Waiting for a genuine liquidity sweep, reclaim and displacement before considering a reversal.';
     evidence.push(sweep?sweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim yet.',disp?'Displacement confirms reversal.':'No displacement.');
   }
@@ -323,7 +332,8 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
     for(const x of evidence)if(/No |Waiting|not support|stale/i.test(x))failures.push(x);
     return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:planReason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:planReason||'No strategy-valid setup is present.'};
   }
-  return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:planReason,entry:planEntry,limitEntry:planOrder==='LIMIT'?planEntry:null,orderType:planOrder,setupReason:planReason};
+  const finalTrade=strategyTrade||base;
+  return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:planReason,entry:planEntry??finalTrade.entry,limitEntry:planOrder==='LIMIT'?(planEntry??finalTrade.entry):null,stopLoss:roundPrice(finalTrade.stop??base.stopLoss),takeProfit1:roundPrice(finalTrade.target??base.takeProfit1),takeProfit2:roundPrice(finalTrade.target2??base.takeProfit2),riskReward:finalTrade.rr!=null?'1:'+Number(finalTrade.rr).toFixed(2):base.riskReward,riskRewardValue:finalTrade.rr??base.riskRewardValue,orderType:planOrder,tradeReady:true,setupStatus:'TRADE READY',setupReason:planReason};
 }
 
 function analyzeCandles(c,forcedBias=null,instrumentSymbol='',executionTimeframe='1H'){
