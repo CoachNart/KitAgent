@@ -188,7 +188,7 @@
   border:0!important;
   overflow:hidden!important;
   background:#0b1119!important;
-  z-index:0!important;
+  z-index:3!important;
 }
 
 @media(max-width:760px){
