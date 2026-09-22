@@ -61,7 +61,7 @@ function AnalysisResult({result,savedSignal}){
         <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>
       </div>}
       <div className="setup-v2-meta">{!wait&&<div><span>RR</span><b>{s.riskReward}</b></div>}<div><span>PRICE</span><b>{price(s.marketEntry)}</b></div><div><span>STRUCTURE</span><b>{s.marketStructure}</b></div><div><span>TARGET</span><b>{s.liquidityType||'—'}</b></div></div>
-      <SetupWhy setup={s} market={result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'METALS / CFD'} symbol={result.symbol}/><div className="setup-v2-footer"><span>{wait?(s.strategyReason||s.setupReason):((s.strategyName||'Strategy')+' setup · '+(s.setupReason||'Target is based on the available market structure/liquidity; no synthetic TP is used.'))}</span>{wait&&s.limitEntry&&<b>LIMIT WATCH · {price(s.limitEntry)}</b>}</div>
+      <div className="setup-v2-footer"><span>{wait?(s.strategyReason||s.setupReason):((s.strategyName||'Strategy')+' setup · '+(s.setupReason||'Target is based on the available market structure/liquidity; no synthetic TP is used.'))}</span>{wait&&s.limitEntry&&<b>LIMIT WATCH · {price(s.limitEntry)}</b>}</div>
     </div>
   </div>
 }
