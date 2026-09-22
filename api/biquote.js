@@ -16,7 +16,7 @@ function normalizeRows(bars){
 function aggregateWeekly(rows){
   const groups=new Map();
   const weekMs=7*86400000;
-  for(const r of rows){const d=new Date(r[0]);const day=(d.getUTCDay()+6)%7;const start=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-day*86400000;const key=Math.floor(start/weekMs)*weekMs;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r)}
+  for(const r of rows){const d=new Date(r[0]);const day=(d.getUTCDay()+6)%7;const start=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-day*86400000;const key=start;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r)}
   return [...groups.entries()].sort((a,b)=>a[0]-b[0]).map(([t,a])=>[t,a[0][1],Math.max(...a.map(x=>x[2])),Math.min(...a.map(x=>x[3])),a.at(-1)[4],a.reduce((n,x)=>n+x[5],0)]);
 }
 const CFD_ALIASES={
