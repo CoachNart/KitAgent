@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {BarChart3,ChevronDown,RefreshCw,ScanSearch,TrendingDown,TrendingUp,Clock} from 'lucide-react';
 import {auth} from './firebase.js';
-import {MarketWatchlist, SetupWhy, StrategySelector, StrategyExplanation} from './MarketExtras.jsx';
+import {MarketWatchlist, StrategySelector, StrategyExplanation} from './MarketExtras.jsx';
 import './market-extras.css';
 export const FOREX=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJPY','CHFJPY','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','EURUSD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','GBPUSD','NZDCAD','NZDCHF','NZDJPY','NZDUSD','USDCAD','USDCHF','USDJPY','USDNOK','USDSEK','USDZAR','USDSGD','EURPLN','EURSEK','EURNOK','EURTRY','GBPPLN','GBPSEK','GBPNOK','NOKSEK','NZDSGD','SGDJPY','CHFSGD','CADSGD','AUDSGD','AUDNOK','AUDSEK','CADNOK','CADSEK','CHFPLN','CHFZAR','EURSGD','GBPZAR','NZDZAR','USDHKD','USDMXN','USDTRY','USDTHB','USDHUF','USDCNH'];
 export const CRYPTO=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
@@ -31,7 +31,91 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 
  const analyze=async()=>{if(!pair)return;setLoading(true);setError('');setResult(null);setSavedSignal(null);try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));const saved=await persistSignal(body);if(saved?.signal)setSavedSignal(saved.signal)}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
 
- return (<div className="live-market page-wrap"><div className="live-market-head"><div><span className="tiny-label">INTELLIGENCE LAYER</span><h2>Market analysis</h2><p>Live market data, multi-timeframe structure and a read-only setup engine.</p></div><span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span></div><MarketWatchlist market={market} symbol={pair} onSelect={(next)=>{setPair(next);setResult(null);}}/><StrategySelector value={strategy} onChange={next=>{setStrategy(next);setResult(null);}}/><section className="live-market-card"><div className="live-tabs" role="tablist">{MARKET_TABS.map(([id,label])=><button key={id} type="button" role="tab" aria-selected={market===id} className={market===id?'active':''} onClick={()=>setMarket(id)}>{label}</button>)}</div><div className="live-controls"><label className="live-field market-picker"><span>{market==='metals'?'METAL / CFD':'MARKET'}</span><div className="instrument-picker"><button type="button" className="instrument-trigger" onClick={()=>setPickerOpen(v=>!v)} aria-expanded={pickerOpen}><b>{pair||'Select pair'}</b><ChevronDown className={pickerOpen?'open':''}/></button>{pickerOpen&&<div className="instrument-menu"><div className="instrument-search"><ScanSearch/><input autoFocus value={instrumentQuery} onChange={e=>setInstrumentQuery(e.target.value)} placeholder={market==='metals'?'Search assets…':'Search pairs…'} aria-label="Search market pairs"/></div><div className="instrument-results">{filteredPairs.map(x=><button type="button" key={x.symbol} className={pair===x.symbol?'selected':''} onClick={()=>{setPair(x.symbol);setResult(null);setInstrumentQuery('');setPickerOpen(false)}}><b>{x.symbol}</b><small>{market==='metals'?CFD_CATEGORIES[x.symbol]||'CFD':''}</small></button>)}{!filteredPairs.length&&<small className="instrument-empty">No matching pairs found.</small>}</div></div>}</div></label><label className="live-field timeframe"><span>TIMEFRAME</span><div><select value={timeframe} onChange={e=>{setTimeframe(e.target.value);setResult(null)}}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select><ChevronDown/></div></label><button type="button" className="live-analyze" onClick={analyze} disabled={loading||!pair}>{loading?<><RefreshCw className="spin"/> Reading market</>:<><BarChart3/> Analyze pair</>}</button></div>{error&&<div className="live-error">{error}<button type="button" onClick={analyze}>Retry</button></div>}{!result&&!loading&&!error&&<div className="live-empty"><ScanSearch/><b>Ready to analyze {pair||'a supported metal or CFD instrument'}</b><span>The engine fetches fresh candles and calculates trend, RSI, EMA, ATR, swing structure, internal liquidity and multi-timeframe confluence.</span></div>}{loading&&<div className="live-loading"><span className="loading-orb"/><b>{TIMEFRAME_GUIDE[timeframe]?.title||'Reading market structure'}</b><small>{TIMEFRAME_GUIDE[timeframe]?.desc||'Building the top-down market read.'}</small></div>}{result&&<><StrategyExplanation setup={result.setup} strategy={result.strategy||strategy}/><AnalysisResult result={result} savedSignal={savedSignal}/></>}</section></div>);
+ return (
+    <div className="live-market page-wrap">
+      <div className="live-market-head">
+        <div>
+          <span className="tiny-label">INTELLIGENCE LAYER</span>
+          <h2>Market analysis</h2>
+          <p>Live market data, multi-timeframe structure and a strategy-specific setup engine.</p>
+        </div>
+        <span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span>
+      </div>
+
+      <MarketWatchlist market={market} symbol={pair} onSelect={(next)=>{setPair(next);setResult(null);}}/>
+
+      <section className="live-market-card">
+        <div className="live-tabs" role="tablist">
+          {MARKET_TABS.map(([id,label])=>
+            <button key={id} type="button" role="tab" aria-selected={market===id} className={market===id?'active':''} onClick={()=>setMarket(id)}>{label}</button>
+          )}
+        </div>
+
+        <div className="live-controls">
+          <label className="live-field market-picker">
+            <span>{market==='metals'?'METAL / CFD':'MARKET'}</span>
+            <div className="instrument-picker">
+              <button type="button" className="instrument-trigger" onClick={()=>setPickerOpen(v=>!v)} aria-expanded={pickerOpen}>
+                <b>{pair||'Select pair'}</b><ChevronDown className={pickerOpen?'open':''}/>
+              </button>
+              {pickerOpen&&
+                <div className="instrument-menu">
+                  <div className="instrument-search">
+                    <ScanSearch/>
+                    <input autoFocus value={instrumentQuery} onChange={e=>setInstrumentQuery(e.target.value)} placeholder={market==='metals'?'Search assets…':'Search pairs…'} aria-label="Search market pairs"/>
+                  </div>
+                  <div className="instrument-results">
+                    {filteredPairs.map(x=>
+                      <button type="button" key={x.symbol} className={pair===x.symbol?'selected':''} onClick={()=>{setPair(x.symbol);setResult(null);setInstrumentQuery('');setPickerOpen(false)}}>
+                        <b>{x.symbol}</b><small>{market==='metals'?CFD_CATEGORIES[x.symbol]||'CFD':''}</small>
+                      </button>
+                    )}
+                    {!filteredPairs.length&&<small className="instrument-empty">No matching pairs found.</small>}
+                  </div>
+                </div>
+              }
+            </div>
+          </label>
+
+          <label className="live-field timeframe">
+            <span>TIMEFRAME</span>
+            <div>
+              <select value={timeframe} onChange={e=>{setTimeframe(e.target.value);setResult(null)}}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select>
+              <ChevronDown/>
+            </div>
+          </label>
+
+          <StrategySelector value={strategy} onChange={next=>{setStrategy(next);setResult(null);}}/>
+
+          <button type="button" className="live-analyze" onClick={analyze} disabled={loading||!pair}>
+            {loading?<><RefreshCw className="spin"/> Reading market</>:<><BarChart3/> Analyze pair</>}
+          </button>
+        </div>
+
+        {error&&<div className="live-error">{error}<button type="button" onClick={analyze}>Retry</button></div>}
+        {!result&&!loading&&!error&&
+          <div className="live-empty">
+            <ScanSearch/>
+            <b>Ready to analyze {pair||'a supported metal or CFD instrument'}</b>
+            <span>The selected strategy will be tested against fresh candles, top-down structure and its own entry, invalidation and target rules.</span>
+          </div>
+        }
+        {loading&&
+          <div className="live-loading">
+            <span className="loading-orb"/>
+            <b>{TIMEFRAME_GUIDE[timeframe]?.title||'Reading market structure'}</b>
+            <small>{TIMEFRAME_GUIDE[timeframe]?.desc||'Building the top-down market read.'}</small>
+          </div>
+        }
+        {result&&
+          <>
+            <AnalysisResult result={result} savedSignal={savedSignal}/>
+            <StrategyExplanation setup={result.setup} strategy={result.strategy||strategy}/>
+          </>
+        }
+      </section>
+    </div>
+  );
 }
 function AnalysisResult({result,savedSignal}){
   const s=result.setup,long=s.directionBias==='LONG',short=s.directionBias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:short?TrendingDown:Clock;
