@@ -28,13 +28,27 @@ export default function AdminPage({user}){
   const [notice,setNotice]=useState('');
 
   const call=async(options={})=>{
-    const token=await auth?.currentUser?.getIdToken();
-    if(!token)throw new Error('Your session has expired. Please sign in again.');
-    const response=await fetch('/api/admin/grant-premium'+(options.query?('?q='+encodeURIComponent(options.query)):''),{
+    const currentUser=auth?.currentUser;
+    if(!currentUser)throw new Error('Please sign in to continue.');
+    const url='/api/admin/grant-premium'+(options.query?('?q='+encodeURIComponent(options.query)):'');
+    const request=async(token)=>fetch(url,{
       method:options.method||'GET',
       headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
       body:options.body?JSON.stringify(options.body):undefined
     });
+
+    // Firebase rotates ID tokens automatically. Force a refresh here so the
+    // admin page does not surface a stale-token "session expired" message.
+    let token=await currentUser.getIdToken(true);
+    let response=await request(token);
+
+    // If the backend rejects the token anyway, refresh once and retry before
+    // showing an actual authentication error.
+    if(response.status===401){
+      token=await currentUser.getIdToken(true);
+      response=await request(token);
+    }
+
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||'Admin request failed.');
     return data;
