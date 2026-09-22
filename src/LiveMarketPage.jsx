@@ -147,3 +147,6 @@ function AnalysisResult({result,savedSignal}){
 function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
 function Breakdown({title,value,detail}){return <div className="breakdown-item"><span>{title}</span><b>{value}</b><small>{detail}</small></div>}
+
+
+export const METALS=['XAUUSD','XAGUSD','US30','US500','NAS100','UK100','GER40','FRA40','JP225','HK50','USOIL','UKOIL'];
