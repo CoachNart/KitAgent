@@ -230,8 +230,8 @@ function closedCandles(c,timeframe,market=''){
   const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.[market==='forex'?'forex':market==='metals'?'metals':'crypto']||timeframe;
   const last=c.at(-1),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
   if(!last||!Number.isFinite(Number(last.time))||!interval)return c;
-  const now=Date.now(),age=now-Number(last.time),weekend=market!=='perpetual'&&[0,6].includes(new Date(now).getUTCDay());
-  const isOpen=age>=0&&age<interval&&!((timeframe==='1W'||timeframe==='1D')&&weekend);
+  const now=Date.now(),age=now-Number(last.time);
+  const isOpen=age>=0&&age<interval;
   return isOpen?c.slice(0,-1):c;
 }
 function marketDataFresh(c,timeframe){
