@@ -379,9 +379,14 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const candlesByTf=Object.fromEntries(fetched);
   const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market);
   const confidenceBase=Number(setup.confidence),finalConfidence=setup.tradeReady?Math.min(95,Math.max(35,Number.isFinite(confidenceBase)?Math.round(confidenceBase):35)):0;
+  const confluenceCandles={
+    bias:closedCandles(candlesByTf[context.bias]||candlesByTf[context.entry],context.bias,market),
+    structure:closedCandles(candlesByTf[context.structure]||candlesByTf[context.entry],context.structure,market),
+    entry:closedCandles(candlesByTf[context.entry],context.entry,market)
+  };
   return json(res,200,{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:{...setup,confidence:finalConfidence},confluence:[
-    {timeframe:context.bias,bias:structureBias(marketStructure(candlesByTf[context.bias]||candlesByTf[context.entry])),role:'CONTEXT',confidence:finalConfidence},
-    {timeframe:context.structure,bias:structureBias(marketStructure(candlesByTf[context.structure]||candlesByTf[context.entry])),role:'STRUCTURE',confidence:finalConfidence},
-    {timeframe:context.entry,bias:structureBias(marketStructure(candlesByTf[context.entry])),role:'OPPORTUNITY',confidence:finalConfidence}
+    {timeframe:context.bias,bias:structureBias(marketStructure(confluenceCandles.bias)),role:'CONTEXT',confidence:finalConfidence},
+    {timeframe:context.structure,bias:structureBias(marketStructure(confluenceCandles.structure)),role:'STRUCTURE',confidence:finalConfidence},
+    {timeframe:context.entry,bias:structureBias(marketStructure(confluenceCandles.entry)),role:'OPPORTUNITY',confidence:finalConfidence}
   ],aligned:setup.tradeReady?3:0,totalTimeframes:3,source:market==='forex'||market==='metals'?'Yahoo Finance chart data':'Bybit linear perpetuals',generatedAt:new Date().toISOString()})
 }catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
