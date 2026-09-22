@@ -1,0 +1,161 @@
+import admin from 'firebase-admin';
+import fs from 'node:fs';
+
+function getAdmin(){
+  if(admin.apps.length)return admin;
+  const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const credentialPath=process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if(raw){
+    try{
+      admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['"]|['"]$/g,'')))});
+      return admin;
+    }catch{}
+  }
+  if(credentialPath&&fs.existsSync(credentialPath)){
+    admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath,'utf8')))});
+    return admin;
+  }
+  const e=new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING');
+  e.code=e.message;
+  throw e;
+}
+
+function json(res,status,body){
+  res.statusCode=status;
+  res.setHeader('Content-Type','application/json');
+  res.end(JSON.stringify(body));
+}
+
+function csvEnv(name){
+  return String(process.env[name]||'').split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
+}
+
+function isAdmin(decoded){
+  if(decoded?.admin===true)return true;
+  const uids=csvEnv('KITSETUPS_ADMIN_UIDS');
+  const emails=csvEnv('KITSETUPS_ADMIN_EMAILS');
+  return (decoded?.uid&&uids.includes(String(decoded.uid).toLowerCase())) ||
+    (decoded?.email&&emails.includes(String(decoded.email).toLowerCase()));
+}
+
+async function authenticate(req){
+  const a=getAdmin();
+  const header=req.headers.authorization||'';
+  const token=header.startsWith('Bearer ')?header.slice(7):'';
+  if(!token)return {a,error:[401,'Authentication required.']};
+  try{
+    const decoded=await a.auth().verifyIdToken(token);
+    if(!isAdmin(decoded))return {a,error:[403,'Admin access is required.']};
+    return {a,decoded};
+  }catch{
+    return {a,error:[401,'Authentication token could not be verified.']};
+  }
+}
+
+export default async function handler(req,res){
+  try{
+    const auth=await authenticate(req);
+    if(auth.error)return json(res,auth.error[0],{error:auth.error[1]});
+    const {a,decoded}=auth;
+    const db=a.firestore();
+
+    if(req.method==='GET'){
+      const q=String(req.query?.q||'').trim().toLowerCase();
+      const users=[];
+      let token;
+      do{
+        const page=await a.auth().listUsers(1000,token);
+        for(const u of page.users){
+          const profileSnap=await db.collection('users').doc(u.uid).get();
+          const profile=profileSnap.exists?profileSnap.data():{};
+          const hay=[u.uid,u.email,u.displayName,profile.username,profile.displayName].filter(Boolean).join(' ').toLowerCase();
+          if(!q||hay.includes(q)){
+            users.push({
+              uid:u.uid,
+              email:u.email||'',
+              displayName:u.displayName||profile.displayName||profile.username||'Unnamed user',
+              username:profile.username||'',
+              photoURL:u.photoURL||profile.photoURL||'',
+              plan:String(profile.plan||'free'),
+              subscriptionEndsAt:profile.subscriptionEndsAt||null
+            });
+          }
+          if(users.length>=50)break;
+        }
+        if(users.length>=50||!page.pageToken)break;
+        token=page.pageToken;
+      }while(token);
+      return json(res,200,{admin:true,users});
+    }
+
+    if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
+
+    const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
+    const uid=String(body.uid||'').trim();
+    const days=Number(body.days);
+    if(!uid)return json(res,400,{error:'Select a registered user.'});
+    if(![7,30,90].includes(days))return json(res,400,{error:'Premium duration must be 7, 30, or 90 days.'});
+
+    let recipient;
+    try{recipient=await a.auth().getUser(uid)}catch{return json(res,404,{error:'Registered user not found.'})}
+
+    const ref=db.collection('users').doc(uid);
+    const snap=await ref.get();
+    if(!snap.exists)return json(res,404,{error:'The user profile could not be found.'});
+    const current=snap.data()||{};
+    const now=new Date();
+    const existingEnd=current.subscriptionEndsAt?.toDate?current.subscriptionEndsAt.toDate():(current.subscriptionEndsAt?new Date(current.subscriptionEndsAt):null);
+    const base=current.plan==='premium'&&existingEnd&&existingEnd.getTime()>now.getTime()?existingEnd:now;
+    const end=new Date(base.getTime()+days*86400000);
+    const giftRef=db.collection('premiumGifts').doc();
+
+    const batch=db.batch();
+    batch.update(ref,{
+      plan:'premium',
+      subscriptionEndsAt:end,
+      subscription:{
+        ...(current.subscription||{}),
+        name:'Premium',
+        price:0,
+        currency:'USD',
+        billingPeriod:'team_gift',
+        accessDays:days,
+        features:Array.isArray(current.subscription?.features)?current.subscription.features:['Unlimited setups','Live intelligence'],
+        source:'team_gift'
+      },
+      premiumGrant:{
+        source:'team_gift',
+        durationDays:days,
+        grantedBy:decoded.uid,
+        grantedAt:admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt:end
+      },
+      updatedAt:admin.firestore.FieldValue.serverTimestamp()
+    });
+    batch.set(giftRef,{
+      recipientUid:uid,
+      recipientEmail:recipient.email||'',
+      recipientName:recipient.displayName||'',
+      durationDays:days,
+      source:'team_gift',
+      grantedBy:decoded.uid,
+      grantedAt:admin.firestore.FieldValue.serverTimestamp(),
+      startsAt:base,
+      expiresAt:end
+    });
+    await batch.commit();
+
+    return json(res,200,{
+      granted:true,
+      uid,
+      email:recipient.email||'',
+      displayName:recipient.displayName||'',
+      days,
+      expiresAt:end.toISOString()
+    });
+  }catch(error){
+    if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_MISSING')return json(res,500,{error:'Firebase Admin credentials are missing.'});
+    console.error('admin premium failed',error);
+    return json(res,500,{error:'The admin Premium operation could not be completed.'});
+  }
+}
