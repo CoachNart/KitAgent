@@ -119,36 +119,29 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 }
 function AnalysisResult({result,savedSignal}){
   const s=result.setup,long=s.directionBias==='LONG',short=s.directionBias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:short?TrendingDown:Clock;
-  const stopDistanceLabel=s.stopDistanceUnits!=null ? `${s.stopDistanceUnits} ${s.priceUnitLabel==='pips'?'pips':'pts'}` : '—';
+  const stopDistanceLabel=s.stopDistanceUnits!=null ? String(s.stopDistanceUnits)+' '+(s.priceUnitLabel==='pips'?'pips':'pts') : '—';
   const direction=long?'LONG':short?'SHORT':'NO SETUP',tone=wait?'wait':(long?'long':short?'short':'wait');
-  const role=TIMEFRAME_GUIDE[result.timeframe]||{title:'Market structure',desc:'Building the top-down market read.'};
-  const stage=s.orderType==='LIMIT'?'LIMIT READY':s.orderType==='MARKET'?'MARKET READY':'NO SETUP';
   return <div className="live-result">
-    <div className={`setup-card-v2 ${tone}`}>
-      <div className="setup-v2-head"><div className="setup-v2-symbol"><span>{result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'METALS / CFD'} · {result.timeframe}</span><h3>{result.market==='forex'||result.market==='metals'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div><div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div><div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div></div>
-      <div className="mtf-structure-strip">
-        <div className={s.higherBias===s.bias && s.bias!=='WAIT'?'active':''}><span>BIAS · {s.higherTimeframe||'HTF'}</span><b>{s.higherBias||'WAIT'}</b></div>
-        <i>→</i>
-        <div className={s.middleBias===s.bias && s.bias!=='WAIT'?'active':''}><span>STRUCTURE · {s.middleTimeframe||'MTF'}</span><b>{s.middleBias||'WAIT'}</b></div>
-        <i>→</i>
-        <div className={s.entryBias===s.bias && s.bias!=='WAIT'?'active':''}><span>ENTRY · {s.entryTimeframe||'LTF'}</span><b>{s.entryBias||'WAIT'}</b></div>
+    <div className={'setup-card-v2 '+tone}>
+      <div className="setup-v2-head">
+        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · {result.timeframe}</span><h3>{result.market==='forex'||result.market==='metals'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div>
+        <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
+        <div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div>
       </div>
-      {s.structureConflict&&<div className="mtf-conflict"><span>STRUCTURE CONFLICT</span><b>Lower timeframe is not allowed to override the higher-timeframe bias.</b></div>}
-      <div className={"execution-type-card "+(s.orderType==='LIMIT'?'limit':'market')}>
-        <div><span className="execution-kicker">EXECUTION</span><strong>{wait?'NO SETUP':(s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER')}</strong></div>
-        <div className="execution-trigger"><span>{wait?'NO TRADE AVAILABLE':(s.orderType==='LIMIT'?'LIMIT ENTRY':'CURRENT ENTRY')}</span><b>{wait?'—':(s.entry ?? s.marketEntry ?? '—')}</b></div>
-      </div><div className={`setup-v2-banner ${wait?'wait':'ready'}`}><div><b>{wait?'NO SETUP':(s.orderType==='LIMIT'?'LIMIT SETUP':'LIVE ENTRY')}</b><span>{wait?(s.structureConflict?'Higher-timeframe direction and lower-timeframe structure are not aligned yet.':s.entryAligned?'Structure is aligned. The engine is waiting for price to reach a quality execution area.':TIMEFRAME_GUIDE[result.timeframe]?.desc||'The engine is monitoring the selected timeframe for a quality opportunity.'):s.orderType==='LIMIT'?'Structure is aligned; wait for price to reach the planned limit entry.':'Current price is offering the setup.'}</span></div>{!wait&&<strong>{s.riskReward}</strong>}</div>
-      {!wait&&<div className="setup-v2-levels">
-        <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Now {price(s.marketEntry)}</small>}</div>
-        <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
-        <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>
-        <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>
-      </div>}
-      <div className="setup-v2-meta">{!wait&&<div><span>RR</span><b>{s.riskReward}</b></div>}<div><span>PRICE</span><b>{price(s.marketEntry)}</b></div><div><span>STRUCTURE</span><b>{s.marketStructure}</b></div><div><span>TARGET</span><b>{s.liquidityType||'—'}</b></div></div>
-      <div className="setup-v2-footer"><span>{wait?(s.strategyReason||s.setupReason):((s.strategyName||'Strategy')+' setup · '+(s.setupReason||'Target is based on the available market structure/liquidity; no synthetic TP is used.'))}</span>{wait&&s.limitEntry&&<b>LIMIT WATCH · {price(s.limitEntry)}</b>}</div>
+      {wait ? <div className="strategy-status-card"><span>NO SETUP</span><b>{s.strategyReason||s.setupReason||'The selected strategy has no valid execution condition yet.'}</b></div> : <>
+        <div className="strategy-trade-status"><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'WAITING AT PLANNED LEVEL':'EXECUTION AVAILABLE NOW'}</b></div>
+        <div className="setup-v2-levels">
+          <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
+          <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
+          <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>
+          <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>
+        </div>
+        <div className="strategy-trade-footer"><span>RR {s.riskReward}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
+      </>}
     </div>
   </div>
 }
+
 function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
 function Breakdown({title,value,detail}){return <div className="breakdown-item"><span>{title}</span><b>{value}</b><small>{detail}</small></div>}

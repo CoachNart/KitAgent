@@ -333,6 +333,33 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
     planReason=valid?'A recent liquidity sweep was reclaimed with displacement; reversal execution is confirmed.':'Waiting for a genuine liquidity sweep, reclaim and displacement before considering a reversal.';
     evidence.push(sweep?sweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim yet.',disp?'Displacement confirms reversal.':'No displacement.');
   }
+  // A strategy may be valid for a pending LIMIT even when the current candle is not a MARKET trigger.
+  // Only use real structural levels/POIs with a complete stop/target calculation; never invent an entry.
+  if(!valid && bias!=='WAIT' && htfBias===bias){
+    const currentPrice=last.close;
+    const maxZoneDistance=Math.max(a*3.5,currentPrice*.03);
+    let candidate=null,candidateTrade=null,candidateReason='';
+    if(key==='PULLBACK'){
+      const zones=entryZones(current,bias,currentPrice,a,60).filter(z=>Math.abs(currentPrice-z.mid)<=maxZoneDistance);
+      for(const z of zones){const t=evaluateTrade(current,bias,z.mid,a,2.25);if(validTrade(t)){candidate={...z,entry:z.mid};candidateTrade=t;break;}}
+      if(candidate){candidateReason='A live directional pullback zone is available. The limit order is anchored to the real FVG/order block and invalidated beyond structure.';evidence.push(candidate.type+' is a live executable pullback zone.');}
+    } else if(key==='BREAKOUT'){
+      const bos=structureBreak(current,bias,60);
+      if(bos&&bos.breakIndex>=Math.max(0,current.length-36)){const t=evaluateTrade(current,bias,bos.level,a,2.25);if(validTrade(t)){candidate={entry:bos.level,type:'BREAKOUT RETEST',index:bos.breakIndex};candidateTrade=t;candidateReason='The structure break is confirmed; the order is staged at the broken level for a retest instead of chasing the current price.';evidence.push('Confirmed BOS is available for a retest LIMIT.');}}
+    } else if(key==='SMC'){
+      const zones=[...fairValueGaps(current,bias),...orderBlockCandidates(current,bias)].filter(z=>z.index>=current.length-60).filter(z=>Math.abs(currentPrice-z.mid)<=maxZoneDistance);
+      const zone=zones[0];
+      if(zone){const t=evaluateTrade(current,bias,zone.mid,a,2.25);if(validTrade(t)){candidate={...zone,entry:zone.mid};candidateTrade=t;candidateReason='A fresh SMC point of interest is available below/above current price; the limit is anchored to that real FVG/order block while price is away from execution.';evidence.push(zone.type+' is a live SMC point of interest.');}}
+    } else if(key==='MSNR'){
+      const levels=msnrLevels(htf,bias).filter(z=>Math.abs(currentPrice-z.level)<=maxZoneDistance);
+      const level=levels[0];
+      // MSNR confirmation remains required for a market entry. A LIMIT is only staged when price is already at/inside the level and the complete risk/target model is valid.
+      if(level&&Math.abs(currentPrice-level.level)<=Math.max(a*.75,currentPrice*.0015)){const t=evaluateTrade(current,bias,level.level,a,2.25);if(validTrade(t)){candidate={entry:level.level,type:level.type,index:level.index};candidateTrade=t;candidateReason='Price is at a qualified MSNR level. The limit is anchored to the live level; lower-timeframe confirmation is still recorded as the strategy trigger.';evidence.push(level.type+' level is currently being tested.');}}
+    }
+    if(candidate&&candidateTrade){
+      valid=true;strategyTrade=candidateTrade;planEntry=candidate.entry;planOrder='LIMIT';planReason=candidateReason;
+    }
+  }
   if(!valid){
     for(const x of evidence)if(/No |Waiting|not support|stale/i.test(x))failures.push(x);
     return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:planReason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:planReason||'No strategy-valid setup is present.'};
