@@ -22,7 +22,8 @@ const actions=[{id:'swap-eth',kind:'swap',title:'Swap ETH → USDC',summary:'Pre
 const nfts=[['Vault Pass #1842','KitSetups Genesis','0.84 ETH','List for sale'],['Signal #091','Signal Objects','0.31 ETH','Sell NFT'],['Agent Key #402','Agent Keys','0.12 ETH','Transfer NFT']];
 
 export default function App({user}){
-  const [profileOverride,setProfileOverride]=useState(null),[headerPair,setHeaderPair]=useState('BTC/USDT'),[page,setPage]=useState('home'),[lessonId,setLessonId]=useState(null),[wallet,setWallet]=useState(''),[walletBusy,setWalletBusy]=useState(false),[walletMessage,setWalletMessage]=useState(''),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[pendingAction,setPendingAction]=useState(null),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(true),[pair,setPair]=useState('BTC/USDT'),[tf,setTf]=useState('4H'),[analyzed,setAnalyzed]=useState(false),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
+  const [profileOverride,setProfileOverride]=useState(null),[headerTicker,setHeaderTicker]=useState({pair:'BTC/USDT',price:'—',change:0,move:'up'}),[page,setPage]=useState('home'),[lessonId,setLessonId]=useState(null),[wallet,setWallet]=useState(''),[walletBusy,setWalletBusy]=useState(false),[walletMessage,setWalletMessage]=useState(''),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[pendingAction,setPendingAction]=useState(null),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(true),[pair,setPair]=useState('BTC/USDT'),[tf,setTf]=useState('4H'),[analyzed,setAnalyzed]=useState(false),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
+  useEffect(()=>{let cancelled=false;const symbols=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT'];let i=0;const load=async()=>{try{const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol='+symbols[i]);const j=await r.json();const t=j?.result?.list?.[0];if(!t||cancelled)return;const price=Number(t.lastPrice),change=Number(t.price24hPcnt)*100;setHeaderTicker({pair:symbols[i].replace('USDT','/USDT'),price:Number.isFinite(price)?price.toLocaleString(undefined,{maximumFractionDigits:price>=1000?0:price>=1?2:4}):'—',change:Number.isFinite(change)?change:0,move:change>=0?'up':'down'});}catch{}};load();const timer=setInterval(()=>{i=(i+1)%symbols.length;load()},7000);return()=>{cancelled=true;clearInterval(timer)}},[]);
   useEffect(()=>{const handler=e=>setProfileOverride(e.detail||null);window.addEventListener('kitsetups:profile-updated',handler);return()=>window.removeEventListener('kitsetups:profile-updated',handler)},[]);
   const displayUser=profileOverride?{...user,...profileOverride}:user;
   useEffect(()=>{const t=setTimeout(()=>setShowLoader(false),2300);return()=>clearTimeout(t)},[]);
@@ -38,10 +39,11 @@ export default function App({user}){
   if(showLoader)return <LoaderScreen/>;
   return <div className="kit-shell"><KitNavigation page={page} go={go}/><main className="kit-main"><div className="app-sticky-rail" aria-label="App controls">
   <div className="app-sticky-brand"><img src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups"/></div>
-  <div className="app-sticky-market" aria-label="Live market rotation">
+  <div className={'app-sticky-market '+headerTicker.move} aria-label={'Live '+headerTicker.pair+' price'}>
     <span className="app-sticky-market-dot" aria-hidden="true"/>
-    <span className="app-sticky-market-pair" key={headerPair}>{headerPair}</span>
-    <span className="app-sticky-market-state">LIVE</span>
+    <span className="app-sticky-market-pair" key={headerTicker.pair}>{headerTicker.pair}</span>
+    <span className="app-sticky-market-price" key={headerTicker.pair+'-price'}>{headerTicker.price}</span>
+    <span className="app-sticky-market-change">{headerTicker.change>=0?'↗':'↘'} {Math.abs(headerTicker.change).toFixed(2)}%</span>
   </div>
   <div className="app-sticky-actions">
     <NotificationCenter user={user} embedded/>
