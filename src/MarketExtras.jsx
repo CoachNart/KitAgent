@@ -9,7 +9,8 @@ const STRATEGY_LIBRARY=[
  {key:'SMC',name:'SMC',short:'Liquidity → displacement → BOS → POI',description:'Uses a sweep, displacement, structure break and fresh FVG/order-block point of interest.',rules:['Liquidity sweep','Displacement','BOS','Fresh POI']},
  {key:'MSNR',name:'MSNR',short:'Malaysian Support & Resistance',description:'Uses the Daily/4H storyline, fresh support/resistance, V/A formations, SBR/RBS and kissing-candle bases, then waits for lower-timeframe confirmation.',rules:['Fresh HTF level','SBR / RBS or V / A evidence','Kissing-candle base can define the zone','Tap + lower-TF BOS / engulfing / rejection']},
  {key:'PRICE_ACTION',name:'Price Action',short:'Structure + candle confirmation',description:'Trades meaningful structure only after a clear rejection or engulfing confirmation.',rules:['Structural level','Rejection or engulfing','Structural invalidation','Minimum 2.25R']},
- {key:'LIQUIDITY_REVERSAL',name:'Liquidity Reversal',short:'Sweep → reclaim → reversal',description:'Waits for price to take liquidity, reclaim the level and displace before considering a reversal.',rules:['Genuine sweep','Reclaim','Displacement','Structural stop']}
+ {key:'LIQUIDITY_REVERSAL',name:'Liquidity Reversal',short:'Sweep → reclaim → reversal',description:'Waits for price to take liquidity, reclaim the level and displace before considering a reversal.',rules:['Genuine sweep','Reclaim','Displacement','Structural stop']},
+ {key:'CRT',name:'CRT',short:'Range → sweep → reclaim',description:'Candle Range Theory: works from a completed candle range, waits for one side to be swept, then requires a reclaim before targeting the opposite side.',rules:['Completed reference range','One-side liquidity sweep','Midpoint reclaim','Range-based invalidation','Minimum 2.25R']}
 ];
 
 export function StrategySelector({value,onChange}){
@@ -36,7 +37,8 @@ export function StrategyExplanation({setup,strategy}){
   SMC:{entry:'Liquidity sweep → displacement → BOS → fresh FVG/order-block POI.',invalidation:'The sweep/POI structure fails and the protected level is lost.',target:'External liquidity created by the prior structure.'},
   MSNR:{entry:'Fresh Daily/4H support or resistance → tap → lower-timeframe BOS, engulfing or rejection confirmation.',invalidation:'The MSNR level breaks without the expected reaction/confirmation.',target:'Next structural/liquidity level from the live market.'},
   PRICE_ACTION:{entry:'Meaningful structural level → rejection or engulfing confirmation → execution.',invalidation:'The structural level fails and invalidates the candle thesis.',target:'Next qualified structural/liquidity level with minimum 2.25R.'},
-  LIQUIDITY_REVERSAL:{entry:'Genuine liquidity sweep → reclaim → displacement → reversal execution.',invalidation:'Price fails to reclaim the swept level or breaks reversal structure.',target:'Opposing external liquidity.'}
+  LIQUIDITY_REVERSAL:{entry:'Genuine liquidity sweep → reclaim → displacement → reversal execution.',invalidation:'Price fails to reclaim the swept level or breaks reversal structure.',target:'Opposing external liquidity.'},
+  CRT:{entry:'Completed candle range → one-side sweep → reclaim through the range midpoint → execution.',invalidation:'The sweep extreme is lost or price fails to reclaim the range.',target:'Opposite side of the reference range, subject to the live risk model.'}
  }[item.key]||{};
  return <section className="strategy-explanation" aria-label={item.name+' strategy explanation'}>
   <div className="strategy-explanation-head"><div><span className="extras-kicker">STRATEGY MODEL</span><h3>{item.name}</h3><p>{item.description}</p></div><span>{item.short}</span></div>
