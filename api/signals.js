@@ -148,7 +148,7 @@ export default async function handler(req,res){
         if(av!==bv)patch[key]=b??null;
       }
       if(Object.keys(patch).length)await collection.doc(original.id).set(patch,{merge:true});
-      if(['open','target_hit','stop_hit'].includes(String(resolved.status||'')))signals.push(resolved);
+      if(['open','target_hit','stop_hit','missed_entry'].includes(String(resolved.status||'')))signals.push(resolved);
     }
     return json(res,200,{ok:true,signals});
   }catch(error){
