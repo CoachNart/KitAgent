@@ -62,3 +62,42 @@
   background:#d8ad52!important;
   box-shadow:0 0 7px rgba(216,173,82,.32)!important;
 }
+
+
+/* NO SETUP banner — compact status notice, not a split text block. */
+.setup-v2-banner.wait{
+  display:block!important;
+  padding:12px 13px!important;
+  border-radius:12px!important;
+}
+.setup-v2-banner.wait>div{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:4px!important;
+  min-width:0!important;
+}
+.setup-v2-banner.wait b{
+  display:block!important;
+  margin:0!important;
+  font-size:10px!important;
+  line-height:1.15!important;
+  letter-spacing:.075em!important;
+  font-weight:850!important;
+}
+.setup-v2-banner.wait span{
+  display:block!important;
+  margin:0!important;
+  max-width:62ch!important;
+  font-size:10px!important;
+  line-height:1.45!important;
+  letter-spacing:0!important;
+  color:rgba(220,229,232,.68)!important;
+  white-space:normal!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+}
+@media(max-width:520px){
+  .setup-v2-banner.wait{padding:11px 12px!important}
+  .setup-v2-banner.wait b{font-size:9px!important}
+  .setup-v2-banner.wait span{font-size:9.5px!important;line-height:1.48!important}
+}
