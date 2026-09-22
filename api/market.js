@@ -234,9 +234,10 @@ function closedCandles(c,timeframe,market=''){
   const isOpen=age>=0&&age<interval;
   return isOpen?c.slice(0,-1):c;
 }
-function marketDataFresh(c,timeframe){
+function marketDataFresh(c,timeframe,market=''){
   if(!Array.isArray(c)||!c.length)return false;
-  const last=Number(c.at(-1)?.time),interval=CANDLE_INTERVAL_MS[timeframe];
+  const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.[market==='forex'?'forex':market==='metals'?'metals':'crypto']||timeframe;
+  const last=Number(c.at(-1)?.time),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
   if(!Number.isFinite(last)||!interval)return false;
   const age=Date.now()-last;
   if(age<0)return false;
@@ -295,7 +296,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   const key=normalizeStrategy(strategy),info=STRATEGIES[key],tf=strategyTimeframes(executionTimeframe,key);
   const rawCurrent=candlesByTf[tf.entry],rawStructure=candlesByTf[tf.structure]||rawCurrent,rawBiasCandles=candlesByTf[tf.bias]||rawStructure;
   if(!rawCurrent?.length)throw new Error('Selected timeframe market data is unavailable');
-  if(!marketDataFresh(rawCurrent,tf.entry)||!marketDataFresh(rawStructure,tf.structure)||!marketDataFresh(rawBiasCandles,tf.bias))throw new Error('Market data is stale for the selected timeframe. No setup was issued.');
+  if(!marketDataFresh(rawCurrent,tf.entry,marketContext)||!marketDataFresh(rawStructure,tf.structure,marketContext)||!marketDataFresh(rawBiasCandles,tf.bias,marketContext))throw new Error('Market data is stale for the selected timeframe. No setup was issued.');
   const current=closedCandles(rawCurrent,tf.entry,marketContext),structure=closedCandles(rawStructure,tf.structure,marketContext),biasCandles=closedCandles(rawBiasCandles,tf.bias,marketContext);
   if(!current?.length||!structure?.length||!biasCandles?.length)throw new Error('No completed candle is available for the selected timeframe');
   const livePrice=Number(rawCurrent.at(-1)?.close);
