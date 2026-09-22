@@ -281,3 +281,29 @@
   opacity:1!important;
   filter:none!important;
 }
+
+
+/* LIVE ACTIVITY — compact premium notification surface. */
+.notification-center.embedded .notification-trigger{width:48px!important;height:32px!important;border-radius:10px!important;gap:0!important;background:rgba(255,255,255,.028)!important;border-color:rgba(255,255,255,.085)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 7px 20px rgba(0,0,0,.14)!important}
+.notification-center.embedded .notification-trigger span{display:none!important}
+.notification-center.embedded .notification-trigger svg{width:15px!important;height:15px!important}
+.notification-center .notification-panel{width:min(332px,calc(100vw - 20px))!important;padding:11px!important;border-radius:15px!important;background:linear-gradient(155deg,rgba(13,21,27,.975),rgba(6,11,15,.985))!important;box-shadow:0 22px 58px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.055)!important}
+.notification-center .notification-head{margin-bottom:9px!important}
+.notification-center .notification-head strong{font-size:13px!important}
+.notification-center .notification-head>div>div{font-size:9px!important}
+.notification-center .notification-status{padding:9px!important;border-radius:10px!important;margin-bottom:6px!important}
+.notification-center .notification-status-grid{margin-top:6px!important;gap:5px!important}
+.notification-center .notification-status-grid>div{padding:6px 3px!important}
+.notification-center .notification-status-grid b{font-size:13px!important}
+.notification-center .notification-status-grid span{font-size:8px!important;margin-top:3px!important}
+.notification-center .notification-event{padding:8px!important;border-radius:9px!important;margin-bottom:6px!important}
+.notification-center .notification-event b{font-size:10px!important}
+.notification-center .notification-event span{font-size:8px!important;margin-top:3px!important}
+.notification-center .notification-section{padding-top:8px!important;margin-top:8px!important}
+.notification-center .notification-section-title{font-size:7px!important;margin-bottom:5px!important}
+.notification-center .notification-item,.notification-center .notification-alert-item{padding:7px!important;border-radius:8px!important}
+.notification-center .notification-item b{font-size:9px!important}.notification-center .notification-item span{font-size:8px!important;margin-top:3px!important}
+.notification-center select,.notification-center input{min-height:34px!important;font-size:10px!important}
+.notification-center .notification-enable,.notification-center .notification-enabled{min-height:34px!important;padding:7px 9px!important;font-size:9px!important}
+.notification-center .notification-footer{font-size:8px!important;margin-top:7px!important}
+@media(max-width:760px){.notification-center .notification-panel{top:60px!important;right:8px!important;width:min(332px,calc(100vw - 16px))!important;max-height:calc(100dvh - 70px)!important}.notification-center.embedded .notification-trigger{width:46px!important;height:31px!important}}
