@@ -294,6 +294,7 @@ function msnrFormation(c,bias){
 }
 function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,marketContext=''){
   const key=normalizeStrategy(strategy),info=STRATEGIES[key],tf=strategyTimeframes(executionTimeframe,key);
+  if((key==='TOP_DOWN'||key==='MSNR')&&(tf.structure===executionTimeframe||tf.bias===executionTimeframe))throw new Error('This strategy requires distinct higher-timeframe structure; the selected timeframe is too high.');
   const rawCurrent=candlesByTf[tf.entry],rawStructure=candlesByTf[tf.structure]||rawCurrent,rawBiasCandles=candlesByTf[tf.bias]||rawStructure;
   if(!rawCurrent?.length)throw new Error('Selected timeframe market data is unavailable');
   if(!marketDataFresh(rawCurrent,tf.entry,marketContext)||!marketDataFresh(rawStructure,tf.structure,marketContext)||!marketDataFresh(rawBiasCandles,tf.bias,marketContext))throw new Error('Market data is stale for the selected timeframe. No setup was issued.');
