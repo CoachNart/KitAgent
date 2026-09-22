@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {BarChart3,ChevronDown,RefreshCw,ScanSearch,TrendingDown,TrendingUp,Clock} from 'lucide-react';
 import {auth} from './firebase.js';
-import {MarketWatchlist, StrategySelector, StrategyExplanation} from './MarketExtras.jsx';
+import {MarketWatchlist, SetupWhy} from './MarketExtras.jsx';
 import './market-extras.css';
 export const FOREX=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJPY','CHFJPY','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','EURUSD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','GBPUSD','NZDCAD','NZDCHF','NZDJPY','NZDUSD','USDCAD','USDCHF','USDJPY','USDNOK','USDSEK','USDZAR','USDSGD','EURPLN','EURSEK','EURNOK','EURTRY','GBPPLN','GBPSEK','GBPNOK','NOKSEK','NZDSGD','SGDJPY','CHFSGD','CADSGD','AUDSGD','AUDNOK','AUDSEK','CADNOK','CADSEK','CHFPLN','CHFZAR','EURSGD','GBPZAR','NZDZAR','USDHKD','USDMXN','USDTRY','USDTHB','USDHUF','USDCNH'];
 export const CRYPTO=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
@@ -21,7 +21,7 @@ const CFD_CATEGORIES={XAUUSD:'Metals',XAGUSD:'Metals',USOIL:'Oil',UKOIL:'Oil',US
 function symbolFor(market,pair){return market==='forex'||market==='metals'?pair:pair.replace('/','');}
 function price(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)>=1000?2:Number(v)>=1?5:8});}
 async function persistSignal(body){const user=auth?.currentUser;if(!user||!body?.setup)return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;return await response.json();}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
-export default function LiveMarketPage(){const [market,setMarket]=useState('forex'),[pair,setPair]=useState(FOREX[0]),[timeframe,setTimeframe]=useState('1H'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState(FOREX.map(symbol=>({symbol}))),[pickerOpen,setPickerOpen]=useState(false);
+export default function LiveMarketPage(){const [market,setMarket]=useState('forex'),[pair,setPair]=useState(FOREX[0]),[timeframe,setTimeframe]=useState('1H'),[loading,setLoading]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState(FOREX.map(symbol=>({symbol}))),[pickerOpen,setPickerOpen]=useState(false);
 
  const localInstruments=(m)=>m==='forex'?FOREX.map(symbol=>({symbol})):m==='perpetual'?CRYPTO.map(symbol=>({symbol})):[{symbol:'XAUUSD'},{symbol:'XAGUSD'},{symbol:'US30'},{symbol:'US500'},{symbol:'NAS100'},{symbol:'UK100'},{symbol:'GER40'},{symbol:'FRA40'},{symbol:'JP225'},{symbol:'HK50'},{symbol:'USOIL'},{symbol:'UKOIL'}];
 
@@ -29,120 +29,41 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 
  const filteredPairs=useMemo(()=>{const q=instrumentQuery.trim().toUpperCase();return q?instruments.filter(x=>`${x.symbol} ${x.name||''}`.toUpperCase().includes(q)):instruments},[instruments,instrumentQuery]);
 
- const analyze=async()=>{if(!pair)return;setLoading(true);setError('');setResult(null);setSavedSignal(null);try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));const saved=await persistSignal(body);if(saved?.signal)setSavedSignal(saved.signal)}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
+ const analyze=async()=>{if(!pair)return;setLoading(true);setError('');setResult(null);setSavedSignal(null);try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));const saved=await persistSignal(body);if(saved?.signal)setSavedSignal(saved.signal)}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
 
- return (
-    <div className="live-market page-wrap">
-      <div className="live-market-head">
-        <div>
-          <span className="tiny-label">INTELLIGENCE LAYER</span>
-          <h2>Market analysis</h2>
-          <p>Live market data, multi-timeframe structure and a strategy-specific setup engine.</p>
-        </div>
-        <span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span>
-      </div>
-
-      <MarketWatchlist market={market} symbol={pair} onSelect={(next)=>{setPair(next);setResult(null);}}/>
-
-      <section className="live-market-card">
-        <div className="live-tabs" role="tablist">
-          {MARKET_TABS.map(([id,label])=>
-            <button key={id} type="button" role="tab" aria-selected={market===id} className={market===id?'active':''} onClick={()=>setMarket(id)}>{label}</button>
-          )}
-        </div>
-
-        <div className="live-controls">
-          <label className="live-field market-picker">
-            <span>{market==='metals'?'METAL / CFD':'MARKET'}</span>
-            <div className="instrument-picker">
-              <button type="button" className="instrument-trigger" onClick={()=>setPickerOpen(v=>!v)} aria-expanded={pickerOpen}>
-                <b>{pair||'Select pair'}</b><ChevronDown className={pickerOpen?'open':''}/>
-              </button>
-              {pickerOpen&&
-                <div className="instrument-menu">
-                  <div className="instrument-search">
-                    <ScanSearch/>
-                    <input autoFocus value={instrumentQuery} onChange={e=>setInstrumentQuery(e.target.value)} placeholder={market==='metals'?'Search assets…':'Search pairs…'} aria-label="Search market pairs"/>
-                  </div>
-                  <div className="instrument-results">
-                    {filteredPairs.map(x=>
-                      <button type="button" key={x.symbol} className={pair===x.symbol?'selected':''} onClick={()=>{setPair(x.symbol);setResult(null);setInstrumentQuery('');setPickerOpen(false)}}>
-                        <b>{x.symbol}</b><small>{market==='metals'?CFD_CATEGORIES[x.symbol]||'CFD':''}</small>
-                      </button>
-                    )}
-                    {!filteredPairs.length&&<small className="instrument-empty">No matching pairs found.</small>}
-                  </div>
-                </div>
-              }
-            </div>
-          </label>
-
-          <label className="live-field timeframe">
-            <span>TIMEFRAME</span>
-            <div>
-              <select value={timeframe} onChange={e=>{setTimeframe(e.target.value);setResult(null)}}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select>
-              <ChevronDown/>
-            </div>
-          </label>
-
-          <StrategySelector value={strategy} onChange={next=>{setStrategy(next);setResult(null);}}/>
-
-          <button type="button" className="live-analyze" onClick={analyze} disabled={loading||!pair}>
-            {loading?<><RefreshCw className="spin"/> Reading market</>:<><BarChart3/> Analyze pair</>}
-          </button>
-        </div>
-
-        {error&&<div className="live-error">{error}<button type="button" onClick={analyze}>Retry</button></div>}
-        {!result&&!loading&&!error&&
-          <div className="live-empty">
-            <ScanSearch/>
-            <b>Ready to analyze {pair||'a supported metal or CFD instrument'}</b>
-            <span>The selected strategy will be tested against fresh candles, top-down structure and its own entry, invalidation and target rules.</span>
-          </div>
-        }
-        {loading&&
-          <div className="live-loading">
-            <span className="loading-orb"/>
-            <b>{TIMEFRAME_GUIDE[timeframe]?.title||'Reading market structure'}</b>
-            <small>{TIMEFRAME_GUIDE[timeframe]?.desc||'Building the top-down market read.'}</small>
-          </div>
-        }
-        {result&&
-          <>
-            <AnalysisResult result={result} savedSignal={savedSignal}/>
-            <StrategyExplanation setup={result.setup} strategy={result.strategy||strategy}/>
-          </>
-        }
-      </section>
-    </div>
-  );
-}
-function strategyWaitCopy(strategy){return ({TOP_DOWN:'Waiting for higher-timeframe structure and a confirmed execution condition.',PULLBACK:'Waiting for a fresh pullback into a qualified FVG or order block.',BREAKOUT:'Waiting for a decisive break and close beyond structure with displacement.',SMC:'Waiting for a liquidity sweep, displacement and structure break at a valid point of interest.',MSNR:'Waiting for price to tap a fresh MSNR level and confirm the reaction on the lower timeframe.',PRICE_ACTION:'Waiting for a clean structural level with a confirmed rejection or engulfing candle.',LIQUIDITY_REVERSAL:'Waiting for a liquidity sweep, reclaim and displacement before reversal entry.'}[strategy]||'No valid entry condition is present yet.');}
+ return <div className="live-market page-wrap"><div className="live-market-head"><div><span className="tiny-label">INTELLIGENCE LAYER</span><h2>Market analysis</h2><p>Live market data, multi-timeframe structure and a read-only setup engine.</p></div><span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span></div><MarketWatchlist market={market} symbol={pair} onSelect={(next)=>{setPair(next);setResult(null);}}/><section className="live-market-card"><div className="live-tabs" role="tablist">{MARKET_TABS.map(([id,label])=><button key={id} type="button" role="tab" aria-selected={market===id} className={market===id?'active':''} onClick={()=>setMarket(id)}>{label}</button>)}</div><div className="live-controls"><label className="live-field market-picker"><span>{market==='metals'?'METAL / CFD':'MARKET'}</span><div className="instrument-picker"><button type="button" className="instrument-trigger" onClick={()=>setPickerOpen(v=>!v)} aria-expanded={pickerOpen}><b>{pair||'Select pair'}</b><ChevronDown className={pickerOpen?'open':''}/></button>{pickerOpen&&<div className="instrument-menu"><div className="instrument-search"><ScanSearch/><input autoFocus value={instrumentQuery} onChange={e=>setInstrumentQuery(e.target.value)} placeholder={market==='metals'?'Search assets…':'Search pairs…'} aria-label="Search market pairs"/></div><div className="instrument-results">{filteredPairs.map(x=><button type="button" key={x.symbol} className={pair===x.symbol?'selected':''} onClick={()=>{setPair(x.symbol);setResult(null);setInstrumentQuery('');setPickerOpen(false)}}><b>{x.symbol}</b><small>{market==='metals'?CFD_CATEGORIES[x.symbol]||'CFD':''}</small></button>)}{!filteredPairs.length&&<small className="instrument-empty">No matching pairs found.</small>}</div></div>}</div></label><label className="live-field timeframe"><span>TIMEFRAME</span><div><select value={timeframe} onChange={e=>{setTimeframe(e.target.value);setResult(null)}}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select><ChevronDown/></div></label><button type="button" className="live-analyze" onClick={analyze} disabled={loading||!pair}>{loading?<><RefreshCw className="spin"/> Reading market</>:<><BarChart3/> Analyze pair</>}</button></div>{error&&<div className="live-error">{error}<button type="button" onClick={analyze}>Retry</button></div>}{!result&&!loading&&!error&&<div className="live-empty"><ScanSearch/><b>Ready to analyze {pair||'a supported metal or CFD instrument'}</b><span>The engine fetches fresh candles and calculates trend, RSI, EMA, ATR, swing structure, internal liquidity and multi-timeframe confluence.</span></div>}{loading&&<div className="live-loading"><span className="loading-orb"/><b>{TIMEFRAME_GUIDE[timeframe]?.title||'Reading market structure'}</b><small>{TIMEFRAME_GUIDE[timeframe]?.desc||'Building the top-down market read.'}</small></div>}{result&&<AnalysisResult result={result} savedSignal={savedSignal}/>}</section></div>}
 function AnalysisResult({result,savedSignal}){
   const s=result.setup,long=s.directionBias==='LONG',short=s.directionBias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:short?TrendingDown:Clock;
-  const stopDistanceLabel=s.stopDistanceUnits!=null ? String(s.stopDistanceUnits)+' '+(s.priceUnitLabel==='pips'?'pips':'pts') : '—';
+  const stopDistanceLabel=s.stopDistanceUnits!=null ? `${s.stopDistanceUnits} ${s.priceUnitLabel==='pips'?'pips':'pts'}` : '—';
   const direction=long?'LONG':short?'SHORT':'NO SETUP',tone=wait?'wait':(long?'long':short?'short':'wait');
+  const role=TIMEFRAME_GUIDE[result.timeframe]||{title:'Market structure',desc:'Building the top-down market read.'};
+  const stage=s.orderType==='LIMIT'?'LIMIT READY':s.orderType==='MARKET'?'MARKET READY':'NO SETUP';
   return <div className="live-result">
-    <div className={'setup-card-v2 '+tone}>
-      <div className="setup-v2-head">
-        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · {result.timeframe}</span><h3>{result.market==='forex'||result.market==='metals'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div>
-        <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
-        <div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div>
+    <div className={`setup-card-v2 ${tone}`}>
+      <div className="setup-v2-head"><div className="setup-v2-symbol"><span>{result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'METALS / CFD'} · {result.timeframe}</span><h3>{result.market==='forex'||result.market==='metals'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div><div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div><div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div></div>
+      <div className="mtf-structure-strip">
+        <div className={s.higherBias===s.bias && s.bias!=='WAIT'?'active':''}><span>BIAS · {s.higherTimeframe||'HTF'}</span><b>{s.higherBias||'WAIT'}</b></div>
+        <i>→</i>
+        <div className={s.middleBias===s.bias && s.bias!=='WAIT'?'active':''}><span>STRUCTURE · {s.middleTimeframe||'MTF'}</span><b>{s.middleBias||'WAIT'}</b></div>
+        <i>→</i>
+        <div className={s.entryBias===s.bias && s.bias!=='WAIT'?'active':''}><span>ENTRY · {s.entryTimeframe||'LTF'}</span><b>{s.entryBias||'WAIT'}</b></div>
       </div>
-      {wait ? <div className="strategy-status-card"><span>NO SETUP</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
-        <div className="strategy-trade-status"><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'WAITING AT PLANNED LEVEL':'EXECUTION AVAILABLE NOW'}</b></div>
-        <div className="setup-v2-levels">
-          <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
-          <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
-          <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>
-          <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>
-        </div>
-        <div className="strategy-trade-footer"><span>RR {s.riskReward}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
-      </>}
+      {s.structureConflict&&<div className="mtf-conflict"><span>STRUCTURE CONFLICT</span><b>Lower timeframe is not allowed to override the higher-timeframe bias.</b></div>}
+      <div className={"execution-type-card "+(s.orderType==='LIMIT'?'limit':'market')}>
+        <div><span className="execution-kicker">EXECUTION</span><strong>{wait?'NO SETUP':(s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER')}</strong></div>
+        <div className="execution-trigger"><span>{wait?'NO TRADE AVAILABLE':(s.orderType==='LIMIT'?'LIMIT ENTRY':'CURRENT ENTRY')}</span><b>{wait?'—':(s.entry ?? s.marketEntry ?? '—')}</b></div>
+      </div><div className={`setup-v2-banner ${wait?'wait':'ready'}`}><div><b>{wait?'NO SETUP':(s.orderType==='LIMIT'?'LIMIT SETUP':'LIVE ENTRY')}</b><span>{wait?(s.structureConflict?'Higher-timeframe direction and lower-timeframe structure are not aligned yet.':s.entryAligned?'Structure is aligned. The engine is waiting for price to reach a quality execution area.':TIMEFRAME_GUIDE[result.timeframe]?.desc||'The engine is monitoring the selected timeframe for a quality opportunity.'):s.orderType==='LIMIT'?'Structure is aligned; wait for price to reach the planned limit entry.':'Current price is offering the setup.'}</span></div>{!wait&&<strong>{s.riskReward}</strong>}</div>
+      {!wait&&<div className="setup-v2-levels">
+        <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Now {price(s.marketEntry)}</small>}</div>
+        <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
+        <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>
+        <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>
+      </div>}
+      <div className="setup-v2-meta">{!wait&&<div><span>RR</span><b>{s.riskReward}</b></div>}<div><span>PRICE</span><b>{price(s.marketEntry)}</b></div><div><span>STRUCTURE</span><b>{s.marketStructure}</b></div><div><span>TARGET</span><b>{s.liquidityType||'—'}</b></div></div>
+      <SetupWhy setup={s} market={result.market==='forex'?'FOREX':result.market==='perpetual'?'PERPETUAL':'METALS / CFD'} symbol={result.symbol}/><div className="setup-v2-footer"><span>{wait?s.setupReason:'Target is based on the available market structure/liquidity; no synthetic TP is used.'}</span>{wait&&s.limitEntry&&<b>LIMIT WATCH · {price(s.limitEntry)}</b>}</div>
     </div>
   </div>
 }
-
 function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
 function Breakdown({title,value,detail}){return <div className="breakdown-item"><span>{title}</span><b>{value}</b><small>{detail}</small></div>}
