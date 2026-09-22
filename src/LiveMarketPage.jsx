@@ -149,4 +149,3 @@ function Indicator({label,value,tone}){return <div className={tone||''}><span>{l
 function Breakdown({title,value,detail}){return <div className="breakdown-item"><span>{title}</span><b>{value}</b><small>{detail}</small></div>}
 
 
-export const METALS=['XAUUSD','XAGUSD','US30','US500','NAS100','UK100','GER40','FRA40','JP225','HK50','USOIL','UKOIL'];
