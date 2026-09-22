@@ -103,7 +103,11 @@
   display:block!important;font-size:11px!important;font-weight:800!important;letter-spacing:.04em!important;
   white-space:nowrap!important;animation:ksHeaderPairIn .42s cubic-bezier(.16,1,.3,1) both!important;
 }
-.app-sticky-market-state{font-size:8px!important;font-weight:800!important;letter-spacing:.12em!important;color:#6fdfff!important}
+.app-sticky-market-price{font-size:10px!important;font-weight:800!important;letter-spacing:.01em!important;color:#eafcff!important;white-space:nowrap!important;animation:ksHeaderPriceIn .42s cubic-bezier(.16,1,.3,1) both!important}
+.app-sticky-market-change{font-size:9px!important;font-weight:800!important;letter-spacing:.01em!important;white-space:nowrap!important}
+.app-sticky-market.up .app-sticky-market-change{color:#65e6a1!important}
+.app-sticky-market.down .app-sticky-market-change{color:#ff7181!important}
+@keyframes ksHeaderPriceIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 @keyframes ksHeaderPairIn{from{opacity:0;transform:translateY(5px);filter:blur(3px)}to{opacity:1;transform:translateY(0);filter:blur(0)}}
 @keyframes ksHeaderLivePulse{0%,100%{opacity:.55;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
 
@@ -241,7 +245,8 @@
   .app-sticky-search input{font-size:11px!important}
   .app-sticky-market{height:30px!important;padding:0 10px!important;gap:6px!important}
   .app-sticky-market-pair{font-size:10px!important}
-  .app-sticky-market-state{font-size:7px!important}
+  .app-sticky-market-price{font-size:9px!important}
+  .app-sticky-market-change{font-size:8px!important}
   .app-sticky-actions{gap:5px!important}
   .app-sticky-actions .header-pulse{padding:4px 6px!important}
   .app-sticky-actions .profile-avatar{
