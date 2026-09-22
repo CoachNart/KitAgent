@@ -258,6 +258,95 @@ async function sendMarketPushes(event) {
   return { sent: response.successCount, removed: invalidTokens.length };
 }
 
+async function sendPriceAlertPush(userDoc, alert, currentPrice) {
+  const pushTokens = userDoc.data()?.pushTokens;
+  if (!pushTokens || typeof pushTokens !== 'object') return false;
+  const tokens = Object.entries(pushTokens)
+    .filter(([, meta]) => meta?.platform === 'web')
+    .map(([token]) => token);
+  const uniqueTokens = [...new Set(tokens)];
+  if (!uniqueTokens.length) return false;
+  const symbolLabel = String(alert.symbol || '').replace('USDT','');
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens: uniqueTokens,
+    notification: {
+      title: `${symbolLabel} price alert`,
+      body: `Price reached ${Number(currentPrice).toLocaleString(undefined,{maximumFractionDigits:8})}.`,
+    },
+    data: {
+      alertId: `price-${alert.id}`,
+      symbol: alert.symbol,
+      direction: alert.direction,
+      target: String(alert.target),
+      price: String(currentPrice),
+      url: '/market',
+    },
+    webpush: { fcmOptions: { link: '/market' } },
+  });
+  const invalid = [];
+  response.responses.forEach((result,index)=>{
+    if(!result.success&&['messaging/registration-token-not-registered','messaging/invalid-registration-token'].includes(result.error?.code))invalid.push(uniqueTokens[index]);
+  });
+  if(invalid.length){
+    const current=(await userDoc.ref.get()).data()?.pushTokens||{};
+    for(const token of invalid)delete current[token];
+    await userDoc.ref.set({pushTokens:current},{merge:true});
+  }
+  return response.successCount>0;
+}
+
+exports.monitorPriceAlerts = onSchedule(
+  { schedule: 'every 1 minutes', timeZone: 'UTC', region: 'us-central1' },
+  async () => {
+    const users = await db.collection('users').where('notificationSettings.enabled', '==', true).get();
+    if (!users.docs.length) return;
+    const symbols = new Set();
+    const candidates = [];
+    for (const userDoc of users.docs) {
+      const alerts = userDoc.data()?.priceAlerts;
+      if (!alerts || typeof alerts !== 'object') continue;
+      for (const alert of Object.values(alerts)) {
+        if (!alert || alert.triggered || !alert.id || !alert.symbol) continue;
+        const target = Number(alert.target);
+        if (!Number.isFinite(target) || target <= 0) continue;
+        const symbol = String(alert.symbol).toUpperCase().replace(/[^A-Z0-9]/g,'');
+        if (!symbol.endsWith('USDT')) continue;
+        symbols.add(symbol);
+        candidates.push({ userDoc, alert: { ...alert, symbol } });
+      }
+    }
+    if (!candidates.length) return;
+    const prices = {};
+    for (const symbol of symbols) {
+      try {
+        const body = await bybitJson('/v5/market/tickers', { category:'linear', symbol });
+        const price = Number(body?.result?.list?.[0]?.lastPrice);
+        if (Number.isFinite(price)) prices[symbol] = price;
+      } catch (error) {
+        console.warn('[price-alerts] failed to read', symbol, error?.message || error);
+      }
+    }
+    for (const item of candidates) {
+      const { userDoc, alert } = item;
+      const price = prices[alert.symbol];
+      if (!Number.isFinite(price)) continue;
+      const target = Number(alert.target);
+      const hit = alert.direction === 'above' ? price >= target : price <= target;
+      if (!hit) continue;
+      try {
+        await sendPriceAlertPush(userDoc, alert, price);
+        const current=(await userDoc.ref.get()).data()?.priceAlerts||{};
+        if (current[alert.id] && !current[alert.id].triggered) {
+          current[alert.id] = { ...current[alert.id], triggered:true, triggeredPrice:price, triggeredAt:Date.now() };
+          await userDoc.ref.set({priceAlerts:current},{merge:true});
+        }
+      } catch (error) {
+        console.warn('[price-alerts] push failed', alert.id, error?.message || error);
+      }
+    }
+  }
+);
+
 exports.monitorMarketPushes = onSchedule(
   { schedule: 'every 5 minutes', timeZone: 'UTC', region: 'us-central1' },
   async () => {
