@@ -55,18 +55,6 @@
   ],
   "rewrites": [
     {
-      "source": "/api/uniswap",
-      "destination": "/api/defi?provider=uniswap"
-    },
-    {
-      "source": "/api/lighter",
-      "destination": "/api/defi?provider=lighter"
-    },
-    {
-      "source": "/api/morpho",
-      "destination": "/api/defi?provider=morpho"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
