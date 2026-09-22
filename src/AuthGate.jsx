@@ -43,8 +43,8 @@ function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPass
        <span><strong>KitSetups</strong><small>Your Crypto Command Center</small></span>
      </div>
      <div className="auth-heading">
-       <h1>{isSignin?'Good To See You!':'Get started'}</h1>
-       <p>{isSignin?'Sign in to continue.':'Create your KitSetups account.'}</p>
+       <h1>{isReset?'Reset your password':isSignin?'Good To See You!':'Get started'}</h1>
+       <p>{isReset?'Enter your email and we’ll send you a secure reset link.':isSignin?'Sign in to continue.':'Create your KitSetups account.'}</p>
      </div>
      <div className="auth-divider"/>
      {interactive&&<form onSubmit={onSubmit} className="auth-form">
@@ -52,6 +52,7 @@ function AuthScreen({mode='signin',setMode,email='',setEmail,password='',setPass
        {!isReset&&<label className="auth-field"><span>Password</span><div className="auth-input-wrap"><input required minLength={6} type={showPassword?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={isSignin?'Your password':'At least 6 characters'} autoComplete={isSignin?'current-password':'new-password'}/><button type="button" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Hide password':'Show password'} title={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>}
        {message&&<div className="auth-error">{message}</div>}
        <button disabled={busy} className={`auth-submit${isSignin ? ' auth-submit-signin' : ''}`} type="submit"><span>{busy?'Please wait…':isReset?'Send reset link':isSignin?'Sign in':'Create account'}</span>{busy?<LoaderCircle size={15}/>:<LogIn size={15}/>}</button>
+       {isSignin&&<button type="button" className="auth-forgot" onClick={()=>{setMode('reset');setMessage('');setPassword('')}}>Forgot password?</button>}
        <div className="auth-switch-row">{isReset?<><span>Remembered it?</span><button type="button" onClick={()=>{setMode('signin');setMessage('')}}>Back to sign in</button></>:<><span>{isSignin?'New here?':'Already have an account?'}</span><button type="button" onClick={()=>{setMode(isSignin?'signup':'signin');setMessage('');setShowPassword(false)}}>{isSignin?'Create account':'Sign in'}</button></>}</div>
      </form>}
      {!interactive&&<div className="auth-error">{message}</div>}
