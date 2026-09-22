@@ -30,6 +30,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'email', 'emailVerified', 'username', 'displayName', 'photoURL', 'authProvider', 'authProviders',
           'walletAddress', 'maxRiskPercent', 'maxTradeSize', 'tradingPreferences', 'apiKeyMetadata',
+          'notificationSettings', 'pushTokens', 'priceAlerts',
           'securitySettings', 'deviceBindingId', 'lastSeenAt', 'lastSeenIp', 'createdAt', 'updatedAt',
           'premiumUntil'
         ]);
