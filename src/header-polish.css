@@ -271,3 +271,16 @@
 @media(prefers-reduced-motion:reduce){
   .app-header-ad-frame img,.app-header-ad-frame::after{animation:none!important}
 }
+
+
+/* HARD STICKY HEADER LOCK — keep the utility rail pinned while page content scrolls. */
+.app-sticky-rail{
+  position:fixed!important;
+  top:0!important;
+  left:0!important;
+  right:0!important;
+  z-index:999999!important;
+}
+.kit-main{padding-top:46px!important}
+@media(max-width:760px){.app-sticky-rail{min-height:46px!important;height:46px!important;padding:3px 9px!important}.kit-main{padding-top:46px!important}}
+@media(max-width:390px){.app-sticky-rail{min-height:42px!important;height:42px!important;padding:2px 8px!important}.kit-main{padding-top:42px!important}}
