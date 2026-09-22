@@ -125,7 +125,6 @@ function liquidityCandidates(c,bias,entry,a){
     :(bias==='LONG'?'SWING HIGH / BUY-SIDE LIQUIDITY':'SWING LOW / SELL-SIDE LIQUIDITY')
   })).sort((x,y)=>x.distance-y.distance);
 }
-function chooseLiquidityTarget(c,bias,entry,a){const candidates=liquidityCandidates(c,bias,entry,a);if(!candidates.length)return null;const chosen=candidates[0],buffer=Math.max(a*.08,entry*.00015),target=bias==='LONG'?chosen.level-buffer:chosen.level+buffer;if((bias==='LONG'&&target<=entry)||(bias==='SHORT'&&target>=entry))return null;return{target,type:chosen.type,liquidityLevel:chosen.level,touches:chosen.touches,distancePct:Number((chosen.distance*100).toFixed(2)),reason:`Targeting ${chosen.type.toLowerCase()} at ${roundPrice(chosen.level)}; TP is placed just before the liquidity to account for reaction.`}}
 function protectiveStop(c,bias,entry,a){
   const st=marketStructure(c),sweep=liquiditySweep(c,bias,20,12),buffer=Math.max(a*.16,entry*.00025);
   const swings=bias==='LONG'?st.lows:st.highs;
@@ -138,13 +137,6 @@ function protectiveStop(c,bias,entry,a){
   const maxRisk=Math.max(a*2.2,entry*.025);
   if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);
   return stop;
-}
-function structuralEntryCandidates(c,bias,current,a){
-  const zones=entryZones(c,bias,current,a),sweep=liquiditySweep(c,bias),bos=structureBreak(c,bias,36),candidates=[];
-  for(const z of zones)candidates.push({entry:z.mid,zone:z});
-  if(sweep)candidates.push({entry:bias==='LONG'?sweep.level+a*.10:sweep.level-a*.10,zone:sweep});
-  if(bos)candidates.push({entry:current,zone:bos});
-  return candidates.sort((x,y)=>Math.abs(current-x.entry)-Math.abs(current-y.entry));
 }
 function stopForEntry(c,bias,entry,a){return protectiveStop(c,bias,entry,a);}
 function targetPool(c,bias,entry,a){
@@ -217,41 +209,6 @@ function marketStructure(c){
 }
 function structureBias(st){return st.trend==='LONG'||st.trend==='SHORT'?st.trend:'WAIT'}
 function opposite(a,b){return (a==='LONG'&&b==='SHORT')||(a==='SHORT'&&b==='LONG')}
-function topDownDecision(htf,mtf,ltf){
-  const higherBias=structureBias(htf);
-  const middleBias=structureBias(mtf);
-  const entryBias=structureBias(ltf);
-  // Higher-timeframe structure is authoritative. The execution timeframe is
-  // confirmation, not a second directional engine: a RANGE on the entry TF
-  // means "waiting for confirmation", while an actual opposite structure is
-  // a hard conflict. This prevents the old exact-alignment gate from turning
-  // every otherwise valid pullback into WAIT.
-  const bias=higherBias;
-  const hardConflict=(higherBias!=='WAIT'&&middleBias!=='WAIT'&&opposite(higherBias,middleBias));
-  const middleAligned=higherBias!=='WAIT'&&middleBias===higherBias;
-  const entryConfirmed=entryBias===higherBias;
-  const structureAligned=Boolean(middleAligned && (entryConfirmed || entryBias==='WAIT'));
-  return {bias,higherBias,middleBias,entryBias,conflict:hardConflict,structureAligned,middleAligned,entryConfirmed};
-}
-function setupQuality(c,bias,entry,trade,e20,e50,r,confirmation){
-  if(!trade)return {score:0,grade:'WAIT',structure:marketStructure(c)};const st=marketStructure(c);let score=0;
-  if(st.trend===bias)score+=2;if(confirmation?.bos)score+=2;if(confirmation?.sweep)score+=2;if(confirmation?.displacement)score+=2;
-  if((bias==='LONG'&&e20>e50)||(bias==='SHORT'&&e20<e50))score+=1;
-  if((bias==='LONG'&&r>=48&&r<=70)||(bias==='SHORT'&&r>=30&&r<=52))score+=1;if(trade.rr>=3)score+=2;else if(trade.rr>=2.25)score+=1;
-  return {score,grade:score>=9?'A':score>=7?'B':'C',structure:st};
-}
-
-const STRATEGIES={
-  TOP_DOWN:{name:'Top-Down',short:'HTF structure first',description:'Starts with higher-timeframe structure, then requires the middle and execution layers to provide a tradable confirmation.',objective:'Trade only when the higher-timeframe storyline and a current execution condition agree.',rules:['Higher timeframe establishes direction.','Middle timeframe confirms or exposes a hard conflict.','Execution timeframe supplies a current market or fresh limit entry.','No synthetic levels when the required evidence is missing.']},
-  PULLBACK:{name:'Pullback',short:'Impulse → retracement → continuation',description:'Waits for a real directional impulse, then looks for a fresh FVG or order block retracement that remains valid inside the higher-timeframe direction.',objective:'Enter continuation after price retraces into a qualified, still-live execution zone.',rules:['HTF direction must be established.','A recent directional impulse must exist.','Price must be retracing into a fresh FVG or order block.','The zone must be unmitigated, close enough to execute and offer at least 2.25R.','A broken or stale zone is rejected.']},
-  BREAKOUT:{name:'Breakout',short:'Close → displacement → continuation',description:'Requires a structural level to break with a decisive candle close and displacement. Wick-only breaks are rejected.',objective:'Participate only after price proves acceptance beyond a meaningful structure level.',rules:['HTF direction must support the break.','A recent BOS must be present.','The break must have decisive displacement, not a wick-only breach.','The current price must remain close enough to the confirmed break leg for execution.','Insufficient RR or stale breaks are rejected.']},
-  SMC:{name:'SMC',short:'Liquidity → displacement → BOS → POI',description:'Uses a Smart Money Concepts sequence: liquidity sweep, displacement, break of structure and a fresh FVG/order-block point of interest.',objective:'Trade the post-liquidity repricing leg rather than guessing direction before the displacement.',rules:['HTF direction is the directional filter.','A meaningful opposing liquidity pool must be swept and reclaimed.','Displacement must follow the sweep.','BOS/structure confirmation must be present.','Entry must use a fresh FVG or order block when price is away from the immediate execution point.']},
-  MSNR:{name:'MSNR',short:'Malaysian Support & Resistance',description:'Uses the Malaysian Support and Resistance framework: higher-timeframe storyline, fresh key levels, V/A formations, SBR/RBS flips and kissing-candle base zones, followed by lower-timeframe confirmation.',objective:'Wait for price to return to a fresh MSNR level and prove the reaction before execution.',rules:['Daily/4H storyline establishes the directional context.','Fresh, unmitigated support/resistance must be identified.','SBR/RBS flips and V/A turning structures are treated as level evidence.','Kissing-candle overlap can define the reaction base.','A tap alone is not an entry; lower-timeframe BOS or engulfing confirmation is required.','If the level is stale, already mitigated or lacks confirmation, no setup is issued.']},
-  PRICE_ACTION:{name:'Price Action',short:'Structure + candle confirmation',description:'Focuses on market structure, rejection and engulfing behaviour without requiring an SMC-specific liquidity sequence.',objective:'Use clean structural price action to confirm continuation or reversal at a meaningful level.',rules:['HTF structure provides the directional context.','Price must interact with a meaningful recent swing or zone.','A clear rejection or engulfing confirmation is required.','The invalidation must sit beyond the structure being traded.','Target must be a real structural/liquidity level with at least 2.25R.']},
-  LIQUIDITY_REVERSAL:{name:'Liquidity Reversal',short:'Sweep → reclaim → reversal',description:'Targets reversals only after price takes a recent swing/liquidity level and closes back through it with displacement.',objective:'Avoid catching falling knives by waiting for the sweep and reclaim to become observable evidence.',rules:['A recent swing high/low must be swept.','Price must reclaim the swept level.','Displacement must confirm the reversal leg.','The stop belongs beyond the swept structure.','No reversal setup is issued without a genuine sweep.']},
-  CRT:{name:'CRT',short:'Candle range → sweep → reclaim',description:'Candle Range Theory setup model: use a completed candle range, wait for one side to be taken, then require a reclaim back through the range before targeting the opposite side.',objective:'Trade a confirmed range expansion and return rather than entering on an unconfirmed wick.',rules:['Use a completed reference candle on the selected timeframe.','One side of that range must be swept.','Price must reclaim back through the range midpoint.','The sweep extreme defines invalidation.','The opposite side of the range must support the risk model and minimum 2.25R.']}
-};
-const STRATEGY_KEYS=new Set(Object.keys(STRATEGIES));
 function normalizeStrategy(v){const key=String(v||'TOP_DOWN').toUpperCase();return STRATEGY_KEYS.has(key)?key:'TOP_DOWN'}
 const CANDLE_INTERVAL_MS={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1H':3600000,'4H':14400000,'1D':86400000,'1W':604800000};
 function closedCandles(c,timeframe,market=''){
@@ -334,11 +291,11 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   else if(key==='TOP_DOWN'){
     const middleBias=structureBias(selectedStructure),entryBias=structureBias(entryStructure),conflict=middleBias!=='WAIT'&&opposite(bias,middleBias),confirmed=entryBias===bias||entryBias==='WAIT';
     const marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
-    if(!conflict&&confirmed){if(marketTrade&&displacement(current,bias)){trade=marketTrade;entry=livePrice;orderType='MARKET';}else{const z=chooseLimit(entryZones(current,bias,last.close,a,36).map(x=>({entry:x.mid,zone:x})));if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}}
+    if(!conflict&&confirmed){if(marketTrade&&displacement(current,bias)){trade=marketTrade;entry=livePrice;orderType='MARKET';}else{const z=chooseLimit(entryZones(current,bias,livePrice,a,36).map(x=>({entry:x.mid,zone:x})));if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}}
     reason=trade?'Top-Down context agrees with the selected timeframe and a valid execution plan is available.':'Waiting for higher-timeframe direction, aligned structure and a real execution level.';
     evidence.push('Bias timeframe '+tf.bias+': '+higherBias+'.','Structure timeframe '+tf.structure+': '+middleBias+'.','Selected '+executionTimeframe+' execution: '+entryBias+'.',conflict?'Structure conflicts with higher-timeframe direction.':'Structure does not conflict.');
   } else if(key==='PULLBACK'){
-    const impulse=structureBreak(structure,bias,48,24),zones=entryZones(current,bias,last.close,a,40),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
+    const impulse=structureBreak(structure,bias,48,24),zones=entryZones(current,bias,livePrice,a,40),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
     if(impulse&&z){trade=z.trade;entry=z.entry;orderType='LIMIT';}else if(impulse&&marketTrade&&displacement(current,bias)){trade=marketTrade;entry=livePrice;orderType='MARKET';}
     reason=trade?'A directional impulse and executable retracement are present on the selected timeframe.':'Waiting for a real impulse followed by a fresh executable pullback.';evidence.push(impulse?'Directional impulse confirmed.':'No qualifying impulse.',zones[0]?.type||'No fresh FVG/order block.');
   } else if(key==='BREAKOUT'){
