@@ -15,7 +15,8 @@ function statusOf(s){
   return {label:'AWAITING ENTRY',tone:'watching',closed:false};
 }
 function isTrade(s){return ['MARKET','LIMIT'].includes(String(s.orderType||'').toUpperCase());}
-function isClosed(s){return ['target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
+function isRecorded(s){return isTrade(s)&&['open','target_hit','stop_hit'].includes(String(s.status||''));}
+function isClosed(s){return ['target_hit','stop_hit'].includes(String(s.status||''));}
 
 export default function SignalHistory({activity=[]}){
   const [signals,setSignals]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('signals'),[query,setQuery]=useState(''),[clearOpen,setClearOpen]=useState(false),[clearText,setClearText]=useState(''),[clearing,setClearing]=useState(false);
@@ -31,7 +32,7 @@ export default function SignalHistory({activity=[]}){
   };
   useEffect(()=>{let unsubscribe=()=>{};if(auth?.onAuthStateChanged)unsubscribe=auth.onAuthStateChanged(user=>load(user));else load();const onSignal=()=>load();window.addEventListener('kitagent-signal-recorded',onSignal);return()=>{unsubscribe?.();window.removeEventListener('kitagent-signal-recorded',onSignal)}},[]);
   useEffect(()=>{const timer=setInterval(()=>load(),30000);return()=>clearInterval(timer)},[]);
-  const tradeSignals=useMemo(()=>signals.filter(isTrade),[signals]);
+  const tradeSignals=useMemo(()=>signals.filter(isRecorded),[signals]);
   const stats=useMemo(()=>{
     const verified=tradeSignals.filter(s=>['target_hit','stop_hit'].includes(s.status)&&(s.result==='win'||s.result==='loss')&&s.outcomeEvidence?.engineVersion==='v3'&&Number.isFinite(Number(s.exitPrice))&&s.closedAt);
     const wins=verified.filter(s=>s.result==='win').length,losses=verified.filter(s=>s.result==='loss').length,pnl=verified.map(s=>Number(s.pnlPercent)).filter(Number.isFinite),closed=tradeSignals.filter(isClosed).length;
