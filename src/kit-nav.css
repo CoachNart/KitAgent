@@ -4,7 +4,7 @@
 .kit-nav{
   position:fixed;
   left:50%;
-  bottom:18px;
+  bottom:0;
   transform:translateX(-50%);
   z-index:1500;
   width:min(720px,calc(100vw - 24px));
