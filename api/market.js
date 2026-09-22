@@ -25,7 +25,7 @@ function ema(v,n){if(v.length<n)return null;let e=sma(v.slice(0,n),n),k=2/(n+1);
 function rsi(v,n=14){if(v.length<n+1)return 50;let g=0,l=0;for(let i=1;i<=n;i++){const d=v[i]-v[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/n,al=l/n;for(let i=n+1;i<v.length;i++){const d=v[i]-v[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n}if(al===0)return 100;return 100-100/(1+ag/al)}
 function atr(c,n=14){if(c.length<n+1)return null;const t=[];for(let i=1;i<c.length;i++){const x=c[i],p=c[i-1];t.push(Math.max(x.high-x.low,Math.abs(x.high-p.close),Math.abs(x.low-p.close)))}return sma(t.slice(-n),n)}
 function roundPrice(v){if(v==null||!Number.isFinite(Number(v)))return null;v=Number(v);if(v>=1000)return Number(v.toFixed(2));if(v>=100)return Number(v.toFixed(3));if(v>=1)return Number(v.toFixed(5));if(v>=.1)return Number(v.toFixed(6));return Number(v.toPrecision(7))}
-function normalize(rows){return rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4]),volume:Number(r[5]||0)})).filter(x=>[x.open,x.high,x.low,x.close].every(Number.isFinite))}
+function normalize(rows){const byTime=new Map();for(const r of rows||[]){const x={time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4]),volume:Number(r[5]||0)};if(![x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)||x.time<=0)continue;if(x.high<Math.max(x.open,x.close,x.low)||x.low>Math.min(x.open,x.close,x.high)||x.high<x.low)continue;byTime.set(x.time,x)}return [...byTime.values()].sort((a,b)=>a.time-b.time)}
 function aggregateFourHour(c){const g=new Map(),b=14400000;for(const x of c){const k=Math.floor(x.time/b)*b;if(!g.has(k))g.set(k,[]);g.get(k).push(x)}return [...g].sort((a,b)=>a[0]-b[0]).map(([time,a])=>({time,open:a[0].open,high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low)),close:a.at(-1).close,volume:a.reduce((s,x)=>s+x.volume,0)}))}
 const CFD_INSTRUMENTS=[
   {symbol:'XAUUSD',providerSymbol:'XAUUSD=X',name:'Gold / US Dollar',type:'CFD'},
@@ -172,7 +172,7 @@ function evaluateTrade(c,bias,entry,a,minRR=2.25){
   const target2Candidate=pools.slice(1).map(level=>{
     const target=bias==='LONG'?level-buffer:level+buffer;
     return {level,target,rr:Math.abs(target-entry)/risk};
-  }).find(x=>x.rr>chosen.rr&&Math.abs(x.target-chosen.target)>a*.3);
+  }).filter(x=>bias==='LONG'?x.target>entry:x.target<entry).find(x=>x.rr>chosen.rr&&Math.abs(x.target-chosen.target)>a*.3);
   return {
     entry,
     stop,
@@ -311,6 +311,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<2.25)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
     if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.entry>=marketPrice)||(tradeBias==='SHORT'&&t.entry<=marketPrice)))return false;
+    if(tradeOrderType==='MARKET'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice)))return false;
     return true;
   };
   const chooseLimit=items=>{for(const x of items||[]){const t=evaluateTrade(current,bias,x.entry,a,2.25);if(validTrade(t,bias,livePrice,'LIMIT'))return {trade:t,entry:x.entry};}return null;};
@@ -384,7 +385,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         return json(res,200,{ok:true,instruments:instruments.length?instruments:CRYPTO_INSTRUMENTS.map(symbol=>({symbol,providerSymbol:symbol.replace('/',''),name:symbol,type:'PERPETUAL'}))});
       }
       return json(res,400,{error:'Instrument discovery is only available for Forex, Crypto, or Metal / CFD'});
-    }if(!['forex','crypto','perpetual','metals'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});
+    }if(!['forex','crypto','perpetual','metals'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});if(market==='forex'&&!/^[A-Z]{6}$/.test(symbol))return json(res,400,{error:'Invalid Forex symbol'});if(market==='metals'&&!CFD_INSTRUMENTS.some(x=>x.symbol===symbol))return json(res,400,{error:'Invalid Metal / CFD symbol'});if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(symbol))return json(res,400,{error:'Invalid crypto symbol'});
   const strategy=normalizeStrategy(req.query?.strategy);
   const context=strategyTimeframes(timeframe,strategy);
   const needed=[...new Set([context.entry,context.structure,context.bias])];
