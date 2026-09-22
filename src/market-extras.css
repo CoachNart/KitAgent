@@ -194,3 +194,80 @@
   .setup-v2-banner.wait b{font-size:9px!important}
   .setup-v2-banner.wait span{font-size:9.5px!important;line-height:1.48!important}
 }
+
+/* Setup trade notice — compact, balanced and deliberately quiet. */
+.strategy-trade-status{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  width:100%!important;
+  margin:0 16px 12px!important;
+  padding:9px 12px!important;
+  box-sizing:border-box!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  border-radius:10px!important;
+  background:rgba(255,255,255,.018)!important;
+  min-width:0!important;
+}
+.strategy-trade-status span{
+  display:inline-flex!important;
+  align-items:center!important;
+  flex:0 0 auto!important;
+  font-size:8px!important;
+  line-height:1!important;
+  letter-spacing:.13em!important;
+  font-weight:800!important;
+  color:#9baab0!important;
+}
+.strategy-trade-status b{
+  display:block!important;
+  min-width:0!important;
+  margin:0!important;
+  font-size:9px!important;
+  line-height:1.25!important;
+  letter-spacing:.025em!important;
+  font-weight:650!important;
+  color:#cbd5d8!important;
+  text-align:right!important;
+}
+.strategy-trade-footer{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  padding:10px 17px 13px!important;
+  border-top:1px solid rgba(255,255,255,.045)!important;
+}
+.strategy-trade-footer span{
+  display:block!important;
+  min-width:0!important;
+  font-size:8px!important;
+  line-height:1.2!important;
+  letter-spacing:.09em!important;
+  font-weight:750!important;
+  color:#74838a!important;
+}
+.strategy-trade-footer span:first-child{
+  color:#a9c9cf!important;
+  white-space:nowrap!important;
+}
+.strategy-trade-footer span:last-child{
+  text-align:right!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+@media(max-width:520px){
+  .strategy-trade-status{
+    margin:0 12px 10px!important;
+    padding:8px 10px!important;
+    gap:8px!important;
+  }
+  .strategy-trade-status span{font-size:7px!important}
+  .strategy-trade-status b{font-size:8px!important}
+  .strategy-trade-footer{padding:9px 13px 12px!important}
+  .strategy-trade-footer span{font-size:7px!important}
+}
