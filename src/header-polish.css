@@ -170,7 +170,7 @@
   position:relative;
   width:100%;
   max-width:1180px;
-  height:124px;
+  height:92px;
   margin:0 auto;
   overflow:hidden;
   border-radius:14px;
@@ -183,7 +183,7 @@
   width:100%;
   height:100%;
   object-fit:cover;
-  object-position:center 50%;
+  object-position:center center;
 }
 
 @media(max-width:760px){
@@ -218,7 +218,7 @@
   }
   .app-header-ad{padding:0 9px 6px}
   .app-header-ad-frame{
-    height:88px;
+    height:68px;
     border-radius:12px;
   }
 }
@@ -235,7 +235,7 @@
   }
   .app-sticky-search{height:32px!important}
   .app-header-ad{padding:0 8px 5px}
-  .app-header-ad-frame{height:80px;border-radius:11px}
+  .app-header-ad-frame{height:62px;border-radius:11px}
 }
 
 .kit-main{padding-top:0!important}
