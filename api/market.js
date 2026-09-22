@@ -227,6 +227,105 @@ function setupQuality(c,bias,entry,trade,e20,e50,r,confirmation){
   if((bias==='LONG'&&r>=48&&r<=70)||(bias==='SHORT'&&r>=30&&r<=52))score+=1;if(trade.rr>=3)score+=2;else if(trade.rr>=2.25)score+=1;
   return {score,grade:score>=9?'A':score>=7?'B':'C',structure:st};
 }
+
+const STRATEGIES={
+  TOP_DOWN:{name:'Top-Down',short:'HTF structure first',description:'Starts with higher-timeframe structure, then requires the middle and execution layers to provide a tradable confirmation.',objective:'Trade only when the higher-timeframe storyline and a current execution condition agree.',rules:['Higher timeframe establishes direction.','Middle timeframe confirms or exposes a hard conflict.','Execution timeframe supplies a current market or fresh limit entry.','No synthetic levels when the required evidence is missing.']},
+  PULLBACK:{name:'Pullback',short:'Impulse → retracement → continuation',description:'Waits for a real directional impulse, then looks for a fresh FVG or order block retracement that remains valid inside the higher-timeframe direction.',objective:'Enter continuation after price retraces into a qualified, still-live execution zone.',rules:['HTF direction must be established.','A recent directional impulse must exist.','Price must be retracing into a fresh FVG or order block.','The zone must be unmitigated, close enough to execute and offer at least 2.25R.','A broken or stale zone is rejected.']},
+  BREAKOUT:{name:'Breakout',short:'Close → displacement → continuation',description:'Requires a structural level to break with a decisive candle close and displacement. Wick-only breaks are rejected.',objective:'Participate only after price proves acceptance beyond a meaningful structure level.',rules:['HTF direction must support the break.','A recent BOS must be present.','The break must have decisive displacement, not a wick-only breach.','The current price must remain close enough to the confirmed break leg for execution.','Insufficient RR or stale breaks are rejected.']},
+  SMC:{name:'SMC',short:'Liquidity → displacement → BOS → POI',description:'Uses a Smart Money Concepts sequence: liquidity sweep, displacement, break of structure and a fresh FVG/order-block point of interest.',objective:'Trade the post-liquidity repricing leg rather than guessing direction before the displacement.',rules:['HTF direction is the directional filter.','A meaningful opposing liquidity pool must be swept and reclaimed.','Displacement must follow the sweep.','BOS/structure confirmation must be present.','Entry must use a fresh FVG or order block when price is away from the immediate execution point.']},
+  MSNR:{name:'MSNR',short:'Malaysian Support & Resistance',description:'Uses the Malaysian Support and Resistance framework: higher-timeframe storyline, fresh key levels, V/A formations, SBR/RBS flips and kissing-candle base zones, followed by lower-timeframe confirmation.',objective:'Wait for price to return to a fresh MSNR level and prove the reaction before execution.',rules:['Daily/4H storyline establishes the directional context.','Fresh, unmitigated support/resistance must be identified.','SBR/RBS flips and V/A turning structures are treated as level evidence.','Kissing-candle overlap can define the reaction base.','A tap alone is not an entry; lower-timeframe BOS or engulfing confirmation is required.','If the level is stale, already mitigated or lacks confirmation, no setup is issued.']},
+  PRICE_ACTION:{name:'Price Action',short:'Structure + candle confirmation',description:'Focuses on market structure, rejection and engulfing behaviour without requiring an SMC-specific liquidity sequence.',objective:'Use clean structural price action to confirm continuation or reversal at a meaningful level.',rules:['HTF structure provides the directional context.','Price must interact with a meaningful recent swing or zone.','A clear rejection or engulfing confirmation is required.','The invalidation must sit beyond the structure being traded.','Target must be a real structural/liquidity level with at least 2.25R.']},
+  LIQUIDITY_REVERSAL:{name:'Liquidity Reversal',short:'Sweep → reclaim → reversal',description:'Targets reversals only after price takes a recent swing/liquidity level and closes back through it with displacement.',objective:'Avoid catching falling knives by waiting for the sweep and reclaim to become observable evidence.',rules:['A recent swing high/low must be swept.','Price must reclaim the swept level.','Displacement must confirm the reversal leg.','The stop belongs beyond the swept structure.','No reversal setup is issued without a genuine sweep.']}
+};
+const STRATEGY_KEYS=new Set(Object.keys(STRATEGIES));
+function normalizeStrategy(v){const key=String(v||'TOP_DOWN').toUpperCase();return STRATEGY_KEYS.has(key)?key:'TOP_DOWN'}
+function candleEngulfing(c,bias){
+  if(c.length<2)return false;
+  const p=c.at(-2),x=c.at(-1);
+  if(bias==='LONG')return p.close<p.open&&x.close>x.open&&x.open<=p.close&&x.close>=p.open;
+  if(bias==='SHORT')return p.close>p.open&&x.close<x.open&&x.open>=p.close&&x.close<=p.open;
+  return false;
+}
+function rejectionCandle(c,bias){
+  if(!c.length)return false;
+  const x=c.at(-1),range=x.high-x.low;if(!range)return false;
+  const upper=x.high-Math.max(x.open,x.close),lower=Math.min(x.open,x.close)-x.low;
+  return bias==='LONG'?(lower/range>=.45&&x.close>x.low+range*.55):(upper/range>=.45&&x.close<x.high-range*.55);
+}
+function msnrLevels(c,bias){
+  const st=marketStructure(c),levels=[],last=c.at(-1)?.close;
+  const source=bias==='LONG'?st.lows:st.highs;
+  for(const x of source.slice(-10)){
+    if((bias==='LONG'&&x.p<last)||(bias==='SHORT'&&x.p>last))levels.push({level:x.p,index:x.i,type:bias==='LONG'?'SUPPORT':'RESISTANCE'});
+  }
+  const oppositeSource=bias==='LONG'?st.highs:st.lows;
+  for(const x of oppositeSource.slice(-10)){
+    const later=c.slice(x.i+1);
+    const flipped=bias==='LONG'?later.some(k=>k.close>x.p)&&last>x.p:later.some(k=>k.close<x.p)&&last<x.p;
+    if(flipped)levels.push({level:x.p,index:x.i,type:bias==='LONG'?'RBS':'SBR'});
+  }
+  for(let i=Math.max(1,c.length-30);i<c.length-1;i++){
+    const a=c[i],b=c[i+1],overlapLow=Math.max(a.low,b.low),overlapHigh=Math.min(a.high,b.high);
+    if(overlapLow<overlapHigh)levels.push({level:(overlapLow+overlapHigh)/2,index:i,type:'KISSING CANDLE BASE'});
+  }
+  return levels.filter(x=>Number.isFinite(x.level)&&c.length-1-x.index<=80).sort((a,b)=>Math.abs(last-a.level)-Math.abs(last-b.level));
+}
+function msnrFormation(c,bias){
+  if(c.length<6)return null;
+  const x=c.at(-1),range=Math.max(x.high-x.low,1e-12);
+  const v=bias==='LONG'&&x.close>x.open&&x.low<=Math.min(...c.slice(-6,-1).map(k=>k.low))&&x.close>x.low+range*.55;
+  const a=bias==='SHORT'&&x.close<x.open&&x.high>=Math.max(...c.slice(-6,-1).map(k=>k.high))&&x.close<x.high-range*.55;
+  return v?'V FORMATION':a?'A FORMATION':null;
+}
+function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executionTimeframe){
+  const key=normalizeStrategy(strategy),info=STRATEGIES[key],htf=candlesByTf[ladder.bias],mtf=candlesByTf[ladder.structure],ltf=candlesByTf[ladder.entry],current=candlesByTf[executionTimeframe];
+  const base=analyzeCandles(current,bias,instrumentSymbol,executionTimeframe),a=atr(current),last=current.at(-1);
+  const htfBias=structureBias(marketStructure(htf)),evidence=[],failures=[];
+  let valid=false,planEntry=base.entry,planOrder=base.orderType,planReason='';
+  const baseReady=Boolean(base.tradeReady&&base.entry!=null&&base.stopLoss!=null&&base.takeProfit1!=null);
+  if(key==='TOP_DOWN'){
+    valid=baseReady;
+    planReason=valid?'Higher-timeframe structure is confirmed and the base execution engine has a valid trade plan.':'Directional context exists, but no fully validated execution plan is present.';
+    evidence.push('Higher timeframe establishes direction.','Middle timeframe is checked for conflict.','Execution timeframe supplies the final trade condition.');
+  } else if(key==='PULLBACK'){
+    const impulse=structureBreak(current,bias,48),zones=entryZones(current,bias,last.close,a,24),zone=zones[0],distance=zone?Math.abs(last.close-zone.mid):Infinity;
+    valid=Boolean(baseReady&&impulse&&zone&&distance>Math.max(a*.12,last.close*.0004));
+    if(valid){planEntry=zone.mid;planOrder='LIMIT';planReason='A recent directional impulse is retracing into a fresh FVG/order-block zone.'}
+    else planReason='Waiting for a fresh pullback into a qualified, executable FVG/order-block zone after a real impulse.';
+    evidence.push(impulse?'Recent directional impulse confirmed.':'No recent directional impulse.',zone?zone.type+' remains available.':'No fresh pullback zone is available.');
+  } else if(key==='BREAKOUT'){
+    const bos=structureBreak(current,bias,36),fresh=bos&&bos.breakIndex>=current.length-12,disp=displacement(current,bias);
+    valid=Boolean(baseReady&&bos&&fresh&&disp);
+    planReason=valid?'A structure level closed through with current displacement; the breakout is still actionable.':'Waiting for a decisive close through structure with displacement. Wick-only breaks are rejected.';
+    evidence.push(bos?'Recent BOS detected.':'No recent BOS.',disp?'Displacement confirmed.':'No displacement confirmation.',fresh?'Break is recent.':'Break is stale.');
+  } else if(key==='SMC'){
+    const sweep=liquiditySweep(current,bias),bos=structureBreak(current,bias,48),disp=displacement(current,bias),zones=[...fairValueGaps(current,bias),...orderBlockCandidates(current,bias)].filter(z=>z.index>=current.length-25);
+    valid=Boolean(baseReady&&sweep&&bos&&disp&&(zones.length||base.orderType==='MARKET'));
+    planReason=valid?'Liquidity was swept, displacement followed and structure confirmed; the entry is tied to a fresh SMC point of interest.':'Waiting for the full SMC sequence: liquidity sweep, displacement, BOS and a fresh POI.';
+    evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',disp?'Displacement confirmed.':'No displacement.',bos?'BOS confirmed.':'No BOS.',zones[0]?.type||'No fresh FVG/order block.');
+  } else if(key==='MSNR'){
+    const levels=msnrLevels(htf,bias),level=levels.find(z=>Math.abs(last.close-z.level)<=Math.max(a*1.5,last.close*.01)),formation=msnrFormation(ltf,bias),bos=structureBreak(ltf,bias,24),engulf=candleEngulfing(ltf,bias),confirm=Boolean(bos||engulf||rejectionCandle(ltf,bias));
+    valid=Boolean(baseReady&&htfBias===bias&&level&&confirm);
+    planReason=valid?'Price tapped a fresh MSNR level and lower-timeframe confirmation is present.':'Waiting for a fresh MSNR support/resistance level to be tapped and confirmed on the lower timeframe.';
+    evidence.push(htfBias===bias?'HTF storyline agrees with direction.':'HTF storyline does not support this direction.',level?level.type+' level at '+roundPrice(level.level):'No fresh MSNR level in range.',formation||'No V/A formation detected.',confirm?'Lower-timeframe confirmation present.':'No BOS, engulfing or rejection confirmation.');
+  } else if(key==='PRICE_ACTION'){
+    const level=msnrLevels(current,bias)[0],engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
+    valid=Boolean(baseReady&&level&&(engulf||reject));
+    planReason=valid?'Price interacted with a recent structural level and printed a confirming candle.':'Waiting for price to reach a meaningful structure level and print rejection or engulfing confirmation.';
+    evidence.push(level?'Recent structural level is nearby.':'No nearby structural level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
+  } else if(key==='LIQUIDITY_REVERSAL'){
+    const sweep=liquiditySweep(current,bias),disp=displacement(current,bias),reclaim=sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level));
+    valid=Boolean(baseReady&&sweep&&disp&&reclaim);
+    planReason=valid?'A recent liquidity sweep was reclaimed with displacement; reversal execution is confirmed.':'Waiting for a genuine liquidity sweep, reclaim and displacement before considering a reversal.';
+    evidence.push(sweep?sweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim yet.',disp?'Displacement confirms reversal.':'No displacement.');
+  }
+  if(!valid){
+    for(const x of evidence)if(/No |Waiting|not support|stale/i.test(x))failures.push(x);
+    return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:planReason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:planReason||'No strategy-valid setup is present.'};
+  }
+  return {...base,strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:htfBias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:planReason,entry:planEntry,limitEntry:planOrder==='LIMIT'?planEntry:null,orderType:planOrder,setupReason:planReason};
+}
+
 function analyzeCandles(c,forcedBias=null,instrumentSymbol='',executionTimeframe='1H'){
   if(c.length<60)throw new Error('Not enough candles for a reliable setup ('+c.length+' received)');
   const closes=c.map(x=>x.close),last=c.at(-1),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(c);if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
@@ -311,7 +410,8 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
   const current=candlesByTf[timeframe],topDown=buildTopDown(candlesByTf,ladder);
-  let setup=analyzeCandles(current,topDown.bias,symbol,timeframe);
+  const strategy=normalizeStrategy(req.query?.strategy);
+  let setup=strategyPlan(candlesByTf,ladder,strategy,topDown.bias,symbol,timeframe);
   const entryStructure=topDown.entryBias, middleStructure=topDown.middleBias;
   const structureConflict=topDown.conflict;
   // A countertrend entry-timeframe structure can be the pullback that creates a valid LIMIT.
@@ -348,5 +448,5 @@ export default async function handler(req,res){if(req.method!=='GET')return json
     setup={...setup,directionBias:topDown.bias};
   }
   const confidenceBase=setup.confidence,finalConfidence=Math.min(95,Math.max(35,Math.round(confidenceBase+(topDown.structureAligned?8:0)-(structureConflict?8:0))));
-  return json(res,200,{ok:true,market,symbol,timeframe,setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'||market==='metals'?'Yahoo Finance chart data':'Bybit linear perpetuals',generatedAt:new Date().toISOString()})
+  return json(res,200,{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:{...setup,confidence:finalConfidence,higherTimeframe:ladder.bias,middleTimeframe:ladder.structure,entryTimeframe:ladder.entry,higherBias:topDown.higherBias,middleBias:topDown.middleBias,entryBias:topDown.entryBias,structureConflict,entryAligned},confluence:[{timeframe:ladder.bias,bias:topDown.higherBias,role:'BIAS',confidence:topDown.higherBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-12)},{timeframe:ladder.structure,bias:topDown.middleBias,role:'STRUCTURE',confidence:topDown.middleBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-15)},{timeframe:ladder.entry,bias:topDown.entryBias,role:'ENTRY',confidence:topDown.entryBias===topDown.bias?finalConfidence:Math.max(35,finalConfidence-18)}],aligned:[topDown.higherBias,topDown.middleBias,topDown.entryBias].filter(x=>x===topDown.bias&&x!=='WAIT').length,totalTimeframes:3,source:market==='forex'||market==='metals'?'Yahoo Finance chart data':'Bybit linear perpetuals',generatedAt:new Date().toISOString()})
 }catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
