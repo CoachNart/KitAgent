@@ -26,11 +26,13 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 
  const localInstruments=(m)=>m==='forex'?FOREX.map(symbol=>({symbol})):m==='perpetual'?CRYPTO.map(symbol=>({symbol})) :METALS.map(symbol=>({symbol}));
 
- useEffect(()=>{let cancelled=false;setResult(null);setSavedSignal(null);setError('');setInstrumentQuery('');setPickerOpen(false);const next=localInstruments(market);setInstruments(next);setPair(next[0]?.symbol||'');(async()=>{try{const token=auth?.currentUser?await auth.currentUser.getIdToken():'';const r=await fetch('/api/market?action=instruments&market='+encodeURIComponent(market),{headers:token?{Authorization:'Bearer '+token}:{},cache:'no-store'});const body=await r.json().catch(()=>({}));if(cancelled||!r.ok||!Array.isArray(body?.instruments)||!body.instruments.length)return;const live=body.instruments.map(x=>({symbol:x.symbol,name:x.name||''}));setInstruments(live);setPair(p=>live.some(x=>x.symbol===p)?p:(live[0]?.symbol||''));}catch{} })();return()=>{cancelled=true}},[market]);
+ useEffect(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup');if(!raw)return;const cached=JSON.parse(raw);if(cached?.ok&&cached?.setup){setResult(cached);window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:cached}));}}catch{}},[]);
+
+ useEffect(()=>{let cancelled=false;setError('');setInstrumentQuery('');setPickerOpen(false);const next=localInstruments(market);setInstruments(next);setPair(next[0]?.symbol||'');(async()=>{try{const token=auth?.currentUser?await auth.currentUser.getIdToken():'';const r=await fetch('/api/market?action=instruments&market='+encodeURIComponent(market),{headers:token?{Authorization:'Bearer '+token}:{},cache:'no-store'});const body=await r.json().catch(()=>({}));if(cancelled||!r.ok||!Array.isArray(body?.instruments)||!body.instruments.length)return;const live=body.instruments.map(x=>({symbol:x.symbol,name:x.name||''}));setInstruments(live);setPair(p=>live.some(x=>x.symbol===p)?p:(live[0]?.symbol||''));}catch{} })();return()=>{cancelled=true}},[market]);
 
  const filteredPairs=useMemo(()=>{const q=instrumentQuery.trim().toUpperCase();return q?instruments.filter(x=>`${x.symbol} ${x.name||''}`.toUpperCase().includes(q)):instruments},[instruments,instrumentQuery]);
 
- const analyze=async()=>{if(!pair)return;setLoading(true);setError('');setResult(null);setSavedSignal(null);try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));const saved=await persistSignal(body);if(saved?.signal)setSavedSignal(saved.signal)}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
+ const analyze=async()=>{if(!pair)return;setLoading(true);setError('');try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);try{localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));}catch{}window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));const saved=await persistSignal(body);if(saved?.signal)setSavedSignal(saved.signal)}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
 
  return (
     <div className="live-market page-wrap">
@@ -43,7 +45,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
         <span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span>
       </div>
 
-      <MarketWatchlist market={market} symbol={pair} onSelect={(next)=>{setPair(next);setResult(null);}}/>
+      <MarketWatchlist market={market} symbol={pair} onSelect={(next)=>setPair(next)}/>
 
       <section className="live-market-card">
         <div className="live-tabs" role="tablist">
@@ -67,7 +69,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
                   </div>
                   <div className="instrument-results">
                     {filteredPairs.map(x=>
-                      <button type="button" key={x.symbol} className={pair===x.symbol?'selected':''} onClick={()=>{setPair(x.symbol);setResult(null);setInstrumentQuery('');setPickerOpen(false)}}>
+                      <button type="button" key={x.symbol} className={pair===x.symbol?'selected':''} onClick={()=>{setPair(x.symbol);setInstrumentQuery('');setPickerOpen(false)}}>
                         <b>{x.symbol}</b><small>{market==='metals'?CFD_CATEGORIES[x.symbol]||'CFD':''}</small>
                       </button>
                     )}
@@ -81,12 +83,12 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
           <label className="live-field timeframe">
             <span>TIMEFRAME</span>
             <div>
-              <select value={timeframe} onChange={e=>{setTimeframe(e.target.value);setResult(null)}}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select>
+              <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select>
               <ChevronDown/>
             </div>
           </label>
 
-          <StrategySelector value={strategy} onChange={next=>{setStrategy(next);setResult(null);}}/>
+          <StrategySelector value={strategy} onChange={setStrategy}/>
 
           <button type="button" className="live-analyze" onClick={analyze} disabled={loading||!pair}>
             {loading?<><RefreshCw className="spin"/> Reading market</>:<><BarChart3/> Analyze pair</>}
