@@ -335,11 +335,32 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
   }
   // A strategy may be valid for a pending LIMIT even when the current candle is not a MARKET trigger.
   // Only use real structural levels/POIs with a complete stop/target calculation; never invent an entry.
+  // The important distinction is that a strategy should be allowed to surface a *pending*
+  // opportunity when the market has already formed the structure but has not yet reached
+  // the execution level. The old engine only did this for a subset of strategies, which
+  // made valid Top-Down and Price Action opportunities disappear entirely.
   if(!valid && bias!=='WAIT' && htfBias===bias){
     const currentPrice=last.close;
     const maxZoneDistance=Math.max(a*3.5,currentPrice*.03);
     let candidate=null,candidateTrade=null,candidateReason='';
-    if(key==='PULLBACK'){
+    if(key==='TOP_DOWN'){
+      const zones=entryZones(current,bias,currentPrice,a,60).filter(z=>Math.abs(currentPrice-z.mid)<=maxZoneDistance);
+      for(const z of zones){
+        const t=evaluateTrade(current,bias,z.mid,a,2.25);
+        if(validTrade(t)){candidate={...z,entry:z.mid};candidateTrade=t;break;}
+      }
+      if(!candidate){
+        const bos=structureBreak(current,bias,60);
+        if(bos&&Math.abs(currentPrice-bos.level)<=maxZoneDistance){
+          const t=evaluateTrade(current,bias,bos.level,a,2.25);
+          if(validTrade(t)){candidate={entry:bos.level,type:'STRUCTURE RETEST',index:bos.breakIndex};candidateTrade=t;}
+        }
+      }
+      if(candidate){
+        candidateReason='Higher-timeframe direction is intact and a real structural execution level is available. The limit is staged at that level rather than waiting for the exact trigger candle.';
+        evidence.push(candidate.type+' is a live Top-Down execution opportunity.');
+      }
+    } else if(key==='PULLBACK'){
       const zones=entryZones(current,bias,currentPrice,a,60).filter(z=>Math.abs(currentPrice-z.mid)<=maxZoneDistance);
       for(const z of zones){const t=evaluateTrade(current,bias,z.mid,a,2.25);if(validTrade(t)){candidate={...z,entry:z.mid};candidateTrade=t;break;}}
       if(candidate){candidateReason='A live directional pullback zone is available. The limit order is anchored to the real FVG/order block and invalidated beyond structure.';evidence.push(candidate.type+' is a live executable pullback zone.');}
@@ -353,8 +374,18 @@ function strategyPlan(candlesByTf,ladder,strategy,bias,instrumentSymbol,executio
     } else if(key==='MSNR'){
       const levels=msnrLevels(htf,bias).filter(z=>Math.abs(currentPrice-z.level)<=maxZoneDistance);
       const level=levels[0];
-      // MSNR confirmation remains required for a market entry. A LIMIT is only staged when price is already at/inside the level and the complete risk/target model is valid.
-      if(level&&Math.abs(currentPrice-level.level)<=Math.max(a*.75,currentPrice*.0015)){const t=evaluateTrade(current,bias,level.level,a,2.25);if(validTrade(t)){candidate={entry:level.level,type:level.type,index:level.index};candidateTrade=t;candidateReason='Price is at a qualified MSNR level. The limit is anchored to the live level; lower-timeframe confirmation is still recorded as the strategy trigger.';evidence.push(level.type+' level is currently being tested.');}}
+      if(level&&Math.abs(currentPrice-level.level)<=Math.max(a*.75,currentPrice*.0015)){const t=evaluateTrade(current,bias,level.level,a,2.25);if(validTrade(t)){candidate={entry:level.level,type:level.type,index:level.index};candidateTrade=t;candidateReason='Price is at a qualified MSNR level. The limit is anchored to the real level and invalidated beyond structure.';evidence.push(level.type+' is a live MSNR execution level.');}}
+    } else if(key==='PRICE_ACTION'){
+      const level=msnrLevels(current,bias).find(z=>Math.abs(currentPrice-z.level)<=maxZoneDistance);
+      if(level){
+        const t=evaluateTrade(current,bias,level.level,a,2.25);
+        if(validTrade(t)){
+          candidate={entry:level.level,type:level.type,index:level.index};
+          candidateTrade=t;
+          candidateReason='A real structural level is available with a complete risk/target model. The limit waits for price to return to the level, while candle confirmation remains the trigger.';
+          evidence.push(level.type+' is a live Price Action level.');
+        }
+      }
     }
     if(candidate&&candidateTrade){
       valid=true;strategyTrade=candidateTrade;planEntry=candidate.entry;planOrder='LIMIT';planReason=candidateReason;
