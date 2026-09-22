@@ -170,7 +170,7 @@
   position:relative;
   width:100%;
   max-width:1180px;
-  height:92px;
+  height:auto;
   margin:0 auto;
   overflow:hidden;
   border-radius:14px;
@@ -181,8 +181,8 @@
 .app-header-ad-frame img{
   display:block;
   width:100%;
-  height:100%;
-  object-fit:cover;
+  height:auto;
+  object-fit:contain;
   object-position:center center;
 }
 
@@ -217,10 +217,7 @@
     min-height:26px!important;
   }
   .app-header-ad{padding:0 9px 6px}
-  .app-header-ad-frame{
-    height:68px;
-    border-radius:12px;
-  }
+  .app-header-ad-frame{border-radius:12px}
 }
 @media(max-width:390px){
   .app-sticky-rail{
@@ -235,41 +232,44 @@
   }
   .app-sticky-search{height:32px!important}
   .app-header-ad{padding:0 8px 5px}
-  .app-header-ad-frame{height:62px;border-radius:11px}
+  .app-header-ad-frame{border-radius:11px}
 }
 
 .kit-main{padding-top:0!important}
 
 .app-header-ad-frame{isolation:isolate}
-.app-header-ad-frame img{
-  transform:scale(1.035) translate3d(0,0,0);
-  transform-origin:center center;
-  will-change:transform;
-  animation:ksAdKenBurns 11s cubic-bezier(.45,0,.2,1) infinite alternate;
+.app-header-ad-frame::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  background:linear-gradient(110deg,transparent 0%,rgba(255,255,255,0) 38%,rgba(255,255,255,.16) 50%,rgba(255,255,255,0) 62%,transparent 100%);
+  transform:translateX(-120%);
+  animation:ksAdSheen 7s cubic-bezier(.55,.05,.25,1) infinite;
 }
 .app-header-ad-frame::after{
   content:"";
   position:absolute;
-  inset:-25% -35%;
+  inset:0;
   z-index:2;
   pointer-events:none;
-  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.025) 44%,rgba(255,255,255,.14) 49%,rgba(255,255,255,.025) 54%,transparent 61%);
-  transform:translateX(-62%) skewX(-12deg);
-  animation:ksAdSheen 6.5s cubic-bezier(.55,.05,.25,1) infinite;
-  mix-blend-mode:screen;
-}
-@keyframes ksAdKenBurns{
-  0%{transform:scale(1) translate3d(0,0,0)}
-  100%{transform:scale(1) translate3d(0,0,0)}
+  border-radius:inherit;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.035),inset 0 -18px 34px rgba(0,0,0,.10);
+  animation:ksAdBreath 5s ease-in-out infinite;
 }
 @keyframes ksAdSheen{
-  0%,18%{transform:translateX(-62%) skewX(-12deg);opacity:0}
-  25%{opacity:.2}
-  48%{transform:translateX(62%) skewX(-12deg);opacity:.72}
-  58%,100%{transform:translateX(62%) skewX(-12deg);opacity:0}
+  0%,22%{transform:translateX(-120%);opacity:0}
+  28%{opacity:.35}
+  48%{transform:translateX(120%);opacity:.72}
+  58%,100%{transform:translateX(120%);opacity:0}
+}
+@keyframes ksAdBreath{
+  0%,100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,.035),inset 0 -18px 34px rgba(0,0,0,.10)}
+  50%{box-shadow:inset 0 0 0 1px rgba(0,199,254,.09),inset 0 -18px 34px rgba(0,0,0,.13)}
 }
 @media(prefers-reduced-motion:reduce){
-  .app-header-ad-frame img,.app-header-ad-frame::after{animation:none!important}
+  .app-header-ad-frame::before,.app-header-ad-frame::after{animation:none!important}
 }
 
 
