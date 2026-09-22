@@ -53,6 +53,32 @@
 .kit-nav-item.active .kit-nav-icon svg{transform:scale(1.03);filter:drop-shadow(0 0 7px rgba(0,199,254,.22))}
 .kit-nav-label{display:none!important}
 
+/* Desktop is a compact vertical app rail, fixed to the left side. */
+@media(min-width:761px){
+  .kit-nav{
+    left:14px;
+    top:50%;
+    bottom:auto;
+    transform:translate3d(0,-50%,0);
+    width:68px;
+  }
+  .kit-nav-inner{
+    min-height:0;
+    height:auto;
+    padding:7px;
+    grid-template-columns:1fr;
+    grid-template-rows:repeat(6,52px);
+    gap:4px;
+    border-radius:22px;
+  }
+  .kit-nav-item{
+    width:52px;
+    height:52px;
+    padding:0;
+  }
+  .content{padding-left:88px!important}
+}
+
 /* Mobile is a true app dock: edge-to-edge, flush with the viewport, with the
    safe-area inset absorbed inside the dock rather than creating a gap below it. */
 @media(max-width:760px){
