@@ -253,7 +253,7 @@ function msnrLevels(c,bias){
   for(let i=Math.max(1,c.length-30);i<c.length-1;i++){
     const a=c[i],b=c[i+1],overlapLow=Math.max(a.low,b.low),overlapHigh=Math.min(a.high,b.high);
     if(overlapLow<overlapHigh){
-      const level=(overlapLow+overlapHigh)/2,prior=c.slice(i+1,-1);
+      const level=(overlapLow+overlapHigh)/2,prior=c.slice(i+2,-1);
       const tested=prior.some(k=>bias==='LONG'?k.low<=overlapHigh:k.high>=overlapLow);
       if(!tested)levels.push({level,index:i,type:'KISSING CANDLE BASE'});
     }
@@ -300,16 +300,16 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     reason=trade?'A directional impulse and executable retracement are present on the selected timeframe.':'Waiting for a real impulse followed by a fresh executable pullback.';evidence.push(impulse?'Directional impulse confirmed.':'No qualifying impulse.',zones[0]?.type||'No fresh FVG/order block.');
   } else if(key==='BREAKOUT'){
     const bos=structureBreak(current,bias,48,12),disp=displacement(current,bias),fresh=Boolean(bos&&bos.breakIndex>=current.length-12),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
-    if(bos&&fresh&&disp&&marketTrade){trade=marketTrade;entry=livePrice;orderType='MARKET';}else if(bos&&fresh){const t=evaluateTrade(current,bias,bos.level,a,2.25);if(validTrade(t)){trade=t;entry=bos.level;orderType='LIMIT';}}
+    if(bos&&fresh&&disp&&marketTrade){trade=marketTrade;entry=livePrice;orderType='MARKET';}else if(bos&&fresh){const t=evaluateTrade(current,bias,bos.level,a,2.25);if(validTrade(t,bias,livePrice,'LIMIT')){trade=t;entry=bos.level;orderType='LIMIT';}}
     reason=trade?'The selected timeframe has a confirmed structural breakout with displacement and a valid risk model.':'Waiting for a decisive close through structure with displacement; wick-only breaks are rejected.';evidence.push(bos?'BOS detected.':'No recent BOS.',disp?'Displacement confirmed.':'No displacement.',fresh?'Break is fresh.':'Break is stale.');
   } else if(key==='SMC'){
-    const sweep=liquiditySweep(current,bias,20,12),disp=displacement(current,bias),bos=structureBreak(current,bias,60,12),zones=[...fairValueGaps(current,bias),...orderBlockCandidates(current,bias)].filter(z=>z.index>=current.length-60),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25),reclaim=Boolean(sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level)));
+    const sweep=liquiditySweep(current,bias,20,12),disp=displacement(current,bias),bos=structureBreak(current,bias,60,12),zones=entryZones(current,bias,livePrice,a,60),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25),reclaim=Boolean(sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level)));
     if(sweep&&disp&&bos&&z){trade=z.trade;entry=z.entry;orderType='LIMIT';}else if(sweep&&disp&&bos&&reclaim&&marketTrade){trade=marketTrade;entry=livePrice;orderType='MARKET';}
     reason=trade?'The selected timeframe completed the SMC sequence and has a valid point of interest.':'Waiting for liquidity sweep → displacement → BOS → fresh POI.';evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',disp?'Displacement confirmed.':'No displacement.',bos?'BOS confirmed.':'No BOS.',zones[0]?.type||'No fresh POI.');
   } else if(key==='MSNR'){
     const levels=msnrLevels(biasCandles,bias),actionableLevels=levels.filter(x=>bias==='LONG'?x.level<livePrice:x.level>livePrice),level=actionableLevels.find(x=>Math.abs(livePrice-x.level)<=Math.max(a*2,livePrice*.0025)),formation=msnrFormation(current,bias),bos=structureBreak(current,bias,30,8),engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias),levelProximity=Boolean(level&&Math.abs(last.close-level.level)<=Math.max(a*1.5,last.close*.002)),confirm=Boolean(levelProximity&&(bos||engulf||reject));
     // A limit entry must be on the executable side of the market: below current price for LONG, above current price for SHORT. A level on the wrong side is a target/resistance reference, not a pending limit entry.
-    if(level&&confirm){const t=evaluateTrade(current,bias,level.level,a,2.25);if(validTrade(t)){trade=t;entry=level.level;orderType=Math.abs(level.level-livePrice)<=a*.08?'MARKET':'LIMIT';}}
+    if(level&&confirm){const t=evaluateTrade(current,bias,level.level,a,2.25),nextOrderType=Math.abs(level.level-livePrice)<=a*.08?'MARKET':'LIMIT';if(validTrade(t,bias,livePrice,nextOrderType)){trade=t;entry=level.level;orderType=nextOrderType;}}
     reason=trade?'A strategy-valid MSNR level has been confirmed on the selected timeframe.':'Waiting for a fresh MSNR level and lower-timeframe confirmation.';evidence.push(level?level.type+' identified.':'No nearby qualified MSNR level.',formation||'No V/A formation.',confirm?'Confirmation present.':'No BOS, engulfing or rejection confirmation.');
   } else if(key==='PRICE_ACTION'){
     const level=msnrLevels(current,bias)[0],engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
