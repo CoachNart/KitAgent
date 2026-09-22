@@ -70,7 +70,7 @@ export default function NotificationCenter({user,embedded=false}){
    {permission==='granted'&&<div className="notification-enabled" style={enabledNotice}><CheckCircle2 size={13}/> Browser notifications enabled</div>}
    <div style={section}><div style={sectionTitle}>PRICE ALERT</div><div style={row}><select value={symbol} onChange={e=>setSymbol(e.target.value)} style={field}>{SYMBOLS.map(s=><option key={s}>{s}</option>)}</select><select value={direction} onChange={e=>setDirection(e.target.value)} style={field}><option value="above">Above</option><option value="below">Below</option></select></div><div style={row}><input inputMode="decimal" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Target price" style={{...field,flex:1}}/><button onClick={add} style={addBtn}>Add</button></div></div>
    <div className="notification-list" style={list}>{alerts.length===0&&<div style={empty}>No manual price alerts.</div>}{alerts.slice().reverse().map(a=><div key={a.id} className="notification-alert-item" style={item}><div><strong>{a.symbol.replace('USDT','')}</strong> {a.direction} {fmtPrice(a.target)}<div style={meta}>{a.triggered?'Triggered':'Watching'}</div></div><button onClick={()=>setAlerts(x=>x.filter(y=>y.id!==a.id))} style={close}>×</button></div>)}</div>
-   <div className="notification-footer" style={footer}><CheckCircle2 size={12}/> Push notifications will be delivered by KitSetups when server-side alerts are connected.</div>
+   <div className="notification-footer" style={footer}><CheckCircle2 size={12}/> Server monitoring checks your alert and pushes a notification when the level is reached.</div>
   </div>}
  </div>;
 }
