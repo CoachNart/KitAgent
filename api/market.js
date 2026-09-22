@@ -135,7 +135,10 @@ function protectiveStop(c,bias,entry,a){
   if(sweep)invalidation=bias==='LONG'?Math.min(invalidation,sweep.level):Math.max(invalidation,sweep.level);
   let stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;
   const maxRisk=Math.max(a*2.2,entry*.025);
-  if(bias==='LONG')stop=Math.max(stop,entry-maxRisk);else stop=Math.min(stop,entry+maxRisk);
+  // Never pull a structural stop inward just to satisfy the risk cap.
+  // If the real invalidation is too far away, reject the trade instead.
+  if(bias==='LONG'&&stop<entry-maxRisk)return null;
+  if(bias==='SHORT'&&stop>entry+maxRisk)return null;
   return stop;
 }
 function stopForEntry(c,bias,entry,a){return protectiveStop(c,bias,entry,a);}
