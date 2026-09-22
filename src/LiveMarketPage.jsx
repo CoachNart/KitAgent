@@ -25,7 +25,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 
  const localInstruments=(m)=>m==='forex'?FOREX.map(symbol=>({symbol})):m==='perpetual'?CRYPTO.map(symbol=>({symbol})):[{symbol:'XAUUSD'},{symbol:'XAGUSD'},{symbol:'US30'},{symbol:'US500'},{symbol:'NAS100'},{symbol:'UK100'},{symbol:'GER40'},{symbol:'FRA40'},{symbol:'JP225'},{symbol:'HK50'},{symbol:'USOIL'},{symbol:'UKOIL'}];
 
- useEffect(()=>{setResult(null);setSavedSignal(null);setError('');setInstrumentQuery('');setPickerOpen(false);const next=localInstruments(market);setInstruments(next);setPair(next[0]?.symbol||'')},[market]);
+ useEffect(()=>{let cancelled=false;setResult(null);setSavedSignal(null);setError('');setInstrumentQuery('');setPickerOpen(false);const next=localInstruments(market);setInstruments(next);setPair(next[0]?.symbol||'');(async()=>{try{const token=auth?.currentUser?await auth.currentUser.getIdToken():'';const r=await fetch('/api/market?action=instruments&market='+encodeURIComponent(market),{headers:token?{Authorization:'Bearer '+token}:{},cache:'no-store'});const body=await r.json().catch(()=>({}));if(cancelled||!r.ok||!Array.isArray(body?.instruments)||!body.instruments.length)return;const live=body.instruments.map(x=>({symbol:x.symbol,name:x.name||''}));setInstruments(live);setPair(p=>live.some(x=>x.symbol===p)?p:(live[0]?.symbol||''));}catch{} })();return()=>{cancelled=true}},[market]);
 
  const filteredPairs=useMemo(()=>{const q=instrumentQuery.trim().toUpperCase();return q?instruments.filter(x=>`${x.symbol} ${x.name||''}`.toUpperCase().includes(q)):instruments},[instruments,instrumentQuery]);
 
