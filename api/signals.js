@@ -1,6 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
+import { brokerConfigured, brokerCandles, brokerPrice } from './broker.js';
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -21,7 +22,9 @@ export async function marketKlines(signal) {
     const startMs=toMs(signal.generatedAt||signal.createdAt);
     if(!symbol||!Number.isFinite(startMs))return [];
     const now=Date.now();
-    if(!['crypto','perpetual'].includes(String(signal.market||'').toLowerCase()))return [];
+    const market=String(signal.market||'').toLowerCase();
+    if(['forex','metals'].includes(market)){if(!brokerConfigured())return [];const result=await brokerCandles(signal.symbol,'1m');return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
+    if(!['crypto','perpetual'].includes(market))return [];
     const all=[];
     let pageEnd=now,pages=0;
     // Bybit caps each kline response at 1,000 rows. A single request cannot
@@ -56,6 +59,8 @@ export async function marketKlines(signal) {
 }
 
 export async function currentPrice(signal) {
+  const market=String(signal.market||'').toLowerCase();
+  if(['forex','metals'].includes(market)&&brokerConfigured()){try{return (await brokerPrice(signal.symbol)).mid}catch{return null}}
   const candles=await marketKlines(signal);
   return candles.at(-1)?.close??null;
 }
@@ -74,7 +79,7 @@ export async function currentPrice(signal) {
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
   const market=String(signal.market||'').toLowerCase();
-  if(!['crypto','perpetual'].includes(market))return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
+  if(!['crypto','perpetual','forex','metals'].includes(market))return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   const candles=await marketKlines(signal); if(!candles.length)return {...signal,currentPrice:price};
   const livePrice=Number.isFinite(Number(price))?price:candles.at(-1)?.close??null;
   const dir=String(signal.direction||'').toUpperCase();
@@ -92,7 +97,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       if(candle.time<generatedMs)continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'v3',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
+      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'oanda_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
         // A 1m OHLC candle cannot establish whether entry, TP or SL happened first.
         // Activate only after the entry-touching candle has completed so we never
