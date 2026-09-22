@@ -22,7 +22,7 @@ export function StrategySelector({value,onChange}){
      </select>
      <ChevronDown size={15}/>
    </div>
-   <small>{item.short}</small>
+   <small className="strategy-selector-note">Choose the ruleset used for this analysis.</small>
  </label>
 }
 
@@ -42,7 +42,7 @@ export function StrategyExplanation({setup,strategy}){
   <div className="strategy-explanation-head"><div><span className="extras-kicker">STRATEGY MODEL</span><h3>{item.name}</h3><p>{item.description}</p></div><span>{item.short}</span></div>
   <div className="strategy-explanation-grid">
    <div><b>Entry model</b><span>{detail.entry}</span></div>
-   <div><b>Rules actually detected</b><span>{evidence.map((x,i)=><em key={i}>{x}</em>)}</span></div>
+   <div><b>Live evidence</b><span>{evidence.length?evidence.map((x,i)=><em key={i}>{x}</em>):'No qualifying evidence yet.'}</span></div>
    <div><b>Invalidation</b><span>{detail.invalidation}</span></div>
    <div><b>Target model</b><span>{detail.target}</span></div>
    <div><b>Current engine state</b><span>{setup?.strategyReason||'Analyze the market to run this strategy against live candles.'}</span></div>
