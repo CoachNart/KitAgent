@@ -21,31 +21,26 @@ export async function marketKlines(signal) {
     const startMs=toMs(signal.generatedAt||signal.createdAt);
     if(!symbol||!Number.isFinite(startMs))return [];
     const now=Date.now();
-    const endpoint=signal.market==='perpetual'
-      ? `https://fapi.binance.com/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=1m&startTime=${startMs}&endTime=${now}&limit=1000`
-      : signal.market==='crypto'
-        ? `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1m&startTime=${startMs}&endTime=${now}&limit=1000`
-        : null;
-    if(!endpoint)return [];
-    const r=await fetch(endpoint,{headers:{Accept:'application/json'}});
+    if(!['crypto','perpetual'].includes(String(signal.market||'').toLowerCase()))return [];
+    const u=new URL('https://api.bybit.com/v5/market/kline');
+    u.searchParams.set('category','linear');
+    u.searchParams.set('symbol',symbol);
+    u.searchParams.set('interval','1');
+    u.searchParams.set('start',String(startMs));
+    u.searchParams.set('end',String(now));
+    u.searchParams.set('limit','1000');
+    const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
     if(!r.ok)return [];
-    const rows=await r.json(); if(!Array.isArray(rows))return [];
-    return rows.map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])})).filter(x=>[x.time,x.high,x.low,x.close].every(Number.isFinite));
+    const body=await r.json();
+    if(body?.retCode!==0||!Array.isArray(body?.result?.list))return [];
+    return body.result.list.slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
+      .filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));
   } catch { return []; }
 }
 
 export async function currentPrice(signal) {
-  try {
-    const symbol=String(signal.symbol||'').replace(/[^A-Z0-9]/gi,'').toUpperCase(); if(!symbol)return null;
-    const endpoint=signal.market==='perpetual'
-      ? `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${encodeURIComponent(symbol)}`
-      : signal.market==='crypto'
-        ? `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`
-        : null;
-    if(!endpoint)return null;
-    const r=await fetch(endpoint,{headers:{Accept:'application/json'}}); if(!r.ok)return null;
-    const b=await r.json(); const p=Number(b?.price); return Number.isFinite(p)?p:null;
-  } catch { return null; }
+  const candles=await marketKlines(signal);
+  return candles.at(-1)?.close??null;
 }
 
 /*
@@ -60,10 +55,11 @@ export async function currentPrice(signal) {
  *   this endpoint has no authoritative price feed for them.
  */
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
-  if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.outcomeEvidence?.engineVersion==='v3' && signal.closedAt)return signal;
+  if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
   const market=String(signal.market||'').toLowerCase();
   if(!['crypto','perpetual'].includes(market))return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   const candles=await marketKlines(signal); if(!candles.length)return {...signal,currentPrice:price};
+  const livePrice=Number.isFinite(Number(price))?price:candles.at(-1)?.close??null;
   const dir=String(signal.direction||'').toUpperCase();
   if(!['LONG','SHORT'].includes(dir))return {...signal,currentPrice:price,status:'watching'};
   const order=String(signal.orderType||'').toUpperCase();
@@ -94,7 +90,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v3',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
     if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'binance_1m_ohlc',engineVersion:'v3',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
   }
-  return {...signal,currentPrice:price,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
+  return {...signal,currentPrice:livePrice,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
 }
 
 export default async function handler(req,res){
@@ -118,8 +114,10 @@ export default async function handler(req,res){
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
+    const unresolved=raw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
+    const resolvable=new Set(unresolved.slice(0,24).map(s=>s.id));
     for(const original of raw){
-      const resolved=await resolveStatus(original,await currentPrice(original));
+      const resolved=resolvable.has(original.id)?await resolveStatus(original,null):original;
       const patch={};
       for(const key of ['status','result','pnlPercent','exitPrice','closedAt','activatedAt','missedAt','outcomeEvidence']){
         const a=original[key],b=resolved[key];
