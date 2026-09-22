@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
-import { brokerConfigured, brokerCandles, brokerPrice } from './broker.js';
+import { biquoteCandles, biquotePrice } from './biquote.js';
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -23,7 +23,7 @@ export async function marketKlines(signal) {
     if(!symbol||!Number.isFinite(startMs))return [];
     const now=Date.now();
     const market=String(signal.market||'').toLowerCase();
-    if(['forex','metals'].includes(market)){if(!brokerConfigured())return [];const result=await brokerCandles(signal.symbol,'1m');return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
+    if(['forex','metals'].includes(market)){const result=await biquoteCandles(signal.symbol,'1m');return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
     if(!['crypto','perpetual'].includes(market))return [];
     const all=[];
     let pageEnd=now,pages=0;
@@ -60,7 +60,7 @@ export async function marketKlines(signal) {
 
 export async function currentPrice(signal) {
   const market=String(signal.market||'').toLowerCase();
-  if(['forex','metals'].includes(market)&&brokerConfigured()){try{return (await brokerPrice(signal.symbol)).mid}catch{return null}}
+  if(['forex','metals'].includes(market)){try{return (await biquotePrice(signal.symbol)).mid}catch{return null}}
   const candles=await marketKlines(signal);
   return candles.at(-1)?.close??null;
 }
@@ -73,8 +73,7 @@ export async function currentPrice(signal) {
  * - TP/SL are evaluated only on candles AFTER activation.
  * - If one OHLC candle touches both TP and SL, candle data cannot prove which happened first,
  *   so the trade stays OPEN. We never guess.
- * - Unsupported markets (Forex/CFD/metals) are never marked closed by this resolver because
- *   this endpoint has no authoritative price feed for them.
+ * - Forex/CFD/metals outcomes are resolved from the same Biquote 1-minute market-data feed used by analysis.
  */
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
@@ -97,7 +96,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       if(candle.time<generatedMs)continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'oanda_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
+      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'biquote_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
         // A 1m OHLC candle cannot establish whether entry, TP or SL happened first.
         // Activate only after the entry-touching candle has completed so we never
