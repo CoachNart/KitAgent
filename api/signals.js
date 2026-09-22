@@ -93,7 +93,12 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
       if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'v3',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
-      if(entryTouched){active=true;activatedAt=candle.time;break;}
+      if(entryTouched){
+        // A 1m OHLC candle cannot establish whether entry, TP or SL happened first.
+        // Activate only after the entry-touching candle has completed so we never
+        // manufacture an outcome from an ambiguous entry/exit sequence.
+        active=true;activatedAt=candle.time+60000;break;
+      }
     }
   } else return {...signal,currentPrice:price,status:'watching'};
   if(!active)return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
