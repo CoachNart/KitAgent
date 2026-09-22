@@ -13,28 +13,37 @@ const STRATEGY_LIBRARY=[
 ];
 
 export function StrategySelector({value,onChange}){
- return <section className="strategy-selector" aria-label="Setup strategy">
+ const item=STRATEGY_LIBRARY.find(x=>x.key===value)||STRATEGY_LIBRARY[0];
+ return <section className="strategy-selector" aria-label="Strategy">
   <div className="strategy-selector-head">
-   <div><span className="extras-kicker"><Target size={11}/> STRATEGY ENGINE</span><strong>Choose how KitSetups hunts the setup</strong><small>The selected rules are applied to the live market read — this is not a label layered on top of the old bias engine.</small></div>
-   <span className="strategy-live"><ShieldCheck size={12}/> RULE-BASED</span>
+   <div><span className="extras-kicker"><Target size={11}/> STRATEGY</span><strong>Choose how KitSetups hunts the setup</strong><small>The selected rules are applied to the live market read. This changes the setup model, not just the label.</small></div>
+   <div className="strategy-select-wrap"><select value={value} onChange={e=>onChange(e.target.value)} aria-label="Select setup strategy">{STRATEGY_LIBRARY.map(x=><option key={x.key} value={x.key}>{x.name}</option>)}</select><ChevronDown size={15}/></div>
   </div>
-  <div className="strategy-options">
-   {STRATEGY_LIBRARY.map(item=><button type="button" key={item.key} className={value===item.key?'strategy-option active':'strategy-option'} onClick={()=>onChange(item.key)}>
-    <span><b>{item.name}</b><small>{item.short}</small></span><i>{value===item.key?'SELECTED':'USE'}</i>
-   </button>)}
-  </div>
+  <div className="strategy-selected"><div><b>{item.name}</b><span>{item.short}</span></div><em>RULE-BASED</em></div>
  </section>
 }
 
 export function StrategyExplanation({setup,strategy}){
  const item=STRATEGY_LIBRARY.find(x=>x.key===strategy)||STRATEGY_LIBRARY[0];
- const rules=setup?.strategyEvidence?.length?setup.strategyEvidence:item.rules;
- return <section className="strategy-explanation">
-  <div className="strategy-explanation-head"><div><span className="extras-kicker">WHY THIS STRATEGY</span><h3>{item.name}</h3><p>{item.description}</p></div><span>{item.short}</span></div>
+ const evidence=setup?.strategyEvidence?.length?setup.strategyEvidence:item.rules;
+ const detail={
+  TOP_DOWN:{entry:'HTF direction → middle confirmation → current execution condition.',invalidation:'Reject when higher-timeframe direction is absent or middle structure hard-conflicts.',target:'Qualified structural/liquidity targets under the existing risk model.'},
+  PULLBACK:{entry:'Impulse → retracement into a fresh FVG/order block → continuation confirmation.',invalidation:'Zone invalidation or structural break against the HTF direction.',target:'Next qualified external liquidity beyond the entry.'},
+  BREAKOUT:{entry:'Decisive close through structure with displacement; wick-only breaks are rejected.',invalidation:'Breakout fails back through the broken structure before acceptance.',target:'Next qualified liquidity level after the break.'},
+  SMC:{entry:'Liquidity sweep → displacement → BOS → fresh FVG/order-block POI.',invalidation:'The sweep/POI structure fails and the protected level is lost.',target:'External liquidity created by the prior structure.'},
+  MSNR:{entry:'Fresh Daily/4H support or resistance → tap → lower-timeframe BOS, engulfing or rejection confirmation.',invalidation:'The MSNR level breaks without the expected reaction/confirmation.',target:'Next structural/liquidity level from the live market.'},
+  PRICE_ACTION:{entry:'Meaningful structural level → rejection or engulfing confirmation → execution.',invalidation:'The structural level fails and invalidates the candle thesis.',target:'Next qualified structural/liquidity level with minimum 2.25R.'},
+  LIQUIDITY_REVERSAL:{entry:'Genuine liquidity sweep → reclaim → displacement → reversal execution.',invalidation:'Price fails to reclaim the swept level or breaks reversal structure.',target:'Opposing external liquidity.'}
+ }[item.key]||{};
+ return <section className="strategy-explanation" aria-label={item.name+' strategy explanation'}>
+  <div className="strategy-explanation-head"><div><span className="extras-kicker">STRATEGY MODEL</span><h3>{item.name}</h3><p>{item.description}</p></div><span>{item.short}</span></div>
   <div className="strategy-explanation-grid">
-   <div><b>Objective</b><span>{item.key==='MSNR'?'Tap a fresh higher-timeframe level, then wait for lower-timeframe proof.':item.key==='SMC'?'Trade the confirmed repricing sequence after liquidity is taken.':item.key==='BREAKOUT'?'Trade acceptance beyond structure only after a decisive break.':item.key==='PULLBACK'?'Enter continuation from a fresh retracement zone.':item.key==='LIQUIDITY_REVERSAL'?'Trade the reversal only after sweep + reclaim + displacement.':'Turn the documented market structure into a current, executable trade plan.'}</span></div>
-   <div><b>Engine evidence</b><span>{rules.map((x,i)=><em key={i}>{x}</em>)}</span></div>
-   <div><b>Current state</b><span>{setup?.strategyReason||'Select Analyze pair to run this strategy against live candles.'}</span></div>
+   <div><b>Entry model</b><span>{detail.entry}</span></div>
+   <div><b>Rules actually detected</b><span>{evidence.map((x,i)=><em key={i}>{x}</em>)}</span></div>
+   <div><b>Invalidation</b><span>{detail.invalidation}</span></div>
+   <div><b>Target model</b><span>{detail.target}</span></div>
+   <div><b>Current engine state</b><span>{setup?.strategyReason||'Analyze the market to run this strategy against live candles.'}</span></div>
+   <div><b>Decision</b><span>{setup?.strategyValid?'Strategy conditions are satisfied by the current market data.':'No trade is issued until the strategy conditions are satisfied.'}</span></div>
   </div>
  </section>
 }
