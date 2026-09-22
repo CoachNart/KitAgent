@@ -58,7 +58,8 @@ export default function App({user}){
 
 function KitNavigation({page,go}){
   return <nav className="kit-nav" aria-label="KitSetups navigation">
-    <div className="kit-nav-inner">
+    <div className="kit-nav-inner" style={{'--nav-index':Math.max(0,nav.findIndex(([id])=>id===page))}}>
+      <span className="kit-nav-active-glass" aria-hidden="true"/>
       {nav.map(([id,label,Icon])=><button key={id} type="button" className={page===id?'kit-nav-item active':'kit-nav-item'} aria-current={page===id?'page':undefined} onClick={()=>go(id)}>
         <span className="kit-nav-icon"><Icon size={20}/></span>
         <span className="kit-nav-label">{label}</span>
