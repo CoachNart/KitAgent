@@ -30,7 +30,7 @@ function normalize(rows){const byTime=new Map();for(const r of rows||[]){const x
 function normalizeInstrumentList(rows){return [...new Map(rows.map(x=>[x.symbol,x])).values()];}
 const BYBIT_INTERVAL={'1m':'1','5m':'5','15m':'15','30m':'30','1H':'60','4H':'240','1D':'D','1W':'W'};
 async function fetchBybit(symbol,timeframe){const r=await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${encodeURIComponent(symbol)}&interval=${BYBIT_INTERVAL[timeframe]}&limit=300`,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error(`Bybit returned ${r.status}`);const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list)||!body.result.list.length)throw new Error(body?.retMsg||'Bybit returned no perpetual candles');return normalize(body.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]))}
-async function candlesFor(market,symbol,timeframe){const sourceKey=['commodities','indices'].includes(market)?'twelvedata':market==='forex'?'forex':'crypto';const mapped=TIMEFRAME_MAP[timeframe]?.[sourceKey];if(!mapped)throw new Error('Unsupported timeframe');if(['forex','commodities','indices'].includes(market)){const result=await twelveCandles(symbol,timeframe,market);return result.rows}const clean=symbol.replace(/[^A-Z0-9]/gi,'');if(market==='perpetual'||market==='crypto')return fetchBybit(clean,timeframe);throw new Error('Unsupported market data source')}
+async function candlesFor(market,symbol,timeframe){const sourceKey=['commodities','indices'].includes(market)?'twelvedata':market==='forex'?'forex':'crypto';const mapped=TIMEFRAME_MAP[timeframe]?.[sourceKey];if(!mapped)throw new Error('Unsupported timeframe');if(['forex','commodities','indices'].includes(market)){const result=await yahooCandles(symbol,timeframe,market);return result.rows}const clean=symbol.replace(/[^A-Z0-9]/gi,'');if(market==='perpetual'||market==='crypto')return fetchBybit(clean,timeframe);throw new Error('Unsupported market data source')}
 function pivotHigh(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;for(let j=1;j<=left;j++)if(c[i].high<=c[i-j].high)return false;for(let j=1;j<=right;j++)if(c[i].high<c[i+j].high)return false;return true}
 function pivotLow(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;for(let j=1;j<=left;j++)if(c[i].low>=c[i-j].low)return false;for(let j=1;j<=right;j++)if(c[i].low>c[i+j].low)return false;return true}
 function confirmedSwings(c){
@@ -387,7 +387,7 @@ if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(sym
   const needed=[...new Set([context.entry,context.structure,context.bias])];
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
-  const liveQuote=(['forex','commodities','indices'].includes(market))?await twelvePrice(symbol,market):null;
+  const liveQuote=(['forex','commodities','indices'].includes(market))?await yahooPrice(symbol,market):null;
   if(liveQuote?.marketState==='closed')throw Object.assign(new Error('Market is currently closed.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
   const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market,liveQuote);
   const confidenceBase=Number(setup.confidence),finalConfidence=setup.tradeReady?Math.min(95,Math.max(35,Number.isFinite(confidenceBase)?Math.round(confidenceBase):35)):0;
