@@ -97,9 +97,9 @@ export default async function handler(req,res){
         return json(res,200,{admin:true,chats});
       }
 
-      const chatSnap=await db.collection('supportChats').where('userId','==',decoded.uid).orderBy('updatedAt','desc').limit(10).get();
+      const chatSnap=await db.collection('supportChats').where('userId','==',decoded.uid).limit(20).get();
       const chats=[];
-      for(const chat of chatSnap.docs){
+      for(const chat of chatSnap.docs.sort((a,b)=>(b.data()?.updatedAt?.toMillis?.()||0)-(a.data()?.updatedAt?.toMillis?.()||0))){
         const messages=await chat.ref.collection('messages').orderBy('createdAt','asc').limit(200).get();
         chats.push({...normalizeChat(chat),messages:messages.docs.map(normalizeMessage)});
       }
