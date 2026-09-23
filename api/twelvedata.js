@@ -1,17 +1,26 @@
 const BASE='https://api.twelvedata.com';
 const KEY=process.env.TWELVE_DATA_API_KEY;
-const FOREX=['EUR/USD','GBP/USD','USD/JPY','USD/CHF','AUD/USD','USD/CAD','NZD/USD','EUR/GBP','EUR/JPY','GBP/JPY','AUD/JPY','EUR/AUD','GBP/AUD','USD/SGD','USD/ZAR'];
-const CFD=[
-  ['XAUUSD','XAU/USD','Gold Spot / US Dollar'],['XAGUSD','XAG/USD','Silver Spot / US Dollar'],
-  ['US30','DJI','Dow Jones Industrial Average'],['US500','SPX','S&P 500 Index'],['NAS100','NDX','Nasdaq 100 Index'],
-  ['UK100','FTSE','FTSE 100'],['GER40','DAX','DAX Index'],['FRA40','CAC','CAC 40'],
-  ['JP225','N225','Nikkei 225'],['HK50','HSI','Hang Seng Index'],
-  ['USOIL','WTI','Crude Oil WTI'],['UKOIL','BRENT','Brent Crude Oil']
+
+const FOREX=[
+  'AUD/CAD','AUD/CHF','AUD/JPY','AUD/NZD','AUD/USD','CAD/CHF','CAD/JPY','CHF/JPY',
+  'EUR/AUD','EUR/CAD','EUR/CHF','EUR/GBP','EUR/JPY','EUR/NZD','EUR/PLN','EUR/SEK','EUR/SGD','EUR/TRY','EUR/USD',
+  'GBP/AUD','GBP/CAD','GBP/CHF','GBP/JPY','GBP/NOK','GBP/PLN','GBP/SEK','GBP/USD','GBP/ZAR',
+  'NZD/CAD','NZD/CHF','NZD/JPY','NZD/SGD','NZD/USD','USD/CAD','USD/CHF','USD/CNH','USD/HKD','USD/HUF','USD/JPY',
+  'USD/MXN','USD/NOK','USD/SEK','USD/SGD','USD/THB','USD/TRY','USD/ZAR'
 ];
+
 const TF={ '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'1h','4H':'4h','1D':'1day','1W':'1week' };
+const CANDLE_TTL={ '1m':20000,'5m':60000,'15m':120000,'30m':180000,'1H':300000,'4H':900000,'1D':3600000,'1W':21600000 };
+const REFERENCE_TTL=21600000;
 const cache=new Map(), inflight=new Map();
 
-function ensureKey(){if(!KEY){const e=new Error('Twelve Data API key is not configured');e.code='MARKET_DATA_PROVIDER_CONFIG';throw e}}
+function ensureKey(){
+  if(!KEY){
+    const e=new Error('Twelve Data API key is not configured');
+    e.code='MARKET_DATA_PROVIDER_CONFIG';
+    throw e;
+  }
+}
 async function request(path,params={}){
   ensureKey();
   const u=new URL(BASE+path);
@@ -19,61 +28,92 @@ async function request(path,params={}){
   for(const [k,v] of Object.entries(params))if(v!=null)u.searchParams.set(k,String(v));
   const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
   const b=await r.json().catch(()=>null);
-  if(!r.ok||b?.status==='error'){const e=new Error(b?.message||`Twelve Data request failed (${r.status})`);e.code='MARKET_DATA_REQUEST_FAILED';e.status=r.status;throw e}
+  if(!r.ok||b?.status==='error'){
+    const e=new Error(b?.message||`Twelve Data request failed (${r.status})`);
+    e.code='MARKET_DATA_REQUEST_FAILED';e.status=r.status;throw e;
+  }
   return b;
 }
-function normalize(v){return String(v||'').toUpperCase().replace(/[^A-Z0-9/]/g,'')}
+function keyFor(...parts){return parts.map(x=>String(x||'').toUpperCase()).join('|')}
+function getCached(key,ttl){const x=cache.get(key);return x&&Date.now()-x.at<ttl?x.value:null}
 function rows(values){
-  return (values||[]).map(x=>[Date.parse(x.datetime+'Z'),Number(x.open),Number(x.high),Number(x.low),Number(x.close),Number(x.volume||0)])
-    .filter(x=>x.every(Number.isFinite)).sort((a,b)=>a[0]-b[0]);
+  return (values||[]).map(x=>[
+    Date.parse(String(x.datetime).replace(' ','T')+'Z'),
+    Number(x.open),Number(x.high),Number(x.low),Number(x.close),Number(x.volume||0)
+  ]).filter(x=>x.every(Number.isFinite)).sort((a,b)=>a[0]-b[0]);
 }
-function mapSymbol(symbol){
-  const wanted=String(symbol||'').trim().toUpperCase();
-  if(wanted.includes('/'))return wanted;
-  const f=FOREX.find(x=>normalize(x)===normalize(wanted));
-  if(f)return f;
-  return CFD.find(x=>x[0]===wanted)?.[1]||wanted;
+function listBody(body){return Array.isArray(body)?body:(Array.isArray(body?.data)?body.data:Array.isArray(body?.values)?body.values:[])}
+function normalizeReference(item,type){
+  const symbol=String(item?.symbol||'').trim().toUpperCase();
+  if(!symbol)return null;
+  return {
+    symbol,
+    name:String(item?.name||item?.description||symbol),
+    type,
+    category:String(item?.category||type)
+  };
 }
-export async function resolveTwelveSymbol(symbol){
-  const provider=mapSymbol(symbol);
-  return {name:provider,description:(CFD.find(x=>x[0]===String(symbol).toUpperCase())?.[2]||provider)};
-}
-export async function twelveCandles(symbol,timeframe){
-  const key=`c|${String(symbol).toUpperCase()}|${timeframe}`;
-  if(inflight.has(key))return inflight.get(key);
-  const cached=cache.get(key);
-  if(cached&&Date.now()-cached.at<15000)return cached.value;
-  const work=(async()=>{
-    const instrument=await resolveTwelveSymbol(symbol);
-    const interval=TF[timeframe];
-    if(!interval){const e=new Error('Unsupported timeframe');e.code='MARKET_DATA_TIMEFRAME_UNSUPPORTED';throw e}
-    const body=await request('/time_series',{symbol:instrument.name,interval,outputsize:5000,timezone:'UTC',order:'asc'});
-    const data=rows(body?.values);
-    if(data.length<60){const e=new Error(`Twelve Data returned insufficient candles for ${symbol} ${timeframe}`);e.code='MARKET_DATA_INSUFFICIENT_CANDLES';throw e}
-    const value={instrument,rows:data};
-    cache.set(key,{at:Date.now(),value});
-    return value;
-  })();
-  inflight.set(key,work);try{return await work}finally{inflight.delete(key)}
-}
-export async function twelvePrice(symbol){
-  const key=`p|${String(symbol).toUpperCase()}`;
-  const cached=cache.get(key);
-  if(cached&&Date.now()-cached.at<2000)return cached.value;
+async function reference(path,type){
+  const key=keyFor('reference',path);
+  const cached=getCached(key,REFERENCE_TTL);if(cached)return cached;
   if(inflight.has(key))return inflight.get(key);
   const work=(async()=>{
-    const instrument=await resolveTwelveSymbol(symbol);
-    const p=await request('/quote',{symbol:instrument.name});
-    const mid=Number(p?.close||p?.price);
-    if(!Number.isFinite(mid)){const e=new Error(`Twelve Data quote unavailable: ${symbol}`);e.code='MARKET_DATA_PRICE_UNAVAILABLE';throw e}
-    const value={instrument,bid:mid,ask:mid,mid,time:p.datetime,tradeable:true,spread:0,marketState:'open',stale:false};
+    const body=await request(path);
+    const value=listBody(body).map(x=>normalizeReference(x,type)).filter(Boolean);
     cache.set(key,{at:Date.now(),value});return value;
   })();
   inflight.set(key,work);try{return await work}finally{inflight.delete(key)}
 }
 export async function twelveInstrumentSnapshot(){
+  const [commodities,indices]=await Promise.all([
+    reference('/commodities','COMMODITY'),
+    reference('/indices','INDEX')
+  ]);
   return [
-    ...FOREX.map(x=>({name:x,displayName:x,type:'FOREX',exchange:'Twelve Data',source:'Twelve Data'})),
-    ...CFD.map(x=>({name:x[1],displayName:x[2],canonical:x[0],type:'CFD',exchange:'Twelve Data',source:'Twelve Data'}))
+    ...FOREX.map(symbol=>({name:symbol,displayName:symbol,type:'FOREX',exchange:'Twelve Data',source:'Twelve Data'})),
+    ...commodities.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'})),
+    ...indices.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'}))
   ];
+}
+export async function resolveTwelveSymbol(symbol){
+  const wanted=String(symbol||'').trim().toUpperCase();
+  if(wanted.includes('/'))return {name:wanted,description:wanted,type:null};
+  const all=await twelveInstrumentSnapshot();
+  const compact=wanted.replace(/[^A-Z0-9]/g,'');
+  const exact=all.find(x=>x.symbol===wanted)||all.find(x=>x.symbol.replace(/[^A-Z0-9]/g,'')===compact);
+  if(!exact){
+    const e=new Error(`Twelve Data instrument is unavailable: ${symbol}`);
+    e.code='MARKET_DATA_INSTRUMENT_UNAVAILABLE';throw e;
+  }
+  return {name:exact.symbol,description:exact.name,type:exact.type};
+}
+export async function twelveCandles(symbol,timeframe){
+  const instrument=await resolveTwelveSymbol(symbol);
+  const key=keyFor('candles',instrument.name,timeframe);
+  const cached=getCached(key,CANDLE_TTL[timeframe]||60000);if(cached)return cached;
+  if(inflight.has(key))return inflight.get(key);
+  const work=(async()=>{
+    const interval=TF[timeframe];
+    if(!interval){const e=new Error('Unsupported timeframe');e.code='MARKET_DATA_TIMEFRAME_UNSUPPORTED';throw e}
+    const body=await request('/time_series',{symbol:instrument.name,interval,outputsize:500,timezone:'UTC',order:'asc'});
+    const data=rows(body?.values);
+    if(data.length<60){const e=new Error(`Twelve Data returned insufficient candles for ${instrument.name} ${timeframe}`);e.code='MARKET_DATA_INSUFFICIENT_CANDLES';throw e}
+    const value={instrument,rows:data};
+    cache.set(key,{at:Date.now(),value});return value;
+  })();
+  inflight.set(key,work);try{return await work}finally{inflight.delete(key)}
+}
+export async function twelvePrice(symbol){
+  const instrument=await resolveTwelveSymbol(symbol);
+  const key=keyFor('price',instrument.name);
+  const cached=getCached(key,2000);if(cached)return cached;
+  if(inflight.has(key))return inflight.get(key);
+  const work=(async()=>{
+    const p=await request('/quote',{symbol:instrument.name});
+    const mid=Number(p?.close??p?.price);
+    if(!Number.isFinite(mid)){const e=new Error(`Twelve Data quote unavailable: ${instrument.name}`);e.code='MARKET_DATA_PRICE_UNAVAILABLE';throw e}
+    const value={instrument,bid:mid,ask:mid,mid,time:p?.datetime||null,tradeable:true,spread:0,marketState:'open',stale:false};
+    cache.set(key,{at:Date.now(),value});return value;
+  })();
+  inflight.set(key,work);try{return await work}finally{inflight.delete(key)}
 }
