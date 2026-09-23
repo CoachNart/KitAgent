@@ -17,6 +17,7 @@ import './account-deletion.css';
 import './signal-history.css';
 import './protected-pages.css';
 import './mobile-nav.css';
+import './light-mode.css';
 import './contentProtection.js';
 import './route-runtime.js';
 import { startMarketAlerts } from './marketAlerts.js';
@@ -47,12 +48,18 @@ function NativeLifecycle(){
       });
     };
     setup();
-    return()=>{
-      active=false;
-      stopPullToRefresh?.();
-      backHandle?.remove();
-      urlHandle?.remove();
-    };
+    return()=>{active=false;stopPullToRefresh?.();backHandle?.remove();urlHandle?.remove()};
+  },[]);
+  return null;
+}
+
+function ThemeBootstrap(){
+  useEffect(()=>{
+    const apply=()=>{try{document.documentElement.classList.toggle('kit-light',localStorage.getItem('kitagent-profile-light')==='on')}catch{}};
+    apply();
+    const onTheme=e=>document.documentElement.classList.toggle('kit-light',!!e?.detail?.light);
+    window.addEventListener('kitsetups:theme-changed',onTheme);
+    return()=>window.removeEventListener('kitsetups:theme-changed',onTheme);
   },[]);
   return null;
 }
@@ -60,10 +67,8 @@ function NativeLifecycle(){
 function Root(){
   const publicPath=window.location.pathname.replace(/\/+$/,'')||'/';
   if(publicPath==='/delete-account')return <AccountDeletionPage/>;
-  if(publicPath==='/admin')return <><NativeLifecycle /><AuthGate>{user => <AdminPage user={user} />}</AuthGate></>;
-  return <><NativeLifecycle /><AuthGate>{user => <App user={user} />}</AuthGate><VoiceTour /></>;
+  if(publicPath==='/admin')return <><ThemeBootstrap/><NativeLifecycle/><AuthGate>{user=><AdminPage user={user}/>}</AuthGate></>;
+  return <><ThemeBootstrap/><NativeLifecycle/><AuthGate>{user=><App user={user}/>}</AuthGate><VoiceTour/></>;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode><Root /></React.StrictMode>
-);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><Root/></React.StrictMode>);
