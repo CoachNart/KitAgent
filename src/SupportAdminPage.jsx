@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Headphones, LoaderCircle, RefreshCw, Send, ShieldCheck, UserRound } from 'lucide-react';
 import { auth } from './firebase.js';
 import './support-admin.css';
@@ -14,6 +14,8 @@ export default function SupportAdminPage({user}){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const firstLoad=useRef(true);
+  const knownLatest=useRef(new Map());
 
   const call=async(body={},method='POST')=>{
     const current=user||auth?.currentUser;
@@ -34,16 +36,23 @@ export default function SupportAdminPage({user}){
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||'Unable to load support inbox.');
       const next=data.chats||[];
+      if(!firstLoad.current){
+        const incoming=next.find(x=>x.unreadForSupport&&x.id&&x.lastMessage&&(knownLatest.current.get(x.id)!==x.lastMessage));
+        if(incoming)setNotice(`New support message from ${incoming.userName||'a user'}.`);
+      }
+      const latestMap=new Map();next.forEach(x=>knownLatest.current.set(x.id,x.lastMessage||''));
+      knownLatest.current=latestMap;
+      firstLoad.current=false;
       setChats(next);
       if(selectFirst){
-        const current=next.find(x=>x.id===selectedId)||next[0];
-        setSelectedId(current?.id||'');
+        const currentChat=next.find(x=>x.id===selectedId)||next[0];
+        setSelectedId(currentChat?.id||'');
       }
       setLoading(false);
     }catch(e){setError(e.message||'Unable to load support inbox.');setLoading(false)}
   };
 
-  useEffect(()=>{load(true);const id=setInterval(()=>load(false),5000);return()=>clearInterval(id)},[]);
+  useEffect(()=>{load(true);const id=setInterval(()=>load(false),5000);return()=>clearInterval(id)},[user?.uid]);
 
   const selected=chats.find(x=>x.id===selectedId)||null;
 
