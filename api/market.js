@@ -20,10 +20,10 @@ function strategyTimeframes(tf,strategy){
 }
 const allowedIntervals=new Set(['1m','5m','15m','30m','4H','1H','1D','1W']);
 function json(res,status,payload){res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store, max-age=0');res.end(JSON.stringify(payload))}
-function sma(v,n){if(v.length<n)return null;return v.slice(-n).reduce((a,b)=>a+b,0)/n}
-function ema(v,n){if(v.length<n)return null;let e=sma(v.slice(0,n),n),k=2/(n+1);for(let i=n;i<v.length;i++)e=v[i]*k+e*(1-k);return e}
+function sma(v,n){const a=(v||[]).map(Number).filter(Number.isFinite);if(!a.length)return null;const len=Math.min(Number(n)||a.length,a.length);return a.slice(-len).reduce((x,y)=>x+y,0)/len}
+function ema(v,n){const a=(v||[]).map(Number).filter(Number.isFinite);if(!a.length)return null;const len=Math.min(Number(n)||a.length,a.length);let e=sma(a.slice(0,len),len);const k=2/(len+1);for(let i=len;i<a.length;i++)e=a[i]*k+e*(1-k);return e}
 function rsi(v,n=14){if(v.length<n+1)return 50;let g=0,l=0;for(let i=1;i<=n;i++){const d=v[i]-v[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/n,al=l/n;for(let i=n+1;i<v.length;i++){const d=v[i]-v[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n}if(al===0)return 100;return 100-100/(1+ag/al)}
-function atr(c,n=14){if(c.length<n+1)return null;const t=[];for(let i=1;i<c.length;i++){const x=c[i],p=c[i-1];t.push(Math.max(x.high-x.low,Math.abs(x.high-p.close),Math.abs(x.low-p.close)))}return sma(t.slice(-n),n)}
+function atr(c,n=14){if(!Array.isArray(c)||c.length<2)return null;const t=[];for(let i=1;i<c.length;i++){const x=c[i],p=c[i-1];const tr=Math.max(x.high-x.low,Math.abs(x.high-p.close),Math.abs(x.low-p.close));if(Number.isFinite(tr)&&tr>=0)t.push(tr)}return sma(t,n)}
 function roundPrice(v){if(v==null||!Number.isFinite(Number(v)))return null;v=Number(v);if(v>=1000)return Number(v.toFixed(2));if(v>=100)return Number(v.toFixed(3));if(v>=1)return Number(v.toFixed(5));if(v>=.1)return Number(v.toFixed(6));return Number(v.toPrecision(7))}
 function normalize(rows){const byTime=new Map();for(const r of rows||[]){const x={time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4]),volume:Number(r[5]||0)};if(![x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)||x.time<=0)continue;if(x.high<Math.max(x.open,x.close,x.low)||x.low>Math.min(x.open,x.close,x.high)||x.high<x.low)continue;byTime.set(x.time,x)}return [...byTime.values()].sort((a,b)=>a.time-b.time)}
 function normalizeInstrumentList(rows){return [...new Map(rows.map(x=>[x.symbol,x])).values()];}
@@ -295,8 +295,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   if(!current?.length||!structure?.length||!biasCandles?.length)throw new Error('No completed candle is available for the selected timeframe');
   const liveMid=Number(liveQuote?.mid??rawCurrent.at(-1)?.close);
   if(!Number.isFinite(liveMid))throw new Error('Live market price is unavailable');
-  const last=current.at(-1),closes=current.map(x=>x.close),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(current);
-  if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
+  const last=current.at(-1),closes=current.map(x=>x.close).filter(Number.isFinite),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(current,14);
+  if(!last||closes.length<2||![e20,e50,a].every(Number.isFinite)){throw Object.assign(new Error('Market data does not contain enough valid OHLC candles for the selected timeframe.'),{code:'MARKET_DATA_INSUFFICIENT_CANDLES'})}
   const higherStructure=marketStructure(biasCandles),selectedStructure=marketStructure(structure),entryStructure=marketStructure(current);
   const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure),bias=higherBias;
   const liveQuoteUsable=Boolean(liveQuote?.tradeable);
