@@ -1,7 +1,6 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
 import { twelveCandles, twelvePrice, twelveInstrumentSnapshot, resolveTwelveSymbol } from './twelvedata.js';
 import { yahooCandles, yahooPrice, yahooInstruments } from '../server/yahooMarket.js';
-const CRYPTO_INSTRUMENTS=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
 const TIMEFRAME_MAP={'1m':{forex:'1m',twelvedata:'1m',crypto:'1m'},'5m':{forex:'5m',twelvedata:'5m',crypto:'5m'},'15m':{forex:'15m',twelvedata:'15m',crypto:'15m'},'30m':{forex:'30m',twelvedata:'30m',crypto:'30m'},'1H':{forex:'1h',twelvedata:'1h',crypto:'1h'},'4H':{forex:'4h',twelvedata:'4h',crypto:'4h'},'1D':{forex:'1d',twelvedata:'1d',crypto:'1d'},'1W':{forex:'1wk',twelvedata:'1wk',crypto:'1w'}};
 const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
 function adjacentTimeframe(tf,steps=1){const i=Math.max(0,TIMEFRAME_ORDER.indexOf(tf));return TIMEFRAME_ORDER[Math.min(TIMEFRAME_ORDER.length-1,i+steps)]||'1H';}
@@ -370,12 +369,26 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         return json(res,200,{ok:true,instruments});
       }
       if(market==='perpetual'||market==='crypto'){
-        const r=await fetch('https://api.bybit.com/v5/market/instruments-info?category=linear&status=Trading&limit=1000',{headers:{Accept:'application/json'}});
-        if(!r.ok)return json(res,502,{error:'Bybit perpetual instrument provider unavailable'});
-        const body=await r.json();
-        if(body?.retCode!==0)return json(res,502,{error:body?.retMsg||'Bybit perpetual instrument provider unavailable'});
-        const instruments=(body?.result?.list||[]).filter(x=>x.status==='Trading'&&x.quoteCoin==='USDT'&&x.contractType==='LinearPerpetual').map(x=>({symbol:x.symbol.replace(/USDT$/,'/USDT'),providerSymbol:x.symbol,name:x.baseCoin+' / USDT',type:'PERPETUAL'}));
-        return json(res,200,{ok:true,instruments:instruments.length?instruments:CRYPTO_INSTRUMENTS.map(symbol=>({symbol,providerSymbol:symbol.replace('/',''),name:symbol,type:'PERPETUAL'}))});
+        const all=[];let cursor='';
+        for(let page=0;page<10;page++){
+          const url=new URL('https://api.bybit.com/v5/market/instruments-info');
+          url.searchParams.set('category','linear');
+          url.searchParams.set('status','Trading');
+          url.searchParams.set('limit','1000');
+          if(cursor)url.searchParams.set('cursor',cursor);
+          const r=await fetch(url.toString(),{headers:{Accept:'application/json'}});
+          if(!r.ok)return json(res,502,{error:'Bybit perpetual instrument provider unavailable'});
+          const body=await r.json();
+          if(body?.retCode!==0)return json(res,502,{error:body?.retMsg||'Bybit perpetual instrument provider unavailable'});
+          all.push(...(body?.result?.list||[]));
+          cursor=body?.result?.nextPageCursor||'';
+          if(!cursor)break;
+        }
+        const instruments=normalizeInstrumentList(all
+          .filter(x=>x.status==='Trading'&&x.contractType==='LinearPerpetual'&&x.baseCoin&&x.quoteCoin)
+          .map(x=>({symbol:x.baseCoin+'/'+x.quoteCoin,providerSymbol:x.symbol,name:x.baseCoin+' / '+x.quoteCoin,type:'PERPETUAL'})));
+        if(!instruments.length)return json(res,502,{error:'Bybit returned no trading perpetual instruments'});
+        return json(res,200,{ok:true,instruments});
       }
       return json(res,400,{error:'Instrument discovery is only available for Forex, Commodities, Indices, or Crypto'});
     }if(!['forex','crypto','perpetual','commodities','indices'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});if(market==='forex'&&!/^[A-Z]{3}\/?[A-Z]{3}$/.test(symbol))return json(res,400,{error:'Invalid Forex symbol'});
