@@ -513,25 +513,12 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         return json(res,200,{ok:true,instruments});
       }
       if(market==='perpetual'||market==='crypto'){
-        const all=[];let cursor='';
-        for(let page=0;page<100;page++){
-          const url=new URL('https://api.bybit.com/v5/market/instruments-info');
-          url.searchParams.set('category','linear');
-          url.searchParams.set('status','Trading');
-          url.searchParams.set('limit','1000');
-          if(cursor)url.searchParams.set('cursor',cursor);
-          const r=await fetch(url.toString(),{headers:{Accept:'application/json'}});
-          if(!r.ok)return json(res,502,{error:'Bybit perpetual instrument provider unavailable'});
-          const body=await r.json();
-          if(body?.retCode!==0)return json(res,502,{error:body?.retMsg||'Bybit perpetual instrument provider unavailable'});
-          all.push(...(body?.result?.list||[]));
-          cursor=body?.result?.nextPageCursor||'';
-          if(!cursor)break;
-        }
-        const instruments=normalizeInstrumentList(all
-          .filter(x=>x.status==='Trading'&&x.contractType==='LinearPerpetual'&&x.baseCoin&&x.quoteCoin)
-          .map(x=>({symbol:x.baseCoin+'/'+x.quoteCoin,providerSymbol:x.symbol,name:x.baseCoin+' / '+x.quoteCoin,type:'PERPETUAL'})));
-        if(!instruments.length)return json(res,502,{error:'Bybit returned no trading perpetual instruments'});
+        // Do not crawl Bybit's entire instrument catalogue here. The old implementation
+        // could make up to 100 paginated requests every time the Crypto tab opened,
+        // which is enough to trigger Bybit's public-IP rate limiter. Market Analysis
+        // only needs a curated set of liquid, commonly traded USDT perpetuals.
+        const bases=['BTC','ETH','SOL','XRP','BNB','DOGE','ADA','AVAX','LINK','MATIC','DOT','TRX','UNI','AAVE','ARB','OP','SUI','PEPE','LTC','BCH','NEAR','ATOM','FIL','INJ','TIA','SEI','APT','ETC','XLM','HBAR','ICP','TON','SHIB','WIF','BONK','RENDER','FET','TAO','ENA','ONDO','JUP','WLD','STX','IMX','MKR','CRV','LDO','SAND','MANA','GALA','RUNE','ALGO','VET','EGLD','KAS','AR','PYTH','JTO','STRK','ZK','ENA'];
+        const instruments=normalizeInstrumentList(bases.map(base=>({symbol:base+'/USDT',providerSymbol:base+'USDT',name:base+' / USDT',type:'PERPETUAL'})));
         return json(res,200,{ok:true,instruments});
       }
       return json(res,400,{error:'Instrument discovery is only available for Forex, Commodities, Indices, or Crypto'});
