@@ -20,7 +20,9 @@ function strategyTimeframes(tf,strategy){
       return {entry:tf,structure:'4H',bias:'1D'};
     case 'PRICE_ACTION': return {entry:tf,structure:tf,bias:higher};
     case 'LIQUIDITY_REVERSAL': return {entry:tf,structure:tf,bias:higher};
-    case 'CRT': return {entry:tf,structure:tf,bias:higher};
+    case 'CRT':
+      if(!['1m','5m','15m','30m','1H','4H'].includes(tf))throw Object.assign(new Error('CRT requires a completed higher-timeframe range and is available on 4H or lower execution timeframes.'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});
+      return {entry:tf,structure:higher,bias:higher2};
     default: return {entry:tf,structure:tf,bias:higher};
   }
 }
@@ -301,7 +303,7 @@ function msnrFormation(c,bias){
 }
 function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,marketContext='',liveQuote=null){
   const key=normalizeStrategy(strategy),info=STRATEGIES[key],tf=strategyTimeframes(executionTimeframe,key);
-  if((key==='TOP_DOWN'||key==='MSNR')&&(tf.structure===executionTimeframe||tf.bias===executionTimeframe))throw new Error('This strategy requires distinct higher-timeframe structure; the selected timeframe is too high.');
+  if((key==='TOP_DOWN'||key==='MSNR')&&(tf.bias===executionTimeframe))throw Object.assign(new Error('This strategy requires a higher-timeframe directional context. Select a lower execution timeframe.'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});
   const rawCurrent=candlesByTf[tf.entry],rawStructure=candlesByTf[tf.structure]||rawCurrent,rawBiasCandles=candlesByTf[tf.bias]||rawStructure;
   if(!rawCurrent?.length)throw new Error('Selected timeframe market data is unavailable');
   if(!marketDataFresh(rawCurrent,tf.entry,marketContext)||!marketDataFresh(rawStructure,tf.structure,marketContext)||!marketDataFresh(rawBiasCandles,tf.bias,marketContext))throw new Error('Market data is stale for the selected timeframe. No setup was issued.');
