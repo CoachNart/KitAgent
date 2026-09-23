@@ -15,7 +15,7 @@ function statusOf(s){
   return {label:'AWAITING ENTRY',tone:'watching',closed:false};
 }
 function isTrade(s){return ['MARKET','LIMIT'].includes(String(s.orderType||'').toUpperCase());}
-function isRecorded(s){return isTrade(s)&&['open','target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
+function isRecorded(s){return isTrade(s)&&['limit_pending','open','target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
 function isClosed(s){return ['target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
 
 export default function SignalHistory({activity=[]}){
@@ -61,7 +61,7 @@ function SignalCard({signal:s}){
   const long=s.direction==='LONG',state=statusOf(s),verified=state.closed&&(s.status==='target_hit'||s.status==='stop_hit')&&Number.isFinite(Number(s.pnlPercent)),order=String(s.orderType||'').toUpperCase();
   return <article className={'signal-card tone-'+state.tone}><div className="signal-card-accent"/>
     <div className="signal-card-header"><div className="signal-identity"><div className={'direction-mark '+(long?'long':'short')}>{long?<TrendingUp size={15}/>:<TrendingDown size={15}/>}</div><div><div className="signal-symbol">{s.symbol}</div><div className="signal-id">{s.signalId}</div></div></div><div className="signal-head-right"><span className={'status-pill '+state.tone}>{state.label}</span><span className="signal-time"><Clock3 size={11}/>{when(s.generatedAt)}</span></div></div>
-    <div className="signal-meta-row"><span>{String(s.market||'').toUpperCase()}</span><i/><span>{s.timeframe||'—'}</span><i/><span>{order||'—'} ORDER</span>{s.confidence!=null&&<><i/><span>{s.confidence}% CONFIDENCE</span></>}</div>
+    <div className="signal-meta-row"><span>{String(s.market||'').toUpperCase()}</span><i/><span>{s.timeframe||'—'}</span>{s.strategy&&<><i/><span>{String(s.strategy).replace(/_/g,' ')}</span></>}<i/><span>{order||'—'} ORDER</span>{s.confidence!=null&&<><i/><span>{s.confidence}% CONFIDENCE</span></>}</div>
     <div className="signal-level-grid"><Level label={order==='LIMIT'?'LIMIT ENTRY':'ENTRY'} value={num(order==='LIMIT'?s.limitEntry:s.entry)} emphasis/><Level label="STOP LOSS" value={num(s.stopLoss)}/><Level label="TP1" value={num(s.takeProfit1)}/><Level label="TP2" value={num(s.takeProfit2)}/><Level label="R:R" value={s.riskReward||'—'}/></div>
     <div className="signal-result-row"><div className="result-context">{state.tone==='pending'?<><Target size={13}/><span>Waiting for the planned limit price to trade</span></>:state.tone==='missed'?<><Target size={13}/><span>Entry was not reached before the setup invalidated</span></>:state.closed?<><Target size={13}/><span>{s.status==='target_hit'?'TP1 was reached':'Stop loss was reached'} · verified outcome</span></>:<><Clock3 size={13}/><span>{state.tone==='live'?'Entry verified · trade is live':'Setup recorded · waiting for entry confirmation'}</span></>}</div>{verified?<strong className={Number(s.pnlPercent)>=0?'pnl-positive':'pnl-negative'}>{Number(s.pnlPercent)>=0?'+':''}{Number(s.pnlPercent).toFixed(2)}%</strong>:<span className="result-muted">{state.closed?'NO P&amp;L':'—'}</span>}</div>
     <div className="signal-card-footer"><span className="footer-source">{s.outcomeEvidence?.source==='binance_1m_ohlc'?'MARKET VERIFIED':'LIVE MARKET ANALYSIS'}</span><button type="button" onClick={()=>window.dispatchEvent(new CustomEvent('kitagent-open-market-history',{detail:s}))}>View setup <ChevronRight size={14}/></button></div>
