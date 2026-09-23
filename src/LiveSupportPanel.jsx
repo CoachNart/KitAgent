@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Headphones, LoaderCircle, MessageCircle, RefreshCw, Send, ShieldCheck } from 'lucide-react';
-import { auth, db } from './firebase.js';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { auth } from './firebase.js';
 import './support-chat.css';
 
 const API='/api/request-account-deletion';
@@ -37,21 +36,19 @@ export default function LiveSupportPanel({user,name,email}){
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||'Could not load support.');
       const first=(data.chats||[])[0];
-      if(first){setChatId(first.id);setChat(first);}
+      if(first){setChatId(first.id);setChat(first);setMessages(first.messages||[]);}
+      else{setChatId('');setChat(null);setMessages([]);}
       setLoading(false);
     }catch(e){setError(e.message||'Could not load support.');setLoading(false)}
   };
 
-  useEffect(()=>{load()},[user?.uid]);
-
   useEffect(()=>{
-    if(!chatId||!db)return;
-    const q=query(collection(db,'supportChats',chatId,'messages'),orderBy('createdAt','asc'));
-    return onSnapshot(q,snapshot=>{
-      setMessages(snapshot.docs.map(doc=>({id:doc.id,...doc.data()})));
-      call({action:'read',chatId}).catch(()=>{});
-    },e=>setError(e?.message||'Live support connection failed.'));
-  },[chatId]);
+    load();
+    const interval=setInterval(()=>{if(!busy)load()},5000);
+    return()=>clearInterval(interval);
+  },[user?.uid]);
+
+  useEffect(()=>{if(chatId)call({action:'read',chatId}).catch(()=>{})},[chatId]);
 
   const sorted=useMemo(()=>messages,[messages]);
 
@@ -75,7 +72,7 @@ export default function LiveSupportPanel({user,name,email}){
     const text=draft.trim();
     if(!text||busy||!chatId)return;
     setBusy(true);setError('');setNotice('');
-    try{await call({action:'message',chatId,message:text});setDraft('')}catch(e){setError(e.message||'Message could not be sent.')}finally{setBusy(false)}
+    try{await call({action:'message',chatId,message:text});setDraft('');await load()}catch(e){setError(e.message||'Message could not be sent.')}finally{setBusy(false)}
   };
 
   if(loading)return <div className="support-chat-loading"><LoaderCircle className="spin" size={18}/> Loading support…</div>;
