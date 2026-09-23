@@ -91,7 +91,7 @@ export async function biquoteCandles(symbol,timeframe){
     // nearest available lower-resolution source rather than declaring the
     // market stale.
     if(['1m','5m','15m','30m'].includes(interval)){
-      const base=interval==='1m'?'1m':interval==='5m'?'5m':'1m';
+      const base=interval==='1m'?'1m':interval==='5m'?'5m':interval==='15m'?'5m':'5m';
       if(base!==interval)body=await request(`/${encodeURIComponent(instrument.name)}/ohlc`,{interval:base,limit:1000});
       else throw err;
     }else throw err;
