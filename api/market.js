@@ -199,10 +199,10 @@ function marketStructure(c){
   const bullishBreak=lastH!=null&&close>lastH;
   const bearishBreak=lastL!=null&&close<lastL;
   let trend='RANGE';
-  if((risingHighs&&risingLows)||bullishBreak)trend='LONG';
-  else if((fallingHighs&&fallingLows)||bearishBreak)trend='SHORT';
-  else if(higherHigh&&higherLow)trend='LONG';
-  else if(lowerHigh&&lowerLow)trend='SHORT';
+  // A single close through a swing is a structure event, not by itself a trend.
+  // Directional bias requires actual swing sequencing: HH+HL or LH+LL.
+  if((risingHighs&&risingLows)||higherHigh&&higherLow)trend='LONG';
+  else if((fallingHighs&&fallingLows)||lowerHigh&&lowerLow)trend='SHORT';
   return {
     trend,higherHigh,higherLow,lowerHigh,lowerLow,risingHighs,risingLows,fallingHighs,fallingLows,
     bullishBreak,bearishBreak,lastHigh:lastH,lastLow:lastL,
