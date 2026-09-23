@@ -32,3 +32,26 @@ html.kit-light .profile-save{background:#00c7fe!important;color:#031014!importan
 html.kit-light .support-form input,html.kit-light .support-form select,html.kit-light .support-form textarea{background:#f7f9fa!important;color:#20262b!important;border-color:#d9e2e6!important}
 html.kit-light .support-form-head h3{color:#20262b!important}
 html.kit-light .support-form-head p{color:#66757c!important}
+
+/* Balanced app-wide light surface system */
+html.kit-light body{background:#f3f6f8!important;color:#1f2930!important}
+html.kit-light .kit-main,html.kit-light .main-content,html.kit-light .content-area,html.kit-light .page-content{background:#f3f6f8!important;color:#1f2930!important}
+html.kit-light .glass,html.kit-light .panel,html.kit-light .card,html.kit-light .modal,html.kit-light .drawer,html.kit-light .terminal-card,html.kit-light .market-card{background:#fff!important;border-color:#dbe4e8!important;color:#1f2930!important;box-shadow:0 8px 28px rgba(24,43,52,.06)}
+html.kit-light table,html.kit-light th,html.kit-light td{color:#26343b!important;border-color:#e1e8eb!important}
+html.kit-light code,html.kit-light pre{background:#eef3f5!important;color:#26343b!important}
+html.kit-light .profile-settings-expand{background:#fff!important;color:#1f2930!important}
+html.kit-light .profile-settings-expand *{border-color:#dbe4e8}
+html.kit-light .profile-settings-expand input,html.kit-light .profile-settings-expand textarea,html.kit-light .profile-settings-expand select{background:#f7f9fa!important;color:#1f2930!important}
+html.kit-light .profile-settings-expand label span,html.kit-light .subscription-label,html.kit-light .payment-heading span,html.kit-light .payment-input-wrap>span{color:#68767d!important}
+html.kit-light .profile-toggle{background:#cbd6db!important}
+html.kit-light .profile-toggle.is-on{background:#00c7fe!important}
+html.kit-light .profile-row-icon{color:#1f2930!important}
+html.kit-light .profile-row-icon.notifications,html.kit-light .profile-row-icon.support{background:#e8f3f6!important;color:#087f9d!important}
+html.kit-light .profile-row-icon.payments{background:#eef1f3!important;color:#52636b!important}
+html.kit-light .profile-row-icon.referrals{background:#e8f8fc!important;color:#008bb0!important}
+html.kit-light .profile-row-icon.delete,html.kit-light .profile-row-icon.logout{background:#fdebec!important;color:#d22d3a!important}
+html.kit-light .verify-payment-btn,html.kit-light .support-submit,html.kit-light .profile-save,html.kit-light .profile-edit-icon,html.kit-light .connect-btn.primary,html.kit-light .confirm-btn,html.kit-light .send-btn,html.kit-light .save-btn{background:#00c7fe!important;border-color:#00c7fe!important;color:#031014!important}
+html.kit-light .verify-payment-btn:hover,html.kit-light .support-submit:hover,html.kit-light .profile-save:hover,html.kit-light .profile-edit-icon:hover,html.kit-light .confirm-btn:hover,html.kit-light .send-btn:hover,html.kit-light .save-btn:hover{background:#00b8ec!important;border-color:#00b8ec!important}
+html.kit-light .profile-cancel{background:#edf2f4!important;border-color:#d8e2e6!important;color:#33434a!important}
+html.kit-light .payment-feedback,html.kit-light .support-form-message,html.kit-light .profile-editor-message{background:#eef9fc!important;border-color:#c7edf5!important;color:#17677a!important}
+html.kit-light .error,html.kit-light .error-message{background:#fff1f2!important;color:#b4232d!important;border-color:#fecdd3!important}
