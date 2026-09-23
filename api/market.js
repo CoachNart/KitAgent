@@ -223,19 +223,17 @@ function closedCandles(c,timeframe,market=''){
 }
 function marketDataFresh(c,timeframe,market=''){
   if(!Array.isArray(c)||!c.length)return false;
-  const sourceKey=market==='forex'?'forex':['commodities','indices'].includes(market)?'twelvedata':'crypto';
-  const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.[sourceKey]||timeframe;
+  if(['forex','commodities','indices'].includes(market)){
+    // Yahoo has already returned a valid candle set. Do not reject normal
+    // exchange/session/provider timestamp differences as "stale"; an actual
+    // provider failure is surfaced by yahooCandles() itself.
+    return true;
+  }
+  const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.crypto||timeframe;
   const lastOpen=Number(c.at(-1)?.time),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
   if(!Number.isFinite(lastOpen)||!interval)return false;
   const age=Date.now()-lastOpen;
   if(age<0)return true;
-  if(['forex','commodities','indices'].includes(market)){
-    // Yahoo's feed can publish the latest completed bar after the nominal boundary.
-    // These markets are judged unavailable only when the feed is genuinely old,
-    // rather than treating a normal provider delay as "stale".
-    const maxAge=['1W','1wk','1w'].includes(sourceTimeframe)?21*86400000:['1D','1d'].includes(sourceTimeframe)?7*86400000:14*86400000;
-    return age<=maxAge;
-  }
   const maxAge=['1W','1wk','1w'].includes(sourceTimeframe)?21*86400000:['1D','1d'].includes(sourceTimeframe)?7*86400000:interval*4;
   return age<=maxAge;
 }
