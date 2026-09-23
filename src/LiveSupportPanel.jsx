@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Headphones, LoaderCircle, MessageCircle, RefreshCw, Send, ShieldCheck } from 'lucide-react';
+import { Headphones, LoaderCircle, MessageCircle, RefreshCw, Send, ShieldCheck, Plus } from 'lucide-react';
 import { auth } from './firebase.js';
 import './support-chat.css';
 
@@ -16,85 +16,17 @@ export default function LiveSupportPanel({user,name,email}){
   const [loading,setLoading]=useState(true);
   const [notice,setNotice]=useState('');
   const [error,setError]=useState('');
+  const [newRequest,setNewRequest]=useState(false);
 
   const token=async()=>{const current=user||auth?.currentUser;if(!current)throw new Error('Your session is not ready. Please sign in again.');return current.getIdToken(true)};
-
-  const call=async(body)=>{
-    const t=await token();
-    if(!t)throw new Error('Your session is not ready. Please sign in again.');
-    const response=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify(body)});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.error||'Support request failed.');
-    return data;
-  };
-
-  const load=async()=>{
-    try{
-      const t=await token();
-      if(!t)return;
-      const response=await fetch(API,{headers:{Authorization:'Bearer '+t}});
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(data.error||'Could not load support.');
-      const first=(data.chats||[])[0];
-      if(first){setChatId(first.id);setChat(first);setMessages(first.messages||[]);}
-      else{setChatId('');setChat(null);setMessages([]);}
-      setLoading(false);
-    }catch(e){setError(e.message||'Could not load support.');setLoading(false)}
-  };
-
-  useEffect(()=>{
-    load();
-    const interval=setInterval(()=>{if(!busy)load()},5000);
-    return()=>clearInterval(interval);
-  },[user?.uid]);
-
+  const call=async(body)=>{const t=await token();if(!t)throw new Error('Your session is not ready. Please sign in again.');const response=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify(body)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Support request failed.');return data;};
+  const load=async()=>{try{const t=await token();if(!t)return;const response=await fetch(API,{headers:{Authorization:'Bearer '+t}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not load support.');const first=(data.chats||[])[0];if(first){setChatId(first.id);setChat(first);setMessages(first.messages||[]);}else{setChatId('');setChat(null);setMessages([]);}setLoading(false);}catch(e){setError(e.message||'Could not load support.');setLoading(false)}};
+  useEffect(()=>{load();const interval=setInterval(()=>{if(!busy)load()},5000);return()=>clearInterval(interval)},[user?.uid]);
   useEffect(()=>{if(chatId)call({action:'read',chatId}).catch(()=>{})},[chatId]);
-
   const sorted=useMemo(()=>messages,[messages]);
-
-  const start=async()=>{
-    if(busy)return;
-    const cleanSubject=subject.trim(),cleanDraft=draft.trim();
-    if(!cleanSubject)return setError('Enter a subject.');
-    if(cleanDraft.length<10)return setError('Please describe the issue in at least 10 characters.');
-    setBusy(true);setError('');setNotice('');
-    try{
-      const data=await call({action:'create',subject:cleanSubject,category,message:cleanDraft});
-      setChatId(data.chatId);
-      setSubject('');setDraft('');
-      setNotice('Your complaint has been sent. Support can reply here in real time.');
-      await load();
-    }catch(e){setError(e.message||'Your complaint could not be sent.')}
-    finally{setBusy(false)}
-  };
-
-  const send=async()=>{
-    const text=draft.trim();
-    if(!text||busy||!chatId)return;
-    setBusy(true);setError('');setNotice('');
-    try{await call({action:'message',chatId,message:text});setDraft('');await load()}catch(e){setError(e.message||'Message could not be sent.')}finally{setBusy(false)}
-  };
-
+  const start=async()=>{if(busy)return;const cleanSubject=subject.trim(),cleanDraft=draft.trim();if(!cleanSubject)return setError('Enter a subject.');if(cleanDraft.length<10)return setError('Please describe the issue in at least 10 characters.');setBusy(true);setError('');setNotice('');try{const data=await call({action:'create',subject:cleanSubject,category,message:cleanDraft});setChatId(data.chatId);setSubject('');setDraft('');setNewRequest(false);setNotice('Your complaint has been sent. Support can reply here in real time.');await load()}catch(e){setError(e.message||'Your complaint could not be sent.')}finally{setBusy(false)}};
+  const send=async()=>{const text=draft.trim();if(!text||busy||!chatId)return;setBusy(true);setError('');setNotice('');try{await call({action:'message',chatId,message:text});setDraft('');await load()}catch(e){setError(e.message||'Message could not be sent.')}finally{setBusy(false)}};
   if(loading)return <div className="support-chat-loading"><LoaderCircle className="spin" size={18}/> Loading support…</div>;
-
-  if(!chatId||!chat)return <div className="support-chat">
-    <div className="support-chat-head"><div className="support-chat-icon"><Headphones size={17}/></div><div><span>LIVE SUPPORT</span><h3>Talk to KitSetups support</h3><p>Send your complaint here and keep the conversation in one place.</p></div><span className="support-live-dot" title="Support connection"/></div>
-    <label><span>SUBJECT</span><input value={subject} maxLength={120} onChange={e=>setSubject(e.target.value)} placeholder="What is the issue?"/></label>
-    <label><span>CATEGORY</span><select value={category} onChange={e=>setCategory(e.target.value)}><option>Technical issue</option><option>Market analysis</option><option>Account & access</option><option>Payment</option><option>Affiliate</option><option>Other</option></select></label>
-    <label><span>MESSAGE</span><textarea value={draft} maxLength={5000} onChange={e=>setDraft(e.target.value)} placeholder="Describe the problem and what happened…" rows={6}/></label>
-    {error&&<div className="support-chat-alert error">{error}</div>}
-    {notice&&<div className="support-chat-alert success">{notice}</div>}
-    <button className="support-submit" type="button" onClick={start} disabled={busy}>{busy?<LoaderCircle className="spin" size={14}/>:<Send size={14}/>} {busy?'Sending…':'Start live support'}</button>
-  </div>;
-
-  return <div className="support-chat">
-    <div className="support-chat-head"><div className="support-chat-icon"><Headphones size={17}/></div><div><span>LIVE SUPPORT</span><h3>{chat.subject||'Support conversation'}</h3><p><i className="support-live-dot"/> {chat.status==='resolved'?'Resolved':'Support is available'} · {chat.category||'General'}</p></div><button type="button" className="support-refresh" onClick={load} title="Refresh"><RefreshCw size={14}/></button></div>
-    <div className="support-chat-thread" aria-live="polite">
-      {sorted.length===0&&<div className="support-empty"><MessageCircle size={18}/><span>Your conversation is ready.</span></div>}
-      {sorted.map(item=><div key={item.id} className={'support-message '+(item.senderType==='support'?'from-support':'from-user')}><div className="support-message-badge">{item.senderType==='support'?<ShieldCheck size={11}/>:name?.slice(0,1).toUpperCase()}</div><div><div className="support-message-author">{item.senderType==='support'?'KitSetups Support':'You'}</div><p>{item.text}</p></div></div>)}
-    </div>
-    {chat.status==='resolved'?<div className="support-resolved">This conversation is resolved. Send a new Support request if you need more help.</div>:<div className="support-chat-compose"><textarea value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Write a message…" rows={2}/><button type="button" onClick={send} disabled={busy||!draft.trim()}>{busy?<LoaderCircle className="spin" size={15}/>:<Send size={15}/>}</button></div>}
-    {error&&<div className="support-chat-alert error">{error}</div>}
-    {notice&&<div className="support-chat-alert success">{notice}</div>}
-  </div>;
+  if(!chatId||!chat||newRequest)return <div className="support-chat"><div className="support-chat-head"><div className="support-chat-icon"><Headphones size={17}/></div><div><span>LIVE SUPPORT</span><h3>Talk to KitSetups support</h3><p>Send your complaint here and keep the conversation in one place.</p></div><span className="support-live-dot" title="Support connection"/></div><label><span>SUBJECT</span><input value={subject} maxLength={120} onChange={e=>setSubject(e.target.value)} placeholder="What is the issue?"/></label><label><span>CATEGORY</span><select value={category} onChange={e=>setCategory(e.target.value)}><option>Technical issue</option><option>Market analysis</option><option>Account & access</option><option>Payment</option><option>Affiliate</option><option>Other</option></select></label><label><span>MESSAGE</span><textarea value={draft} maxLength={5000} onChange={e=>setDraft(e.target.value)} placeholder="Describe the problem and what happened…" rows={6}/></label>{error&&<div className="support-chat-alert error">{error}</div>}{notice&&<div className="support-chat-alert success">{notice}</div>}<div style={{display:'flex',gap:8}}><button className="support-submit" type="button" onClick={start} disabled={busy}>{busy?<LoaderCircle className="spin" size={14}/>:<Send size={14}/>} {busy?'Sending…':'Start live support'}</button>{newRequest&&<button className="support-submit" type="button" onClick={()=>{setNewRequest(false);setError('');setSubject('');setDraft('')}}>Cancel</button>}</div></div>;
+  return <div className="support-chat"><div className="support-chat-head"><div className="support-chat-icon"><Headphones size={17}/></div><div><span>LIVE SUPPORT</span><h3>{chat.subject||'Support conversation'}</h3><p><i className="support-live-dot"/> {chat.status==='resolved'?'Resolved':'Support is available'} · {chat.category||'General'}</p></div><button type="button" className="support-refresh" onClick={load} title="Refresh"><RefreshCw size={14}/></button></div><div className="support-chat-thread" aria-live="polite">{sorted.length===0&&<div className="support-empty"><MessageCircle size={18}/><span>Your conversation is ready.</span></div>}{sorted.map(item=><div key={item.id} className={'support-message '+(item.senderType==='support'?'from-support':'from-user')}><div className="support-message-badge">{item.senderType==='support'?<ShieldCheck size={11}/>:name?.slice(0,1).toUpperCase()}</div><div><div className="support-message-author">{item.senderType==='support'?'KitSetups Support':'You'}</div><p>{item.text}</p></div></div>)}</div>{chat.status==='resolved'?<div><div className="support-resolved">This conversation is resolved.</div><button type="button" className="support-submit" onClick={()=>{setNewRequest(true);setError('');setNotice('')}}><Plus size={14}/> New support request</button></div>:<div className="support-chat-compose"><textarea value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Write a message…" rows={2}/><button type="button" onClick={send} disabled={busy||!draft.trim()}>{busy?<LoaderCircle className="spin" size={15}/>:<Send size={15}/>}</button></div>}{error&&<div className="support-chat-alert error">{error}</div>}{notice&&<div className="support-chat-alert success">{notice}</div>}</div>;
 }
