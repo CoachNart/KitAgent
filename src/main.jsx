@@ -28,29 +28,15 @@ startMarketAlerts();
 function NativeLifecycle(){
   useEffect(()=>{
     if(!Capacitor.isNativePlatform()) return undefined;
-    let backHandle;
-    let urlHandle;
-    let active=true;
-    const stopPullToRefresh = startAndroidPullToRefresh();
+    let backHandle; let urlHandle; let active=true;
+    const stopPullToRefresh=startAndroidPullToRefresh();
     const setup=async()=>{
-      backHandle=await CapacitorApp.addListener('backButton',({canGoBack})=>{
-        if(!active) return;
-        if(canGoBack) window.history.back();
-        else CapacitorApp.exitApp();
-      });
-      urlHandle=await CapacitorApp.addListener('appUrlOpen',({url})=>{
-        if(!active||!url) return;
-        try{
-          const parsed=new URL(url);
-          if(parsed.pathname) window.history.replaceState({},'',parsed.pathname+parsed.search+parsed.hash);
-          window.dispatchEvent(new CustomEvent('kitagent:app-url-open',{detail:{url}}));
-        }catch(error){console.warn('KitSetups deep-link handling failed:',error)}
-      });
+      backHandle=await CapacitorApp.addListener('backButton',({canGoBack})=>{if(!active)return;if(canGoBack)window.history.back();else CapacitorApp.exitApp()});
+      urlHandle=await CapacitorApp.addListener('appUrlOpen',({url})=>{if(!active||!url)return;try{const parsed=new URL(url);if(parsed.pathname)window.history.replaceState({},'',parsed.pathname+parsed.search+parsed.hash);window.dispatchEvent(new CustomEvent('kitagent:app-url-open',{detail:{url}}))}catch(error){console.warn('KitSetups deep-link handling failed:',error)}});
     };
     setup();
     return()=>{active=false;stopPullToRefresh?.();backHandle?.remove();urlHandle?.remove()};
-  },[]);
-  return null;
+  },[]); return null;
 }
 
 function ThemeBootstrap(){
@@ -59,9 +45,10 @@ function ThemeBootstrap(){
     apply();
     const onTheme=e=>document.documentElement.classList.toggle('kit-light',!!e?.detail?.light);
     window.addEventListener('kitsetups:theme-changed',onTheme);
-    return()=>window.removeEventListener('kitsetups:theme-changed',onTheme);
-  },[]);
-  return null;
+    const observer=new MutationObserver(apply);
+    observer.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+    return()=>{window.removeEventListener('kitsetups:theme-changed',onTheme);observer.disconnect()};
+  },[]); return null;
 }
 
 function Root(){
@@ -70,5 +57,4 @@ function Root(){
   if(publicPath==='/admin')return <><ThemeBootstrap/><NativeLifecycle/><AuthGate>{user=><AdminPage user={user}/>}</AuthGate></>;
   return <><ThemeBootstrap/><NativeLifecycle/><AuthGate>{user=><App user={user}/>}</AuthGate><VoiceTour/></>;
 }
-
 ReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><Root/></React.StrictMode>);
