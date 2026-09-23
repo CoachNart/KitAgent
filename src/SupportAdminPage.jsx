@@ -3,7 +3,7 @@ import { ArrowLeft, CheckCircle2, Headphones, LoaderCircle, RefreshCw, Send, Shi
 import { auth } from './firebase.js';
 import './support-admin.css';
 
-const API='/api/support';
+const API='/api/request-account-deletion';
 
 export default function SupportAdminPage({user}){
   const [chats,setChats]=useState([]);
