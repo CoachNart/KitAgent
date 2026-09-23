@@ -424,7 +424,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
     const resolved=await resolveTwelveSymbol(symbol);
     const provider=String(resolved?.name||'').toUpperCase();
     const valid=Boolean(resolved)&&aliases.some(a=>String(a).toUpperCase()===provider||String(a).toUpperCase().replace(/[^A-Z0-9]/g,'')===provider.replace(/[^A-Z0-9]/g,''));
-    if(!valid)return json(res,400,{error:'Biquote Metal / CFD instrument is unavailable',code:'MARKET_DATA_INSTRUMENT_UNAVAILABLE'});
+    if(!valid)return json(res,400,{error:'Twelve Data Metal / CFD instrument is unavailable',code:'MARKET_DATA_INSTRUMENT_UNAVAILABLE'});
   }if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(symbol))return json(res,400,{error:'Invalid crypto symbol'});
   const strategy=normalizeStrategy(req.query?.strategy);
   const context=strategyTimeframes(timeframe,strategy);
