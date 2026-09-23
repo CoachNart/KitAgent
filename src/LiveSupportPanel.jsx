@@ -53,11 +53,6 @@ export default function LiveSupportPanel({user,name,email}){
     },e=>setError(e?.message||'Live support connection failed.'));
   },[chatId]);
 
-  useEffect(()=>{
-    if(!chatId||!db)return;
-    return onSnapshot(collection(db,'supportChats'),()=>{},()=>{});
-  },[chatId]);
-
   const sorted=useMemo(()=>messages,[messages]);
 
   const start=async()=>{
