@@ -1,5 +1,4 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
-import { twelveCandles, twelvePrice, twelveInstrumentSnapshot, resolveTwelveSymbol } from './twelvedata.js';
 import { yahooCandles, yahooPrice, yahooInstruments } from '../server/yahooMarket.js';
 const TIMEFRAME_MAP={'1m':{forex:'1m',twelvedata:'1m',crypto:'1m'},'5m':{forex:'5m',twelvedata:'5m',crypto:'5m'},'15m':{forex:'15m',twelvedata:'15m',crypto:'15m'},'30m':{forex:'30m',twelvedata:'30m',crypto:'30m'},'1H':{forex:'1h',twelvedata:'1h',crypto:'1h'},'4H':{forex:'4h',twelvedata:'4h',crypto:'4h'},'1D':{forex:'1d',twelvedata:'1d',crypto:'1d'},'1W':{forex:'1wk',twelvedata:'1wk',crypto:'1w'}};
 const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
@@ -27,7 +26,18 @@ function normalize(rows){const byTime=new Map();for(const r of rows||[]){const x
 function normalizeInstrumentList(rows){return [...new Map(rows.map(x=>[x.symbol,x])).values()];}
 const BYBIT_INTERVAL={'1m':'1','5m':'5','15m':'15','30m':'30','1H':'60','4H':'240','1D':'D','1W':'W'};
 async function fetchBybit(symbol,timeframe){const r=await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${encodeURIComponent(symbol)}&interval=${BYBIT_INTERVAL[timeframe]}&limit=300`,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error(`Bybit returned ${r.status}`);const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list)||!body.result.list.length)throw new Error(body?.retMsg||'Bybit returned no perpetual candles');return normalize(body.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]))}
-async function candlesFor(market,symbol,timeframe){const sourceKey=['commodities','indices'].includes(market)?'twelvedata':market==='forex'?'forex':'crypto';const mapped=TIMEFRAME_MAP[timeframe]?.[sourceKey];if(!mapped)throw new Error('Unsupported timeframe');if(['forex','commodities','indices'].includes(market)){const result=await yahooCandles(symbol,timeframe,market);return normalize(result.rows)}const clean=symbol.replace(/[^A-Z0-9]/gi,'');if(market==='perpetual'||market==='crypto')return fetchBybit(clean,timeframe);throw new Error('Unsupported market data source')}
+async function bybitPrice(symbol){
+  const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol='+encodeURIComponent(symbol),{headers:{Accept:'application/json'}});
+  if(!r.ok)throw Object.assign(new Error('Bybit ticker provider unavailable'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  const body=await r.json();
+  const row=body?.result?.list?.[0];
+  if(body?.retCode!==0||!row)throw Object.assign(new Error(body?.retMsg||'Bybit ticker provider returned no price'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  const bid=Number(row.bid1Price),ask=Number(row.ask1Price),last=Number(row.lastPrice);
+  const mid=Number.isFinite(bid)&&Number.isFinite(ask)&&bid>0&&ask>0?(bid+ask)/2:last;
+  if(!Number.isFinite(mid)||mid<=0)throw Object.assign(new Error('Bybit live price is unavailable'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  return {bid:Number.isFinite(bid)&&bid>0?bid:mid,ask:Number.isFinite(ask)&&ask>0?ask:mid,mid,time:new Date(Number(body.time||Date.now())).toISOString(),tradeable:true,spread:(Number.isFinite(bid)&&Number.isFinite(ask))?Math.max(0,ask-bid):0,marketState:'open',stale:false,instrument:{name:symbol}};
+}
+async function candlesFor(market,symbol,timeframe){if(!TIMEFRAME_MAP[timeframe])throw new Error('Unsupported timeframe');if(['forex','commodities','indices'].includes(market)){const result=await yahooCandles(symbol,timeframe,market);return normalize(result.rows)}const clean=symbol.replace(/[^A-Z0-9]/gi,'');if(market==='perpetual'||market==='crypto')return fetchBybit(clean,timeframe);throw new Error('Unsupported market data source')}
 function pivotHigh(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;for(let j=1;j<=left;j++)if(c[i].high<=c[i-j].high)return false;for(let j=1;j<=right;j++)if(c[i].high<c[i+j].high)return false;return true}
 function pivotLow(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;for(let j=1;j<=left;j++)if(c[i].low>=c[i-j].low)return false;for(let j=1;j<=right;j++)if(c[i].low>c[i+j].low)return false;return true}
 function confirmedSwings(c){
@@ -193,7 +203,6 @@ function marketStructure(c){
   };
 }
 function structureBias(st){return st.trend==='LONG'||st.trend==='SHORT'?st.trend:'WAIT'}
-function opposite(a,b){return (a==='LONG'&&b==='SHORT')||(a==='SHORT'&&b==='LONG')}
 const STRATEGIES={
   TOP_DOWN:{name:'Top-Down',short:'HTF structure first',description:'Starts with higher-timeframe structure, then requires the middle and execution layers to provide a tradable confirmation.',objective:'Trade only when the higher-timeframe storyline and a current execution condition agree.',rules:['Higher timeframe establishes direction.','Middle timeframe confirms or exposes a hard conflict.','Execution timeframe supplies a current market or fresh limit entry.','No synthetic levels when the required evidence is missing.']},
   PULLBACK:{name:'Pullback',short:'Impulse → retracement → continuation',description:'Waits for a real directional impulse, then looks for a fresh FVG or order block retracement that remains valid inside the higher-timeframe direction.',objective:'Enter continuation after price retraces into a qualified, still-live execution zone.',rules:['HTF direction must be established.','A recent directional impulse must exist.','Price must be retracing into a fresh FVG or order block.','The zone must be unmitigated, close enough to execute and offer at least 2.25R.','A broken or stale zone is rejected.']},
@@ -375,6 +384,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const selected=sweepCandidates.sort((x,y)=>y.sweep.index-x.sweep.index)[0];
     const smcBias=selected?.bias||bias;
     const sweep=selected?.sweep||null;
+    const structureAligned=Boolean(higherBias!=='WAIT'&&smcBias===higherBias);
     const reclaim=Boolean(sweep&&((smcBias==='LONG'&&last.close>sweep.level)||(smcBias==='SHORT'&&last.close<sweep.level)));
     const bos=sweep?structureBreak(current,smcBias,60,12):null;
     const bosAfterSweep=Boolean(sweep&&bos&&bos.breakIndex>sweep.index);
@@ -382,12 +392,12 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const zones=entryZones(current,smcBias,livePrice,a,48);
     const z=chooseLimitForBias(zones,smcBias,livePrice);
     const marketTrade=bosAfterSweep&&reclaim&&disp?evaluateTrade(current,smcBias,livePrice,a,2.25):null;
-    if(sweep&&reclaim&&bosAfterSweep&&disp&&z){
+    if(structureAligned&&sweep&&reclaim&&bosAfterSweep&&disp&&z){
       trade=z.trade;entry=z.entry;orderType='LIMIT';bias=smcBias;
-    } else if(sweep&&reclaim&&bosAfterSweep&&disp&&marketTrade&&validTrade(marketTrade,smcBias,livePrice,'MARKET')){
+    } else if(structureAligned&&sweep&&reclaim&&bosAfterSweep&&disp&&marketTrade&&validTrade(marketTrade,smcBias,livePrice,'MARKET')){
       trade=marketTrade;entry=livePrice;orderType='MARKET';bias=smcBias;
     }
-    reason=trade?'Liquidity sweep, reclaim, post-sweep displacement and BOS are confirmed with a fresh POI.':'Waiting for the full SMC sequence: liquidity sweep → reclaim → displacement → BOS → fresh POI.';
+    reason=trade?'Liquidity sweep, reclaim, post-sweep displacement and BOS are confirmed with a fresh POI.':!structureAligned?'The SMC reversal leg conflicts with the higher-timeframe market structure. No counter-structure trade is issued.':'Waiting for the full SMC sequence: liquidity sweep → reclaim → displacement → BOS → fresh POI.';
     evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',reclaim?'Sweep reclaimed.':'No reclaim.',bosAfterSweep?'BOS occurred after the sweep.':'No post-sweep BOS.',disp?'Displacement confirmed.':'No displacement.',zones[0]?zones[0].type:'No fresh POI.');
   } else if(key==='MSNR'){
     const levels=msnrLevels(biasCandles,bias);
@@ -424,15 +434,16 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const candidates=[longSweep?{bias:'LONG',sweep:longSweep}:null,shortSweep?{bias:'SHORT',sweep:shortSweep}:null].filter(Boolean);
     const selected=candidates.sort((x,y)=>y.sweep.index-x.sweep.index)[0];
     const reversalBias=selected?.bias||'WAIT',reversalSweep=selected?.sweep||null;
+    const structureAligned=Boolean(higherBias!=='WAIT'&&reversalBias===higherBias);
     const reclaim=Boolean(reversalSweep&&((reversalBias==='LONG'&&last.close>reversalSweep.level)||(reversalBias==='SHORT'&&last.close<reversalSweep.level)));
     const disp=reversalBias!=='WAIT'&&displacement(current,reversalBias);
     const reversalBOS=reversalBias!=='WAIT'&&structureBreak(current,reversalBias,30,8);
     const bosAfterSweep=Boolean(reversalSweep&&reversalBOS&&reversalBOS.breakIndex>reversalSweep.index);
-    const marketTrade=reversalBias!=='WAIT'&&reclaim&&disp&&bosAfterSweep?evaluateTrade(current,reversalBias,livePrice,a,2.25):null;
-    if(reversalSweep&&reclaim&&disp&&bosAfterSweep&&marketTrade&&validTrade(marketTrade,reversalBias,livePrice,'MARKET')){
+    const marketTrade=structureAligned&&reversalBias!=='WAIT'&&reclaim&&disp&&bosAfterSweep?evaluateTrade(current,reversalBias,livePrice,a,2.25):null;
+    if(structureAligned&&reversalSweep&&reclaim&&disp&&bosAfterSweep&&marketTrade&&validTrade(marketTrade,reversalBias,livePrice,'MARKET')){
       trade=marketTrade;entry=livePrice;orderType='MARKET';bias=reversalBias;
     }
-    reason=trade?'A liquidity sweep was rejected, reclaimed and followed by displacement plus reversal structure.':'Waiting for sweep → reclaim → displacement → reversal structure.';
+    reason=trade?'A liquidity sweep was rejected, reclaimed and followed by displacement plus reversal structure.':!structureAligned?'The reversal signal conflicts with the higher-timeframe market structure. No counter-structure trade is issued.':'Waiting for sweep → reclaim → displacement → reversal structure.';
     evidence.push(reversalSweep?reversalSweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim.',bosAfterSweep?'Reversal BOS confirmed after sweep.':'No post-sweep reversal BOS.',disp?'Displacement confirmed.':'No displacement.');
   } else if(key==='CRT'){
     // Use the last completed range before the current execution candle so CRT has a future candle to sweep.
@@ -446,7 +457,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
         if(current[i].high>rangeHigh&&current[i].close<rangeHigh){sweepIndex=i;signal='SHORT';sweepExtreme=current[i].high;break;}
       }
     }
-    const confirmed=Boolean(signal&&sweepIndex>=0);
+    const confirmed=Boolean(signal&&sweepIndex>=0&&higherBias!=='WAIT'&&signal===higherBias&&current[sweepIndex]?.close!==undefined&&mid!=null&&((signal==='LONG'&&current[sweepIndex].close>mid)||(signal==='SHORT'&&current[sweepIndex].close<mid)));
     let crtTrade=null;
     if(confirmed){
       const t=evaluateTrade(current,signal,livePrice,a,2.25);
@@ -463,8 +474,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       }
     }
     if(crtTrade&&validTrade(crtTrade,signal,livePrice,'MARKET')){trade=crtTrade;entry=livePrice;orderType='MARKET';bias=signal;}
-    reason=trade?'A higher-timeframe candle range was swept and reclaimed with price targeting the opposite range extreme.':'Waiting for a higher-timeframe range sweep and close-back-inside confirmation with sufficient room.';
-    evidence.push(ref?'CRT range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No higher-timeframe reference range.',signal==='LONG'?'Sell-side range swept and reclaimed.':signal==='SHORT'?'Buy-side range swept and reclaimed.':'No qualifying sweep/reclaim.',mid!=null?'Range midpoint '+roundPrice(mid)+'.':'No midpoint.');
+    reason=trade?'A higher-timeframe candle range was swept and reclaimed with price targeting the opposite range extreme.':(signal&&higherBias!==signal)?'The CRT sweep conflicts with higher-timeframe market structure. No counter-structure trade is issued.':'Waiting for a completed candle range to be swept, reclaimed through its midpoint and leave sufficient room.';
+    evidence.push(ref?'CRT range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No higher-timeframe reference range.',signal==='LONG'?'Sell-side range swept and reclaimed.':signal==='SHORT'?'Buy-side range swept and reclaimed.':'No qualifying sweep/reclaim.',confirmed?'Range midpoint reclaimed.':'No midpoint reclaim.');
   }
   const confidence=trade?Math.min(95,Math.max(38,Math.round(
     50+
@@ -521,7 +532,7 @@ if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(sym
   const needed=[...new Set([context.entry,context.structure,context.bias])];
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
-  const liveQuote=(['forex','commodities','indices'].includes(market))?await yahooPrice(symbol,market):null;
+  const liveQuote=(['forex','commodities','indices'].includes(market))?await yahooPrice(symbol,market):await bybitPrice(symbol.replace(/[^A-Z0-9]/gi,''));
   if(liveQuote?.marketState==='closed')throw Object.assign(new Error('Market is currently closed.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
   const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market,liveQuote);
   const confidenceBase=Number(setup.confidence),finalConfidence=setup.tradeReady?Math.min(95,Math.max(35,Number.isFinite(confidenceBase)?Math.round(confidenceBase):35)):0;
