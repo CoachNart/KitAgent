@@ -1,5 +1,6 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
 import { twelveCandles, twelvePrice, twelveInstrumentSnapshot, resolveTwelveSymbol } from './twelvedata.js';
+import { yahooCandles, yahooPrice, yahooInstruments } from './yahooMarket.js';
 const CRYPTO_INSTRUMENTS=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
 const TIMEFRAME_MAP={'1m':{forex:'1m',twelvedata:'1m',crypto:'1m'},'5m':{forex:'5m',twelvedata:'5m',crypto:'5m'},'15m':{forex:'15m',twelvedata:'15m',crypto:'15m'},'30m':{forex:'30m',twelvedata:'30m',crypto:'30m'},'1H':{forex:'1h',twelvedata:'1h',crypto:'1h'},'4H':{forex:'4h',twelvedata:'4h',crypto:'4h'},'1D':{forex:'1d',twelvedata:'1d',crypto:'1d'},'1W':{forex:'1wk',twelvedata:'1wk',crypto:'1w'}};
 const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
@@ -365,26 +366,10 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:reason,entry:roundPrice(entry),limitEntry:orderType==='LIMIT'?roundPrice(entry):null,stopLoss:roundPrice(trade.stop),takeProfit1:roundPrice(trade.target),takeProfit2:roundPrice(trade.target2),riskReward:'1:'+Number(trade.rr).toFixed(2),riskRewardValue:Number(trade.rr.toFixed(2)),orderType,tradeReady:true,setupStatus:'TRADE READY',setupReason:reason,bias,directionBias:bias,confidence,riskPercent:riskPct!=null?Number(riskPct.toFixed(2)):null,stopDistance:roundPrice(stopDistance),stopDistancePct:entry?Number((stopDistance/entry*100).toFixed(3)):null,stopDistanceUnits:Number((stopDistance*pipMultiplier).toFixed(2)),priceUnitLabel,structuralInvalidation:roundPrice(trade.stop),marketEntry:roundPrice(livePrice),price:roundPrice(livePrice),liquidityTarget:roundPrice(trade.targetLiquidity),liquidityType:'STRUCTURAL LIQUIDITY',liquidityTouches:0,liquidityDistancePct:Number((Math.abs((trade.targetLiquidity??trade.target)-entry)*100/entry).toFixed(2)),liquidityReason:'Target is derived from a qualified structural/liquidity level.',confirmation:{bos:Boolean(structureBreak(current,bias,48,12)),sweep:Boolean(liquiditySweep(current,bias,20,12)),displacement:Boolean(displacement(current,bias))},higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry,timestamp:last.time};
 }
 export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{if(String(req.query?.action||'')==='header'){const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear',{headers:{Accept:'application/json'}});if(!r.ok)return json(res,502,{error:'Bybit ticker provider unavailable'});const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list))return json(res,502,{error:body?.retMsg||'Bybit ticker provider unavailable'});const wanted=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT']);const result=body.result.list.filter(x=>wanted.has(x.symbol)).map(x=>({symbol:x.symbol,lastPrice:x.lastPrice,price24hPcnt:x.price24hPcnt}));return json(res,200,{ok:true,result});} const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(req.query?.action==='instruments'){
-      if(market==='commodities'||market==='indices'){
+      if(market==='commodities'||market==='indices'||market==='forex'){
         const query=String(req.query?.q||'').trim().toUpperCase();
-        const type=market==='commodities'?'COMMODITY':'INDEX';
-        const brokerRows=await twelveInstrumentSnapshot();
-        const instruments=brokerRows
-          .filter(x=>String(x.type||'').toUpperCase()===type)
-          .map(x=>({symbol:String(x.symbol||'').toUpperCase(),providerSymbol:String(x.symbol||'').toUpperCase(),name:x.name||x.symbol,type}))
-          .filter(x=>x.symbol&&(!query||`${x.symbol} ${x.name}`.toUpperCase().includes(query)));
-        return json(res,200,{ok:true,instruments:normalizeInstrumentList(instruments)});
-      }
-      if(market==='forex'){
-        const query=String(req.query?.q||'').trim().toUpperCase();
-        const brokerRows=await twelveInstrumentSnapshot();
-        const instruments=brokerRows
-          .filter(x=>String(x.type||'').toUpperCase()==='FOREX')
-          .map(x=>String(x.name||'').trim().toUpperCase())
-          .filter(x=>/^[A-Z]{3}\/[A-Z]{3}$/.test(x))
-          .map(symbol=>({symbol,providerSymbol:symbol,name:symbol,type:'FOREX'}))
-          .filter(x=>!query||`${x.symbol} ${x.name}`.includes(query));
-        return json(res,200,{ok:true,instruments:normalizeInstrumentList(instruments)});
+        const instruments=yahooInstruments(market).filter(x=>!query||`${x.symbol} ${x.name}`.toUpperCase().includes(query));
+        return json(res,200,{ok:true,instruments});
       }
       if(market==='perpetual'||market==='crypto'){
         const r=await fetch('https://api.bybit.com/v5/market/instruments-info?category=linear&status=Trading&limit=1000',{headers:{Accept:'application/json'}});
