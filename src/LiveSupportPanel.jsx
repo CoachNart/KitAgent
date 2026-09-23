@@ -4,7 +4,7 @@ import { auth, db } from './firebase.js';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import './support-chat.css';
 
-const API='/api/support';
+const API='/api/request-account-deletion';
 
 export default function LiveSupportPanel({user,name,email}){
   const [chatId,setChatId]=useState('');
@@ -18,7 +18,7 @@ export default function LiveSupportPanel({user,name,email}){
   const [notice,setNotice]=useState('');
   const [error,setError]=useState('');
 
-  const token=async()=>auth?.currentUser?.getIdToken(true);
+  const token=async()=>{const current=user||auth?.currentUser;if(!current)throw new Error('Your session is not ready. Please sign in again.');return current.getIdToken(true)};
 
   const call=async(body)=>{
     const t=await token();
