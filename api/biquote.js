@@ -82,8 +82,25 @@ export async function biquoteCandles(symbol,timeframe){
   const instrument=await resolveBiquoteSymbol(symbol);
   if(!instrument){const e=new Error(`Market-data instrument unavailable: ${symbol}`);e.code='MARKET_DATA_INSTRUMENT_UNAVAILABLE';throw e}
   const interval=timeframe==='1H'?'1h':timeframe==='4H'?'4h':timeframe==='1D'?'1d':timeframe==='1W'?'1d':timeframe;
-  const body=await request(`/${encodeURIComponent(instrument.name)}/ohlc`,{interval,limit:1000});
+  let body;
+  try{
+    body=await request(`/${encodeURIComponent(instrument.name)}/ohlc`,{interval,limit:1000});
+  }catch(err){
+    // Biquote documents M1/M5/M15/M30 explicitly. If a requested intraday
+    // series is temporarily sparse, rebuild that exact timeframe from the
+    // nearest available lower-resolution source rather than declaring the
+    // market stale.
+    if(['1m','5m','15m','30m'].includes(interval)){
+      const base=interval==='1m'?'1m':interval==='5m'?'5m':'1m';
+      if(base!==interval)body=await request(`/${encodeURIComponent(instrument.name)}/ohlc`,{interval:base,limit:1000});
+      else throw err;
+    }else throw err;
+  }
   let rows=normalizeRows(body?.bars);
+  if(['5m','15m','30m'].includes(interval)){
+    const bucket=interval==='5m'?5*60000:interval==='15m'?15*60000:30*60000;
+    rows=aggregate(rows,bucket);
+  }
   // Biquote's live quote feed can be newer than its stored 4H/D1 bars.
   // Rebuild higher timeframes from current 1H candles and merge them over
   // the broker's longer historical series so HTF structure stays current.
