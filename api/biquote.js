@@ -76,5 +76,23 @@ export async function biquotePrice(symbol){
 }
 export async function biquoteInstrumentSnapshot(){
   const all=await listBiquoteInstruments();
-  return all.map(x=>({name:x.name,displayName:x.description||x.name,type:x.type,exchange:x.exchange,source:x.source}));
+  const rows=all.map(x=>({name:x.name,displayName:x.description||x.name,type:x.type,exchange:x.exchange,source:x.source}));
+  // Keep the supported Metal/CFD picker source-native even if Biquote's
+  // recent catalogue temporarily omits a configured instrument.
+  const existing=new Set(rows.map(x=>String(x.name||'').toUpperCase()));
+  for(const aliases of Object.values(CFD_ALIASES)){
+    for(const candidate of aliases){
+      const key=String(candidate).toUpperCase();
+      if(existing.has(key))break;
+      try{
+        const direct=await request(`/symbols/${encodeURIComponent(key)}`);
+        if(direct?.name){
+          rows.push({name:direct.name,displayName:direct.description||direct.name,type:direct.type,exchange:direct.exchange,source:direct.source});
+          existing.add(String(direct.name).toUpperCase());
+          break;
+        }
+      }catch{}
+    }
+  }
+  return rows;
 }
