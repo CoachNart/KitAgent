@@ -299,7 +299,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure);
   // Direction is strategy-specific. Higher-timeframe structure is a filter for
   // continuation models, not a universal signal generator.
-  const bias=(key==='LIQUIDITY_REVERSAL'||key==='CRT')?'WAIT':higherBias;
+  let bias=(key==='LIQUIDITY_REVERSAL'||key==='CRT')?'WAIT':higherBias;
   const liveQuoteUsable=Boolean(liveQuote?.tradeable);
   const livePrice=liveQuoteUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
