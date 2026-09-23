@@ -15,10 +15,7 @@ function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type
 export default async function handler(req,res){
   let body=req.body;
   try{if(typeof body==='string')body=JSON.parse(body||'{}');}catch{return json(res,400,{error:'Invalid request body.'});}
-  if(req.method==='GET'||(body&&typeof body==='object'&&body.action)){
-    req.body=body||{};
-    return supportHandler(req,res);
-  }
+  if(req.method==='GET'||(body&&typeof body==='object'&&body.action)){req.body=body||{};return supportHandler(req,res);}
   if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
   try{
     const email=String(body?.email||'').trim().toLowerCase();
