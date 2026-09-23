@@ -44,7 +44,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
         <span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span>
       </div>
 
-      <MarketWatchlist market={market} symbol={pair} onSelect={(next)=>setPair(next)}/>
+      <MarketWatchlist market={market} symbol={pair} onSelect={(next,nextMarket)=>{if(nextMarket&&nextMarket!==market)setMarket(nextMarket);setPair(next)}}/>
 
       <section className="live-market-card">
         <div className="live-tabs" role="tablist">
@@ -82,7 +82,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
           <label className="live-field timeframe">
             <span>TIMEFRAME</span>
             <div>
-              <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=><option key={x}>{x}</option>)}</select>
+              <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=>{const blocked=x==='1W'||(strategy==='MSNR'&&x==='1D');return <option key={x} value={x} disabled={blocked}>{x}{blocked?' · unavailable for '+(strategy==='MSNR'?'MSNR':'setup hierarchy'):''}</option>})}</select>
               <ChevronDown/>
             </div>
           </label>
