@@ -435,7 +435,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     reason=trade?'A liquidity sweep was rejected, reclaimed and followed by displacement plus reversal structure.':'Waiting for sweep → reclaim → displacement → reversal structure.';
     evidence.push(reversalSweep?reversalSweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim.',bosAfterSweep?'Reversal BOS confirmed after sweep.':'No post-sweep reversal BOS.',disp?'Displacement confirmed.':'No displacement.');
   } else if(key==='CRT'){
-    const ref=structure.at(-1);
+    // Use the last completed range before the current execution candle so CRT has a future candle to sweep.
+    const ref=structure.length>1?structure.at(-2):structure.at(-1);
     const rangeHigh=ref?.high,rangeLow=ref?.low,mid=ref?((ref.high+ref.low)/2):null;
     let sweepIndex=-1,signal=null,sweepExtreme=null;
     if(ref&&Number.isFinite(rangeHigh)&&Number.isFinite(rangeLow)){
