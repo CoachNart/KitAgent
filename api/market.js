@@ -252,7 +252,7 @@ function marketDataFresh(c,timeframe,market=''){
     :['1D','1d'].includes(sourceTimeframe)
       ?7*86400000
       :market==='forex'||market==='metals'
-        ?interval*12
+        ?Math.max(interval*24, 2*86400000)
         :interval*4;
   return age<=maxAge;
 }
@@ -398,6 +398,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         // Biquote's documented live symbols are canonical names such as EURUSD,
         // not the Yahoo-style EUR_USD / EURUSD=X names used by the old picker.
         const instruments=brokerRows
+          .filter(x=>String(x.type||'').toUpperCase()==='FOREX'||String(x.exchange||'').toUpperCase()==='FOREX')
           .map(x=>String(x.name||'').trim().toUpperCase())
           .filter(x=>/^[A-Z]{6}$/.test(x)&&x.slice(0,3)!==x.slice(3))
           .map(symbol=>({symbol,providerSymbol:symbol,name:`${symbol.slice(0,3)} / ${symbol.slice(3)}`,type:'FOREX'}))
