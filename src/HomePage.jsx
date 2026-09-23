@@ -7,7 +7,7 @@ const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT'];
 const api=()=>fetch('/api/market?action=header',{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j});
 const money=(v,d=2)=>Number.isFinite(Number(v))?`$${Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})}`:'—';
 const pct=v=>Number.isFinite(Number(v))?`${Number(v)>=0?'+':''}${Number(v).toFixed(2)}%`:'—';
-export default function HomePage({go,wallet,onLesson}){
+export default function HomePage({go,onLesson}){
  const [tickers,setTickers]=useState([]),[busy,setBusy]=useState(false),[updated,setUpdated]=useState(Date.now());
  const [openTrades,setOpenTrades]=useState([]);
  const loadOpenTrades=async()=>{try{let creds={};try{creds=JSON.parse(localStorage.getItem('kitsetups_mexc_credentials_v2')||'{}')}catch{}if(!creds.key||!creds.secret){setOpenTrades([]);return}const r=await fetch('/api/cex',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'positions',key:creds.key,secret:creds.secret})});const j=await r.json();if(!r.ok||j?.error)throw Error(j?.error||'Unable to load positions');const rows=Array.isArray(j?.data)?j.data:Array.isArray(j?.data?.data)?j.data.data:Array.isArray(j?.result)?j.result:[];setOpenTrades(rows.filter(p=>Number(p.holdVol??p.vol??p.size??0)>0))}catch{setOpenTrades([])}};
