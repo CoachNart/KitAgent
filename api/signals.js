@@ -2,6 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
 import { biquoteCandles, biquotePrice } from './biquote.js';
+import { yahooCandles } from '../server/yahooMarket.js';
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -23,7 +24,8 @@ export async function marketKlines(signal) {
     if(!symbol||!Number.isFinite(startMs))return [];
     const now=Date.now();
     const market=String(signal.market||'').toLowerCase();
-    if(['forex','metals'].includes(market)){const result=await biquoteCandles(signal.symbol,'1m');return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
+    if(['forex','metals'].includes(market)){const result=market==='forex'?await yahooCandles(signal.symbol,'1m','forex'):await biquoteCandles(signal.symbol,'1m');return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
+    if(['commodities','indices'].includes(market)){const result=await yahooCandles(signal.symbol,'1m',market);return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
     if(!['crypto','perpetual'].includes(market))return [];
     const all=[];
     let pageEnd=now,pages=0;
@@ -60,7 +62,9 @@ export async function marketKlines(signal) {
 
 export async function currentPrice(signal) {
   const market=String(signal.market||'').toLowerCase();
-  if(['forex','metals'].includes(market)){try{return (await biquotePrice(signal.symbol)).mid}catch{return null}}
+  if(['forex'].includes(market)){try{return (await yahooCandles(signal.symbol,'1m','forex')).rows.at(-1)?.[4]??null}catch{return null}}
+  if(['commodities','indices'].includes(market)){try{return (await yahooCandles(signal.symbol,'1m',market)).rows.at(-1)?.[4]??null}catch{return null}}
+  if(['metals'].includes(market)){try{return (await biquotePrice(signal.symbol)).mid}catch{return null}}
   const candles=await marketKlines(signal);
   return candles.at(-1)?.close??null;
 }
@@ -78,7 +82,7 @@ export async function currentPrice(signal) {
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
   const market=String(signal.market||'').toLowerCase();
-  if(!['crypto','perpetual','forex','metals'].includes(market))return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
+  if(!['crypto','perpetual','forex','commodities','indices','metals'].includes(market))return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   const candles=await marketKlines(signal); if(!candles.length)return {...signal,currentPrice:price};
   const livePrice=Number.isFinite(Number(price))?price:candles.at(-1)?.close??null;
   const dir=String(signal.direction||'').toUpperCase();
@@ -158,7 +162,7 @@ export default async function handler(req,res){
         if(av!==bv)patch[key]=b??null;
       }
       if(Object.keys(patch).length)await collection.doc(original.id).set(patch,{merge:true});
-      if(['open','target_hit','stop_hit','missed_entry'].includes(String(resolved.status||'')))signals.push(resolved);
+      if(['limit_pending','open','target_hit','stop_hit','missed_entry'].includes(String(resolved.status||'')))signals.push(resolved);
     }
     return json(res,200,{ok:true,signals});
   }catch(error){
