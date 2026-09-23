@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node --input-type=commonjs -e \"const fs=require('fs');const p='api/market.js';let s=fs.readFileSync(p,'utf8');const bad=\"if(['commodities','indices'].includes(market)){\";if(s.includes(bad)){s=s.replace(bad,\"if(['commodities','indices'].includes(market)){}\");fs.writeFileSync(p,s)}\" && node --input-type=commonjs -e \"const fs=require('fs');const p='src/mexcFutures.css';let s=fs.readFileSync(p,'utf8');let depth=0,out='';for(const ch of s){if(ch==='\\{')depth++;else if(ch==='\\}'){if(depth===0)continue;depth--;}out+=ch;}if(depth!==0)throw new Error('Unbalanced CSS braces in '+p);fs.writeFileSync(p,out)\" && vite build",
+    "build": "vite build",
     "postbuild": "node scripts/brand-kitsetups.mjs",
     "preview": "vite preview",
     "android:sync": "npm run build && npx cap sync android",
