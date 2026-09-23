@@ -1,6 +1,6 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
 import { twelveCandles, twelvePrice, twelveInstrumentSnapshot, resolveTwelveSymbol } from './twelvedata.js';
-import { yahooCandles, yahooPrice, yahooInstruments } from './yahooMarket.js';
+import { yahooCandles, yahooPrice, yahooInstruments } from '../server/yahooMarket.js';
 const CRYPTO_INSTRUMENTS=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
 const TIMEFRAME_MAP={'1m':{forex:'1m',twelvedata:'1m',crypto:'1m'},'5m':{forex:'5m',twelvedata:'5m',crypto:'5m'},'15m':{forex:'15m',twelvedata:'15m',crypto:'15m'},'30m':{forex:'30m',twelvedata:'30m',crypto:'30m'},'1H':{forex:'1h',twelvedata:'1h',crypto:'1h'},'4H':{forex:'4h',twelvedata:'4h',crypto:'4h'},'1D':{forex:'1d',twelvedata:'1d',crypto:'1d'},'1W':{forex:'1wk',twelvedata:'1wk',crypto:'1w'}};
 const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
