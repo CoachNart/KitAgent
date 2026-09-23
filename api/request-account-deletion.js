@@ -6,26 +6,22 @@ function getAdmin(){
   if(admin.apps.length)return admin;
   const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   const credentialPath=process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if(raw){
-    try{
-      admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['\"]|['\"]$/g,'')))});
-      return admin;
-    }catch(error){console.error('Firebase Admin initialization failed:',error);}
-  }
-  if(credentialPath&&fs.existsSync(credentialPath)){
-    admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath,'utf8')))});
-    return admin;
-  }
+  if(raw){try{admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['"]|['"]$/g,'')))});return admin;}catch(error){console.error('Firebase Admin initialization failed:',error);}}
+  if(credentialPath&&fs.existsSync(credentialPath)){admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath,'utf8')))});return admin;}
   const error=new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING');error.code=error.message;throw error;
 }
 function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');res.end(JSON.stringify(body));}
 
 export default async function handler(req,res){
-  if(String(req.query?.support||'')==='1')return supportHandler(req,res);
+  let body=req.body;
+  try{if(typeof body==='string')body=JSON.parse(body||'{}');}catch{return json(res,400,{error:'Invalid request body.'});}
+  if(req.method==='GET'||(body&&typeof body==='object'&&body.action)){
+    req.body=body||{};
+    return supportHandler(req,res);
+  }
   if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
   try{
-    const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
-    const email=String(body.email||'').trim().toLowerCase();
+    const email=String(body?.email||'').trim().toLowerCase();
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{error:'Enter the email address used for your KitSetups account.'});
     const a=getAdmin(),db=a.firestore(),requestRef=db.collection('accountDeletionRequests').doc();
     await requestRef.set({email,status:'pending',source:'public-web-form',createdAt:admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
