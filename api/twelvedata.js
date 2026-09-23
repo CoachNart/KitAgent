@@ -1,14 +1,6 @@
 const BASE='https://api.twelvedata.com';
 const KEY=process.env.TWELVE_DATA_API_KEY;
 
-const FOREX=[
-  'AUD/CAD','AUD/CHF','AUD/JPY','AUD/NZD','AUD/USD','CAD/CHF','CAD/JPY','CHF/JPY',
-  'EUR/AUD','EUR/CAD','EUR/CHF','EUR/GBP','EUR/JPY','EUR/NZD','EUR/PLN','EUR/SEK','EUR/SGD','EUR/TRY','EUR/USD',
-  'GBP/AUD','GBP/CAD','GBP/CHF','GBP/JPY','GBP/NOK','GBP/PLN','GBP/SEK','GBP/USD','GBP/ZAR',
-  'NZD/CAD','NZD/CHF','NZD/JPY','NZD/SGD','NZD/USD','USD/CAD','USD/CHF','USD/CNH','USD/HKD','USD/HUF','USD/JPY',
-  'USD/MXN','USD/NOK','USD/SEK','USD/SGD','USD/THB','USD/TRY','USD/ZAR'
-];
-
 const TF={ '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'1h','4H':'4h','1D':'1day','1W':'1week' };
 const CANDLE_TTL={ '1m':20000,'5m':60000,'15m':120000,'30m':180000,'1H':300000,'4H':900000,'1D':3600000,'1W':21600000 };
 const REFERENCE_TTL=21600000;
@@ -64,21 +56,26 @@ async function reference(path,type){
   })();
   inflight.set(key,work);try{return await work}finally{inflight.delete(key)}
 }
-export async function twelveInstrumentSnapshot(){
-  const [commodities,indices]=await Promise.all([
-    reference('/commodities','COMMODITY'),
-    reference('/indices','INDEX')
+export async function twelveInstrumentSnapshot(kind='all'){
+  const wanted=String(kind).toLowerCase();
+  const needForex=wanted==='all'||wanted==='forex';
+  const needCommodities=wanted==='all'||wanted==='commodities';
+  const needIndices=wanted==='all'||wanted==='indices';
+  const [forex,commodities,indices]=await Promise.all([
+    needForex?reference('/forex_pairs','FOREX'):[],
+    needCommodities?reference('/commodities','COMMODITY'):[],
+    needIndices?reference('/indices','INDEX'):[]
   ]);
   return [
-    ...FOREX.map(symbol=>({name:symbol,displayName:symbol,type:'FOREX',exchange:'Twelve Data',source:'Twelve Data'})),
+    ...forex.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'})),
     ...commodities.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'})),
     ...indices.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'}))
   ];
 }
-export async function resolveTwelveSymbol(symbol){
+export async function resolveTwelveSymbol(symbol,kind='all'){
   const wanted=String(symbol||'').trim().toUpperCase();
   if(wanted.includes('/'))return {name:wanted,description:wanted,type:null};
-  const all=await twelveInstrumentSnapshot();
+  const all=await twelveInstrumentSnapshot(kind);
   const compact=wanted.replace(/[^A-Z0-9]/g,'');
   const exact=all.find(x=>x.symbol===wanted)||all.find(x=>x.symbol.replace(/[^A-Z0-9]/g,'')===compact);
   if(!exact){
