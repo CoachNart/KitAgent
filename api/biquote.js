@@ -71,6 +71,23 @@ export async function biquoteInstrumentSnapshot(){
   return all.map(x=>({name:x.name,displayName:x.description||x.name,type:x.type,exchange:x.exchange,source:x.source}));
 }
 
+function aggregate(rows,bucketMs){
+  const groups=new Map();
+  for(const r of rows){
+    const key=Math.floor(r[0]/bucketMs)*bucketMs;
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(r);
+  }
+  return [...groups].sort((a,b)=>a[0]-b[0]).map(([time,a])=>[
+    time,a[0][1],Math.max(...a.map(x=>x[2])),Math.min(...a.map(x=>x[3])),a.at(-1)[4],a.reduce((n,x)=>n+x[5],0)
+  ]);
+}
+function mergeRows(base,derived,bucketMs){
+  const map=new Map((base||[]).map(r=>[Math.floor(r[0]/bucketMs)*bucketMs,r]));
+  for(const r of derived||[])map.set(Math.floor(r[0]/bucketMs)*bucketMs,r);
+  return [...map.values()].sort((a,b)=>a[0]-b[0]);
+}
+
 export async function biquoteCandles(symbol,timeframe){
   const cacheKey=`${String(symbol||'').toUpperCase()}|${timeframe}`;
   const cached=candleCache.get(cacheKey);
@@ -138,26 +155,4 @@ export async function biquotePrice(symbol){
   })();
   pricePromises.set(cacheKey,work);
   try{return await work}finally{pricePromises.delete(cacheKey)}
-}
-export async function biquoteInstrumentSnapshot(){
-  const all=await listBiquoteInstruments();
-  const rows=all.map(x=>({name:x.name,displayName:x.description||x.name,type:x.type,exchange:x.exchange,source:x.source}));
-  // Keep the supported Metal/CFD picker source-native even if Biquote's
-  // recent catalogue temporarily omits a configured instrument.
-  const existing=new Set(rows.map(x=>String(x.name||'').toUpperCase()));
-  for(const aliases of Object.values(CFD_ALIASES)){
-    for(const candidate of aliases){
-      const key=String(candidate).toUpperCase();
-      if(existing.has(key))break;
-      try{
-        const direct=await request(`/symbols/${encodeURIComponent(key)}`);
-        if(direct?.name){
-          rows.push({name:direct.name,displayName:direct.description||direct.name,type:direct.type,exchange:direct.exchange,source:direct.source});
-          existing.add(String(direct.name).toUpperCase());
-          break;
-        }
-      }catch{}
-    }
-  }
-  return rows;
 }
