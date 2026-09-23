@@ -101,6 +101,8 @@ export default function AdminPage({user}){
       {error&&<div className="admin-alert error"><XCircle size={16}/><span>{error}</span></div>}
       {notice&&<div className="admin-alert success"><CheckCircle2 size={16}/><span>{notice}</span></div>}
 
+      <button type="button" className="admin-support-link" onClick={()=>window.location.href='/admin/support'}>Support inbox <span>Open live conversations →</span></button>
+
       <section className="admin-grid">
         <div className="admin-card">
           <div className="admin-card-head"><div><span>REGISTERED USERS</span><h3>Choose recipient</h3></div><UserRound size={18}/></div>
