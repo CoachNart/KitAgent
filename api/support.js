@@ -178,6 +178,18 @@ export default async function handler(req,res){
       return json(res,201,{sent:true});
     }
 
+    if(action==='messages'){
+      const chatId=cleanText(body.chatId,128);
+      if(!chatId)return json(res,400,{error:'Conversation is missing.'});
+      if(!isAdmin(decoded))return json(res,403,{error:'Admin access is required.'});
+      const chatRef=db.collection('supportChats').doc(chatId);
+      const chat=await chatRef.get();
+      if(!chat.exists)return json(res,404,{error:'Support conversation not found.'});
+      const messages=await chatRef.collection('messages').orderBy('createdAt','asc').limit(500).get();
+      await chatRef.update({unreadForSupport:false});
+      return json(res,200,{messages:messages.docs.map(normalizeMessage)});
+    }
+
     if(action==='admin-message'){
       if(!isAdmin(decoded))return json(res,403,{error:'Admin access is required.'});
       const chatId=cleanText(body.chatId,128);
