@@ -212,8 +212,7 @@ const CANDLE_INTERVAL_MS={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1h'
 function closedCandles(c,timeframe,market=''){
   if(!Array.isArray(c)||c.length<2)return [];
   // Biquote's OHLC normalizer already removes bars marked isOpen:true.
-  // Do not infer "open" again from the timestamp: that incorrectly removes
-  // the newest completed Biquote candle for every Forex/Metal timeframe.
+  // Twelve Data returns completed OHLC bars; do not infer candle state from timestamps for these markets.
   if(['forex','commodities','indices'].includes(market))return c;
   const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.crypto||timeframe;
   const last=c.at(-1),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
@@ -224,15 +223,14 @@ function closedCandles(c,timeframe,market=''){
 }
 function marketDataFresh(c,timeframe,market=''){
   if(!Array.isArray(c)||!c.length)return false;
-  const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.[market==='forex'?'forex':['commodities','indices'].includes(market)?'metals':'crypto']||timeframe;
+  const sourceKey=market==='forex'?'forex':['commodities','indices'].includes(market)?'twelvedata':'crypto';
+  const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.[sourceKey]||timeframe;
   const lastOpen=Number(c.at(-1)?.time),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
   if(!Number.isFinite(lastOpen)||!interval)return false;
-  // Biquote returns completed bars with their OPEN timestamp. A completed
-  // candle can therefore be nearly one full interval old before the next
-  // candle appears. Judge freshness from the candle close, not its open.
+  // A completed candle can be nearly one full interval old before the next candle appears. Judge freshness from the candle close, not its open.
   const lastClose=lastOpen+interval,age=Date.now()-lastClose;
   if(age<0)return true;
-  // Forex/Metals feeds can briefly have sparse ticks between completed bars.
+  // Twelve Data can briefly deliver a completed bar after the nominal close; keep a bounded delivery window.
   // Keep the stale guard, but allow a reasonable provider-delivery window.
   const maxAge=['1W','1wk','1w'].includes(sourceTimeframe)
     ?21*86400000
