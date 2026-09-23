@@ -25,7 +25,7 @@ function price(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number
 async function persistSignal(body){const user=auth?.currentUser,setup=body?.setup;if(!user||!setup?.tradeReady||!['MARKET','LIMIT'].includes(String(setup.orderType||'').toUpperCase())||!['LONG','SHORT'].includes(String(setup.bias||'').toUpperCase())||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;const result=await response.json();window.dispatchEvent(new CustomEvent('kitagent-signal-recorded',{detail:result.signal}));return result;}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
 export default function LiveMarketPage(){const [market,setMarket]=useState('forex'),[pair,setPair]=useState(''),[timeframe,setTimeframe]=useState('1H'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[sourceLoading,setSourceLoading]=useState(true),[error,setError]=useState(''),[result,setResult]=useState(null),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState([]),[pickerOpen,setPickerOpen]=useState(false);
 
- useEffect(()=>{if(timeframe==='1W'||(strategy==='MSNR'&&timeframe==='1D'))setTimeframe(strategy==='MSNR'?'4H':'1D')},[strategy,timeframe]);
+ useEffect(()=>{if(timeframe==='1W'||((strategy==='MSNR'||strategy==='CRT')&&timeframe==='1D'))setTimeframe((strategy==='MSNR'||strategy==='CRT')?'4H':'1D')},[strategy,timeframe]);
 
  useEffect(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup');if(!raw)return;const cached=JSON.parse(raw);if(cached?.ok&&cached?.setup){setResult(cached);window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:cached}));}}catch{}},[]);
 
@@ -84,7 +84,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
           <label className="live-field timeframe">
             <span>TIMEFRAME</span>
             <div>
-              <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=>{const blocked=x==='1W'||(strategy==='MSNR'&&x==='1D');return <option key={x} value={x} disabled={blocked}>{x}{blocked?' · unavailable for '+(strategy==='MSNR'?'MSNR':'setup hierarchy'):''}</option>})}</select>
+              <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=>{const blocked=x==='1W'||((strategy==='MSNR'||strategy==='CRT')&&x==='1D');return <option key={x} value={x} disabled={blocked}>{x}{blocked?' · unavailable for '+(strategy==='MSNR'?'MSNR':'setup hierarchy'):''}</option>})}</select>
               <ChevronDown/>
             </div>
           </label>
