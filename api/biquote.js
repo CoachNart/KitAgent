@@ -33,8 +33,14 @@ export async function listBiquoteInstruments(){
   // disappear. Biquote explicitly documents /symbols?quotedWithinDays=7 as
   // the picker-safe source and /symbols as the full broker catalogue.
   if(instrumentCache&&Date.now()-instrumentAt<60000)return instrumentCache;
-  let body=await request('/symbols',{quotedWithinDays:7});
-  if(!Array.isArray(body)||!body.length)body=await request('/symbols');
+  let body=null;
+  try{body=await request('/symbols',{quotedWithinDays:7})}catch{}
+  if(!Array.isArray(body)||!body.length){
+    try{body=await request('/symbols')}catch{}
+  }
+  if(!Array.isArray(body)||!body.length){
+    try{body=await request('/active')}catch{}
+  }
   instrumentCache=Array.isArray(body)?body:[];instrumentAt=Date.now();return instrumentCache;
 }
 export async function resolveBiquoteSymbol(symbol){
@@ -56,12 +62,41 @@ export async function resolveBiquoteSymbol(symbol){
   }
   return null;
 }
+function aggregate(rows,bucketMs){
+  const groups=new Map();
+  for(const r of rows){
+    const key=Math.floor(r[0]/bucketMs)*bucketMs;
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(r);
+  }
+  return [...groups].sort((a,b)=>a[0]-b[0]).map(([time,a])=>[
+    time,a[0][1],Math.max(...a.map(x=>x[2])),Math.min(...a.map(x=>x[3])),a.at(-1)[4],a.reduce((n,x)=>n+x[5],0)
+  ]);
+}
+function mergeRows(base,derived,bucketMs){
+  const map=new Map((base||[]).map(r=>[Math.floor(r[0]/bucketMs)*bucketMs,r]));
+  for(const r of derived||[])map.set(Math.floor(r[0]/bucketMs)*bucketMs,r);
+  return [...map.values()].sort((a,b)=>a[0]-b[0]);
+}
 export async function biquoteCandles(symbol,timeframe){
   const instrument=await resolveBiquoteSymbol(symbol);
   if(!instrument){const e=new Error(`Market-data instrument unavailable: ${symbol}`);e.code='MARKET_DATA_INSTRUMENT_UNAVAILABLE';throw e}
   const interval=timeframe==='1H'?'1h':timeframe==='4H'?'4h':timeframe==='1D'?'1d':timeframe==='1W'?'1d':timeframe;
   const body=await request(`/${encodeURIComponent(instrument.name)}/ohlc`,{interval,limit:1000});
   let rows=normalizeRows(body?.bars);
+  // Biquote's live quote feed can be newer than its stored 4H/D1 bars.
+  // Rebuild higher timeframes from current 1H candles and merge them over
+  // the broker's longer historical series so HTF structure stays current.
+  if(['4H','1D','1W'].includes(timeframe)){
+    try{
+      const hourly=normalizeRows((await request(`/${encodeURIComponent(instrument.name)}/ohlc`,{interval:'1h',limit:1000}))?.bars);
+      if(hourly.length){
+        const bucket=timeframe==='4H'?4*3600000:86400000;
+        const recent=aggregate(hourly,bucket);
+        rows=mergeRows(rows,recent,bucket);
+      }
+    }catch{}
+  }
   if(timeframe==='1W')rows=aggregateWeekly(rows);
   if(rows.length<60){const e=new Error(`Market-data provider returned insufficient completed candles for ${symbol}`);e.code='MARKET_DATA_INSUFFICIENT_CANDLES';throw e}
   return {instrument,rows};
