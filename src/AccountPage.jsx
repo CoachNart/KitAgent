@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, Check, ChevronRight, Copy, Edit3, Flame, Headphones, LoaderCircle, LogOut, Save, Send, ShieldCheck, Trash2, UserRound, Users, WalletCards, X } from 'lucide-react';
+import { ArrowLeft, Bell, Check, ChevronRight, Copy, Edit3, Flame, Headphones, LoaderCircle, LogOut, Save, ShieldCheck, Trash2, UserRound, Users, WalletCards, X } from 'lucide-react';
 import { signOut, updateProfile } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
@@ -12,7 +12,7 @@ const PREMIUM_PAYMENT_ADDRESS='0x046b97b07c13c4ad5e61599d98fcb52f1246247d';
 
 export default function AccountPage({user,onBack=()=>{window.location.assign('/')}}){
  const [profile,setProfile]=useState(null),[verification,setVerification]=useState(null),[message,setMessage]=useState(''),[hash,setHash]=useState(''),[copied,setCopied]=useState(false),[busy,setBusy]=useState(false),[now,setNow]=useState(Date.now()),[editing,setEditing]=useState(false),[editName,setEditName]=useState(''),[editAvatar,setEditAvatar]=useState(''),[profileBusy,setProfileBusy]=useState(false),[profileMessage,setProfileMessage]=useState('');
- const [expanded,setExpanded]=useState(''),[supportOpen,setSupportOpen]=useState(false),[supportBusy,setSupportBusy]=useState(false),[supportMessage,setSupportMessage]=useState('');
+ const [expanded,setExpanded]=useState(''),[supportOpen,setSupportOpen]=useState(false);
  const [notifications,setNotifications]=useState(()=>{try{return localStorage.getItem('kitagent-notifications')!=='off'}catch{return true}});
  useEffect(()=>{if(!db||!user?.uid)return;const uid=user.uid;return onSnapshot(doc(db,'users',uid),s=>{if(auth?.currentUser?.uid!==uid)return;const data=s.exists()?s.data():null;setProfile(data);setVerification(data?.latestPaymentVerification||null)},e=>{if(auth?.currentUser?.uid===uid)setMessage(e?.message||'Profile sync is temporarily unavailable.')})},[user?.uid]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
@@ -25,7 +25,7 @@ export default function AccountPage({user,onBack=()=>{window.location.assign('/'
  const logout=async()=>{setMessage('');try{await signOut(auth)}catch(e){console.error('KitSetups logout failed:',e);setMessage('Unable to sign out right now. Check your connection and try again.')}};
  const toggleNotifications=()=>setNotifications(value=>{const next=!value;try{localStorage.setItem('kitagent-notifications',next?'on':'off')}catch{};window.dispatchEvent(new CustomEvent('kitagent:notifications-setting',{detail:{enabled:next}}));return next});
  const toggleSection=key=>{setExpanded(value=>value===key?'':key);setSupportOpen(false)};
- const openSupport=()=>{setSupportOpen(value=>!value);setExpanded('');setSupportMessage('')};
+ const openSupport=()=>{setSupportOpen(value=>!value);setExpanded('')};
  const row=(key,label,Icon,color,action,expandedRow=false)=><button className={`profile-settings-row ${expandedRow&&expanded===key?'is-expanded':''}`} data-profile-row={key} type="button" onClick={e=>{e.preventDefault();e.stopPropagation();action()}} aria-expanded={expandedRow?expanded===key:undefined}><span className={`profile-row-icon ${color}`}><Icon/></span><span>{label}</span>{expandedRow?<ChevronRight className={`profile-row-chevron ${expanded===key?'is-open':''}`}/>:null}</button>;
  return <div className="account-page profile-settings-page">
   <div className="profile-screen-heading"><button type="button" className="profile-back" aria-label="Back" onClick={onBack}><ArrowLeft size={17}/></button><h1>Profile</h1><div className="profile-plan-pill"><span>🔥</span>{premiumActive?'Premium':trialActive?`${Math.max(1,Math.ceil(trialRemaining/DAY))} Days`:'Free'}</div></div>
