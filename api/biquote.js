@@ -54,7 +54,7 @@ export async function biquoteCandles(symbol,timeframe){
 export async function biquotePrice(symbol){
   const instrument=await resolveBiquoteSymbol(symbol);
   if(!instrument){const e=new Error(`Market-data instrument unavailable: ${symbol}`);e.code='MARKET_DATA_INSTRUMENT_UNAVAILABLE';throw e}
-  const p=await request(`/${encodeURIComponent(instrument.name)}`,{allowStale:false});
+  const p=await request(`/${encodeURIComponent(instrument.name)}`,{allowStale:true});
   const bid=Number(p?.bid),ask=Number(p?.ask),mid=Number(p?.mid);
   if(![bid,ask,mid].every(Number.isFinite)){const e=new Error(`Market-data quote unavailable: ${symbol}`);e.code='MARKET_DATA_PRICE_UNAVAILABLE';throw e}
   return {instrument,bid,ask,mid,time:p.timestamp,tradeable:p.marketState==='open'&&!p.stale,spread:Number.isFinite(Number(p.spread))?Number(p.spread):ask-bid,marketState:p.marketState,stale:Boolean(p.stale)};
