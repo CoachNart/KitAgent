@@ -117,8 +117,8 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
-    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'v3',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
-    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'v3',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'biquote_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'biquote_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
   }
   return {...signal,currentPrice:livePrice,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
 }
@@ -138,8 +138,9 @@ export default async function handler(req,res){
     }
     if(req.method==='POST'){
       const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),bias=clean(setup.bias,10).toUpperCase();
-      if(!market||!symbol||!timeframe||!['LONG','SHORT','WAIT'].includes(bias))return json(res,400,{error:'Incomplete signal record.'});
-      const ref=collection.doc(),orderType=clean(setup.orderType,20).toUpperCase()||'WAIT';
+      const orderType=clean(setup.orderType,20).toUpperCase();
+      if(!market||!symbol||!timeframe||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
+      const ref=collection.doc();
       const signal={signalId:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-market-analysis-v1'};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
