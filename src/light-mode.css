@@ -823,3 +823,99 @@ html.kit-light .permission-modal{
   color:#17242b!important;
   border-color:#d8e4e8!important;
 }
+
+
+/* PREMIUM LIGHT THEME — dedicated surfaces, hierarchy and controls */
+html.kit-light .profile-settings-page{
+  background:
+    radial-gradient(700px 340px at 90% -10%,rgba(0,199,254,.10),transparent 62%),
+    radial-gradient(600px 300px at 5% 30%,rgba(120,95,255,.055),transparent 65%),
+    #f4f8fa!important;
+}
+html.kit-light .profile-settings-row{
+  min-height:56px!important;
+  border-radius:15px!important;
+  background:rgba(255,255,255,.86)!important;
+  border:1px solid #dce8ec!important;
+  box-shadow:0 8px 24px rgba(26,58,69,.045)!important;
+  backdrop-filter:blur(12px)!important;
+}
+html.kit-light .profile-settings-row:hover,
+html.kit-light .profile-settings-row.is-expanded{
+  background:#ffffff!important;
+  border-color:#bde9f2!important;
+  box-shadow:0 10px 28px rgba(26,58,69,.075)!important;
+}
+html.kit-light .profile-row-chevron{
+  transition:transform .2s ease,color .2s ease!important;
+}
+html.kit-light .profile-row-chevron.is-open{
+  transform:rotate(90deg)!important;
+  color:#00a7cf!important;
+}
+html.kit-light .profile-settings-expand{
+  margin:0 0 9px!important;
+  padding:15px!important;
+  border:1px solid #cfe2e7!important;
+  border-top:0!important;
+  border-radius:0 0 17px 17px!important;
+  background:linear-gradient(180deg,#ffffff 0%,#f7fbfc 100%)!important;
+  box-shadow:0 12px 30px rgba(26,58,69,.055)!important;
+}
+html.kit-light .profile-payment-slot,
+html.kit-light .profile-affiliate-slot{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  overflow:visible!important;
+}
+html.kit-light .profile-payment-slot .subscription-card{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  padding:17px!important;
+  border-radius:16px!important;
+  box-shadow:0 9px 26px rgba(26,58,69,.055)!important;
+}
+html.kit-light .profile-payment-slot .free-plan{
+  background:linear-gradient(135deg,#ffffff 0%,#f0fbfd 100%)!important;
+  border-color:#c9eaf1!important;
+}
+html.kit-light .profile-payment-slot .premium-plan{
+  background:linear-gradient(135deg,#ffffff 0%,#fbfaf4 100%)!important;
+  border-color:#e5dcae!important;
+}
+html.kit-light .profile-payment-slot .payment-panel{
+  background:linear-gradient(145deg,#f3fbfd,#ffffff)!important;
+  border:1px solid #cfeaf0!important;
+  border-radius:14px!important;
+  padding:14px!important;
+}
+html.kit-light .profile-affiliate-slot .affiliate-account-card{
+  background:linear-gradient(145deg,#ffffff 0%,#f1fbfd 100%)!important;
+  border:1px solid #c9e9ef!important;
+  border-radius:17px!important;
+  padding:17px!important;
+  box-shadow:0 10px 28px rgba(26,58,69,.06)!important;
+}
+html.kit-light .profile-affiliate-slot .affiliate-metrics>div{
+  background:#ffffff!important;
+  border:1px solid #dce8ec!important;
+  border-radius:12px!important;
+}
+html.kit-light .profile-affiliate-slot .affiliate-link-row,
+html.kit-light .profile-affiliate-slot .affiliate-wallet-row{
+  background:#f7fbfc!important;
+  border:1px solid #d8e6ea!important;
+  border-radius:12px!important;
+}
+html.kit-light .profile-affiliate-slot .affiliate-link-row button,
+html.kit-light .profile-affiliate-slot .affiliate-wallet-row button,
+html.kit-light .profile-payment-slot .verify-payment-btn{
+  min-height:38px!important;
+  border-radius:10px!important;
+  background:linear-gradient(135deg,#00c7fe,#00a9d7)!important;
+  box-shadow:0 8px 18px rgba(0,170,215,.16)!important;
+}
+html.kit-light .profile-screen-heading h1{letter-spacing:-.03em!important}
+html.kit-light .profile-settings-caption{letter-spacing:.16em!important;color:#829198!important}
