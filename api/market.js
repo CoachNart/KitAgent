@@ -21,8 +21,6 @@ function strategyTimeframes(tf,strategy){
 const allowedIntervals=new Set(['1m','5m','15m','30m','4H','1H','1D','1W']);
 function json(res,status,payload){res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store, max-age=0');res.end(JSON.stringify(payload))}
 function sma(v,n){const a=(v||[]).map(Number).filter(Number.isFinite);if(!a.length)return null;const len=Math.min(Number(n)||a.length,a.length);return a.slice(-len).reduce((x,y)=>x+y,0)/len}
-function ema(v,n){const a=(v||[]).map(Number).filter(Number.isFinite);if(!a.length)return null;const len=Math.min(Number(n)||a.length,a.length);let e=sma(a.slice(0,len),len);const k=2/(len+1);for(let i=len;i<a.length;i++)e=a[i]*k+e*(1-k);return e}
-function rsi(v,n=14){if(v.length<n+1)return 50;let g=0,l=0;for(let i=1;i<=n;i++){const d=v[i]-v[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/n,al=l/n;for(let i=n+1;i<v.length;i++){const d=v[i]-v[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n}if(al===0)return 100;return 100-100/(1+ag/al)}
 function atr(c,n=14){if(!Array.isArray(c)||c.length<2)return null;const t=[];for(let i=1;i<c.length;i++){const x=c[i],p=c[i-1];const tr=Math.max(x.high-x.low,Math.abs(x.high-p.close),Math.abs(x.low-p.close));if(Number.isFinite(tr)&&tr>=0)t.push(tr)}return sma(t,n)}
 function roundPrice(v){if(v==null||!Number.isFinite(Number(v)))return null;v=Number(v);if(v>=1000)return Number(v.toFixed(2));if(v>=100)return Number(v.toFixed(3));if(v>=1)return Number(v.toFixed(5));if(v>=.1)return Number(v.toFixed(6));return Number(v.toPrecision(7))}
 function normalize(rows){const byTime=new Map();for(const r of rows||[]){const x={time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4]),volume:Number(r[5]||0)};if(![x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)||x.time<=0)continue;if(x.high<Math.max(x.open,x.close,x.low)||x.low>Math.min(x.open,x.close,x.high)||x.high<x.low)continue;byTime.set(x.time,x)}return [...byTime.values()].sort((a,b)=>a.time-b.time)}
@@ -298,7 +296,10 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   const last=current.at(-1),closes=current.map(x=>x.close).filter(Number.isFinite),a=atr(current,14);
   if(!last||closes.length<2||!Number.isFinite(a)){throw Object.assign(new Error('Market data does not contain enough valid OHLC candles for the selected timeframe.'),{code:'MARKET_DATA_INSUFFICIENT_CANDLES'})}
   const higherStructure=marketStructure(biasCandles),selectedStructure=marketStructure(structure),entryStructure=marketStructure(current);
-  const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure),bias=higherBias;
+  const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure);
+  // Direction is strategy-specific. Higher-timeframe structure is a filter for
+  // continuation models, not a universal signal generator.
+  const bias=(key==='LIQUIDITY_REVERSAL'||key==='CRT')?'WAIT':higherBias;
   const liveQuoteUsable=Boolean(liveQuote?.tradeable);
   const livePrice=liveQuoteUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
@@ -312,7 +313,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     return true;
   };
   const chooseLimit=items=>{for(const x of items||[]){const t=evaluateTrade(current,bias,x.entry,a,2.25);if(validTrade(t,bias,livePrice,'LIMIT'))return {trade:t,entry:x.entry};}return null;};
-  if(bias==='WAIT'){reason='No decisive directional structure is present for the selected strategy and timeframe.';evidence.push('No clear directional structure.');}
+  if(bias==='WAIT'&&key!=='LIQUIDITY_REVERSAL'&&key!=='CRT'){reason='No decisive directional structure is present for the selected strategy and timeframe.';evidence.push('No clear directional structure.');}
   else if(key==='TOP_DOWN'){
     const middleBias=structureBias(selectedStructure),entryBias=structureBias(entryStructure),conflict=middleBias!=='WAIT'&&opposite(bias,middleBias),confirmed=entryBias===bias||entryBias==='WAIT';
     const marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
@@ -337,28 +338,68 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     if(level&&confirm){const t=evaluateTrade(current,bias,level.level,a,2.25),nextOrderType=Math.abs(level.level-livePrice)<=a*.08?'MARKET':'LIMIT';if(validTrade(t,bias,livePrice,nextOrderType)){trade=t;entry=level.level;orderType=nextOrderType;}}
     reason=trade?'A strategy-valid MSNR level has been confirmed on the selected timeframe.':'Waiting for a fresh MSNR level and lower-timeframe confirmation.';evidence.push(level?level.type+' identified.':'No nearby qualified MSNR level.',formation||'No V/A formation.',confirm?'Confirmation present.':'No BOS, engulfing or rejection confirmation.');
   } else if(key==='PRICE_ACTION'){
-    const level=msnrLevels(current,bias)[0],engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias),levelProximity=Boolean(level&&Math.abs(last.close-level.level)<=Math.max(a*1.5,last.close*.002)),levelTouched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
-    if(level&&levelProximity&&levelTouched&&(engulf||reject)){const t=evaluateTrade(current,bias,livePrice,a,2.25);if(validTrade(t)){trade=t;entry=livePrice;orderType='MARKET';}else{const z=chooseLimit([{entry:level.level,zone:level}]);if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}}
-    reason=trade?'A structural level and price-action confirmation are present on the selected timeframe.':'Waiting for meaningful structure plus rejection or engulfing confirmation.';evidence.push(level?'Structural level identified.':'No meaningful structural level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
+    const swings=marketStructure(current),levels=[
+      ...swings.highs.slice(-4).map(x=>({level:x.p,type:'SWING HIGH'})),
+      ...swings.lows.slice(-4).map(x=>({level:x.p,type:'SWING LOW'}))
+    ].filter(x=>Number.isFinite(x.level));
+    const level=levels.sort((x,y)=>Math.abs(last.close-x.level)-Math.abs(last.close-y.level))[0];
+    const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
+    const levelProximity=Boolean(level&&Math.abs(last.close-level.level)<=Math.max(a*1.5,last.close*.002));
+    const levelTouched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
+    if(level&&levelProximity&&levelTouched&&(engulf||reject)){
+      const t=evaluateTrade(current,bias,livePrice,a,2.25);
+      if(validTrade(t)){trade=t;entry=livePrice;orderType='MARKET';}
+      else{const z=chooseLimit([{entry:level.level,zone:level}]);if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}
+    }
+    reason=trade?'A structural swing and price-action confirmation are present on the selected timeframe.':'Waiting for a meaningful swing plus rejection or engulfing confirmation.';
+    evidence.push(level?level.type+' identified.':'No meaningful swing level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
   } else if(key==='LIQUIDITY_REVERSAL'){
-    const sweep=liquiditySweep(current,bias,20,8),reclaim=Boolean(sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level))),disp=displacement(current,bias),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
-    if(sweep&&reclaim&&disp&&marketTrade){trade=marketTrade;entry=livePrice;orderType='MARKET';}
-    reason=trade?'Liquidity was swept and reclaimed with displacement on the selected timeframe.':'Waiting for a genuine liquidity sweep, reclaim and displacement.';evidence.push(sweep?sweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim.',disp?'Displacement confirmed.':'No displacement.');
+    const longSweep=liquiditySweep(current,'LONG',20,8);
+    const shortSweep=liquiditySweep(current,'SHORT',20,8);
+    const candidates=[
+      longSweep?{bias:'LONG',sweep:longSweep}:null,
+      shortSweep?{bias:'SHORT',sweep:shortSweep}:null
+    ].filter(Boolean);
+    const selected=candidates.sort((x,y)=>y.sweep.index-x.sweep.index)[0];
+    const reversalBias=selected?.bias||'WAIT';
+    const reversalSweep=selected?.sweep||null;
+    const reclaim=Boolean(reversalSweep&&((reversalBias==='LONG'&&last.close>reversalSweep.level)||(reversalBias==='SHORT'&&last.close<reversalSweep.level)));
+    const disp=reversalBias!=='WAIT'&&displacement(current,reversalBias);
+    const marketTrade=reversalBias!=='WAIT'?evaluateTrade(current,reversalBias,livePrice,a,2.25):null;
+    if(reversalSweep&&reclaim&&disp&&marketTrade&&validTrade(marketTrade,reversalBias,livePrice,'MARKET')){
+      trade=marketTrade;entry=livePrice;orderType='MARKET';bias=reversalBias;
+    }
+    reason=trade?'Liquidity was swept and reclaimed with displacement on the selected timeframe.':'Waiting for a genuine liquidity sweep, reclaim and displacement.';
+    evidence.push(reversalSweep?reversalSweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim.',disp?'Displacement confirmed.':'No displacement.');
   } else if(key==='CRT'){
     const ref=current.at(-2),x=last;
     const rangeHigh=ref?.high,rangeLow=ref?.low,mid=ref?((ref.high+ref.low)/2):null;
     const bullish=Boolean(ref&&x.low<rangeLow&&x.close>mid&&x.close>rangeLow);
     const bearish=Boolean(ref&&x.high>rangeHigh&&x.close<mid&&x.close<rangeHigh);
-    const signal=bias==='LONG'?bullish:bias==='SHORT'?bearish:(bullish?'LONG':bearish?'SHORT':null);
+    const signal=bullish&&!bearish?'LONG':bearish&&!bullish?'SHORT':null;
     const crtTrade=signal?evaluateTrade(current,signal,livePrice,a,2.25):null;
-    if(crtTrade&&validTrade(crtTrade)){trade=crtTrade;entry=livePrice;orderType='MARKET';}
+    if(crtTrade&&validTrade(crtTrade,signal,livePrice,'MARKET')){trade=crtTrade;entry=livePrice;orderType='MARKET';bias=signal;}
     reason=trade?'CRT range sweep and reclaim are confirmed on the selected timeframe with a valid risk model.':'Waiting for a completed candle range to be swept and reclaimed with enough room for a valid target.';
     evidence.push(ref?'Reference range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No completed reference range.',bullish?'Sell-side range sweep reclaimed.':bearish?'Buy-side range sweep reclaimed.':'No qualifying range sweep.',mid!=null?'Midpoint '+roundPrice(mid)+'.':'No range midpoint.');
   }
-  const confidence=trade?Math.min(95,Math.max(38,Math.round(48+(higherBias===bias?12:0)+(selectedBias===bias?8:0)+(displacement(current,bias)?8:0)+(trade?.rr>=3?8:0)))):0;
-  if(!trade||!validTrade(trade,bias,livePrice,orderType)){for(const x of evidence)if(/No |Waiting|conflict|stale/i.test(x))failures.push(x);return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:reason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:reason||'No strategy-valid setup is present.',bias,directionBias:bias,confidence,higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry};}
+  const confidence=trade?Math.min(95,Math.max(38,Math.round(
+    50+
+    (key==='LIQUIDITY_REVERSAL'||key==='CRT'?0:(higherBias===bias?12:0))+
+    (key==='TOP_DOWN'&&selectedBias===bias?8:0)+
+    (['PULLBACK','BREAKOUT','SMC'].includes(key)&&displacement(current,bias)?8:0)+
+    (['MSNR','PRICE_ACTION'].includes(key)&&(candleEngulfing(current,bias)||rejectionCandle(current,bias))?8:0)+
+    (trade?.rr>=3?8:0)
+  )):0;
+  if(!trade||!validTrade(trade,bias,livePrice,orderType)){for(const x of evidence)if(/No |Waiting|conflict/i.test(x))failures.push(x);return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:reason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:reason||'No strategy-valid setup is present.',bias,directionBias:bias,confidence,higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry};}
   const riskPct=entry>0?(trade.risk/entry)*100:null,stopDistance=Math.abs(entry-trade.stop),instrumentKey=String(instrumentSymbol||''),isForexInstrument=marketContext==='forex'||(marketContext===''&&(/^[A-Z]{6}$/.test(instrumentKey)||instrumentKey.includes('/')&&!instrumentKey.includes('USDT'))),priceUnitLabel=isForexInstrument?'pips':'price units',pipMultiplier=isForexInstrument?(instrumentKey.includes('JPY')?100:10000):1;
-  return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:reason,entry:roundPrice(entry),limitEntry:orderType==='LIMIT'?roundPrice(entry):null,stopLoss:roundPrice(trade.stop),takeProfit1:roundPrice(trade.target),takeProfit2:roundPrice(trade.target2),riskReward:'1:'+Number(trade.rr).toFixed(2),riskRewardValue:Number(trade.rr.toFixed(2)),orderType,tradeReady:true,setupStatus:'TRADE READY',setupReason:reason,bias,directionBias:bias,confidence,riskPercent:riskPct!=null?Number(riskPct.toFixed(2)):null,stopDistance:roundPrice(stopDistance),stopDistancePct:entry?Number((stopDistance/entry*100).toFixed(3)):null,stopDistanceUnits:Number((stopDistance*pipMultiplier).toFixed(2)),priceUnitLabel,structuralInvalidation:roundPrice(trade.stop),marketEntry:roundPrice(livePrice),price:roundPrice(livePrice),liquidityTarget:roundPrice(trade.targetLiquidity),liquidityType:'STRUCTURAL LIQUIDITY',liquidityTouches:0,liquidityDistancePct:Number((Math.abs((trade.targetLiquidity??trade.target)-entry)*100/entry).toFixed(2)),liquidityReason:'Target is derived from a qualified structural/liquidity level.',confirmation:{bos:Boolean(structureBreak(current,bias,48,12)),sweep:Boolean(liquiditySweep(current,bias,20,12)),displacement:Boolean(displacement(current,bias))},higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry,timestamp:last.time};
+  return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias,strategyValid:true,strategyReady:true,strategyEvidence:evidence,strategyFailures:[],strategyReason:reason,entry:roundPrice(entry),limitEntry:orderType==='LIMIT'?roundPrice(entry):null,stopLoss:roundPrice(trade.stop),takeProfit1:roundPrice(trade.target),takeProfit2:roundPrice(trade.target2),riskReward:'1:'+Number(trade.rr).toFixed(2),riskRewardValue:Number(trade.rr.toFixed(2)),orderType,tradeReady:true,setupStatus:'TRADE READY',setupReason:reason,bias,directionBias:bias,confidence,riskPercent:riskPct!=null?Number(riskPct.toFixed(2)):null,stopDistance:roundPrice(stopDistance),stopDistancePct:entry?Number((stopDistance/entry*100).toFixed(3)):null,stopDistanceUnits:Number((stopDistance*pipMultiplier).toFixed(2)),priceUnitLabel,structuralInvalidation:roundPrice(trade.stop),marketEntry:roundPrice(livePrice),price:roundPrice(livePrice),liquidityTarget:roundPrice(trade.targetLiquidity),liquidityType:'STRUCTURAL LIQUIDITY',liquidityTouches:0,liquidityDistancePct:Number((Math.abs((trade.targetLiquidity??trade.target)-entry)*100/entry).toFixed(2)),liquidityReason:'Target is derived from a qualified structural/liquidity level.',confirmation:{
+      bos:['BREAKOUT','SMC','TOP_DOWN','PULLBACK'].includes(key)?Boolean(structureBreak(current,bias,48,12)):false,
+      sweep:['SMC','LIQUIDITY_REVERSAL'].includes(key)?Boolean(liquiditySweep(current,bias,20,12)):false,
+      displacement:['BREAKOUT','SMC','LIQUIDITY_REVERSAL','PULLBACK'].includes(key)?Boolean(displacement(current,bias)):false,
+      engulfing:['MSNR','PRICE_ACTION'].includes(key)?Boolean(candleEngulfing(current,bias)):false,
+      rejection:['MSNR','PRICE_ACTION'].includes(key)?Boolean(rejectionCandle(current,bias)):false,
+      strategy:key
+    },higherTimeframe:tf.bias,middleTimeframe:tf.structure,entryTimeframe:tf.entry,timestamp:last.time};
 }
 export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{if(String(req.query?.action||'')==='header'){const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear',{headers:{Accept:'application/json'}});if(!r.ok)return json(res,502,{error:'Bybit ticker provider unavailable'});const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list))return json(res,502,{error:body?.retMsg||'Bybit ticker provider unavailable'});const wanted=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT']);const result=body.result.list.filter(x=>wanted.has(x.symbol)).map(x=>({symbol:x.symbol,lastPrice:x.lastPrice,price24hPcnt:x.price24hPcnt}));return json(res,200,{ok:true,result});} const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(req.query?.action==='instruments'){
       if(market==='commodities'||market==='indices'||market==='forex'){
