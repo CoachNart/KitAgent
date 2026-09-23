@@ -34,14 +34,24 @@ function rows(values){
     Number(x.open),Number(x.high),Number(x.low),Number(x.close),Number(x.volume||0)
   ]).filter(x=>x.every(Number.isFinite)).sort((a,b)=>a[0]-b[0]);
 }
-function listBody(body){return Array.isArray(body)?body:(Array.isArray(body?.data)?body.data:Array.isArray(body?.values)?body.values:[])}
+function listBody(body){
+  // Twelve Data reference endpoints have used both `data` and `result.list`
+  // shapes across asset classes. Keep the adapter tolerant so the UI never
+  // depends on one response envelope.
+  if(Array.isArray(body))return body;
+  if(Array.isArray(body?.data))return body.data;
+  if(Array.isArray(body?.result?.list))return body.result.list;
+  if(Array.isArray(body?.values))return body.values;
+  if(Array.isArray(body?.result))return body.result;
+  return [];
+}
 function normalizeReference(item,type){
-  const symbol=String(item?.symbol||'').trim().toUpperCase();
+  const symbol=String(item?.symbol||item?.ticker||item?.code||'').trim().toUpperCase();
   if(!symbol)return null;
   return {
     symbol,
     name:String(item?.name||item?.description||symbol),
-    type,
+    type:String(item?.type||type).toUpperCase(),
     category:String(item?.category||type)
   };
 }
@@ -61,16 +71,26 @@ export async function twelveInstrumentSnapshot(kind='all'){
   const needForex=wanted==='all'||wanted==='forex';
   const needCommodities=wanted==='all'||wanted==='commodities';
   const needIndices=wanted==='all'||wanted==='indices';
-  const [forex,commodities,indices]=await Promise.all([
-    needForex?reference('/forex_pairs','FOREX'):[],
-    needCommodities?reference('/commodities','COMMODITY'):[],
-    needIndices?reference('/indices','INDEX'):[]
-  ]);
-  return [
+  const jobs=[
+    needForex?reference('/forex_pairs','FOREX'):Promise.resolve([]),
+    needCommodities?reference('/commodities','COMMODITY'):Promise.resolve([]),
+    needIndices?reference('/indices','INDEX'):Promise.resolve([])
+  ];
+  const settled=await Promise.allSettled(jobs);
+  const [forexResult,commodityResult,indexResult]=settled;
+  const forex=forexResult.status==='fulfilled'?forexResult.value:[];
+  const commodities=commodityResult.status==='fulfilled'?commodityResult.value:[];
+  const indices=indexResult.status==='fulfilled'?indexResult.value:[];
+  const result=[
     ...forex.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'})),
     ...commodities.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'})),
     ...indices.map(x=>({...x,displayName:x.name,exchange:'Twelve Data',source:'Twelve Data'}))
   ];
+  if(!result.length){
+    const failed=settled.find(x=>x.status==='rejected');
+    if(failed?.reason)throw failed.reason;
+  }
+  return result;
 }
 export async function resolveTwelveSymbol(symbol,kind='all'){
   const wanted=String(symbol||'').trim().toUpperCase();
