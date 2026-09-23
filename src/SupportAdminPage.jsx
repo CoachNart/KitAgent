@@ -16,7 +16,7 @@ export default function SupportAdminPage({user}){
   const [notice,setNotice]=useState('');
 
   const call=async(body={},method='POST')=>{
-    const current=auth?.currentUser;
+    const current=user||auth?.currentUser;
     if(!current)throw new Error('Admin session is not ready.');
     const token=await current.getIdToken(true);
     const response=await fetch(API,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:method==='POST'?JSON.stringify(body):undefined});
@@ -27,7 +27,9 @@ export default function SupportAdminPage({user}){
 
   const load=async(selectFirst=true)=>{
     try{
-      const token=await auth.currentUser.getIdToken(true);
+      const current=user||auth?.currentUser;
+      if(!current)throw new Error('Admin session is not ready.');
+      const token=await current.getIdToken(true);
       const response=await fetch(API+'?admin=1',{headers:{Authorization:'Bearer '+token}});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||'Unable to load support inbox.');
