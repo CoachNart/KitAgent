@@ -4,7 +4,8 @@ import {auth} from './firebase.js';
 import {MarketWatchlist, StrategySelector, StrategyExplanation} from './MarketExtras.jsx';
 import './market-extras.css';
 export const FOREX=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJPY','CHFJPY','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','EURUSD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','GBPUSD','NZDCAD','NZDCHF','NZDJPY','NZDUSD','USDCAD','USDCHF','USDJPY','USDNOK','USDSEK','USDZAR','USDSGD','EURPLN','EURSEK','EURNOK','EURTRY','GBPPLN','GBPSEK','GBPNOK','NOKSEK','NZDSGD','SGDJPY','CHFSGD','CADSGD','AUDSGD','AUDNOK','AUDSEK','CADNOK','CADSEK','CHFPLN','CHFZAR','EURSGD','GBPZAR','NZDZAR','USDHKD','USDMXN','USDTRY','USDTHB','USDHUF','USDCNH'];
-export const METALS=['XAUUSD','XAGUSD','US30','US500','NAS100','UK100','GER40','FRA40','JP225','HK50','USOIL','UKOIL'];
+export const COMMODITIES=[];
+export const INDICES=[];
 export const CRYPTO=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
 export const TIMEFRAMES=['1m','5m','15m','30m','1H','4H','1D','1W'];
 const TIMEFRAME_GUIDE={
@@ -17,11 +18,10 @@ const TIMEFRAME_GUIDE={
  '1D':{title:'1D opportunity horizon',desc:'Hunts multi-day opportunities. Strategy rules remain in control while higher context is handled automatically.'},
  '1W':{title:'1W opportunity horizon',desc:'Hunts longer-term opportunities. The selected strategy decides what constitutes a valid setup.'}
 };
-const MARKET_TABS=[['forex','Forex'],['metals','Metal / CFD'],['perpetual','Crypto']];
-const CFD_CATEGORIES={XAUUSD:'Metals',XAGUSD:'Metals',USOIL:'Oil',UKOIL:'Oil',US30:'Indices',US500:'Indices',NAS100:'Indices',UK100:'Indices',GER40:'Indices',FRA40:'Indices',JP225:'Indices',HK50:'Indices'};
+const MARKET_TABS=[['forex','Forex'],['commodities','Commodities'],['indices','Indices'],['perpetual','Crypto']];
 const instrumentCache=new Map();
 const instrumentRequests=new Map();
-function symbolFor(market,pair){return market==='forex'||market==='metals'?pair:pair.replace('/','');}
+function symbolFor(market,pair){return ['forex','commodities','indices'].includes(market)?pair:pair.replace('/','');}
 function price(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)>=1000?2:Number(v)>=1?5:8});}
 async function persistSignal(body){const user=auth?.currentUser,setup=body?.setup;if(!user||!setup?.tradeReady||!['MARKET','LIMIT'].includes(String(setup.orderType||'').toUpperCase())||!['LONG','SHORT'].includes(String(setup.bias||'').toUpperCase())||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;const result=await response.json();window.dispatchEvent(new CustomEvent('kitagent-signal-recorded',{detail:result.signal}));return result;}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
 export default function LiveMarketPage(){const [market,setMarket]=useState('forex'),[pair,setPair]=useState(''),[timeframe,setTimeframe]=useState('1H'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[sourceLoading,setSourceLoading]=useState(true),[error,setError]=useState(''),[result,setResult]=useState(null),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState([]),[pickerOpen,setPickerOpen]=useState(false);
@@ -30,11 +30,11 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 
  useEffect(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup');if(!raw)return;const cached=JSON.parse(raw);if(cached?.ok&&cached?.setup){setResult(cached);window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:cached}));}}catch{}},[]);
 
- useEffect(()=>{let cancelled=false;setError('');setInstrumentQuery('');setPickerOpen(false);setResult(null);const local=localInstruments(market);if(local.length){setInstruments(local);setPair(p=>p&&local.some(x=>x.symbol===p)?p:local[0]?.symbol||'');setSourceLoading(false);return()=>{cancelled=true}}const cached=instrumentCache.get(market);if(cached?.length){setInstruments(cached);setPair(p=>p&&cached.some(x=>x.symbol===p)?p:cached[0]?.symbol||'');setSourceLoading(false);return()=>{cancelled=true}}setSourceLoading(true);let request=instrumentRequests.get(market);if(!request){request=(async()=>{const token=auth?.currentUser?await auth.currentUser.getIdToken():'';const r=await fetch('/api/market?action=instruments&market='+encodeURIComponent(market),{headers:token?{Authorization:'Bearer '+token}:{},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok||!Array.isArray(body?.instruments)||!body.instruments.length)throw new Error(market==='forex'?'No Biquote Forex instruments are currently available. Please retry.':'No Biquote Metal / CFD instruments are currently available. Please retry.');const live=body.instruments.map(x=>({symbol:x.symbol,name:x.name||''}));instrumentCache.set(market,live);return live})().finally(()=>instrumentRequests.delete(market));instrumentRequests.set(market,request)}request.then(live=>{if(cancelled)return;setInstruments(live);setPair(p=>p&&live.some(x=>x.symbol===p)?p:live[0]?.symbol||'');}).catch(e=>{if(!cancelled){setInstruments([]);setPair('');setError(e?.message||'Unable to load live instruments from the market-data source. Please retry.')}}).finally(()=>{if(!cancelled)setSourceLoading(false)});return()=>{cancelled=true}},[market]);
+ useEffect(()=>{let cancelled=false;setError('');setInstrumentQuery('');setPickerOpen(false);setResult(null);const local=localInstruments(market);if(local.length){setInstruments(local);setPair(p=>p&&local.some(x=>x.symbol===p)?p:local[0]?.symbol||'');setSourceLoading(false);return()=>{cancelled=true}}const cached=instrumentCache.get(market);if(cached?.length){setInstruments(cached);setPair(p=>p&&cached.some(x=>x.symbol===p)?p:cached[0]?.symbol||'');setSourceLoading(false);return()=>{cancelled=true}}setSourceLoading(true);let request=instrumentRequests.get(market);if(!request){request=(async()=>{const token=auth?.currentUser?await auth.currentUser.getIdToken():'';const r=await fetch('/api/market?action=instruments&market='+encodeURIComponent(market),{headers:token?{Authorization:'Bearer '+token}:{},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok||!Array.isArray(body?.instruments)||!body.instruments.length)throw new Error(market==='forex'?'No Twelve Data Forex instruments are currently available. Please retry.':market==='commodities'?'No Twelve Data commodity instruments are currently available. Please retry.':'No Twelve Data index instruments are currently available. Please retry.');const live=body.instruments.map(x=>({symbol:x.symbol,name:x.name||''}));instrumentCache.set(market,live);return live})().finally(()=>instrumentRequests.delete(market));instrumentRequests.set(market,request)}request.then(live=>{if(cancelled)return;setInstruments(live);setPair(p=>p&&live.some(x=>x.symbol===p)?p:live[0]?.symbol||'');}).catch(e=>{if(!cancelled){setInstruments([]);setPair('');setError(e?.message||'Unable to load live instruments from the market-data source. Please retry.')}}).finally(()=>{if(!cancelled)setSourceLoading(false)});return()=>{cancelled=true}},[market]);
 
  const filteredPairs=useMemo(()=>{const q=instrumentQuery.trim().toUpperCase();return q?instruments.filter(x=>`${x.symbol} ${x.name||''}`.toUpperCase().includes(q)):instruments},[instruments,instrumentQuery]);
 
- const analyze=async()=>{if(!pair)return;setLoading(true);setError('');try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken(true):'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);try{localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));}catch{}window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));persistSignal(body).then(saved=>{if(saved?.signal)setSavedSignal(saved.signal)});}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
+ const analyze=async()=>{if(!pair)return;setLoading(true);setError('');try{const endpoint='/api/market';const token=auth?.currentUser?await auth.currentUser.getIdToken():'';const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(market,pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:token?{Authorization:`Bearer ${token}`}:{}});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session has expired. Please sign in again.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);try{localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));}catch{}window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));persistSignal(body).then(saved=>{if(saved?.signal)setSavedSignal(saved.signal)});}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
 
  return (
     <div className="live-market page-wrap">
@@ -58,7 +58,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
 
         <div className="live-controls">
           <label className="live-field market-picker">
-            <span>{market==='metals'?'METAL / CFD':'MARKET'}</span>
+            <span>{market==='commodities'?'COMMODITY':market==='indices'?'INDEX':'MARKET'}</span>
             <div className="instrument-picker">
               <button type="button" className="instrument-trigger" onClick={()=>setPickerOpen(v=>!v)} aria-expanded={pickerOpen}>
                 <b>{pair||'Select pair'}</b><ChevronDown className={pickerOpen?'open':''}/>
@@ -67,12 +67,12 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
                 <div className="instrument-menu">
                   <div className="instrument-search">
                     <ScanSearch/>
-                    <input autoFocus value={instrumentQuery} onChange={e=>setInstrumentQuery(e.target.value)} placeholder={market==='metals'?'Search assets…':'Search pairs…'} aria-label="Search market pairs"/>
+                    <input autoFocus value={instrumentQuery} onChange={e=>setInstrumentQuery(e.target.value)} placeholder={market==='commodities'?'Search commodities…':market==='indices'?'Search indices…':'Search pairs…'} aria-label="Search market pairs"/>
                   </div>
                   <div className="instrument-results">
                     {filteredPairs.map(x=>
                       <button type="button" key={x.symbol} className={pair===x.symbol?'selected':''} onClick={()=>{setPair(x.symbol);setInstrumentQuery('');setPickerOpen(false)}}>
-                        <b>{x.symbol}</b><small>{market==='metals'?CFD_CATEGORIES[x.symbol]||'CFD':''}</small>
+                        <b>{x.symbol}</b><small>{market==='commodities'?'COMMODITY':market==='indices'?'INDEX':''}</small>
                       </button>
                     )}
                     {!filteredPairs.length&&<small className="instrument-empty">No matching pairs found.</small>}
@@ -101,7 +101,7 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
         {!result&&!loading&&!error&&
           <div className="live-empty">
             <ScanSearch/>
-            <b>Ready to analyze {pair||'a supported metal or CFD instrument'}</b>
+            <b>Ready to analyze {pair||'a supported market instrument'}</b>
             <span>The selected strategy will be tested against fresh candles, top-down structure and its own entry, invalidation and target rules.</span>
           </div>
         }
@@ -130,7 +130,7 @@ function AnalysisResult({result,savedSignal}){
   return <div className="live-result">
     <div className={'setup-card-v2 '+tone}>
       <div className="setup-v2-head">
-        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · {result.timeframe}</span><h3>{result.market==='forex'||result.market==='metals'?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div>
+        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · {result.timeframe}</span><h3>{['forex','commodities','indices'].includes(result.market)?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div>
         <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
         <div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div>
       </div>
