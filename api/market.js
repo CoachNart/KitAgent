@@ -465,6 +465,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     if(crtTrade&&validTrade(crtTrade,signal,livePrice,'MARKET')){trade=crtTrade;entry=livePrice;orderType='MARKET';bias=signal;}
     reason=trade?'A higher-timeframe candle range was swept and reclaimed with price targeting the opposite range extreme.':'Waiting for a higher-timeframe range sweep and close-back-inside confirmation with sufficient room.';
     evidence.push(ref?'CRT range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No higher-timeframe reference range.',signal==='LONG'?'Sell-side range swept and reclaimed.':signal==='SHORT'?'Buy-side range swept and reclaimed.':'No qualifying sweep/reclaim.',mid!=null?'Range midpoint '+roundPrice(mid)+'.':'No midpoint.');
+  }
   const confidence=trade?Math.min(95,Math.max(38,Math.round(
     50+
     (key==='LIQUIDITY_REVERSAL'||key==='CRT'?0:(higherBias===bias?12:0))+
