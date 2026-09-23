@@ -5,7 +5,7 @@ async function request(path,params={}){
   for(const [k,v] of Object.entries(params))if(v!=null)url.searchParams.set(k,String(v));
   const r=await fetch(url,{headers:{Accept:'application/json'},cache:'no-store'});
   const body=await r.json().catch(()=>null);
-  if(!r.ok){const err=new Error(body?.message||body?.error||`Biquote request failed (${r.status})`);err.code='MARKET_DATA_REQUEST_FAILED';err.status=r.status;throw err}
+  if(!r.ok){const err=new Error(body?.message||body?.error||`Biquote request failed (${r.status})`);err.code='MARKET_DATA_REQUEST_FAILED';err.status=r.status;err.retryAfterMs=Number(r.headers.get('retry-after')||0)*1000;throw err}
   return body;
 }
 function compact(v){return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
@@ -26,58 +26,50 @@ const CFD_ALIASES={
   JP225:['JP225','NIKKEI225','NIKKEI'],HK50:['HK50','HANGSENG','HSI'],USOIL:['USOIL','WTI','WTICOUSD'],
   UKOIL:['UKOIL','BRENT','BCOUSD']
 };
-let instrumentCache=null,instrumentAt=0;
+let instrumentCache=null,instrumentAt=0,instrumentPromise=null,instrumentRetryAt=0;
 export async function listBiquoteInstruments(){
-  // Use Biquote's recent-quote catalogue for the picker, but never let an
-  // empty/temporarily filtered catalogue make every supported instrument
-  // disappear. Biquote explicitly documents /symbols?quotedWithinDays=7 as
-  // the picker-safe source and /symbols as the full broker catalogue.
-  if(instrumentCache&&Date.now()-instrumentAt<60000)return instrumentCache;
-  let body=null;
-  try{body=await request('/symbols',{quotedWithinDays:7})}catch{}
-  if(!Array.isArray(body)||!body.length){
-    try{body=await request('/symbols')}catch{}
-  }
-  if(!Array.isArray(body)||!body.length){
-    try{body=await request('/active')}catch{}
-  }
-  instrumentCache=Array.isArray(body)?body:[];instrumentAt=Date.now();return instrumentCache;
+  const now=Date.now();
+  if(instrumentCache&&now-instrumentAt<5*60*1000)return instrumentCache;
+  if(instrumentPromise)return instrumentPromise;
+  if(instrumentCache&&now<instrumentRetryAt)return instrumentCache;
+  instrumentPromise=(async()=>{
+    try{
+      // One catalogue request only. Do not fan out to /symbols and /active
+      // after a 429: that turns a rate-limit response into a request storm.
+      const body=await request('/symbols',{quotedWithinDays:7});
+      if(Array.isArray(body)&&body.length){
+        instrumentCache=body;
+        instrumentAt=Date.now();
+        instrumentRetryAt=0;
+        return body;
+      }
+      return instrumentCache||[];
+    }catch(err){
+      if(err?.status===429){
+        instrumentRetryAt=Date.now()+Math.max(60000,Number(err.retryAfterMs)||60000);
+      }
+      if(instrumentCache)return instrumentCache;
+      throw err;
+    }finally{
+      instrumentPromise=null;
+    }
+  })();
+  return instrumentPromise;
 }
 export async function resolveBiquoteSymbol(symbol){
   const wanted=String(symbol||'').trim().toUpperCase();
   const all=await listBiquoteInstruments();
   const aliases=CFD_ALIASES[wanted]||[wanted];
   const found=all.find(x=>String(x.name||'').toUpperCase()===wanted)
-    ||all.find(x=>aliases.includes(String(x.name||'').toUpperCase()))
+    ||all.find(x=>aliases.some(a=>String(a).toUpperCase()===String(x.name||'').toUpperCase()))
     ||all.find(x=>compact(x.name)===compact(wanted));
-  if(found)return found;
-  // The catalogue can lag a newly quoted symbol. Ask Biquote for the exact
-  // canonical symbol, then each configured CFD alias before declaring it
-  // unavailable. This keeps resolution source-native without Yahoo fallbacks.
-  for(const candidate of [wanted,...aliases.filter(x=>x!==wanted)]){
-    try{
-      const direct=await request(`/symbols/${encodeURIComponent(candidate)}`);
-      if(direct?.name)return direct;
-    }catch{}
-  }
-  return null;
+  return found||null;
 }
-function aggregate(rows,bucketMs){
-  const groups=new Map();
-  for(const r of rows){
-    const key=Math.floor(r[0]/bucketMs)*bucketMs;
-    if(!groups.has(key))groups.set(key,[]);
-    groups.get(key).push(r);
-  }
-  return [...groups].sort((a,b)=>a[0]-b[0]).map(([time,a])=>[
-    time,a[0][1],Math.max(...a.map(x=>x[2])),Math.min(...a.map(x=>x[3])),a.at(-1)[4],a.reduce((n,x)=>n+x[5],0)
-  ]);
+export async function biquoteInstrumentSnapshot(){
+  const all=await listBiquoteInstruments();
+  return all.map(x=>({name:x.name,displayName:x.description||x.name,type:x.type,exchange:x.exchange,source:x.source}));
 }
-function mergeRows(base,derived,bucketMs){
-  const map=new Map((base||[]).map(r=>[Math.floor(r[0]/bucketMs)*bucketMs,r]));
-  for(const r of derived||[])map.set(Math.floor(r[0]/bucketMs)*bucketMs,r);
-  return [...map.values()].sort((a,b)=>a[0]-b[0]);
-}
+
 export async function biquoteCandles(symbol,timeframe){
   const instrument=await resolveBiquoteSymbol(symbol);
   if(!instrument){const e=new Error(`Market-data instrument unavailable: ${symbol}`);e.code='MARKET_DATA_INSTRUMENT_UNAVAILABLE';throw e}
