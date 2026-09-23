@@ -313,74 +313,159 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     return true;
   };
   const chooseLimit=items=>{for(const x of items||[]){const t=evaluateTrade(current,bias,x.entry,a,2.25);if(validTrade(t,bias,livePrice,'LIMIT'))return {trade:t,entry:x.entry};}return null;};
-  if(bias==='WAIT'&&key!=='LIQUIDITY_REVERSAL'&&key!=='CRT'){reason='No decisive directional structure is present for the selected strategy and timeframe.';evidence.push('No clear directional structure.');}
-  else if(key==='TOP_DOWN'){
-    const middleBias=structureBias(selectedStructure),entryBias=structureBias(entryStructure),conflict=middleBias!=='WAIT'&&opposite(bias,middleBias),confirmed=entryBias===bias||entryBias==='WAIT';
+  if(bias==='WAIT'&&key!=='LIQUIDITY_REVERSAL'&&key!=='CRT'){
+    reason='No decisive higher-timeframe direction is present for this strategy.';
+    evidence.push('Higher-timeframe structure is neutral.');
+  } else if(key==='TOP_DOWN'){
+    const middleBias=structureBias(selectedStructure),entryBias=structureBias(entryStructure);
+    const alignedMiddle=middleBias===bias,alignedEntry=entryBias===bias||entryBias==='WAIT';
+    const conflict=middleBias!=='WAIT'&&middleBias!==bias;
+    const impulse=displacement(current,bias);
     const marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
-    if(!conflict&&confirmed){if(marketTrade&&displacement(current,bias)){trade=marketTrade;entry=livePrice;orderType='MARKET';}else{const z=chooseLimit(entryZones(current,bias,livePrice,a,36).map(x=>({entry:x.mid,zone:x})));if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}}
-    reason=trade?'Top-Down context agrees with the selected timeframe and a valid execution plan is available.':'Waiting for higher-timeframe direction, aligned structure and a real execution level.';
-    evidence.push('Bias timeframe '+tf.bias+': '+higherBias+'.','Structure timeframe '+tf.structure+': '+middleBias+'.','Selected '+executionTimeframe+' execution: '+entryBias+'.',conflict?'Structure conflicts with higher-timeframe direction.':'Structure does not conflict.');
-  } else if(key==='PULLBACK'){
-    const impulse=structureBreak(structure,bias,48,24),zones=entryZones(current,bias,livePrice,a,40),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
-    if(impulse&&z){trade=z.trade;entry=z.entry;orderType='LIMIT';}else if(impulse&&marketTrade&&displacement(current,bias)){trade=marketTrade;entry=livePrice;orderType='MARKET';}
-    reason=trade?'A directional impulse and executable retracement are present on the selected timeframe.':'Waiting for a real impulse followed by a fresh executable pullback.';evidence.push(impulse?'Directional impulse confirmed.':'No qualifying impulse.',zones[0]?.type||'No fresh FVG/order block.');
-  } else if(key==='BREAKOUT'){
-    const bos=structureBreak(current,bias,48,12),disp=displacement(current,bias),fresh=Boolean(bos&&bos.breakIndex>=current.length-12),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
-    if(bos&&fresh&&disp&&marketTrade){trade=marketTrade;entry=livePrice;orderType='MARKET';}else if(bos&&fresh){const t=evaluateTrade(current,bias,bos.level,a,2.25);if(validTrade(t,bias,livePrice,'LIMIT')){trade=t;entry=bos.level;orderType='LIMIT';}}
-    reason=trade?'The selected timeframe has a confirmed structural breakout with displacement and a valid risk model.':'Waiting for a decisive close through structure with displacement; wick-only breaks are rejected.';evidence.push(bos?'BOS detected.':'No recent BOS.',disp?'Displacement confirmed.':'No displacement.',fresh?'Break is fresh.':'Break is stale.');
-  } else if(key==='SMC'){
-    const sweep=liquiditySweep(current,bias,20,12),disp=displacement(current,bias),bos=structureBreak(current,bias,60,12),zones=entryZones(current,bias,livePrice,a,60),z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x}))),marketTrade=evaluateTrade(current,bias,livePrice,a,2.25),reclaim=Boolean(sweep&&((bias==='LONG'&&last.close>sweep.level)||(bias==='SHORT'&&last.close<sweep.level)));
-    if(sweep&&reclaim&&disp&&bos&&z){trade=z.trade;entry=z.entry;orderType='LIMIT';}else if(sweep&&reclaim&&disp&&bos&&marketTrade){trade=marketTrade;entry=livePrice;orderType='MARKET';}
-    reason=trade?'The selected timeframe completed the SMC sequence and has a valid point of interest.':'Waiting for liquidity sweep → displacement → BOS → fresh POI.';evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',disp?'Displacement confirmed.':'No displacement.',bos?'BOS confirmed.':'No BOS.',zones[0]?.type||'No fresh POI.');
-  } else if(key==='MSNR'){
-    const levels=msnrLevels(biasCandles,bias),actionableLevels=levels.filter(x=>bias==='LONG'?x.level<livePrice:x.level>livePrice),level=actionableLevels.find(x=>Math.abs(livePrice-x.level)<=Math.max(a*2,livePrice*.0025)),formation=msnrFormation(current,bias),bos=structureBreak(current,bias,30,8),engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias),levelProximity=Boolean(level&&Math.abs(last.close-level.level)<=Math.max(a*1.5,last.close*.002)),confirm=Boolean(levelProximity&&(bos||engulf||reject));
-    // A limit entry must be on the executable side of the market: below current price for LONG, above current price for SHORT. A level on the wrong side is a target/resistance reference, not a pending limit entry.
-    if(level&&confirm){const t=evaluateTrade(current,bias,level.level,a,2.25),nextOrderType=Math.abs(level.level-livePrice)<=a*.08?'MARKET':'LIMIT';if(validTrade(t,bias,livePrice,nextOrderType)){trade=t;entry=level.level;orderType=nextOrderType;}}
-    reason=trade?'A strategy-valid MSNR level has been confirmed on the selected timeframe.':'Waiting for a fresh MSNR level and lower-timeframe confirmation.';evidence.push(level?level.type+' identified.':'No nearby qualified MSNR level.',formation||'No V/A formation.',confirm?'Confirmation present.':'No BOS, engulfing or rejection confirmation.');
-  } else if(key==='PRICE_ACTION'){
-    const swings=marketStructure(current),levels=[
-      ...swings.highs.slice(-4).map(x=>({level:x.p,type:'SWING HIGH'})),
-      ...swings.lows.slice(-4).map(x=>({level:x.p,type:'SWING LOW'}))
-    ].filter(x=>Number.isFinite(x.level));
-    const level=levels.sort((x,y)=>Math.abs(last.close-x.level)-Math.abs(last.close-y.level))[0];
-    const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
-    const levelProximity=Boolean(level&&Math.abs(last.close-level.level)<=Math.max(a*1.5,last.close*.002));
-    const levelTouched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
-    if(level&&levelProximity&&levelTouched&&(engulf||reject)){
-      const t=evaluateTrade(current,bias,livePrice,a,2.25);
-      if(validTrade(t)){trade=t;entry=livePrice;orderType='MARKET';}
-      else{const z=chooseLimit([{entry:level.level,zone:level}]);if(z){trade=z.trade;entry=z.entry;orderType='LIMIT';}}
+    const zones=entryZones(current,bias,livePrice,a,24);
+    const z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x})));
+    // Top-down is a context model, not a reason to enter merely because HTF is bullish/bearish.
+    if(!conflict&&alignedMiddle&&alignedEntry){
+      if(impulse&&marketTrade&&validTrade(marketTrade,bias,livePrice,'MARKET')){
+        trade=marketTrade;entry=livePrice;orderType='MARKET';
+      } else if(z){
+        trade=z.trade;entry=z.entry;orderType='LIMIT';
+      }
     }
-    reason=trade?'A structural swing and price-action confirmation are present on the selected timeframe.':'Waiting for a meaningful swing plus rejection or engulfing confirmation.';
-    evidence.push(level?level.type+' identified.':'No meaningful swing level.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
-  } else if(key==='LIQUIDITY_REVERSAL'){
-    const longSweep=liquiditySweep(current,'LONG',20,8);
-    const shortSweep=liquiditySweep(current,'SHORT',20,8);
-    const candidates=[
-      longSweep?{bias:'LONG',sweep:longSweep}:null,
-      shortSweep?{bias:'SHORT',sweep:shortSweep}:null
+    reason=trade?'Higher-timeframe direction, structure and execution evidence are aligned.':'Waiting for aligned HTF structure plus a concrete execution condition.';
+    evidence.push('Bias '+tf.bias+': '+higherBias+'.','Structure '+tf.structure+': '+middleBias+'.','Execution '+executionTimeframe+': '+entryBias+'.',impulse?'Execution displacement present.':'No execution displacement.');
+  } else if(key==='PULLBACK'){
+    const impulse=structureBreak(structure,bias,60,30);
+    const zones=entryZones(current,bias,livePrice,a,36);
+    // Pullback entries must be on the retracement side of current price.
+    const z=chooseLimit(zones.map(x=>({entry:x.mid,zone:x})));
+    const continuation=displacement(current,bias);
+    const marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
+    if(impulse&&z){
+      trade=z.trade;entry=z.entry;orderType='LIMIT';
+    } else if(impulse&&continuation&&marketTrade&&validTrade(marketTrade,bias,livePrice,'MARKET')){
+      trade=marketTrade;entry=livePrice;orderType='MARKET';
+    }
+    reason=trade?'A confirmed impulse is being followed by a valid retracement/continuation entry.':'Waiting for a confirmed impulse and a fresh, unmitigated pullback zone.';
+    evidence.push(impulse?'Directional impulse confirmed.':'No qualifying directional impulse.',zones[0]?zones[0].type:'No fresh FVG/order block.',continuation?'Continuation displacement present.':'No continuation displacement.');
+  } else if(key==='BREAKOUT'){
+    const bos=structureBreak(current,bias,48,12);
+    const fresh=Boolean(bos&&bos.breakIndex>=current.length-12);
+    const breakCandle=fresh?current[bos.breakIndex]:null;
+    const breakBody=breakCandle?Math.abs(breakCandle.close-breakCandle.open):0;
+    const breakRange=breakCandle?breakCandle.high-breakCandle.low:0;
+    const priorRanges=breakCandle?current.slice(Math.max(0,bos.breakIndex-6),bos.breakIndex).map(x=>x.high-x.low).filter(Number.isFinite):[];
+    const avgPrior=priorRanges.length?sma(priorRanges,priorRanges.length):0;
+    const closeThrough=Boolean(breakCandle&&((bias==='LONG'&&breakCandle.close>bos.level)||(bias==='SHORT'&&breakCandle.close<bos.level)));
+    const decisive=Boolean(breakCandle&&breakRange>0&&breakBody>=breakRange*.55&&(!avgPrior||breakRange>=avgPrior*1.15));
+    const stillAccepted=Boolean(breakCandle&&((bias==='LONG'&&last.close>bos.level)||(bias==='SHORT'&&last.close<bos.level)));
+    // A true breakout is a continuation entry after the confirmed break. Do not turn
+    // a later pullback above/below the break level into a misleading "breakout limit".
+    const marketTrade=evaluateTrade(current,bias,livePrice,a,2.25);
+    if(bos&&fresh&&closeThrough&&decisive&&stillAccepted&&marketTrade&&validTrade(marketTrade,bias,livePrice,'MARKET')){
+      trade=marketTrade;entry=livePrice;orderType='MARKET';
+    }
+    reason=trade?'A confirmed close through structure, displacement and continued acceptance are present.':'Waiting for a confirmed structural break with displacement and acceptance beyond the level.';
+    evidence.push(bos?'BOS level '+roundPrice(bos.level)+'.':'No qualifying BOS.',closeThrough?'Break candle closed through the level.':'No confirmed close through structure.',decisive?'Break displacement confirmed.':'Break candle lacks decisive displacement.',stillAccepted?'Price remains accepted beyond the broken level.':'Price has returned through the broken level.');
+  } else if(key==='SMC'){
+    const sweepCandidates=[
+      liquiditySweep(current,'LONG',24,12)?{bias:'LONG',sweep:liquiditySweep(current,'LONG',24,12)}:null,
+      liquiditySweep(current,'SHORT',24,12)?{bias:'SHORT',sweep:liquiditySweep(current,'SHORT',24,12)}:null
     ].filter(Boolean);
+    const selected=sweepCandidates.sort((x,y)=>y.sweep.index-x.sweep.index)[0];
+    const smcBias=selected?.bias||bias;
+    const sweep=selected?.sweep||null;
+    const reclaim=Boolean(sweep&&((smcBias==='LONG'&&last.close>sweep.level)||(smcBias==='SHORT'&&last.close<sweep.level)));
+    const bos=sweep?structureBreak(current,smcBias,60,12):null;
+    const bosAfterSweep=Boolean(sweep&&bos&&bos.breakIndex>sweep.index);
+    const disp=displacement(current,smcBias);
+    const zones=entryZones(current,smcBias,livePrice,a,48);
+    const z=chooseLimitForBias(zones,smcBias,livePrice);
+    const marketTrade=bosAfterSweep&&reclaim&&disp?evaluateTrade(current,smcBias,livePrice,a,2.25):null;
+    if(sweep&&reclaim&&bosAfterSweep&&disp&&z){
+      trade=z.trade;entry=z.entry;orderType='LIMIT';bias=smcBias;
+    } else if(sweep&&reclaim&&bosAfterSweep&&disp&&marketTrade&&validTrade(marketTrade,smcBias,livePrice,'MARKET')){
+      trade=marketTrade;entry=livePrice;orderType='MARKET';bias=smcBias;
+    }
+    reason=trade?'Liquidity sweep, reclaim, post-sweep displacement and BOS are confirmed with a fresh POI.':'Waiting for the full SMC sequence: liquidity sweep → reclaim → displacement → BOS → fresh POI.';
+    evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',reclaim?'Sweep reclaimed.':'No reclaim.',bosAfterSweep?'BOS occurred after the sweep.':'No post-sweep BOS.',disp?'Displacement confirmed.':'No displacement.',zones[0]?zones[0].type:'No fresh POI.');
+  } else if(key==='MSNR'){
+    const levels=msnrLevels(biasCandles,bias);
+    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.max(a*1.5,livePrice*.002));
+    const formation=msnrFormation(current,bias);
+    const bos=structureBreak(current,bias,30,10);
+    const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
+    const touched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
+    const confirmed=Boolean(level&&touched&&(formation||bos||engulf||reject));
+    if(confirmed){
+      const t=evaluateTrade(current,bias,livePrice,a,2.25);
+      if(t&&validTrade(t,bias,livePrice,'MARKET')){trade=t;entry=livePrice;orderType='MARKET';}
+    }
+    reason=trade?'A fresh MSNR level has been reached and price has confirmed the reaction.':'Waiting for a fresh support/resistance level, reaction and lower-timeframe confirmation.';
+    evidence.push(level?level.type+' at '+roundPrice(level.level)+'.':'No fresh MSNR level.',formation||'No V/A formation.',touched?'Level touched.':'Level not yet reached.',confirmed?'Reaction confirmation present.':'No valid reaction confirmation.');
+  } else if(key==='PRICE_ACTION'){
+    const swings=marketStructure(current);
+    const candidateLevels=[
+      ...swings.lows.slice(-6).map(x=>({level:x.p,type:'SWING LOW',index:x.i})),
+      ...swings.highs.slice(-6).map(x=>({level:x.p,type:'SWING HIGH',index:x.i}))
+    ].filter(x=>bias==='LONG'?x.level<=last.close:x.level>=last.close);
+    const level=candidateLevels.sort((x,y)=>Math.abs(last.close-x.level)-Math.abs(last.close-y.level))[0];
+    const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
+    const touched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
+    const response=Boolean(engulf||reject);
+    if(level&&touched&&response){
+      const t=evaluateTrade(current,bias,livePrice,a,2.25);
+      if(t&&validTrade(t,bias,livePrice,'MARKET')){trade=t;entry=livePrice;orderType='MARKET';}
+    }
+    reason=trade?'Price interacted with a structurally relevant swing and produced directional candle confirmation.':'Waiting for price to reach a relevant structural swing and print rejection/engulfing confirmation.';
+    evidence.push(level?level.type+' at '+roundPrice(level.level)+'.':'No directional swing level.',touched?'Swing level interacted with current candle.':'No swing interaction.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
+  } else if(key==='LIQUIDITY_REVERSAL'){
+    const longSweep=liquiditySweep(current,'LONG',24,8),shortSweep=liquiditySweep(current,'SHORT',24,8);
+    const candidates=[longSweep?{bias:'LONG',sweep:longSweep}:null,shortSweep?{bias:'SHORT',sweep:shortSweep}:null].filter(Boolean);
     const selected=candidates.sort((x,y)=>y.sweep.index-x.sweep.index)[0];
-    const reversalBias=selected?.bias||'WAIT';
-    const reversalSweep=selected?.sweep||null;
+    const reversalBias=selected?.bias||'WAIT',reversalSweep=selected?.sweep||null;
     const reclaim=Boolean(reversalSweep&&((reversalBias==='LONG'&&last.close>reversalSweep.level)||(reversalBias==='SHORT'&&last.close<reversalSweep.level)));
     const disp=reversalBias!=='WAIT'&&displacement(current,reversalBias);
-    const marketTrade=reversalBias!=='WAIT'?evaluateTrade(current,reversalBias,livePrice,a,2.25):null;
-    if(reversalSweep&&reclaim&&disp&&marketTrade&&validTrade(marketTrade,reversalBias,livePrice,'MARKET')){
+    const reversalBOS=reversalBias!=='WAIT'&&structureBreak(current,reversalBias,30,8);
+    const bosAfterSweep=Boolean(reversalSweep&&reversalBOS&&reversalBOS.breakIndex>reversalSweep.index);
+    const marketTrade=reversalBias!=='WAIT'&&reclaim&&disp&&bosAfterSweep?evaluateTrade(current,reversalBias,livePrice,a,2.25):null;
+    if(reversalSweep&&reclaim&&disp&&bosAfterSweep&&marketTrade&&validTrade(marketTrade,reversalBias,livePrice,'MARKET')){
       trade=marketTrade;entry=livePrice;orderType='MARKET';bias=reversalBias;
     }
-    reason=trade?'Liquidity was swept and reclaimed with displacement on the selected timeframe.':'Waiting for a genuine liquidity sweep, reclaim and displacement.';
-    evidence.push(reversalSweep?reversalSweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim.',disp?'Displacement confirmed.':'No displacement.');
+    reason=trade?'A liquidity sweep was rejected, reclaimed and followed by displacement plus reversal structure.':'Waiting for sweep → reclaim → displacement → reversal structure.';
+    evidence.push(reversalSweep?reversalSweep.type+' confirmed.':'No genuine liquidity sweep.',reclaim?'Sweep level reclaimed.':'No reclaim.',bosAfterSweep?'Reversal BOS confirmed after sweep.':'No post-sweep reversal BOS.',disp?'Displacement confirmed.':'No displacement.');
   } else if(key==='CRT'){
-    const ref=current.at(-2),x=last;
+    const ref=structure.at(-1);
     const rangeHigh=ref?.high,rangeLow=ref?.low,mid=ref?((ref.high+ref.low)/2):null;
-    const bullish=Boolean(ref&&x.low<rangeLow&&x.close>mid&&x.close>rangeLow);
-    const bearish=Boolean(ref&&x.high>rangeHigh&&x.close<mid&&x.close<rangeHigh);
-    const signal=bullish&&!bearish?'LONG':bearish&&!bullish?'SHORT':null;
-    const crtTrade=signal?evaluateTrade(current,signal,livePrice,a,2.25):null;
+    let sweepIndex=-1,signal=null,sweepExtreme=null;
+    if(ref&&Number.isFinite(rangeHigh)&&Number.isFinite(rangeLow)){
+      for(let i=0;i<current.length;i++){
+        if(current[i].time<=ref.time)continue;
+        if(current[i].low<rangeLow&&current[i].close>rangeLow){sweepIndex=i;signal='LONG';sweepExtreme=current[i].low;break;}
+        if(current[i].high>rangeHigh&&current[i].close<rangeHigh){sweepIndex=i;signal='SHORT';sweepExtreme=current[i].high;break;}
+      }
+    }
+    const confirmed=Boolean(signal&&sweepIndex>=0);
+    let crtTrade=null;
+    if(confirmed){
+      const t=evaluateTrade(current,signal,livePrice,a,2.25);
+      if(t&&validTrade(t,signal,livePrice,'MARKET')){
+        // The CRT invalidation must remain beyond the actual sweep extreme.
+        const buffer=Math.max(a*.1,livePrice*.0002);
+        const crtStop=signal==='LONG'?sweepExtreme-buffer:sweepExtreme+buffer;
+        const risk=Math.abs(livePrice-crtStop);
+        const target=signal==='LONG'?rangeHigh:rangeLow;
+        const rr=Math.abs(target-livePrice)/risk;
+        if(risk>0&&Number.isFinite(rr)&&rr>=2.25){
+          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity:target,rr,target2:t.target2};
+        }
+      }
+    }
     if(crtTrade&&validTrade(crtTrade,signal,livePrice,'MARKET')){trade=crtTrade;entry=livePrice;orderType='MARKET';bias=signal;}
-    reason=trade?'CRT range sweep and reclaim are confirmed on the selected timeframe with a valid risk model.':'Waiting for a completed candle range to be swept and reclaimed with enough room for a valid target.';
-    evidence.push(ref?'Reference range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No completed reference range.',bullish?'Sell-side range sweep reclaimed.':bearish?'Buy-side range sweep reclaimed.':'No qualifying range sweep.',mid!=null?'Midpoint '+roundPrice(mid)+'.':'No range midpoint.');
+    reason=trade?'A higher-timeframe candle range was swept and reclaimed with price targeting the opposite range extreme.':'Waiting for a higher-timeframe range sweep and close-back-inside confirmation with sufficient room.';
+    evidence.push(ref?'CRT range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No higher-timeframe reference range.',signal==='LONG'?'Sell-side range swept and reclaimed.':signal==='SHORT'?'Buy-side range swept and reclaimed.':'No qualifying sweep/reclaim.',mid!=null?'Range midpoint '+roundPrice(mid)+'.':'No midpoint.');
+  }
+rice(rangeHigh)+'.':'No completed reference range.',bullish?'Sell-side range sweep reclaimed.':bearish?'Buy-side range sweep reclaimed.':'No qualifying range sweep.',mid!=null?'Midpoint '+roundPrice(mid)+'.':'No range midpoint.');
   }
   const confidence=trade?Math.min(95,Math.max(38,Math.round(
     50+
