@@ -395,7 +395,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         return json(res,200,{ok:true,instruments:instruments.length?instruments:CRYPTO_INSTRUMENTS.map(symbol=>({symbol,providerSymbol:symbol.replace('/',''),name:symbol,type:'PERPETUAL'}))});
       }
       return json(res,400,{error:'Instrument discovery is only available for Forex, Commodities, Indices, or Crypto'});
-    }if(!['forex','crypto','perpetual','commodities','indices'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});if(market==='forex'&&!/^[A-Z]{3}\/?[A-Z]{3}$/.test(symbol))return json(res,400,{error:'Invalid Forex symbol'});if(['commodities','indices'].includes(market)){
+    }if(!['forex','crypto','perpetual','commodities','indices'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});if(market==='forex'&&!/^[A-Z]{3}\/?[A-Z]{3}$/.test(symbol))return json(res,400,{error:'Invalid Forex symbol'});
 if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(symbol))return json(res,400,{error:'Invalid crypto symbol'});
   const strategy=normalizeStrategy(req.query?.strategy);
   const context=strategyTimeframes(timeframe,strategy);
