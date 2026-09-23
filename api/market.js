@@ -1,5 +1,5 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
-import { biquoteCandles, biquotePrice, biquoteInstrumentSnapshot } from './biquote.js';
+import { biquoteCandles, biquotePrice, biquoteInstrumentSnapshot, resolveBiquoteSymbol } from './biquote.js';
 const FOREX_INSTRUMENTS=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJPY','CHFJPY','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','EURUSD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','GBPUSD','NZDCAD','NZDCHF','NZDJPY','NZDUSD','USDCAD','USDCHF','USDJPY','USDNOK','USDSEK','USDZAR','USDSGD','EURPLN','EURSEK','EURNOK','EURTRY','GBPPLN','GBPSEK','GBPNOK','NOKSEK','NZDSGD','SGDJPY','CHFSGD','CADSGD','AUDSGD','AUDNOK','AUDSEK','CADNOK','CADSEK','CHFPLN','CHFZAR','EURSGD','GBPZAR','NZDZAR','USDHKD','USDMXN','USDTRY','USDTHB','USDHUF','USDCNH'];
 const CRYPTO_INSTRUMENTS=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','DOT/USDT','TRX/USDT','TON/USDT','SHIB/USDT','LTC/USDT','BCH/USDT','NEAR/USDT','UNI/USDT','AAVE/USDT','ATOM/USDT','ETC/USDT','XLM/USDT','FIL/USDT','HBAR/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','INJ/USDT','SEI/USDT','TIA/USDT','PEPE/USDT','WIF/USDT','FLOKI/USDT','JUP/USDT','ENA/USDT','MKR/USDT','RUNE/USDT','ALGO/USDT','VET/USDT','ICP/USDT','EGLD/USDT','SAND/USDT','MANA/USDT','AXS/USDT','GALA/USDT','IMX/USDT','STX/USDT','CRV/USDT','LDO/USDT','SNX/USDT','COMP/USDT','MATIC/USDT','APE/USDT','DYDX/USDT','ORDI/USDT','PYTH/USDT','JTO/USDT','ONDO/USDT','TAO/USDT','FET/USDT'];
 const TIMEFRAME_MAP={'1m':{forex:'1m',crypto:'1m',metals:'1m'},'5m':{forex:'5m',crypto:'5m',metals:'5m'},'15m':{forex:'15m',crypto:'15m',metals:'15m'},'30m':{forex:'30m',crypto:'30m',metals:'30m'},'1H':{forex:'1h',crypto:'1h',metals:'1h'},'4H':{forex:'4h',crypto:'4h',metals:'4h'},'1D':{forex:'1d',crypto:'1d',metals:'1d'},'1W':{forex:'1wk',crypto:'1w',metals:'1wk'}};
@@ -386,14 +386,15 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
 export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{if(String(req.query?.action||'')==='header'){const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear',{headers:{Accept:'application/json'}});if(!r.ok)return json(res,502,{error:'Bybit ticker provider unavailable'});const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list))return json(res,502,{error:body?.retMsg||'Bybit ticker provider unavailable'});const wanted=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT']);const result=body.result.list.filter(x=>wanted.has(x.symbol)).map(x=>({symbol:x.symbol,lastPrice:x.lastPrice,price24hPcnt:x.price24hPcnt}));return json(res,200,{ok:true,result});} const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(req.query?.action==='instruments'){
       if(market==='metals'){
         const query=String(req.query?.q||'').trim().toUpperCase();
-        const brokerRows=await biquoteInstrumentSnapshot();
         const aliasEntries=Object.entries(CFD_ALIASES);
-        const instruments=brokerRows.flatMap(x=>{
-          const provider=String(x.name||'').trim().toUpperCase();
-          const compactProvider=provider.replace(/[^A-Z0-9]/g,'');
-          const canonical=aliasEntries.find(([key,aliases])=>aliases.some(a=>String(a).toUpperCase()===provider||String(a).toUpperCase()===compactProvider))?.[0];
-          return canonical?[{symbol:canonical,providerSymbol:provider,name:x.displayName||x.name,type:'CFD'}]:[];
-        }).filter(x=>!query||`${x.symbol} ${x.name}`.toUpperCase().includes(query));
+        const resolved=await Promise.all(aliasEntries.map(async([canonical])=>{
+          try{
+            const x=await resolveBiquoteSymbol(canonical);
+            if(!x?.name)return null;
+            return {symbol:canonical,providerSymbol:String(x.name).toUpperCase(),name:x.description||x.name,type:'CFD'};
+          }catch{return null}
+        }));
+        const instruments=resolved.filter(Boolean).filter(x=>!query||(`${x.symbol} ${x.name}`).toUpperCase().includes(query));
         return json(res,200,{ok:true,instruments:normalizeInstrumentList(instruments)});
       }
       if(market==='forex'){
@@ -418,7 +419,13 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         return json(res,200,{ok:true,instruments:instruments.length?instruments:CRYPTO_INSTRUMENTS.map(symbol=>({symbol,providerSymbol:symbol.replace('/',''),name:symbol,type:'PERPETUAL'}))});
       }
       return json(res,400,{error:'Instrument discovery is only available for Forex, Crypto, or Metal / CFD'});
-    }if(!['forex','crypto','perpetual','metals'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});if(market==='forex'&&!/^[A-Z]{6}$/.test(symbol))return json(res,400,{error:'Invalid Forex symbol'});if(market==='metals'&&!CFD_INSTRUMENTS.some(x=>x.symbol===symbol))return json(res,400,{error:'Invalid Metal / CFD symbol'});if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(symbol))return json(res,400,{error:'Invalid crypto symbol'});
+    }if(!['forex','crypto','perpetual','metals'].includes(market))return json(res,400,{error:'Unsupported market'});if(!symbol)return json(res,400,{error:'Missing symbol'});if(!allowedIntervals.has(timeframe))return json(res,400,{error:'Unsupported timeframe'});if(market==='forex'&&!/^[A-Z]{6}$/.test(symbol))return json(res,400,{error:'Invalid Forex symbol'});if(market==='metals'){
+    const aliases=CFD_ALIASES[symbol]||[symbol];
+    const resolved=await resolveBiquoteSymbol(symbol);
+    const provider=String(resolved?.name||'').toUpperCase();
+    const valid=Boolean(resolved)&&aliases.some(a=>String(a).toUpperCase()===provider||String(a).toUpperCase().replace(/[^A-Z0-9]/g,'')===provider.replace(/[^A-Z0-9]/g,''));
+    if(!valid)return json(res,400,{error:'Biquote Metal / CFD instrument is unavailable',code:'MARKET_DATA_INSTRUMENT_UNAVAILABLE'});
+  }if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(symbol))return json(res,400,{error:'Invalid crypto symbol'});
   const strategy=normalizeStrategy(req.query?.strategy);
   const context=strategyTimeframes(timeframe,strategy);
   const needed=[...new Set([context.entry,context.structure,context.bias])];
