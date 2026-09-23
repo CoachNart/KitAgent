@@ -53,6 +53,18 @@ service cloud.firestore {
       }
     }
 
+
+    match /supportChats/{chatId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if signedIn()
+          && get(/databases/$(database)/documents/supportChats/$(chatId)).data.userId == request.auth.uid;
+        allow create, update, delete: if false;
+      }
+    }
+
     match /deviceBindings/{deviceBindingId} {
       allow read, write: if false;
     }
