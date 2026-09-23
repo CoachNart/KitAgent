@@ -228,18 +228,16 @@ function marketDataFresh(c,timeframe,market=''){
   const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.[sourceKey]||timeframe;
   const lastOpen=Number(c.at(-1)?.time),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
   if(!Number.isFinite(lastOpen)||!interval)return false;
-  // A completed candle can be nearly one full interval old before the next candle appears. Judge freshness from the candle close, not its open.
-  const lastClose=lastOpen+interval,age=Date.now()-lastClose;
+  const age=Date.now()-lastOpen;
   if(age<0)return true;
-  // Twelve Data can briefly deliver a completed bar after the nominal close; keep a bounded delivery window.
-  // Keep the stale guard, but allow a reasonable provider-delivery window.
-  const maxAge=['1W','1wk','1w'].includes(sourceTimeframe)
-    ?21*86400000
-    :['1D','1d'].includes(sourceTimeframe)
-      ?7*86400000
-      :['forex','commodities','indices'].includes(market)
-        ?Math.max(interval*48, 7*86400000)
-        :interval*4;
+  if(['forex','commodities','indices'].includes(market)){
+    // Yahoo's feed can publish the latest completed bar after the nominal boundary.
+    // These markets are judged unavailable only when the feed is genuinely old,
+    // rather than treating a normal provider delay as "stale".
+    const maxAge=['1W','1wk','1w'].includes(sourceTimeframe)?21*86400000:['1D','1d'].includes(sourceTimeframe)?7*86400000:14*86400000;
+    return age<=maxAge;
+  }
+  const maxAge=['1W','1wk','1w'].includes(sourceTimeframe)?21*86400000:['1D','1d'].includes(sourceTimeframe)?7*86400000:interval*4;
   return age<=maxAge;
 }
 function candleEngulfing(c,bias){
