@@ -27,6 +27,7 @@ const CFD_ALIASES={
   UKOIL:['UKOIL','BRENT','BCOUSD']
 };
 let instrumentCache=null,instrumentAt=0,instrumentPromise=null,instrumentRetryAt=0;
+const candleCache=new Map(), candlePromises=new Map(), priceCache=new Map(), pricePromises=new Map();
 export async function listBiquoteInstruments(){
   const now=Date.now();
   if(instrumentCache&&now-instrumentAt<5*60*1000)return instrumentCache;
@@ -71,6 +72,11 @@ export async function biquoteInstrumentSnapshot(){
 }
 
 export async function biquoteCandles(symbol,timeframe){
+  const cacheKey=`${String(symbol||'').toUpperCase()}|${timeframe}`;
+  const cached=candleCache.get(cacheKey);
+  if(cached&&Date.now()-cached.at<15000)return cached.value;
+  if(candlePromises.has(cacheKey))return candlePromises.get(cacheKey);
+  const work=(async()=>{
   const instrument=await resolveBiquoteSymbol(symbol);
   if(!instrument){const e=new Error(`Market-data instrument unavailable: ${symbol}`);e.code='MARKET_DATA_INSTRUMENT_UNAVAILABLE';throw e}
   const interval=timeframe==='1H'?'1h':timeframe==='4H'?'4h':timeframe==='1D'?'1d':timeframe==='1W'?'1d':timeframe;
@@ -108,15 +114,30 @@ export async function biquoteCandles(symbol,timeframe){
   }
   if(timeframe==='1W')rows=aggregateWeekly(rows);
   if(rows.length<60){const e=new Error(`Market-data provider returned insufficient completed candles for ${symbol}`);e.code='MARKET_DATA_INSUFFICIENT_CANDLES';throw e}
-  return {instrument,rows};
+  const value={instrument,rows};
+  candleCache.set(cacheKey,{at:Date.now(),value});
+  return value;
+  })();
+  candlePromises.set(cacheKey,work);
+  try{return await work}finally{candlePromises.delete(cacheKey)}
 }
 export async function biquotePrice(symbol){
+  const cacheKey=String(symbol||'').toUpperCase();
+  const cached=priceCache.get(cacheKey);
+  if(cached&&Date.now()-cached.at<2000)return cached.value;
+  if(pricePromises.has(cacheKey))return pricePromises.get(cacheKey);
+  const work=(async()=>{
   const instrument=await resolveBiquoteSymbol(symbol);
   if(!instrument){const e=new Error(`Market-data instrument unavailable: ${symbol}`);e.code='MARKET_DATA_INSTRUMENT_UNAVAILABLE';throw e}
   const p=await request(`/${encodeURIComponent(instrument.name)}`,{allowStale:true});
   const bid=Number(p?.bid),ask=Number(p?.ask),mid=Number(p?.mid);
   if(![bid,ask,mid].every(Number.isFinite)){const e=new Error(`Market-data quote unavailable: ${symbol}`);e.code='MARKET_DATA_PRICE_UNAVAILABLE';throw e}
-  return {instrument,bid,ask,mid,time:p.timestamp,tradeable:p.marketState==='open'&&!p.stale,spread:Number.isFinite(Number(p.spread))?Number(p.spread):ask-bid,marketState:p.marketState,stale:Boolean(p.stale)};
+  const value={instrument,bid,ask,mid,time:p.timestamp,tradeable:p.marketState==='open'&&!p.stale,spread:Number.isFinite(Number(p.spread))?Number(p.spread):ask-bid,marketState:p.marketState,stale:Boolean(p.stale)};
+  priceCache.set(cacheKey,{at:Date.now(),value});
+  return value;
+  })();
+  pricePromises.set(cacheKey,work);
+  try{return await work}finally{pricePromises.delete(cacheKey)}
 }
 export async function biquoteInstrumentSnapshot(){
   const all=await listBiquoteInstruments();
