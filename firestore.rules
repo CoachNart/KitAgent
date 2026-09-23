@@ -47,6 +47,10 @@ service cloud.firestore {
         allow read: if owns(uid);
         allow create, update, delete: if false;
       }
+      match /supportTickets/{ticketId} {
+        allow read, create: if owns(uid);
+        allow update, delete: if false;
+      }
     }
 
     match /deviceBindings/{deviceBindingId} {
