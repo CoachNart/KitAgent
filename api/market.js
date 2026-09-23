@@ -307,14 +307,14 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   if(![e20,e50,a].every(Number.isFinite))throw new Error('Indicators could not be calculated from market data');
   const higherStructure=marketStructure(biasCandles),selectedStructure=marketStructure(structure),entryStructure=marketStructure(current);
   const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure),bias=higherBias;
-  const livePrice=liveQuote?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
+  const liveQuoteUsable=Boolean(liveQuote?.tradeable);\n  const livePrice=liveQuoteUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
   const evidence=[],failures=[]; let trade=null,orderType='NO_SETUP',entry=null,reason='';
   const validTrade=(t,tradeBias=bias,marketPrice=livePrice,tradeOrderType='')=>{
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<2.25)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
     if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.entry>=marketPrice)||(tradeBias==='SHORT'&&t.entry<=marketPrice)))return false;
-    if(tradeOrderType==='MARKET'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice)))return false;
+    if(tradeOrderType==='MARKET'&&!liveQuoteUsable)return false;\n    if(tradeOrderType==='MARKET'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice)))return false;
     return true;
   };
   const chooseLimit=items=>{for(const x of items||[]){const t=evaluateTrade(current,bias,x.entry,a,2.25);if(validTrade(t,bias,livePrice,'LIMIT'))return {trade:t,entry:x.entry};}return null;};
@@ -395,7 +395,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
   const liveQuote=(market==='forex'||market==='metals')?await biquotePrice(symbol):null;
-  if(liveQuote&&!liveQuote.tradeable)throw Object.assign(new Error('Market is currently closed or its quote is stale.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  if(liveQuote?.marketState==='closed')throw Object.assign(new Error('Market is currently closed.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
   const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market,liveQuote);
   const confidenceBase=Number(setup.confidence),finalConfidence=setup.tradeReady?Math.min(95,Math.max(35,Number.isFinite(confidenceBase)?Math.round(confidenceBase):35)):0;
   const confluenceCandles={
