@@ -4,13 +4,20 @@ const TIMEFRAME_MAP={'1m':{forex:'1m',twelvedata:'1m',crypto:'1m'},'5m':{forex:'
 const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
 function adjacentTimeframe(tf,steps=1){const i=Math.max(0,TIMEFRAME_ORDER.indexOf(tf));return TIMEFRAME_ORDER[Math.min(TIMEFRAME_ORDER.length-1,i+steps)]||'1H';}
 function strategyTimeframes(tf,strategy){
-  const higher=adjacentTimeframe(tf,1),higher2=adjacentTimeframe(tf,2);
-  switch(normalizeStrategy(strategy)){
+  const key=normalizeStrategy(strategy),higher=adjacentTimeframe(tf,1),higher2=adjacentTimeframe(tf,2);
+  // Every setup has an execution timeframe plus genuinely higher context. A 1W
+  // execution chart cannot provide that hierarchy, so it is deliberately rejected.
+  if(tf==='1W')throw Object.assign(new Error('1W is not a valid execution timeframe for the setup engine. Select 1D or lower.'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});
+  switch(key){
     case 'TOP_DOWN': return {entry:tf,structure:higher,bias:higher2};
     case 'PULLBACK': return {entry:tf,structure:tf,bias:higher};
     case 'BREAKOUT': return {entry:tf,structure:tf,bias:higher};
     case 'SMC': return {entry:tf,structure:tf,bias:higher};
-    case 'MSNR': return {entry:tf,structure:higher,bias:higher2};
+    // MSNR is specifically a Daily/4H contextual model, so do not silently
+    // replace its required higher-timeframe storyline with 5m/15m context.
+    case 'MSNR':
+      if(!['1m','5m','15m','30m','1H','4H'].includes(tf))throw Object.assign(new Error('MSNR requires a 4H/Daily context and is available on 4H or lower execution timeframes.'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});
+      return {entry:tf,structure:'4H',bias:'1D'};
     case 'PRICE_ACTION': return {entry:tf,structure:tf,bias:higher};
     case 'LIQUIDITY_REVERSAL': return {entry:tf,structure:tf,bias:higher};
     case 'CRT': return {entry:tf,structure:tf,bias:higher};
