@@ -145,7 +145,7 @@ export default async function handler(req,res){
       const orderType=clean(setup.orderType,20).toUpperCase();
       if(!market||!symbol||!timeframe||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
       const ref=collection.doc();
-      const signal={signalId:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-market-analysis-v1'};
+      const signal={signalId:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-market-analysis-v2'};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
@@ -162,7 +162,7 @@ export default async function handler(req,res){
         if(av!==bv)patch[key]=b??null;
       }
       if(Object.keys(patch).length)await collection.doc(original.id).set(patch,{merge:true});
-      if(['limit_pending','open','target_hit','stop_hit','missed_entry'].includes(String(resolved.status||'')))signals.push(resolved);
+      if(['open','target_hit','stop_hit','missed_entry'].includes(String(resolved.status||'')))signals.push(resolved);
     }
     return json(res,200,{ok:true,signals});
   }catch(error){
