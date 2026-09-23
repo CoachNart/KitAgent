@@ -398,5 +398,5 @@ if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(sym
     {timeframe:context.bias,bias:structureBias(marketStructure(confluenceCandles.bias)),role:'CONTEXT',confidence:finalConfidence},
     {timeframe:context.structure,bias:structureBias(marketStructure(confluenceCandles.structure)),role:'STRUCTURE',confidence:finalConfidence},
     {timeframe:context.entry,bias:structureBias(marketStructure(confluenceCandles.entry)),role:'OPPORTUNITY',confidence:finalConfidence}
-  ],aligned:setup.tradeReady?3:0,totalTimeframes:3,source:['forex','commodities','indices'].includes(market)?'Twelve Data':'Bybit linear perpetuals',generatedAt:new Date().toISOString()})
+  ],aligned:setup.tradeReady?3:0,totalTimeframes:3,source:['forex','commodities','indices'].includes(market)?'Yahoo Finance':'Bybit linear perpetuals',generatedAt:new Date().toISOString()})
 }catch(e){const code=e?.code||'',status=code==='AUTH_REQUIRED'||code==='AUTH_INVALID'?401:code==='ACCESS_EXPIRED'?403:['MARKET_DATA_INSTRUMENT_UNAVAILABLE','MARKET_DATA_PRICE_UNAVAILABLE','MARKET_DATA_INSUFFICIENT_CANDLES','MARKET_DATA_REQUEST_FAILED'].includes(code)?503:500;return json(res,status,{ok:false,error:e?.message||'Market analysis failed',code:code||'MARKET_ERROR'})}}
