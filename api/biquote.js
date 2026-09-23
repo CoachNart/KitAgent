@@ -28,21 +28,33 @@ const CFD_ALIASES={
 };
 let instrumentCache=null,instrumentAt=0;
 export async function listBiquoteInstruments(){
-  // Do not build the picker/resolver from /active. Biquote documents /active
-  // as "quoting this second", which can legitimately collapse to almost nothing
-  // during market pauses/weekends. Use the recent-quote catalogue instead.
+  // Use Biquote's recent-quote catalogue for the picker, but never let an
+  // empty/temporarily filtered catalogue make every supported instrument
+  // disappear. Biquote explicitly documents /symbols?quotedWithinDays=7 as
+  // the picker-safe source and /symbols as the full broker catalogue.
   if(instrumentCache&&Date.now()-instrumentAt<60000)return instrumentCache;
-  const body=await request('/symbols',{quotedWithinDays:7});
+  let body=await request('/symbols',{quotedWithinDays:7});
+  if(!Array.isArray(body)||!body.length)body=await request('/symbols');
   instrumentCache=Array.isArray(body)?body:[];instrumentAt=Date.now();return instrumentCache;
 }
 export async function resolveBiquoteSymbol(symbol){
   const wanted=String(symbol||'').trim().toUpperCase();
   const all=await listBiquoteInstruments();
   const aliases=CFD_ALIASES[wanted]||[wanted];
-  return all.find(x=>String(x.name||'').toUpperCase()===wanted)
+  const found=all.find(x=>String(x.name||'').toUpperCase()===wanted)
     ||all.find(x=>aliases.includes(String(x.name||'').toUpperCase()))
-    ||all.find(x=>compact(x.name)===compact(wanted))
-    ||null;
+    ||all.find(x=>compact(x.name)===compact(wanted));
+  if(found)return found;
+  // The catalogue can lag a newly quoted symbol. Ask Biquote for the exact
+  // canonical symbol, then each configured CFD alias before declaring it
+  // unavailable. This keeps resolution source-native without Yahoo fallbacks.
+  for(const candidate of [wanted,...aliases.filter(x=>x!==wanted)]){
+    try{
+      const direct=await request(`/symbols/${encodeURIComponent(candidate)}`);
+      if(direct?.name)return direct;
+    }catch{}
+  }
+  return null;
 }
 export async function biquoteCandles(symbol,timeframe){
   const instrument=await resolveBiquoteSymbol(symbol);
