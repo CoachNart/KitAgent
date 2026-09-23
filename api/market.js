@@ -295,8 +295,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   if(!current?.length||!structure?.length||!biasCandles?.length)throw new Error('No completed candle is available for the selected timeframe');
   const liveMid=Number(liveQuote?.mid??rawCurrent.at(-1)?.close);
   if(!Number.isFinite(liveMid))throw new Error('Live market price is unavailable');
-  const last=current.at(-1),closes=current.map(x=>x.close).filter(Number.isFinite),e20=ema(closes,20),e50=ema(closes,50),r=rsi(closes),a=atr(current,14);
-  if(!last||closes.length<2||![e20,e50,a].every(Number.isFinite)){throw Object.assign(new Error('Market data does not contain enough valid OHLC candles for the selected timeframe.'),{code:'MARKET_DATA_INSUFFICIENT_CANDLES'})}
+  const last=current.at(-1),closes=current.map(x=>x.close).filter(Number.isFinite),a=atr(current,14);
+  if(!last||closes.length<2||!Number.isFinite(a)){throw Object.assign(new Error('Market data does not contain enough valid OHLC candles for the selected timeframe.'),{code:'MARKET_DATA_INSUFFICIENT_CANDLES'})}
   const higherStructure=marketStructure(biasCandles),selectedStructure=marketStructure(structure),entryStructure=marketStructure(current);
   const higherBias=structureBias(higherStructure),selectedBias=structureBias(selectedStructure),bias=higherBias;
   const liveQuoteUsable=Boolean(liveQuote?.tradeable);
@@ -368,7 +368,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
       }
       if(market==='perpetual'||market==='crypto'){
         const all=[];let cursor='';
-        for(let page=0;page<10;page++){
+        for(let page=0;page<100;page++){
           const url=new URL('https://api.bybit.com/v5/market/instruments-info');
           url.searchParams.set('category','linear');
           url.searchParams.set('status','Trading');
