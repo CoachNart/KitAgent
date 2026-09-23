@@ -26,11 +26,14 @@ const CFD_ALIASES={
   JP225:['JP225','NIKKEI225','NIKKEI'],HK50:['HK50','HANGSENG','HSI'],USOIL:['USOIL','WTI','WTICOUSD'],
   UKOIL:['UKOIL','BRENT','BCOUSD']
 };
-let activeCache=null,activeAt=0;
+let instrumentCache=null,instrumentAt=0;
 export async function listBiquoteInstruments(){
-  if(activeCache&&Date.now()-activeAt<60000)return activeCache;
-  const body=await request('/active');
-  activeCache=Array.isArray(body)?body:[];activeAt=Date.now();return activeCache;
+  // Do not build the picker/resolver from /active. Biquote documents /active
+  // as "quoting this second", which can legitimately collapse to almost nothing
+  // during market pauses/weekends. Use the recent-quote catalogue instead.
+  if(instrumentCache&&Date.now()-instrumentAt<60000)return instrumentCache;
+  const body=await request('/symbols',{quotedWithinDays:7});
+  instrumentCache=Array.isArray(body)?body:[];instrumentAt=Date.now();return instrumentCache;
 }
 export async function resolveBiquoteSymbol(symbol){
   const wanted=String(symbol||'').trim().toUpperCase();
