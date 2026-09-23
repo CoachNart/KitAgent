@@ -84,8 +84,8 @@ export async function resolveTwelveSymbol(symbol,kind='all'){
   }
   return {name:exact.symbol,description:exact.name,type:exact.type};
 }
-export async function twelveCandles(symbol,timeframe){
-  const instrument=await resolveTwelveSymbol(symbol);
+export async function twelveCandles(symbol,timeframe,kind='all'){
+  const instrument=await resolveTwelveSymbol(symbol,kind);
   const key=keyFor('candles',instrument.name,timeframe);
   const cached=getCached(key,CANDLE_TTL[timeframe]||60000);if(cached)return cached;
   if(inflight.has(key))return inflight.get(key);
@@ -100,8 +100,8 @@ export async function twelveCandles(symbol,timeframe){
   })();
   inflight.set(key,work);try{return await work}finally{inflight.delete(key)}
 }
-export async function twelvePrice(symbol){
-  const instrument=await resolveTwelveSymbol(symbol);
+export async function twelvePrice(symbol,kind='all'){
+  const instrument=await resolveTwelveSymbol(symbol,kind);
   const key=keyFor('price',instrument.name);
   const cached=getCached(key,2000);if(cached)return cached;
   if(inflight.has(key))return inflight.get(key);
