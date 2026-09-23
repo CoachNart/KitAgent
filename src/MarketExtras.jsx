@@ -106,7 +106,7 @@ export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
           >
             <span className="watch-dot" />
             <span>{item.symbol}</span>
-            <em>{item.market === 'forex' ? 'FX' : item.market === 'metals' ? 'CFD' : 'PERP'}</em>
+            <em>{item.market === 'forex' ? 'FX' : item.market === 'commodities' ? 'CMDTY' : item.market === 'indices' ? 'INDEX' : 'PERP'}</em>
             {item.symbol === symbol && item.market === market && <span className="watch-active-mark">LIVE</span>}
           </button>
         )) : (
