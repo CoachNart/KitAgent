@@ -130,3 +130,8 @@ html.kit-light .profile-settings-page .profile-cancel{
   color:#34515a!important;
   border:1px solid #d0e0e4!important;
 }
+\n
+.profile-settings-page .logout-row{color:#e53935!important}
+.profile-settings-page .logout-row:hover{background:rgba(229,57,53,.08)!important}
+html.kit-light .profile-settings-page .logout-row{color:#c92f31!important;background:linear-gradient(135deg,#fffafa,#fff4f4)!important;border-color:#f1d2d3!important}
+html.kit-light .profile-settings-page .logout-row:hover{background:#fff0f0!important;border-color:#e9b8ba!important}
