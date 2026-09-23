@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bell, Check, ChevronRight, Copy, Edit3, Flame, Headphones, LoaderCircle, LogOut, Save, Send, ShieldCheck, Trash2, UserRound, Users, WalletCards, X } from 'lucide-react';
 import { signOut, updateProfile } from 'firebase/auth';
-import { addDoc, collection, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
 import AffiliatePanel from './AffiliatePanel.jsx';
+import LiveSupportPanel from './LiveSupportPanel.jsx';
 import './profile-settings.css';
 
 const DAY=86400000;
@@ -12,7 +13,6 @@ const PREMIUM_PAYMENT_ADDRESS='0x046b97b07c13c4ad5e61599d98fcb52f1246247d';
 export default function AccountPage({user,onBack=()=>{window.location.assign('/')}}){
  const [profile,setProfile]=useState(null),[verification,setVerification]=useState(null),[message,setMessage]=useState(''),[hash,setHash]=useState(''),[copied,setCopied]=useState(false),[busy,setBusy]=useState(false),[now,setNow]=useState(Date.now()),[editing,setEditing]=useState(false),[editName,setEditName]=useState(''),[editAvatar,setEditAvatar]=useState(''),[profileBusy,setProfileBusy]=useState(false),[profileMessage,setProfileMessage]=useState('');
  const [expanded,setExpanded]=useState(''),[supportOpen,setSupportOpen]=useState(false),[supportBusy,setSupportBusy]=useState(false),[supportMessage,setSupportMessage]=useState('');
- const [supportSubject,setSupportSubject]=useState(''),[supportCategory,setSupportCategory]=useState('Technical issue'),[supportBody,setSupportBody]=useState('');
  const [notifications,setNotifications]=useState(()=>{try{return localStorage.getItem('kitagent-notifications')!=='off'}catch{return true}});
  useEffect(()=>{if(!db||!user?.uid)return;const uid=user.uid;return onSnapshot(doc(db,'users',uid),s=>{if(auth?.currentUser?.uid!==uid)return;const data=s.exists()?s.data():null;setProfile(data);setVerification(data?.latestPaymentVerification||null)},e=>{if(auth?.currentUser?.uid===uid)setMessage(e?.message||'Profile sync is temporarily unavailable.')})},[user?.uid]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
@@ -26,7 +26,6 @@ export default function AccountPage({user,onBack=()=>{window.location.assign('/'
  const toggleNotifications=()=>setNotifications(value=>{const next=!value;try{localStorage.setItem('kitagent-notifications',next?'on':'off')}catch{};window.dispatchEvent(new CustomEvent('kitagent:notifications-setting',{detail:{enabled:next}}));return next});
  const toggleSection=key=>{setExpanded(value=>value===key?'':key);setSupportOpen(false)};
  const openSupport=()=>{setSupportOpen(value=>!value);setExpanded('');setSupportMessage('')};
- const submitSupport=async()=>{const subject=supportSubject.trim().slice(0,120),body=supportBody.trim().slice(0,5000);if(!auth?.currentUser||!db||!user?.uid)return setSupportMessage('Your account is not ready yet.');if(!subject)return setSupportMessage('Please enter a subject.');if(body.length<10)return setSupportMessage('Please describe the issue in at least 10 characters.');setSupportBusy(true);setSupportMessage('');try{await addDoc(collection(db,'users',user.uid,'supportTickets'),{uid:user.uid,email,displayName:name,subject,category:supportCategory,message:body,status:'open',createdAt:serverTimestamp()});setSupportSubject('');setSupportBody('');setSupportMessage('Complaint sent. Our support team can now review it.')}catch(e){setSupportMessage(e?.message||'Your complaint could not be sent. Please try again.')}finally{setSupportBusy(false)}};
  const row=(key,label,Icon,color,action,expandedRow=false)=><button className={`profile-settings-row ${expandedRow&&expanded===key?'is-expanded':''}`} data-profile-row={key} type="button" onClick={e=>{e.preventDefault();e.stopPropagation();action()}} aria-expanded={expandedRow?expanded===key:undefined}><span className={`profile-row-icon ${color}`}><Icon/></span><span>{label}</span>{expandedRow?<ChevronRight className={`profile-row-chevron ${expanded===key?'is-open':''}`}/>:null}</button>;
  return <div className="account-page profile-settings-page">
   <div className="profile-screen-heading"><button type="button" className="profile-back" aria-label="Back" onClick={onBack}><ArrowLeft size={17}/></button><h1>Profile</h1><div className="profile-plan-pill"><span>🔥</span>{premiumActive?'Premium':trialActive?`${Math.max(1,Math.ceil(trialRemaining/DAY))} Days`:'Free'}</div></div>
@@ -40,7 +39,7 @@ export default function AccountPage({user,onBack=()=>{window.location.assign('/'
    {expanded==='affiliate'&&<div className="profile-settings-expand profile-affiliate-slot" data-profile-panel="affiliate"><AffiliatePanel/></div>}
    <button className="profile-settings-row" type="button" aria-pressed={notifications} onClick={toggleNotifications}><span className="profile-row-icon notifications"><Bell/></span><span>Notifications</span><span className={`profile-toggle ${notifications?'is-on':''}`} aria-hidden="true"/></button>
    {row('support','Support',Headphones,'support',openSupport)}
-   {supportOpen&&<div className="profile-settings-expand support-form"><div className="support-form-head"><span>SUPPORT</span><h3>Tell us what went wrong</h3><p>Send a complaint or report a problem with your KitSetups account.</p></div><label><span>SUBJECT</span><input value={supportSubject} maxLength={120} onChange={e=>setSupportSubject(e.target.value)} placeholder="What is the issue?"/></label><label><span>CATEGORY</span><select value={supportCategory} onChange={e=>setSupportCategory(e.target.value)}><option>Technical issue</option><option>Market analysis</option><option>Account & access</option><option>Payment</option><option>Affiliate</option><option>Other</option></select></label><label><span>COMPLAINT</span><textarea value={supportBody} maxLength={5000} onChange={e=>setSupportBody(e.target.value)} placeholder="Describe the problem and what happened…" rows={6}/></label>{supportMessage&&<div className="support-form-message" role="status">{supportMessage}</div>}<button className="support-submit" type="button" onClick={submitSupport} disabled={supportBusy}>{supportBusy?<LoaderCircle className="spin" size={14}/>:<Send size={14}/>} {supportBusy?'Sending…':'Send complaint'}</button></div>}
+   {supportOpen&&<div className="profile-settings-expand support-form"><LiveSupportPanel user={user} name={name} email={email}/></div>}
    <button className="profile-settings-row" type="button" onClick={()=>window.location.assign('/delete-account')}><span className="profile-row-icon delete"><Trash2/></span><span>Delete Account</span><ChevronRight className="profile-row-chevron"/></button>
    <button className="profile-settings-row logout-row" type="button" onClick={logout}><span className="profile-row-icon logout"><LogOut/></span><span>Logout</span></button>
   </div>
