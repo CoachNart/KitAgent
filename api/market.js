@@ -211,7 +211,7 @@ function normalizeStrategy(v){const key=String(v||'TOP_DOWN').toUpperCase();retu
 const CANDLE_INTERVAL_MS={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'4h':14400000,'1d':86400000,'1wk':604800000,'1w':604800000,'1H':3600000,'4H':14400000,'1D':86400000,'1W':604800000};
 function closedCandles(c,timeframe,market=''){
   if(!Array.isArray(c)||c.length<2)return [];
-  // Biquote's OHLC normalizer already removes bars marked isOpen:true.
+  // Twelve Data's OHLC normalizer already removes bars marked isOpen:true.
   // Twelve Data returns completed OHLC bars; do not infer candle state from timestamps for these markets.
   if(['forex','commodities','indices'].includes(market))return c;
   const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.crypto||timeframe;
