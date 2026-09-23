@@ -34,6 +34,51 @@ function roundPrice(v){if(v==null||!Number.isFinite(Number(v)))return null;v=Num
 function normalize(rows){const byTime=new Map();for(const r of rows||[]){const x={time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4]),volume:Number(r[5]||0)};if(![x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)||x.time<=0)continue;if(x.high<Math.max(x.open,x.close,x.low)||x.low>Math.min(x.open,x.close,x.high)||x.high<x.low)continue;byTime.set(x.time,x)}return [...byTime.values()].sort((a,b)=>a.time-b.time)}
 function normalizeInstrumentList(rows){return [...new Map(rows.map(x=>[x.symbol,x])).values()];}
 const BYBIT_INTERVAL={'1m':'1','5m':'5','15m':'15','30m':'30','1H':'60','4H':'240','1D':'D','1W':'W'};
+const BYBIT_INSTRUMENT_CACHE_TTL=10*60*1000;
+let bybitInstrumentCache=[];
+let bybitInstrumentCacheAt=0;
+let bybitInstrumentRefresh=null;
+
+async function getBybitPerpetualInstruments(){
+  const now=Date.now();
+  if(bybitInstrumentCache.length&&now-bybitInstrumentCacheAt<BYBIT_INSTRUMENT_CACHE_TTL)return bybitInstrumentCache;
+  if(bybitInstrumentRefresh)return bybitInstrumentRefresh;
+  bybitInstrumentRefresh=(async()=>{
+    const all=[];
+    let cursor='';
+    for(let page=0;page<25;page++){
+      const url=new URL('https://api.bybit.com/v5/market/instruments-info');
+      url.searchParams.set('category','linear');
+      url.searchParams.set('status','Trading');
+      url.searchParams.set('limit','1000');
+      if(cursor)url.searchParams.set('cursor',cursor);
+      const r=await fetch(url.toString(),{headers:{Accept:'application/json'}});
+      if(!r.ok){
+        if(bybitInstrumentCache.length)return bybitInstrumentCache;
+        throw Object.assign(new Error('Bybit perpetual instrument provider unavailable'),{code:'MARKET_DATA_INSTRUMENT_UNAVAILABLE'});
+      }
+      const body=await r.json();
+      if(body?.retCode!==0){
+        if(bybitInstrumentCache.length)return bybitInstrumentCache;
+        throw Object.assign(new Error(body?.retMsg||'Bybit perpetual instrument provider unavailable'),{code:'MARKET_DATA_INSTRUMENT_UNAVAILABLE'});
+      }
+      all.push(...(body?.result?.list||[]));
+      cursor=body?.result?.nextPageCursor||'';
+      if(!cursor)break;
+    }
+    if(cursor)throw Object.assign(new Error('Bybit returned an unexpectedly large perpetual instrument catalogue'),{code:'MARKET_DATA_INSTRUMENT_UNAVAILABLE'});
+    const instruments=normalizeInstrumentList(all
+      .filter(x=>x.status==='Trading'&&x.contractType==='LinearPerpetual'&&x.baseCoin&&x.quoteCoin)
+      .map(x=>({symbol:x.baseCoin+'/'+x.quoteCoin,providerSymbol:x.symbol,name:x.baseCoin+' / '+x.quoteCoin,type:'PERPETUAL'})))
+      .sort((a,b)=>a.symbol.localeCompare(b.symbol));
+    if(!instruments.length)throw Object.assign(new Error('Bybit returned no trading perpetual instruments'),{code:'MARKET_DATA_INSTRUMENT_UNAVAILABLE'});
+    bybitInstrumentCache=instruments;
+    bybitInstrumentCacheAt=Date.now();
+    return instruments;
+  })().finally(()=>{bybitInstrumentRefresh=null});
+  return bybitInstrumentRefresh;
+}
+
 async function fetchBybit(symbol,timeframe){const r=await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${encodeURIComponent(symbol)}&interval=${BYBIT_INTERVAL[timeframe]}&limit=300`,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error(`Bybit returned ${r.status}`);const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list)||!body.result.list.length)throw new Error(body?.retMsg||'Bybit returned no perpetual candles');return normalize(body.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]))}
 async function bybitPrice(symbol){
   const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol='+encodeURIComponent(symbol),{headers:{Accept:'application/json'}});
@@ -513,12 +558,9 @@ export default async function handler(req,res){if(req.method!=='GET')return json
         return json(res,200,{ok:true,instruments});
       }
       if(market==='perpetual'||market==='crypto'){
-        // Do not crawl Bybit's entire instrument catalogue here. The old implementation
-        // could make up to 100 paginated requests every time the Crypto tab opened,
-        // which is enough to trigger Bybit's public-IP rate limiter. Market Analysis
-        // only needs a curated set of liquid, commonly traded USDT perpetuals.
-        const bases=['BTC','ETH','SOL','XRP','BNB','DOGE','ADA','AVAX','LINK','MATIC','DOT','TRX','UNI','AAVE','ARB','OP','SUI','PEPE','LTC','BCH','NEAR','ATOM','FIL','INJ','TIA','SEI','APT','ETC','XLM','HBAR','ICP','TON','SHIB','WIF','BONK','RENDER','FET','TAO','ENA','ONDO','JUP','WLD','STX','IMX','MKR','CRV','LDO','SAND','MANA','GALA','RUNE','ALGO','VET','EGLD','KAS','AR','PYTH','JTO','STRK','ZK','ENA'];
-        const instruments=normalizeInstrumentList(bases.map(base=>({symbol:base+'/USDT',providerSymbol:base+'USDT',name:base+' / USDT',type:'PERPETUAL'})));
+        // Keep the full live Bybit perpetual catalogue in the picker, but cache the
+        // paginated discovery so opening the Crypto tab does not repeatedly hit Bybit.
+        const instruments=await getBybitPerpetualInstruments();
         return json(res,200,{ok:true,instruments});
       }
       return json(res,400,{error:'Instrument discovery is only available for Forex, Commodities, Indices, or Crypto'});
