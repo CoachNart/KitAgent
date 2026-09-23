@@ -382,15 +382,27 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
 export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});try{if(String(req.query?.action||'')==='header'){const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear',{headers:{Accept:'application/json'}});if(!r.ok)return json(res,502,{error:'Bybit ticker provider unavailable'});const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list))return json(res,502,{error:body?.retMsg||'Bybit ticker provider unavailable'});const wanted=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT']);const result=body.result.list.filter(x=>wanted.has(x.symbol)).map(x=>({symbol:x.symbol,lastPrice:x.lastPrice,price24hPcnt:x.price24hPcnt}));return json(res,200,{ok:true,result});} const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H');if(req.query?.action==='instruments'){
       if(market==='metals'){
         const query=String(req.query?.q||'').trim().toUpperCase();
-        {const brokerRows=await biquoteInstrumentSnapshot();const aliases=new Set(['XAUUSD','XAGUSD','US30','US500','NAS100','UK100','GER40','FRA40','JP225','HK50','USOIL','UKOIL']);const filteredBroker=brokerRows.filter(x=>{const n=String(x.name||'').toUpperCase().replace(/[^A-Z0-9]/g,'');return aliases.has(n)||[...aliases].some(k=>n.includes(k));}).map(x=>({symbol:String(x.name).replace(/[^A-Z0-9]/g,''),providerSymbol:x.name,name:x.displayName||x.name,type:'CFD'})).filter(x=>!query||`${x.symbol} ${x.name}`.toUpperCase().includes(query));return json(res,200,{ok:true,instruments:filteredBroker});} const filtered=query?CFD_INSTRUMENTS.filter(x=>`${x.symbol} ${x.name}`.includes(query)):CFD_INSTRUMENTS;
-        return json(res,200,{ok:true,instruments:filtered});
+        const brokerRows=await biquoteInstrumentSnapshot();
+        const aliasEntries=Object.entries(CFD_ALIASES);
+        const instruments=brokerRows.flatMap(x=>{
+          const provider=String(x.name||'').trim().toUpperCase();
+          const compactProvider=provider.replace(/[^A-Z0-9]/g,'');
+          const canonical=aliasEntries.find(([key,aliases])=>aliases.some(a=>String(a).toUpperCase()===provider||String(a).toUpperCase()===compactProvider))?.[0];
+          return canonical?[{symbol:canonical,providerSymbol:provider,name:x.displayName||x.name,type:'CFD'}]:[];
+        }).filter(x=>!query||`${x.symbol} ${x.name}`.toUpperCase().includes(query));
+        return json(res,200,{ok:true,instruments:normalizeInstrumentList(instruments)});
       }
       if(market==='forex'){
-        {const brokerRows=await biquoteInstrumentSnapshot();const instruments=brokerRows.filter(x=>/^[A-Z]{3}_[A-Z]{3}$/.test(String(x.name||''))).map(x=>({symbol:String(x.name).replace(/_/g,''),providerSymbol:x.name,name:x.displayName||String(x.name).replace('_',' / '),type:'FOREX'}));return json(res,200,{ok:true,instruments});} const queries=['USD','EUR','GBP','JPY','AUD','NZD','CAD','CHF','SEK','NOK','SGD','HKD','CNH','ZAR','MXN','TRY','PLN','HUF','THB','CZK','ILS','INR','BRL','CLP','COP'];
-        const responses=await Promise.all(queries.map(q=>fetch(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q+' forex')}&quotesCount=100&newsCount=0`,{headers:{'User-Agent':'KitAgent/1.0','Accept':'application/json'}}).then(async r=>r.ok?(await r.json()).quotes||[]:[]).catch(()=>[])));
-        const discovered=responses.flat().map(x=>String(x.symbol||'').toUpperCase()).filter(x=>/^[A-Z]{6}=X$/.test(x)).map(x=>({symbol:x.slice(0,6),providerSymbol:x,name:x.slice(0,3)+' / '+x.slice(3,6),type:'FOREX'}));
-        const fallback=FOREX_INSTRUMENTS.map(symbol=>({symbol,providerSymbol:`${symbol}=X`,name:`${symbol.slice(0,3)} / ${symbol.slice(3)}`,type:'FOREX'}));
-        return json(res,200,{ok:true,instruments:normalizeInstrumentList([...discovered,...fallback])});
+        const query=String(req.query?.q||'').trim().toUpperCase();
+        const brokerRows=await biquoteInstrumentSnapshot();
+        // Biquote's documented live symbols are canonical names such as EURUSD,
+        // not the Yahoo-style EUR_USD / EURUSD=X names used by the old picker.
+        const instruments=brokerRows
+          .map(x=>String(x.name||'').trim().toUpperCase())
+          .filter(x=>/^[A-Z]{6}$/.test(x)&&x.slice(0,3)!==x.slice(3))
+          .map(symbol=>({symbol,providerSymbol:symbol,name:`${symbol.slice(0,3)} / ${symbol.slice(3)}`,type:'FOREX'}))
+          .filter(x=>!query||`${x.symbol} ${x.name}`.includes(query));
+        return json(res,200,{ok:true,instruments:normalizeInstrumentList(instruments)});
       }
       if(market==='perpetual'||market==='crypto'){
         const r=await fetch('https://api.bybit.com/v5/market/instruments-info?category=linear&status=Trading&limit=1000',{headers:{Accept:'application/json'}});
