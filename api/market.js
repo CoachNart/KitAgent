@@ -207,7 +207,7 @@ function targetPool(c,bias,entry,a){
   const extremes=bias==='LONG'
     ?[Math.max(...window.map(x=>x.high)),...(previous.length?[Math.max(...previous.map(x=>x.high))]:[])]
     : [Math.min(...window.map(x=>x.low)),...(previous.length?[Math.min(...previous.map(x=>x.low))]:[])];
-  const maxDistance=Math.min(a*3.0,entry*.025);
+  const maxDistance=Math.min(a*4.5,entry*.04);
   return [...new Set([...structural,...extremes])]
     .filter(level=>Number.isFinite(level))
     .filter(level=>bias==='LONG'?level>entry&&level-entry<=maxDistance:level<entry&&entry-level<=maxDistance)
@@ -235,7 +235,7 @@ function targetBeforeLiquidity(c,bias,level,entry,a){
   const buffer=liquidityTargetBuffer(c,bias,level,entry,a);
   return bias==='LONG'?level-buffer:level+buffer;
 }
-function evaluateTrade(c,bias,entry,a,minRR=1.8){
+function evaluateTrade(c,bias,entry,a,minRR=SETUP_MIN_RR){
   const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop),minimumRisk=Math.max(a*.65,entry*.001);
   if(!Number.isFinite(entry)||entry<=0||!Number.isFinite(stop))return null;
   if((bias==='LONG'&&stop>=entry)||(bias==='SHORT'&&stop<=entry))return null;
@@ -251,7 +251,7 @@ function evaluateTrade(c,bias,entry,a,minRR=1.8){
     const target=targetBeforeLiquidity(c,bias,level,entry,a);
     const reward=Math.abs(target-entry);
     return {level,target,reward,rr:reward/risk};
-  }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&Math.abs(x.target-entry)<=Math.min(a*3.0,entry*.025));
+  }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&Math.abs(x.target-entry)<=Math.min(a*4.5,entry*.04));
   if(!candidates.length)return null;
   const chosen=candidates[0];
 
@@ -421,7 +421,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
   const evidence=[],failures=[]; let trade=null,orderType='NO_SETUP',entry=null,reason='';
   const validTrade=(t,tradeBias=bias,marketPrice=livePrice,tradeOrderType='')=>{
-    if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<1.8)return false;
+    if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<SETUP_MIN_RR)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
     if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)){
       const maxPendingDistance=Math.min(a*2.0,marketPrice*.008);
@@ -433,9 +433,9 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     if(tradeOrderType==='MARKET'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice)))return false;
     return true;
   };
-  const chooseLimit=items=>{for(const x of items||[]){const t=evaluateTrade(current,bias,x.entry,a,1.8);if(validTrade(t,bias,livePrice,'LIMIT'))return {trade:t,entry:x.entry,zone:x.zone||null};}return null;};
-  const chooseLimitForBias=(items,tradeBias,marketPrice)=>{for(const x of items||[]){const t=evaluateTrade(current,tradeBias,x.mid,a,1.8);if(validTrade(t,tradeBias,marketPrice,'LIMIT'))return {trade:t,entry:x.mid,zone:x};}return null;};
-  const chooseMarketFromZones=(items,tradeBias=bias)=>{for(const z of items||[]){if(!zoneTouchesCandle(current,z)||!zoneFreshBeforeCurrent(current,z,tradeBias))continue;const t=evaluateTrade(current,tradeBias,livePrice,a,1.8);if(validTrade(t,tradeBias,livePrice,'MARKET'))return {trade:t,entry:livePrice,zone:z};}return null;};
+  const chooseLimit=items=>{for(const x of items||[]){const t=evaluateTrade(current,bias,x.entry,a,SETUP_MIN_RR);if(validTrade(t,bias,livePrice,'LIMIT'))return {trade:t,entry:x.entry,zone:x.zone||null};}return null;};
+  const chooseLimitForBias=(items,tradeBias,marketPrice)=>{for(const x of items||[]){const t=evaluateTrade(current,tradeBias,x.mid,a,SETUP_MIN_RR);if(validTrade(t,tradeBias,marketPrice,'LIMIT'))return {trade:t,entry:x.mid,zone:x};}return null;};
+  const chooseMarketFromZones=(items,tradeBias=bias)=>{for(const z of items||[]){if(!zoneTouchesCandle(current,z)||!zoneFreshBeforeCurrent(current,z,tradeBias))continue;const t=evaluateTrade(current,tradeBias,livePrice,a,SETUP_MIN_RR);if(validTrade(t,tradeBias,livePrice,'MARKET'))return {trade:t,entry:livePrice,zone:z};}return null;};
   if(bias==='WAIT'&&key!=='LIQUIDITY_REVERSAL'&&key!=='CRT'){
     reason='No decisive higher-timeframe direction is present for this strategy.';
     evidence.push('Higher-timeframe structure is neutral.');
@@ -485,11 +485,11 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     // distance from current price.
     const retested=Boolean(bos&&fresh&&current.slice(bos.breakIndex+1).some(x=>bias==='LONG'?x.low<=bos.level:x.high>=bos.level));
     const breakoutEntry=bos&&Number.isFinite(bos.level)?bos.level:null;
-    const breakoutTrade=retested&&breakoutEntry!=null?evaluateTrade(current,bias,breakoutEntry,a,1.8):null;
+    const breakoutTrade=retested&&breakoutEntry!=null?evaluateTrade(current,bias,breakoutEntry,a,SETUP_MIN_RR):null;
     if(bos&&fresh&&closeThrough&&decisive&&stillAccepted&&retested&&breakoutTrade){
       if(validTrade(breakoutTrade,bias,livePrice,'MARKET')){
         const marketTrade={...breakoutTrade,entry:livePrice};
-        const revalued=evaluateTrade(current,bias,livePrice,a,1.8);
+        const revalued=evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR);
         if(validTrade(revalued,bias,livePrice,'MARKET')){trade=revalued;entry=livePrice;orderType='MARKET';}
       }
       if(!trade&&validTrade(breakoutTrade,bias,livePrice,'LIMIT')){
@@ -529,8 +529,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const confirmed=Boolean(level&&touched&&(formation||bos||engulf||reject));
     const levelEntry=level?.level;
     if(confirmed&&Number.isFinite(levelEntry)){
-      const t=evaluateTrade(current,bias,levelEntry,a,1.8);
-      if(t&&validTrade(t,bias,livePrice,'MARKET')){const mt=evaluateTrade(current,bias,livePrice,a,1.8);if(mt&&validTrade(mt,bias,livePrice,'MARKET')){trade=mt;entry=livePrice;orderType='MARKET';}} else if(t&&validTrade(t,bias,livePrice,'LIMIT')){trade=t;entry=levelEntry;orderType='LIMIT';}
+      const t=evaluateTrade(current,bias,levelEntry,a,SETUP_MIN_RR);
+      if(t&&validTrade(t,bias,livePrice,'MARKET')){const mt=evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR);if(mt&&validTrade(mt,bias,livePrice,'MARKET')){trade=mt;entry=livePrice;orderType='MARKET';}} else if(t&&validTrade(t,bias,livePrice,'LIMIT')){trade=t;entry=levelEntry;orderType='LIMIT';}
     }
     reason=trade?'A fresh MSNR level has been reached and price has confirmed the reaction.':'Waiting for a fresh support/resistance level, reaction and lower-timeframe confirmation.';
     evidence.push(level?level.type+' at '+roundPrice(level.level)+'.':'No fresh MSNR level.',formation||'No V/A formation.',touched?'Level touched.':'Level not yet reached.',confirmed?'Reaction confirmation present.':'No valid reaction confirmation.');
@@ -545,8 +545,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const touched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
     const response=Boolean(engulf||reject);
     if(level&&touched&&response&&Number.isFinite(level.level)){
-      const t=evaluateTrade(current,bias,level.level,a,1.8);
-      if(t&&validTrade(t,bias,livePrice,'MARKET')){const mt=evaluateTrade(current,bias,livePrice,a,1.8);if(mt&&validTrade(mt,bias,livePrice,'MARKET')){trade=mt;entry=livePrice;orderType='MARKET';}} else if(t&&validTrade(t,bias,livePrice,'LIMIT')){trade=t;entry=level.level;orderType='LIMIT';}
+      const t=evaluateTrade(current,bias,level.level,a,SETUP_MIN_RR);
+      if(t&&validTrade(t,bias,livePrice,'MARKET')){const mt=evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR);if(mt&&validTrade(mt,bias,livePrice,'MARKET')){trade=mt;entry=livePrice;orderType='MARKET';}} else if(t&&validTrade(t,bias,livePrice,'LIMIT')){trade=t;entry=level.level;orderType='LIMIT';}
     }
     reason=trade?'Price interacted with a structurally relevant swing and produced directional candle confirmation.':'Waiting for price to reach a relevant structural swing and print rejection/engulfing confirmation.';
     evidence.push(level?level.type+' at '+roundPrice(level.level)+'.':'No directional swing level.',touched?'Swing level interacted with current candle.':'No swing interaction.',engulf?'Engulfing confirmation.':reject?'Rejection confirmation.':'No candle confirmation.');
@@ -564,9 +564,9 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     // displacement, wait for price to retest that level instead of chasing the quote.
     const retest=Boolean(reversalSweep&&current.slice(reversalSweep.index+1).some(x=>reversalBias==='LONG'?x.low<=reversalSweep.level:x.high>=reversalSweep.level));
     const reversalEntry=reversalSweep?.level;
-    const reversalTrade=structureAligned&&reversalSweep&&reclaim&&disp&&bosAfterSweep&&retest&&Number.isFinite(reversalEntry)?evaluateTrade(current,reversalBias,reversalEntry,a,1.8):null;
+    const reversalTrade=structureAligned&&reversalSweep&&reclaim&&disp&&bosAfterSweep&&retest&&Number.isFinite(reversalEntry)?evaluateTrade(current,reversalBias,reversalEntry,a,SETUP_MIN_RR):null;
     if(structureAligned&&reversalSweep&&reclaim&&disp&&bosAfterSweep&&retest&&reversalTrade){
-      const mt=evaluateTrade(current,reversalBias,livePrice,a,1.8);
+      const mt=evaluateTrade(current,reversalBias,livePrice,a,SETUP_MIN_RR);
       if(mt&&validTrade(mt,reversalBias,livePrice,'MARKET')){trade=mt;entry=livePrice;orderType='MARKET';bias=reversalBias;}
       else if(validTrade(reversalTrade,reversalBias,livePrice,'LIMIT')){trade=reversalTrade;entry=reversalEntry;orderType='LIMIT';bias=reversalBias;}
     }
@@ -588,7 +588,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     let crtTrade=null;
     if(confirmed){
       const crtEntry=mid;
-      const t=evaluateTrade(current,signal,crtEntry,a,1.8);
+      const t=evaluateTrade(current,signal,crtEntry,a,SETUP_MIN_RR);
       if(t&&validTrade(t,signal,livePrice,'LIMIT')){
         // CRT executes at the range midpoint, while the swept extreme remains
         // the structural invalidation reference.
@@ -598,7 +598,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
         const target=targetBeforeLiquidity(current,signal,signal==='LONG'?rangeHigh:rangeLow,crtEntry,a);
         const targetLiquidity=signal==='LONG'?rangeHigh:rangeLow;
         const rr=Math.abs(target-crtEntry)/risk;
-        if(risk>0&&Number.isFinite(rr)&&rr>=1.8){
+        if(risk>0&&Number.isFinite(rr)&&rr>=SETUP_MIN_RR){
           crtTrade={...t,entry:crtEntry,stop:crtStop,target,targetLiquidity,rr,risk};
         }
       }
