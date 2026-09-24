@@ -4,7 +4,7 @@ import { auth } from './firebase.js';
 import './affiliate-panel.css';
 
 export default function AffiliatePanel(){
- const [data,setData]=useState(null),[busy,setBusy]=useState(true),[message,setMessage]=useState(''),[code,setCode]=useState(''),[wallet,setWallet]=useState(''),[savingWallet,setSavingWallet]=useState(false);
+ const [data,setData]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[code,setCode]=useState(''),[wallet,setWallet]=useState(''),[savingWallet,setSavingWallet]=useState(false);
  const load=async()=>{if(!auth?.currentUser)return;setBusy(true);setMessage('');try{const token=await auth.currentUser.getIdToken();const r=await fetch('/api/affiliate',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({action:'dashboard'})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Affiliate data could not be loaded.');setData(body);setCode(body.referralCode||'');setWallet(body.payoutWallet||'')}catch(e){setMessage(e?.message||'Affiliate data could not be loaded.')}finally{setBusy(false)}};
  useEffect(()=>{load()},[]);
  const register=async()=>{if(!auth?.currentUser)return;setBusy(true);setMessage('');try{const token=await auth.currentUser.getIdToken();const r=await fetch('/api/affiliate',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({action:'register',referralCode:code})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Affiliate registration failed.');setData(body);setCode(body.referralCode||'')}catch(e){setMessage(e?.message||'Affiliate registration failed.')}finally{setBusy(false)}};
