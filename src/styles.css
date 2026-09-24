@@ -127,22 +127,3 @@ body{
     margin-bottom:0!important;
   }
 }
-
-
-/* NATIVE APP RESPONSE MODE
-   Navigation and content should render immediately. Avoid web-style entrance,
-   hover, pulse, skeleton and transition effects across the app. */
-*,
-*::before,
-*::after {
-  animation-delay: 0s !important;
-  animation-duration: 0s !important;
-  animation-iteration-count: 1 !important;
-  transition: none !important;
-  scroll-behavior: auto !important;
-}
-*:hover,
-*:focus,
-*:active {
-  transform: none !important;
-}
