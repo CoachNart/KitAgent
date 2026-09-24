@@ -6,7 +6,7 @@ import { db } from './firebase.js';
 const TRIAL_MS=3*24*60*60*1000;
 export default function AccessGate({user,children}){
  const [profile,setProfile]=useState(null),[loaded,setLoaded]=useState(false),[now,setNow]=useState(Date.now());
- useEffect(()=>{if(!db||!user?.uid){setLoaded(true);return undefined}return onSnapshot(doc(db,'users',user.uid),s=>{setProfile(s.exists()?s.data():null);setLoaded(true)},()=>setLoaded(true))},[user?.uid]);
+ useEffect(()=>{if(!db||!user?.uid){setLoaded(true);return undefined}return onSnapshot(doc(db,'users',user.uid),{includeMetadataChanges:true},s=>{setProfile(s.exists()?s.data():null);if(!s.metadata.fromCache)setLoaded(true)},()=>setLoaded(true))},[user?.uid]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
  if(!loaded||!profile)return children;
  const plan=String(profile.plan||profile.subscription?.plan||'free').toLowerCase();
