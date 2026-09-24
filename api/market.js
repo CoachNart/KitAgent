@@ -173,6 +173,24 @@ function entryZones(c,bias,current,a,maxAge=24){
     return ahead&&age<=maxAge&&distance<=maxDistance&&zoneFreshBeforeCurrent(c,z,bias);
   }).sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
 }
+function structuralEntryZones(c,bias,current,a,maxAge=40){
+  const st=marketStructure(c),swings=bias==='LONG'?st.lows:st.highs,limit=Math.min(a*3.0,current*.02),out=[];
+  for(const s of swings.slice().reverse()){
+    const i=Number(s.i);
+    if(!Number.isFinite(i)||i>=c.length-2||c.length-1-i>maxAge)continue;
+    const candle=c[i];
+    if(!candle)continue;
+    const mid=(Number(candle.high)+Number(candle.low))/2;
+    const ahead=bias==='LONG'?mid<current:mid>current;
+    const distance=Math.abs(current-mid);
+    if(!ahead||distance>limit)continue;
+    const zone={low:Number(candle.low),high:Number(candle.high),mid,index:i,type:bias==='LONG'?'STRUCTURAL DEMAND':'STRUCTURAL SUPPLY'};
+    if(!Number.isFinite(zone.low)||!Number.isFinite(zone.high)||zone.low>=zone.high)continue;
+    if(!zoneFreshBeforeCurrent(c,zone,bias))continue;
+    out.push(zone);
+  }
+  return out.sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
+}
 function liquidityCandidates(c,bias,entry,a){
   const st=marketStructure(c),source=bias==='LONG'?st.highs:st.lows;
   const tolerance=Math.max(a*.18,entry*.0006),groups=[];
@@ -612,6 +630,35 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     if(crtTrade&&validTrade(crtTrade,signal,livePrice,'LIMIT')){trade=crtTrade;entry=crtTrade.entry;orderType='LIMIT';bias=signal;}
     reason=trade?'A higher-timeframe candle range was swept and reclaimed with price targeting the opposite range extreme.':(signal&&higherBias!==signal)?'The CRT sweep conflicts with higher-timeframe market structure. No counter-structure trade is issued.':'Waiting for a completed candle range to be swept, reclaimed through its midpoint and leave sufficient room.';
     evidence.push(ref?'CRT range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No higher-timeframe reference range.',signal==='LONG'?'Sell-side range swept and reclaimed.':signal==='SHORT'?'Buy-side range swept and reclaimed.':'No qualifying sweep/reclaim.',confirmed?'Range midpoint reclaimed.':'No midpoint reclaim.');
+  }
+  // Strategy-preserving recovery: if the full pattern did not produce a trade,
+  // give that same strategy one additional execution path using its own directional
+  // evidence plus a real structural retracement zone. This does not manufacture a
+  // signal, change the RR floor, or replace the strategy model.
+  if(!trade){
+    const fallbackBias=higherBias;
+    const structuralZones=fallbackBias==='LONG'||fallbackBias==='SHORT'
+      ?[...entryZones(current,fallbackBias,livePrice,a,72),...structuralEntryZones(current,fallbackBias,livePrice,a,48)]
+      :[];
+    let qualified=false;
+    if(key==='TOP_DOWN')qualified=selectedBias===fallbackBias||selectedBias==='WAIT';
+    else if(key==='PULLBACK')qualified=Boolean(structureBreak(structure,fallbackBias,80,45)||displacement(current,fallbackBias));
+    else if(key==='BREAKOUT')qualified=Boolean(structureBreak(current,fallbackBias,60,24));
+    else if(key==='SMC')qualified=Boolean(liquiditySweep(current,fallbackBias,30,18)||structureBreak(current,fallbackBias,60,24));
+    else if(key==='MSNR')qualified=Boolean(msnrLevels(biasCandles,fallbackBias).length);
+    else if(key==='PRICE_ACTION')qualified=Boolean(structureBreak(current,fallbackBias,40,20)||rejectionCandle(current,fallbackBias)||candleEngulfing(current,fallbackBias));
+    else if(key==='LIQUIDITY_REVERSAL')qualified=Boolean(liquiditySweep(current,fallbackBias,30,12));
+    else if(key==='CRT')qualified=false;
+    if(qualified&&structuralZones.length){
+      const limitCandidate=chooseLimitForBias(structuralZones,fallbackBias,livePrice);
+      const marketCandidate=chooseMarketFromZones(structuralZones,fallbackBias);
+      const chosen=marketCandidate||limitCandidate;
+      if(chosen){
+        trade=chosen.trade;entry=chosen.entry;orderType=marketCandidate?'MARKET':'LIMIT';bias=fallbackBias;
+        reason=info.name+' conditions support a structural execution zone with sufficient room for the risk model.';
+        evidence.push('Structural execution recovery: '+chosen.zone?.type+'.');
+      }
+    }
   }
   const confidence=trade?Math.min(95,Math.max(38,Math.round(
     50+
