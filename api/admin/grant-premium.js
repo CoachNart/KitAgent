@@ -71,6 +71,66 @@ export default async function handler(req,res){
       return json(res,200,{admin:true,admins:rows});
     }
 
+    if(req.method==='GET' && String(req.query?.q||'')==='__device_duplicates__'){
+      const bindingsSnap=await db.collection('deviceBindings').limit(1000).get();
+      const bindings=bindingsSnap.docs.map(doc=>({id:doc.id,data:doc.data()||{}})).filter(x=>x.data.uid&&x.data.osFamily&&x.data.screenWidth&&x.data.screenHeight);
+      const liveUids=new Set();
+      let pageToken;
+      do{
+        const page=await a.auth().listUsers(1000,pageToken);
+        for(const user of page.users)liveUids.add(user.uid);
+        pageToken=page.pageToken;
+      }while(pageToken);
+      const groups=new Map();
+      for(const item of bindings){
+        const os=String(item.data.osFamily||'');
+        if(!groups.has(os))groups.set(os,[]);
+        groups.get(os).push(item);
+      }
+      const matches=[];
+      const score=(a,b)=>{
+        return (a.osFamily===b.osFamily?3:0)
+          +(a.timezone&&a.timezone===b.timezone?2:0)
+          +(Number(a.hardwareConcurrency)===Number(b.hardwareConcurrency)&&Number(a.hardwareConcurrency)?2:0)
+          +(Number(a.maxTouchPoints)===Number(b.maxTouchPoints)?2:0)
+          +(((Number(a.screenWidth)===Number(b.screenWidth)&&Number(a.screenHeight)===Number(b.screenHeight))||(Number(a.screenWidth)===Number(b.screenHeight)&&Number(a.screenHeight)===Number(b.screenWidth)))?3:0)
+          +(Number(a.availWidth)===Number(b.availWidth)&&Number(a.availHeight)===Number(b.availHeight)&&Number(a.availWidth)?1:0)
+          +(Math.abs(Number(a.pixelRatio)-Number(b.pixelRatio))<0.01&&Number(a.pixelRatio)?2:0)
+          +(Number(a.colorDepth)===Number(b.colorDepth)&&Number(a.colorDepth)?1:0)
+          +(Number(a.deviceMemory)===Number(b.deviceMemory)&&Number(a.deviceMemory)?1:0);
+      };
+      for(const list of groups.values()){
+        for(let i=0;i<list.length;i++){
+          for(let j=i+1;j<list.length;j++){
+            const left=list[i],right=list[j],a=left.data,b=right.data;
+            const leftUid=String(a.uid),rightUid=String(b.uid);
+            if(!leftUid||!rightUid||leftUid===rightUid||!liveUids.has(leftUid)||!liveUids.has(rightUid))continue;
+            const matchScore=score(a,b);
+            if(matchScore<13)continue;
+            matches.push({score:matchScore,deviceIds:[left.id,right.id],uids:[leftUid,rightUid]});
+          }
+        }
+      }
+      const unique=new Map();
+      for(const match of matches){
+        const key=[...match.uids].sort().join('|');
+        const previous=unique.get(key);
+        if(!previous||match.score>previous.score)unique.set(key,match);
+      }
+      const top=[...unique.values()].sort((a,b)=>b.score-a.score).slice(0,100);
+      const userCache=new Map();
+      for(const match of top){
+        for(const uid of match.uids){
+          if(userCache.has(uid))continue;
+          try{
+            const user=await a.auth().getUser(uid);
+            userCache.set(uid,{uid,email:user.email||'',displayName:user.displayName||''});
+          }catch{}
+        }
+      }
+      return json(res,200,{admin:true,matches:top.map(match=>({...match,users:match.uids.map(uid=>userCache.get(uid)||{uid})}))});
+    }
+
     if(req.method==='GET'){
       const q=String(req.query?.q||'').trim().toLowerCase();
       const users=[];
