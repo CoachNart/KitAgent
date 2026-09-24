@@ -28,8 +28,8 @@ export default async function handler(req,res){
     const a=getAdmin();const h=req.headers.authorization||'';const token=h.startsWith('Bearer ')?h.slice(7):'';
     if(!token)return json(res,401,{error:'Authentication required.',code:'AUTH_TOKEN_MISSING'});
     let decoded;try{decoded=await a.auth().verifyIdToken(token)}catch{return json(res,401,{error:'Authentication token could not be verified.',code:'AUTH_TOKEN_INVALID'})}
-    const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const deviceId=body.deviceId;
-    if(!/^[a-f0-9]{64}$/.test(deviceId||''))return json(res,400,{error:'Invalid device binding.',code:'DEVICE_ID_INVALID'});
+    const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});const deviceId=body.deviceId;const deviceFingerprint=String(body.deviceFingerprint||'').trim().toLowerCase();
+    if(!/^[a-f0-9]{64}$/.test(deviceId||'')||!/^[a-f0-9]{64}$/.test(deviceFingerprint))return json(res,400,{error:'Invalid device binding.',code:'DEVICE_ID_INVALID'});
     const db=a.firestore(),deviceRef=db.collection('deviceBindings').doc(deviceId),userRef=db.collection('users').doc(decoded.uid);
 
     const existingDevice=await deviceRef.get();
@@ -50,9 +50,9 @@ export default async function handler(req,res){
       if(device?.uid&&device.uid!==decoded.uid&&!stale){const e=new Error('DEVICE_ALREADY_REGISTERED');e.code=e.message;throw e}
       if(user?.securitySettings?.deviceBindingId&&user.securitySettings.deviceBindingId!==deviceId){const e=new Error('ACCOUNT_ALREADY_BOUND');e.code=e.message;throw e}
 
-      const deviceData={uid:decoded.uid,lastSeenAt:a.firestore.FieldValue.serverTimestamp(),version:2};
+      const deviceData={uid:decoded.uid,deviceFingerprint,lastSeenAt:a.firestore.FieldValue.serverTimestamp(),version:3};
       if(!deviceSnap.exists||stale)tx.set(deviceRef,{...deviceData,createdAt:a.firestore.FieldValue.serverTimestamp()},{merge:true});
-      else tx.update(deviceRef,{lastSeenAt:deviceData.lastSeenAt});
+      else tx.update(deviceRef,{lastSeenAt:deviceData.lastSeenAt,deviceFingerprint});
 
       if(userSnap.exists){
         const security={...(user.securitySettings||{}),deviceBindingId:deviceId};
