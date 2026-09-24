@@ -127,3 +127,31 @@ body{
     margin-bottom:0!important;
   }
 }
+
+
+/* Premium native motion layer — restrained, purposeful, no gimmicks */
+@keyframes kitPageEnter{from{opacity:.0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes kitSurfaceIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.kit-main>.content>.page-wrap,
+.kit-main>.content>.chart-terminal,
+.kit-main>.content>.live-market{
+  animation:kitPageEnter .22s cubic-bezier(.2,.75,.25,1) both;
+  will-change:opacity,transform;
+}
+.kit-main button:not(.kit-nav-item),
+.kit-main .glance-card,
+.kit-main .insight-stat,
+.kit-main .signal-feed-row,
+.kit-main .affiliate-account-card,
+.kit-main .support-chat{
+  transition:transform .16s ease,opacity .16s ease,border-color .16s ease,background-color .16s ease,box-shadow .16s ease;
+}
+.kit-main button:not(.kit-nav-item):active{transform:scale(.985)}
+.chart-actions{align-items:center;gap:5px}
+.chart-actions button{width:29px!important;height:29px!important;padding:0!important;justify-content:center!important;font-size:0!important}
+.chart-actions button svg{width:14px;height:14px}
+.chart-actions button:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(0,0,0,.18)}
+@media(prefers-reduced-motion:reduce){
+  .kit-main>.content>.page-wrap,.kit-main>.content>.chart-terminal,.kit-main>.content>.live-market{animation:none}
+  .kit-main button,.kit-main .glance-card,.kit-main .insight-stat,.kit-main .signal-feed-row,.kit-main .affiliate-account-card,.kit-main .support-chat{transition:none}
+}
