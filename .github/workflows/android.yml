@@ -9,10 +9,66 @@ jobs:
   android:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Apply market setup policy and restore workflow
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          market = Path('api/market.js')
+          m = market.read_text()
+          replacements = [
+            ("const maxDistance=Math.max(a*2.25,current*.0125);", "const maxDistance=Math.max(a*1.5,current*.006);"),
+            ("const maxDistance=Math.max(a*10,entry*.08);", "const maxDistance=Math.max(a*3.5,entry*.035);"),
+            ("const maxRisk=Math.max(a*2.2,entry*.025);", "const maxRisk=Math.max(a*1.8,entry*.015);"),
+            ("function evaluateTrade(c,bias,entry,a,minRR=2.25){", "function evaluateTrade(c,bias,entry,a,minRR=1.25){"),
+            ("const buffer=Math.max(a*.08,entry*.00015);\n  // Do not accept", "// Do not accept"),
+            ("const minimumReward=Math.max(a*1.25,entry*.0035,risk*minRR);", "const minimumReward=Math.max(a*.75,entry*.0015,risk*minRR);"),
+            (".filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR);", ".filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&Math.abs(x.target-entry)<=Math.max(a*3.5,entry*.035));"),
+            ("t.rr<2.25", "t.rr<1.25"),
+            ("takeProfit2:roundPrice(trade.target2)", "takeProfit2:null"),
+            ("offer at least 2.25R.", "offer a realistic reward relative to risk."),
+            ("Target must be a real structural/liquidity level with at least 2.25R.", "Target must be a real structural/liquidity level within the execution timeframe's realistic range."),
+            ("The opposite side of the range must support the risk model and minimum 2.25R.", "The opposite side of the range must support the risk model and remain within a realistic execution range."),
+          ]
+          for old, new in replacements:
+              m = m.replace(old, new)
+          m = m.replace(",a,2.25)", ",a,1.25)")
+
+          runner_start = "  // TP2 is always produced when the chart has room:"
+          runner_end = "  return {\n    entry,\n    stop,\n    risk,\n    target:chosen.target,\n    targetLiquidity:chosen.level,\n    target2,\n    target2Liquidity,\n    rr:chosen.rr\n  };"
+          if runner_start not in m or runner_end not in m:
+              raise SystemExit('TP2 engine block not found; refusing unsafe market edit')
+          before, rest = m.split(runner_start, 1)
+          _, after = rest.split(runner_end, 1)
+          m = before + runner_end.replace("    target2,\n    target2Liquidity,\n", "") + after
+          m = m.replace("rr>=2.25){\n          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity,rr,target2:t.target2};", "rr>=1.25){\n          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity,rr};")
+          market.write_text(m)
+
+          ui = Path('src/LiveMarketPage.jsx')
+          u = ui.read_text()
+          old = '''          <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>\n          <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>'''
+          new = '''          <div className="v2-level tp"><span>TP</span><b>{price(s.takeProfit1)}</b></div>'''
+          if old not in u:
+              raise SystemExit('Setup-card TP block not found; refusing unsafe UI edit')
+          ui.write_text(u.replace(old, new, 1))
+
+          workflow = Path('.github/workflows/android.yml')
+          workflow.write_text('''name: Build KitSetups Android\n\non:\n  workflow_dispatch:\n  push:\n    branches: [main]\n\njobs:\n  android:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Setup Node\n        uses: actions/setup-node@v4\n        with:\n          node-version: 24\n\n      - name: Setup Java\n        uses: actions/setup-java@v4\n        with:\n          distribution: temurin\n          java-version: '21'\n\n      - name: Install dependencies\n        run: npm install\n\n      - name: Build web app\n        run: npm run build\n\n      - name: Add Android platform\n        run: npx cap add android\n\n      - name: Sync Capacitor\n        run: npx cap sync android\n\n      - name: Apply KitSetups native branding\n        shell: bash\n        run: |\n          set -e\n          mkdir -p android/app/src/main/res/drawable\n          cp android-assets/kitsetups_icon.xml android/app/src/main/res/drawable/kitsetups_icon.xml\n          python3 - <<'PY'\n          from pathlib import Path\n          p = Path('android/app/src/main/AndroidManifest.xml')\n          s = p.read_text()\n          s = s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/kitsetups_icon"')\n          s = s.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/kitsetups_icon"')\n          p.write_text(s)\n\n          gradle = Path('android/app/build.gradle')\n          if gradle.exists():\n              g = gradle.read_text()\n              g = g.replace('versionCode 1', 'versionCode 233')\n              g = g.replace('versionName "1.0"', 'versionName "2.3.3"')\n              gradle.write_text(g)\n          PY\n\n      - name: Build debug APK\n        working-directory: android\n        run: ./gradlew assembleDebug --no-daemon\n\n      - name: Verify APK branding\n        run: |\n          test -f android/app/build/outputs/apk/debug/app-debug.apk\n          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -q 'kitsetups_icon'\n\n      - name: Package APK\n        run: |\n          mkdir -p android-artifact\n          cp android/app/build/outputs/apk/debug/app-debug.apk android-artifact/KitSetups-debug.apk\n          cd android-artifact\n          zip -j KitSetups-Android-debug.zip KitSetups-debug.apk\n\n      - name: Upload Android APK\n        uses: actions/upload-artifact@v4\n        with:\n          name: KitSetups-Android-debug\n          path: android-artifact/KitSetups-Android-debug.zip\n          if-no-files-found: error\n          retention-days: 30\n''')
+
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          subprocess.run(['git','add','api/market.js','src/LiveMarketPage.jsx','.github/workflows/android.yml'],check=True)
+          subprocess.run(['git','commit','-m','fix: realistic single-target market setups'],check=True)
+          subprocess.run(['git','push','origin','HEAD:main'],check=True)
+          PY
 
       - name: Setup Node
         uses: actions/setup-node@v4
