@@ -122,8 +122,10 @@ export default async function handler(req,res){
     }
 
     if(action==='hard-reset'){
-      const uid=String(body.uid||'').trim();
-      if(!uid)return json(res,400,{error:'Select a registered user.'});
+      let uid=String(body.uid||'').trim();
+      const requestedEmail=String(body.email||'').trim().toLowerCase();
+      if(!uid&&requestedEmail){try{uid=(await a.auth().getUserByEmail(requestedEmail)).uid}catch{return json(res,404,{error:'No Firebase account exists for that email.'})}}
+      if(!uid)return json(res,400,{error:'Select a registered user or provide an email address.'});
       if(uid===decoded.uid)return json(res,400,{error:'You cannot hard reset the admin account currently in use.'});
 
       let recipient;
