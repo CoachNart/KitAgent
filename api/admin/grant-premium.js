@@ -93,6 +93,68 @@ export default async function handler(req,res){
     if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
 
     const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
+    const action=String(body.action||'grant-premium').trim().toLowerCase();
+
+    if(action==='hard-reset'){
+      const uid=String(body.uid||'').trim();
+      if(!uid)return json(res,400,{error:'Select a registered user.'});
+      if(uid===decoded.uid)return json(res,400,{error:'You cannot hard reset the admin account currently in use.'});
+
+      let recipient;
+      try{recipient=await a.auth().getUser(uid)}catch{return json(res,404,{error:'Registered user not found.'})}
+
+      const userRef=db.collection('users').doc(uid);
+      const profileSnap=await userRef.get();
+      const profile=profileSnap.exists?(profileSnap.data()||{}):{};
+
+      const deviceIds=new Set();
+      if(typeof profile.deviceBindingId==='string')deviceIds.add(profile.deviceBindingId);
+      if(typeof profile.securitySettings?.deviceBindingId==='string')deviceIds.add(profile.securitySettings.deviceBindingId);
+      const deviceQuery=await db.collection('deviceBindings').where('uid','==',uid).get();
+      for(const snap of deviceQuery.docs)deviceIds.add(snap.id);
+      const deviceRefs=[...deviceIds].map(id=>db.collection('deviceBindings').doc(id));
+
+      const lockRefs=[];
+      const lockQueries=await Promise.all([
+        db.collection('accountIdentityLocks').where('uid','==',uid).get(),
+        db.collection('signupNetworkLocks').where('uid','==',uid).get(),
+        db.collection('referrals').where('referredUserId','==',uid).get(),
+        db.collection('premiumGifts').where('recipientUid','==',uid).get(),
+        db.collection('supportChats').where('userId','==',uid).get()
+      ]);
+      for(const snap of lockQueries)for(const doc of snap.docs)lockRefs.push(doc.ref);
+
+      const email=String(recipient.email||profile.email||'').trim().toLowerCase();
+      if(email){
+        const parts=email.split('@'),local=parts[0],domain=parts[1];
+        const canonical=local&&domain&&['gmail.com','googlemail.com'].includes(domain)
+          ? local.split('+')[0].replace(/\\./g,'')+'@gmail.com'
+          : email;
+        lockRefs.push(db.collection('accountIdentityLocks').doc(encodeURIComponent(canonical)));
+      }
+      const ip=String(profile.lastSeenIp||'').trim();
+      if(ip){
+        const hash=crypto.createHash('sha256').update('kitsetups-signup-v2:'+ip).digest('hex');
+        lockRefs.push(db.collection('signupNetworkLocks').doc(hash));
+      }
+
+      const uniqueRefs=[...new Map([...deviceRefs,...lockRefs].map(ref=>[ref.path,ref])).values()];
+      for(const ref of uniqueRefs)await ref.delete().catch(()=>{});
+
+      await db.recursiveDelete(userRef);
+      await a.auth().deleteUser(uid);
+
+      return json(res,200,{
+        reset:true,
+        uid,
+        email:recipient.email||'',
+        displayName:recipient.displayName||'',
+        deletedCollections:true,
+        deviceBindingsRemoved:deviceRefs.length,
+        message:'Account, device bindings, signup locks, and associated KitSetups data were permanently removed.'
+      });
+    }
+
     const uid=String(body.uid||'').trim();
     const days=Number(body.days);
     if(!uid)return json(res,400,{error:'Select a registered user.'});
