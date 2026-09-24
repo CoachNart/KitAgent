@@ -1,0 +1,45 @@
+name: repair-market-engine
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/repair-market-engine.yml'
+      - 'api/market.js'
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair strategy gates
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('api/market.js')
+          s=p.read_text()
+          original=s
+          old="""  let bias=(key==='LIQUIDITY_REVERSAL'||key==='CRT')?'WAIT':higherBias;\n  const quoteIsUsable=Boolean(liveQuote?.tradeable);"""
+          new="""  let bias=(key==='LIQUIDITY_REVERSAL'||key==='CRT')?'WAIT':higherBias;\n  // HTF direction remains the preferred filter, but a neutral HTF must not make\n  // lower-timeframe strategies permanently dead. Fall back to confirmed local structure.\n  if(bias==='WAIT'&&!['TOP_DOWN'].includes(key)){\n    bias=selectedBias!=='WAIT'?selectedBias:entryStructure.trend;\n  }\n  const quoteIsUsable=Boolean(liveQuote?.tradeable);"""
+          s=s.replace(old,new)
+          s=s.replace("if(impulse&&((m&&continuation)||z)){\n      const chosen=m&&continuation?m:z;", "if(impulse&&(z||m)){\n      const chosen=m&&continuation?m:z;")
+          s=s.replace("if(bos&&fresh&&closeThrough&&decisive&&stillAccepted&&retested&&breakoutTrade){", "if(bos&&fresh&&closeThrough&&decisive&&stillAccepted&&breakoutTrade){")
+          old="""    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*1.5,livePrice*.002));\n    const formation=msnrFormation(current,bias);"""
+          new="""    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*3.0,livePrice*.004));\n    const pendingLevel=levels.find(x=>bias==='LONG'?x.level<livePrice:x.level>livePrice);\n    const formation=msnrFormation(current,bias);"""
+          s=s.replace(old,new)
+          old="""    if(level&&touched&&response&&Number.isFinite(level.level)){\n      const t=evaluateTrade(current,bias,level.level,a,SETUP_MIN_RR);"""
+          new="""    if(level&&Number.isFinite(level.level)&&(touched&&response || (!touched&&Math.abs(last.close-level.level)<=Math.min(a*3.0,last.close*.004)))){\n      const t=evaluateTrade(current,bias,level.level,a,SETUP_MIN_RR);"""
+          s=s.replace(old,new)
+          if s==original:
+              raise SystemExit('No engine replacements matched; aborting')
+          p.write_text(s)
+      - name: Commit repaired engine and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/repair-market-engine.yml
+          git add api/market.js .github/workflows/repair-market-engine.yml
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Fix dead strategy execution gates'
+          git push
