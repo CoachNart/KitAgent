@@ -139,7 +139,7 @@ function zoneIsUnmitigated(c,z,bias){
 }
 function entryZones(c,bias,current,a,maxAge=24){
   const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-2);
-  const maxDistance=Math.max(a*1.5,current*.006);
+  const maxDistance=Math.min(a*1.5,current*.006);
   return zones.filter(z=>{
     const ahead=bias==='LONG'?z.mid<current:z.mid>current;
     const age=c.length-1-z.index;
@@ -180,7 +180,7 @@ function protectiveStop(c,bias,entry,a){
     :(recent.at(-1)?.p??st.protectedHigh??Math.max(...c.slice(-20).map(x=>x.high)));
   if(sweep)invalidation=bias==='LONG'?Math.min(invalidation,sweep.level):Math.max(invalidation,sweep.level);
   let stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;
-  const maxRisk=Math.max(a*1.8,entry*.015);
+  const maxRisk=Math.min(a*1.8,entry*.015);
   // Never pull a structural stop inward just to satisfy the risk cap.
   // If the real invalidation is too far away, reject the trade instead.
   if(bias==='LONG'&&stop<entry-maxRisk)return null;
@@ -195,7 +195,7 @@ function targetPool(c,bias,entry,a){
   const extremes=bias==='LONG'
     ?[Math.max(...window.map(x=>x.high)),...(previous.length?[Math.max(...previous.map(x=>x.high))]:[])]
     : [Math.min(...window.map(x=>x.low)),...(previous.length?[Math.min(...previous.map(x=>x.low))]:[])];
-  const maxDistance=Math.max(a*3.5,entry*.035);
+  const maxDistance=Math.min(a*3.0,entry*.025);
   return [...new Set([...structural,...extremes])]
     .filter(level=>Number.isFinite(level))
     .filter(level=>bias==='LONG'?level>entry&&level-entry<=maxDistance:level<entry&&entry-level<=maxDistance)
@@ -239,7 +239,7 @@ function evaluateTrade(c,bias,entry,a,minRR=1.25){
     const target=targetBeforeLiquidity(c,bias,level,entry,a);
     const reward=Math.abs(target-entry);
     return {level,target,reward,rr:reward/risk};
-  }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&Math.abs(x.target-entry)<=Math.max(a*3.5,entry*.035));
+  }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&Math.abs(x.target-entry)<=Math.min(a*3.0,entry*.025));
   if(!candidates.length)return null;
   const chosen=candidates[0];
 
@@ -412,7 +412,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<1.25)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
     if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)){
-      const maxPendingDistance=Math.max(a*1.5,marketPrice*.006);
+      const maxPendingDistance=Math.min(a*1.5,marketPrice*.006);
       if((tradeBias==='LONG'&&t.entry>=marketPrice)||(tradeBias==='SHORT'&&t.entry<=marketPrice))return false;
       if(Math.abs(t.entry-marketPrice)>maxPendingDistance)return false;
       if((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice))return false;
@@ -497,7 +497,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',reclaim?'Sweep reclaimed.':'No reclaim.',bosAfterSweep?'BOS occurred after the sweep.':'No post-sweep BOS.',disp?'Displacement confirmed.':'No displacement.',zones[0]?zones[0].type:'No fresh POI.');
   } else if(key==='MSNR'){
     const levels=msnrLevels(biasCandles,bias);
-    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.max(a*1.5,livePrice*.002));
+    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*1.5,livePrice*.002));
     const formation=msnrFormation(current,bias);
     const bos=structureBreak(current,bias,30,10);
     const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
