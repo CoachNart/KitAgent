@@ -1,6 +1,6 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
 import { yahooCandles, yahooPrice, yahooInstruments } from '../server/yahooMarket.js';
-const TIMEFRAME_MAP={'1m':{forex:'1m',twelvedata:'1m',crypto:'1m'},'5m':{forex:'5m',twelvedata:'5m',crypto:'5m'},'15m':{forex:'15m',twelvedata:'15m',crypto:'15m'},'30m':{forex:'30m',twelvedata:'30m',crypto:'30m'},'1H':{forex:'1h',twelvedata:'1h',crypto:'1h'},'4H':{forex:'4h',twelvedata:'4h',crypto:'4h'},'1D':{forex:'1d',twelvedata:'1d',crypto:'1d'},'1W':{forex:'1wk',twelvedata:'1wk',crypto:'1w'}};
+const TIMEFRAME_MAP={'1m':{forex:'1m',crypto:'1m'},'5m':{forex:'5m',crypto:'5m'},'15m':{forex:'15m',crypto:'15m'},'30m':{forex:'30m',crypto:'30m'},'1H':{forex:'1h',crypto:'1h'},'4H':{forex:'4h',crypto:'4h'},'1D':{forex:'1d',crypto:'1d'},'1W':{forex:'1wk',crypto:'1w'}};
 const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
 function adjacentTimeframe(tf,steps=1){const i=Math.max(0,TIMEFRAME_ORDER.indexOf(tf));return TIMEFRAME_ORDER[Math.min(TIMEFRAME_ORDER.length-1,i+steps)]||'1H';}
 function strategyTimeframes(tf,strategy){
@@ -195,7 +195,7 @@ function targetPool(c,bias,entry,a){
   const extremes=bias==='LONG'
     ?[Math.max(...window.map(x=>x.high)),...(previous.length?[Math.max(...previous.map(x=>x.high))]:[])]
     : [Math.min(...window.map(x=>x.low)),...(previous.length?[Math.min(...previous.map(x=>x.low))]:[])];
-  const maxDistance=Math.max(a*8,entry*.04);
+  const maxDistance=Math.max(a*10,entry*.08);
   return [...new Set([...structural,...extremes])]
     .filter(level=>Number.isFinite(level))
     .filter(level=>bias==='LONG'?level>entry&&level-entry<=maxDistance:level<entry&&entry-level<=maxDistance)
@@ -208,25 +208,46 @@ function evaluateTrade(c,bias,entry,a,minRR=2.25){
   if(!risk||risk<minimumRisk)return null;
   const pools=targetPool(c,bias,entry,a);
   const buffer=Math.max(a*.08,entry*.00015);
+  // Do not accept a technically valid but practically tiny target. The first
+  // objective must have enough room to absorb normal volatility and still leave
+  // the trade with a meaningful exit after entry.
+  const minimumReward=Math.max(a*1.25,entry*.0035,risk*minRR);
   const candidates=pools.map(level=>{
     const target=bias==='LONG'?level-buffer:level+buffer;
     const reward=Math.abs(target-entry);
     return {level,target,reward,rr:reward/risk};
-  }).filter(x=>Number.isFinite(x.target)&&x.rr>=minRR);
+  }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR);
   if(!candidates.length)return null;
   const chosen=candidates[0];
+
+  // TP2 is always produced when the chart has room: prefer the next structural
+  // liquidity level, otherwise project a runner at least 4R and no farther than
+  // the validated target envelope. This keeps the UI from publishing a setup
+  // with a blank second target while avoiding an arbitrary price level.
   const target2Candidate=pools.slice(1).map(level=>{
     const target=bias==='LONG'?level-buffer:level+buffer;
     return {level,target,rr:Math.abs(target-entry)/risk};
-  }).filter(x=>bias==='LONG'?x.target>entry:x.target<entry).find(x=>x.rr>chosen.rr&&Math.abs(x.target-chosen.target)>a*.3);
+  }).filter(x=>
+    (bias==='LONG'?x.target>chosen.target:x.target<chosen.target) &&
+    x.rr>=Math.max(4,minRR+1) &&
+    Math.abs(x.target-chosen.target)>=Math.max(a*.5,entry*.001)
+  ).find(x=>true);
+
+  const runnerReward=Math.max(chosen.reward*1.75,risk*4);
+  const projectedTarget=bias==='LONG'?entry+runnerReward:entry-runnerReward;
+  const maxTargetDistance=Math.max(a*10,entry*.08);
+  const runnerWithinEnvelope=Math.abs(projectedTarget-entry)<=maxTargetDistance;
+  const target2=target2Candidate?.target??(runnerWithinEnvelope?projectedTarget:null);
+  const target2Liquidity=target2Candidate?.level??(runnerWithinEnvelope?target2:null);
+
   return {
     entry,
     stop,
     risk,
     target:chosen.target,
     targetLiquidity:chosen.level,
-    target2:target2Candidate?.target??null,
-    target2Liquidity:target2Candidate?.level??null,
+    target2,
+    target2Liquidity,
     rr:chosen.rr
   };
 }
@@ -272,8 +293,8 @@ function normalizeStrategy(v){const key=String(v||'TOP_DOWN').toUpperCase();retu
 const CANDLE_INTERVAL_MS={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'4h':14400000,'1d':86400000,'1wk':604800000,'1w':604800000,'1H':3600000,'4H':14400000,'1D':86400000,'1W':604800000};
 function closedCandles(c,timeframe,market=''){
   if(!Array.isArray(c)||c.length<2)return [];
-  // Twelve Data's OHLC normalizer already removes bars marked isOpen:true.
-  // Twelve Data returns completed OHLC bars; do not infer candle state from timestamps for these markets.
+  // TradFi candles are supplied by the market provider and are retained here;
+  // crypto candles are trimmed when the newest bar is still forming.
   if(['forex','commodities','indices'].includes(market))return c;
   const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.crypto||timeframe;
   const last=c.at(-1),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
@@ -346,6 +367,20 @@ function msnrFormation(c,bias){
   const a=bias==='SHORT'&&x.close<x.open&&x.high>=Math.max(...c.slice(-6,-1).map(k=>k.high))&&x.close<x.high-range*.55;
   return v?'V FORMATION':a?'A FORMATION':null;
 }
+function quoteFresh(liveQuote,marketContext){
+  const t=Date.parse(String(liveQuote?.time||''));
+  if(!Number.isFinite(t))return false;
+  const age=Date.now()-t;
+  const maxAge=['forex','commodities','indices'].includes(marketContext)?10*60*1000:2*60*1000;
+  return age>=-30000&&age<=maxAge;
+}
+function quoteConsistentWithCandle(livePrice,candle,a,marketContext){
+  if(!Number.isFinite(livePrice)||!candle)return false;
+  const range=Math.max(0,Number(candle.high)-Number(candle.low));
+  const tolerance=Math.max(a*3,livePrice*(['forex','commodities','indices'].includes(marketContext)?0.01:0.03),range*1.5);
+  return livePrice>=Number(candle.low)-tolerance&&livePrice<=Number(candle.high)+tolerance;
+}
+function liveQuoteUsable(quote){return Boolean(quote?.tradeable);}
 function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,marketContext='',liveQuote=null){
   const key=normalizeStrategy(strategy),info=STRATEGIES[key],tf=strategyTimeframes(executionTimeframe,key);
   if((key==='TOP_DOWN'||key==='MSNR')&&(tf.bias===executionTimeframe))throw Object.assign(new Error('This strategy requires a higher-timeframe directional context. Select a lower execution timeframe.'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});
@@ -356,6 +391,11 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   if(!current?.length||!structure?.length||!biasCandles?.length)throw new Error('No completed candle is available for the selected timeframe');
   const liveMid=Number(liveQuote?.mid??rawCurrent.at(-1)?.close);
   if(!Number.isFinite(liveMid))throw new Error('Live market price is unavailable');
+  if(!liveQuoteUsable(liveQuote))throw Object.assign(new Error('Live market quote is unavailable or stale. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  const consistencyAtr=atr(current,14);
+  if(!quoteConsistentWithCandle(liveMid,current.at(-1),consistencyAtr,marketContext)){
+    throw Object.assign(new Error('Live market price is inconsistent with the latest candle data. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  }
   const last=current.at(-1),closes=current.map(x=>x.close).filter(Number.isFinite),a=atr(current,14);
   if(!last||closes.length<2||!Number.isFinite(a)){throw Object.assign(new Error('Market data does not contain enough valid OHLC candles for the selected timeframe.'),{code:'MARKET_DATA_INSUFFICIENT_CANDLES'})}
   const higherStructure=marketStructure(biasCandles),selectedStructure=marketStructure(structure),entryStructure=marketStructure(current);
@@ -573,6 +613,7 @@ if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(sym
   const candlesByTf=Object.fromEntries(fetched);
   const liveQuote=(['forex','commodities','indices'].includes(market))?await yahooPrice(symbol,market):await bybitPrice(symbol.replace(/[^A-Z0-9]/gi,''));
   if(liveQuote?.marketState==='closed')throw Object.assign(new Error('Market is currently closed.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  if(!quoteFresh(liveQuote,market))throw Object.assign(new Error('Live market quote is stale. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
   const setup=strategyPlan(candlesByTf,strategy,symbol,timeframe,market,liveQuote);
   const confidenceBase=Number(setup.confidence),finalConfidence=setup.tradeReady?Math.min(95,Math.max(35,Number.isFinite(confidenceBase)?Math.round(confidenceBase):35)):0;
   const confluenceCandles={
