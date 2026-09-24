@@ -439,6 +439,11 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   // Direction is strategy-specific. Higher-timeframe structure is a filter for
   // continuation models, not a universal signal generator.
   let bias=(key==='LIQUIDITY_REVERSAL'||key==='CRT')?'WAIT':higherBias;
+  // HTF direction remains the preferred filter, but a neutral HTF must not make
+  // lower-timeframe strategies permanently dead. Fall back to confirmed local structure.
+  if(bias==='WAIT'&&!['TOP_DOWN'].includes(key)){
+    bias=selectedBias!=='WAIT'?selectedBias:entryStructure.trend;
+  }
   const quoteIsUsable=Boolean(liveQuote?.tradeable);
   const livePrice=quoteIsUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
@@ -487,7 +492,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     // A pullback can be a pending limit while price is approaching the POI, or
     // a market execution when the current candle has reached a still-fresh POI
     // and the continuation evidence is present.
-    if(impulse&&((m&&continuation)||z)){
+    if(impulse&&(z||m)){
       const chosen=m&&continuation?m:z;
       trade=chosen.trade;entry=chosen.entry;orderType=m&&continuation?'MARKET':'LIMIT';
     }
@@ -510,7 +515,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const retested=Boolean(bos&&fresh&&current.slice(bos.breakIndex+1).some(x=>bias==='LONG'?x.low<=bos.level:x.high>=bos.level));
     const breakoutEntry=bos&&Number.isFinite(bos.level)?bos.level:null;
     const breakoutTrade=retested&&breakoutEntry!=null?evaluateTrade(current,bias,breakoutEntry,a,SETUP_MIN_RR):null;
-    if(bos&&fresh&&closeThrough&&decisive&&stillAccepted&&retested&&breakoutTrade){
+    if(bos&&fresh&&closeThrough&&decisive&&stillAccepted&&breakoutTrade){
       if(validTrade(breakoutTrade,bias,livePrice,'MARKET')){
         const marketTrade={...breakoutTrade,entry:livePrice};
         const revalued=evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR);
@@ -545,7 +550,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',reclaim?'Sweep reclaimed.':'No reclaim.',bosAfterSweep?'BOS occurred after the sweep.':'No post-sweep BOS.',disp?'Displacement confirmed.':'No displacement.',zones[0]?zones[0].type:'No fresh POI.');
   } else if(key==='MSNR'){
     const levels=msnrLevels(biasCandles,bias);
-    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*1.5,livePrice*.002));
+    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*3.0,livePrice*.004));
+    const pendingLevel=levels.find(x=>bias==='LONG'?x.level<livePrice:x.level>livePrice);
     const formation=msnrFormation(current,bias);
     const bos=structureBreak(current,bias,30,10);
     const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
@@ -568,7 +574,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
     const touched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
     const response=Boolean(engulf||reject);
-    if(level&&touched&&response&&Number.isFinite(level.level)){
+    if(level&&Number.isFinite(level.level)&&(touched&&response || (!touched&&Math.abs(last.close-level.level)<=Math.min(a*3.0,last.close*.004)))){
       const t=evaluateTrade(current,bias,level.level,a,SETUP_MIN_RR);
       if(t&&validTrade(t,bias,livePrice,'MARKET')){const mt=evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR);if(mt&&validTrade(mt,bias,livePrice,'MARKET')){trade=mt;entry=livePrice;orderType='MARKET';}} else if(t&&validTrade(t,bias,livePrice,'LIMIT')){trade=t;entry=level.level;orderType='LIMIT';}
     }
