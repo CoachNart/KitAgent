@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 
 function getAdmin(){
   if(admin.apps.length)return admin;
@@ -30,14 +31,14 @@ function csvEnv(name){
   return String(process.env[name]||'').split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
 }
 
-function isAdmin(decoded){
+async function isAdmin(a,decoded){
   if(decoded?.admin===true)return true;
   const uids=csvEnv('KITSETUPS_ADMIN_UIDS');
   const emails=csvEnv('KITSETUPS_ADMIN_EMAILS');
   const ownerEmail='03nart@gmail.com';
-  return (decoded?.uid&&uids.includes(String(decoded.uid).toLowerCase())) ||
-    (decoded?.email&&emails.includes(String(decoded.email).toLowerCase())) ||
-    String(decoded?.email||'').toLowerCase()===ownerEmail;
+  if((decoded?.uid&&uids.includes(String(decoded.uid).toLowerCase()))||(decoded?.email&&emails.includes(String(decoded.email).toLowerCase()))||String(decoded?.email||'').toLowerCase()===ownerEmail)return true;
+  if(decoded?.email){const snap=await a.firestore().collection('adminAccess').doc(String(decoded.email).toLowerCase()).get();return snap.exists&&snap.data()?.active!==false}
+  return false;
 }
 
 async function authenticate(req){
@@ -47,7 +48,7 @@ async function authenticate(req){
   if(!token)return {a,error:[401,'Authentication required.']};
   try{
     const decoded=await a.auth().verifyIdToken(token);
-    if(!isAdmin(decoded))return {a,error:[403,'Admin access is required.']};
+    if(!(await isAdmin(a,decoded)))return {a,error:[403,'Admin access is required.']};
     return {a,decoded};
   }catch{
     return {a,error:[401,'Authentication token could not be verified.']};
@@ -94,6 +95,31 @@ export default async function handler(req,res){
 
     const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
     const action=String(body.action||'grant-premium').trim().toLowerCase();
+
+    if(req.method==='GET' && String(req.query?.q||'')==='__admins__'){
+      const rows=[];
+      const ownerEmail='03nart@gmail.com';
+      rows.push({email:ownerEmail,source:'owner',active:true});
+      const snap=await db.collection('adminAccess').where('active','==',true).get();
+      for(const doc of snap.docs){const email=doc.id.toLowerCase();if(!rows.some(x=>x.email===email))rows.push({email,source:'admin',active:true})}
+      return json(res,200,{admin:true,admins:rows});
+    }
+
+    if(action==='add-admin'){
+      const email=String(body.email||'').trim().toLowerCase();
+      if(!/^\\S+@\\S+\\.\\S+$/.test(email))return json(res,400,{error:'Enter a valid admin email.'});
+      if(email==='03nart@gmail.com')return json(res,200,{added:false,owner:true,email});
+      await db.collection('adminAccess').doc(email).set({email,active:true,addedBy:decoded.email||decoded.uid,addedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+      return json(res,200,{added:true,email});
+    }
+
+    if(action==='remove-admin'){
+      const email=String(body.email||'').trim().toLowerCase();
+      if(!email)return json(res,400,{error:'Admin email is required.'});
+      if(email==='03nart@gmail.com')return json(res,400,{error:'The owner admin cannot be removed.'});
+      await db.collection('adminAccess').doc(email).set({email,active:false,removedBy:decoded.email||decoded.uid,removedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+      return json(res,200,{removed:true,email});
+    }
 
     if(action==='hard-reset'){
       const uid=String(body.uid||'').trim();
