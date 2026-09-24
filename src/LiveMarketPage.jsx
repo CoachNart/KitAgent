@@ -146,8 +146,7 @@ function AnalysisResult({result,savedSignal}){
         <div className="setup-v2-levels">
           <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
           <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
-          <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>
-          <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>
+          <div className="v2-level tp"><span>TP</span><b>{price(s.takeProfit1)}</b></div>
         </div>
         <div className="strategy-trade-footer"><span>RR {s.riskReward}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
       </>}
