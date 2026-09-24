@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Check, ChevronDown, ChevronUp, CircleHelp, Plus, Star, X, Target, ShieldCheck } from 'lucide-react';
+import { Bookmark, Check, ChevronDown, ChevronUp, CircleHelp, Plus, X, Target, ShieldCheck } from 'lucide-react';
 
 
 const STRATEGY_LIBRARY=[
@@ -80,12 +80,12 @@ export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
  const toggle=()=>setItems(current=>{const exists=current.some(x=>x.symbol===symbol&&x.market===market);return exists?current.filter(x=>!(x.symbol===symbol&&x.market===market)):[{symbol,market},...current].slice(0,12)});
  return <section className={`market-watchlist ${open?'is-open':''}`} aria-label="Market watchlist">
   <button type="button" className="watchlist-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
-   <span className="watchlist-toggle-main"><span className="watchlist-toggle-icon"><Star size={13}/></span><span><b>Watchlist</b><small>{items.length?items.length+' saved market'+(items.length===1?'':'s')+(symbol?' · '+symbol:''):'Save markets for quick access'}</small></span></span>
+   <span className="watchlist-toggle-main"><span><b>Watchlist</b><small>{items.length?items.length+' saved market'+(items.length===1?'':'s')+(symbol?' · '+symbol:''):'Save markets for quick access'}</small></span></span>
    <span className="watchlist-toggle-right"><em>{items.length}</em><ChevronDown className={open?'open':''} size={16}/></span>
   </button>
   <div className="watchlist-panel">
    <div className="watchlist-head">
-    <div className="watchlist-title"><span className="extras-kicker"><Star size={10}/> SAVED MARKETS</span><strong>Quick access</strong><small>{items.length?'Tap a pair to open its live analysis.':'Save pairs here for one-tap access.'}</small></div>
+    <div className="watchlist-title"><span className="extras-kicker">SAVED MARKETS</span><strong>Quick access</strong><small>{items.length?'Tap a pair to open its live analysis.':'Save pairs here for one-tap access.'}</small></div>
     <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={12}/>:<Plus size={12}/>} {saved?'Saved':`Save ${symbol||'pair'}`}</button>
    </div>
    {symbol&&<div className="watchlist-current-row"><span className="watch-current-label">CURRENT</span><b>{symbol}</b><em>{market==='forex'?'FOREX':market==='commodities'?'COMMODITIES':market==='indices'?'INDICES':'CRYPTO'}</em></div>}
