@@ -369,39 +369,88 @@ function rejectionCandle(c,bias){
   return bias==='LONG'?(lower/range>=.45&&x.close>x.low+range*.55):(upper/range>=.45&&x.close<x.high-range*.55);
 }
 function msnrLevels(c,bias){
-  const st=marketStructure(c),levels=[],last=c.at(-1)?.close;
-  const source=bias==='LONG'?st.lows:st.highs;
-  for(const x of source.slice(-10)){
-    if(!((bias==='LONG'&&x.p<last)||(bias==='SHORT'&&x.p>last)))continue;
-    const prior=c.slice(x.i+1,-1);
-    const touched=prior.some(k=>bias==='LONG'?k.low<=x.p:k.high>=x.p);
-    if(!touched)levels.push({level:x.p,index:x.i,type:bias==='LONG'?'SUPPORT':'RESISTANCE'});
-  }
-  const oppositeSource=bias==='LONG'?st.highs:st.lows;
-  for(const x of oppositeSource.slice(-10)){
-    const later=c.slice(x.i+1),flipIndex=later.findIndex(k=>bias==='LONG'?k.close>x.p:k.close<x.p);
-    if(flipIndex<0)continue;
-    const absoluteFlip=x.i+1+flipIndex;
-    if(!((bias==='LONG'&&last>x.p)||(bias==='SHORT'&&last<x.p)))continue;
-    const retest=c.slice(absoluteFlip+1,-1).some(k=>bias==='LONG'?k.low<=x.p:k.high>=x.p);
-    if(!retest)levels.push({level:x.p,index:absoluteFlip,type:bias==='LONG'?'RBS':'SBR'});
-  }
-  for(let i=Math.max(1,c.length-30);i<c.length-1;i++){
-    const a=c[i],b=c[i+1],overlapLow=Math.max(a.low,b.low),overlapHigh=Math.min(a.high,b.high);
-    if(overlapLow<overlapHigh){
-      const level=(overlapLow+overlapHigh)/2,prior=c.slice(i+2,-1);
-      const tested=prior.some(k=>bias==='LONG'?k.low<=overlapHigh:k.high>=overlapLow);
-      if(!tested)levels.push({level,index:i,type:'KISSING CANDLE BASE'});
+  if(!Array.isArray(c)||c.length<6)return [];
+  const levels=[],last=Number(c.at(-1)?.close);
+  const push=(level,type,index,role='')=>{
+    if(!Number.isFinite(level)||level<=0||index<1)return;
+    const later=c.slice(index+1,-1);
+    const touched=later.some(k=>k.low<=level&&k.high>=level);
+    const bodyBroken=later.some(k=>bias==='LONG'?k.close<level:k.close>level);
+    levels.push({level,type,index,role,fresh:!touched&&!bodyBroken,touched,bodyBroken});
+  };
+  // Malaysian SNR is body/open-close based: bullish close into bearish open = A/resistance,
+  // bearish close into bullish open = V/support. Wicks are validation, not the level origin.
+  for(let i=0;i<c.length-1;i++){
+    const a=c[i],b=c[i+1];
+    if(a.close>a.open&&b.close<b.open){
+      const level=(a.close+b.open)/2;
+      if(bias==='SHORT'&&level>last)push(level,'A FORMATION',i,'RESISTANCE');
+    }
+    if(a.close<a.open&&b.close>b.open){
+      const level=(a.close+b.open)/2;
+      if(bias==='LONG'&&level<last)push(level,'V FORMATION',i,'SUPPORT');
+    }
+    // Open-close gap / hidden base: same-direction candles with a meaningful
+    // body transition. Keep it as a decision level, not an automatic signal.
+    if((a.close>a.open&&b.close>b.open)||(a.close<a.open&&b.close<b.open)){
+      const gap=Math.abs(b.open-a.close);
+      if(gap>0){
+        const level=(b.open+a.close)/2;
+        if((bias==='LONG'&&level<last)||(bias==='SHORT'&&level>last))push(level,'OPEN-CLOSE / GAP',i,'DECISION');
+      }
     }
   }
-  return levels.filter(x=>Number.isFinite(x.level)&&c.length-1-x.index<=80).sort((a,b)=>Math.abs(last-a.level)-Math.abs(last-b.level));
+  // Flipped levels: body close through an old level creates RBS/SBR; only a
+  // subsequent retest can make the flipped level executable.
+  const raw=levels.slice();
+  for(const x of raw){
+    const later=c.slice(x.index+1,-1);
+    const flip=later.findIndex(k=>x.role==='RESISTANCE'?k.close>x.level:k.close<x.level);
+    if(flip<0)continue;
+    const flipIndex=x.index+1+flip;
+    const flippedRole=x.role==='RESISTANCE'?'RBS':'SBR';
+    const retested=c.slice(flipIndex+1,-1).some(k=>k.low<=x.level&&k.high>=x.level);
+    const currentSide=bias==='LONG'?x.level<last:x.level>last;
+    if(currentSide)levels.push({level:x.level,type:flippedRole,index:flipIndex,role:flippedRole,fresh:!retested,touched:retested,bodyBroken:false,flipIndex});
+  }
+  // Kissing/overlap base: adjacent candle bodies overlap materially and have
+  // not already been revisited.
+  for(let i=Math.max(0,c.length-36);i<c.length-1;i++){
+    const a=c[i],b=c[i+1];
+    const lo=Math.max(Math.min(a.open,a.close),Math.min(b.open,b.close));
+    const hi=Math.min(Math.max(a.open,a.close),Math.max(b.open,b.close));
+    if(hi<=lo)continue;
+    const level=(lo+hi)/2;
+    const side=bias==='LONG'?level<last:level>last;
+    if(!side)continue;
+    const later=c.slice(i+2,-1);
+    const revisited=later.some(k=>k.low<=hi&&k.high>=lo);
+    if(!revisited)levels.push({level,type:'KISSING CANDLE BASE',index:i,role:'BASE',fresh:true,touched:false,bodyBroken:false});
+  }
+  return levels
+    .filter(x=>Number.isFinite(x.level)&&c.length-1-x.index<=120)
+    .sort((a,b)=>{
+      const af=a.fresh?0:1,bf=b.fresh?0:1;
+      return af-bf||Math.abs(last-a.level)-Math.abs(last-b.level);
+    });
 }
 function msnrFormation(c,bias){
-  if(c.length<6)return null;
-  const x=c.at(-1),range=Math.max(x.high-x.low,1e-12);
-  const v=bias==='LONG'&&x.close>x.open&&x.low<=Math.min(...c.slice(-6,-1).map(k=>k.low))&&x.close>x.low+range*.55;
-  const a=bias==='SHORT'&&x.close<x.open&&x.high>=Math.max(...c.slice(-6,-1).map(k=>k.high))&&x.close<x.high-range*.55;
-  return v?'V FORMATION':a?'A FORMATION':null;
+  if(!Array.isArray(c)||c.length<4)return null;
+  const a=c.at(-2),x=c.at(-1);
+  if(!a||!x)return null;
+  if(bias==='LONG'&&a.close<a.open&&x.close>x.open&&x.close>=a.open)return 'V FORMATION';
+  if(bias==='SHORT'&&a.close>a.open&&x.close<x.open&&x.close<=a.open)return 'A FORMATION';
+  return null;
+}
+function msnrRoadblocks(c,bias,lookback=60){
+  const st=marketStructure(c),out=[];
+  const highs=st.highs.slice(-10),lows=st.lows.slice(-10),last=c.at(-1)?.close;
+  for(const x of bias==='LONG'?highs:lows){
+    if(!Number.isFinite(x.p))continue;
+    if(bias==='LONG'&&x.p>last)out.push({level:x.p,type:'RESISTANCE ROADBLOCK',index:x.i});
+    if(bias==='SHORT'&&x.p<last)out.push({level:x.p,type:'SUPPORT ROADBLOCK',index:x.i});
+  }
+  return out.filter(x=>c.length-1-x.index<=lookback);
 }
 function quoteFresh(liveQuote,marketContext){
   const t=Date.parse(String(liveQuote?.time||''));
@@ -565,21 +614,63 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     reason=trade?'Liquidity sweep, reclaim, post-sweep displacement and BOS are confirmed with a fresh POI.':!structureAligned?'The SMC reversal leg conflicts with the higher-timeframe market structure. No counter-structure trade is issued.':'Waiting for the full SMC sequence: liquidity sweep → reclaim → displacement → BOS → fresh POI.';
     evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',reclaim?'Sweep reclaimed.':'No reclaim.',bosAfterSweep?'BOS occurred after the sweep.':'No post-sweep BOS.',disp?'Displacement confirmed.':'No displacement.',zones[0]?zones[0].type:'No fresh POI.');
   } else if(key==='MSNR'){
-    const levels=msnrLevels(biasCandles,bias);
-    const level=levels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*3.0,livePrice*.004));
-    const pendingLevel=levels.find(x=>bias==='LONG'?x.level<livePrice:x.level>livePrice);
-    const formation=msnrFormation(current,bias);
-    const bos=structureBreak(current,bias,30,10);
-    const engulf=candleEngulfing(current,bias),reject=rejectionCandle(current,bias);
-    const touched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
-    const confirmed=Boolean(level&&touched&&(formation||bos||engulf||reject));
-    const levelEntry=level?.level;
-    if(confirmed&&Number.isFinite(levelEntry)){
-      const candidate=chooseExecution(bias,levelEntry,level,livePrice);
-      if(candidate){trade=candidate.trade;entry=candidate.entry;orderType=candidate.orderType;}
+    // Full MSNR hierarchy: Weekly storyline -> Daily roadblock/level ->
+    // H4 confirmation -> selected execution timeframe. The selected timeframe
+    // is only the trigger; it does not invent the directional story.
+    const weeklyBias=structureBias(marketStructure(biasCandles));
+    const dailyCandles=candlesByTf['1D']?closedCandles(candlesByTf['1D'],'1D',marketContext):biasCandles;
+    const dailyBias=structureBias(marketStructure(dailyCandles));
+    const storyBias=weeklyBias!=='WAIT'?weeklyBias:(dailyBias!=='WAIT'?dailyBias:bias);
+    const storyConflict=weeklyBias!=='WAIT'&&dailyBias!=='WAIT'&&weeklyBias!==dailyBias;
+    const msnrBias=storyConflict?'WAIT':storyBias;
+    const levels=msnrBias!=='WAIT'?msnrLevels(biasCandles,msnrBias):[];
+    const freshLevels=levels.filter(x=>x.fresh);
+    const flipLevels=levels.filter(x=>x.type==='RBS'||x.type==='SBR');
+    const roadblocks=msnrBias!=='WAIT'?msnrRoadblocks(structure,msnrBias):[];
+    const nearFresh=freshLevels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*3.5,livePrice*.006));
+    const nearFlip=flipLevels.find(x=>Math.abs(livePrice-x.level)<=Math.min(a*3.0,livePrice*.005));
+    const active=nearFresh||nearFlip;
+    const formation=msnrFormation(current,msnrBias);
+    const bos=msnrBias!=='WAIT'?structureBreak(current,msnrBias,36,12):null;
+    const engulf=msnrBias!=='WAIT'&&candleEngulfing(current,msnrBias);
+    const reject=msnrBias!=='WAIT'&&rejectionCandle(current,msnrBias);
+    const touched=Boolean(active&&last.low<=active.level&&last.high>=active.level);
+    const closeNear=Boolean(active&&Math.abs(last.close-active.level)<=Math.min(a*1.25,last.close*.0025));
+    const lowerConfirm=Boolean(formation||engulf||reject||(bos&&bos.breakIndex>=current.length-12));
+    const flipValid=Boolean(nearFlip&&lowerConfirm);
+    const freshValid=Boolean(nearFresh&&touched&&lowerConfirm);
+    // A roadblock is not a trade signal by itself. It is used to reject targets
+    // that sit immediately in front of the proposed entry.
+    const blocking=roadblocks.filter(r=>Math.abs(r.level-livePrice)<=Math.min(a*2.5,livePrice*.004)).length>0;
+    let candidate=null;
+    if(msnrBias!=='WAIT'&&!storyConflict&&(freshValid||flipValid||closeNear)){
+      candidate=chooseExecution(msnrBias,active.level,active,livePrice);
+      if(!candidate&&touched){
+        candidate=chooseMarketFromZones([{...active,mid:livePrice}],msnrBias);
+      }
     }
-    reason=trade?'A fresh MSNR level has been reached and price has confirmed the reaction.':'Waiting for a fresh support/resistance level, reaction and lower-timeframe confirmation.';
-    evidence.push(level?level.type+' at '+roundPrice(level.level)+'.':'No fresh MSNR level.',formation||'No V/A formation.',touched?'Level touched.':'Level not yet reached.',confirmed?'Reaction confirmation present.':'No valid reaction confirmation.');
+    // If price is already inside a validated MSNR level, allow market execution;
+    // otherwise the same level remains a genuine pending limit.
+    if(candidate){
+      trade=candidate.trade;entry=candidate.entry;orderType=candidate.orderType||'LIMIT';bias=msnrBias;
+    }
+    reason=trade
+      ?'MSNR storyline, fresh/flip level and lower-timeframe confirmation are aligned.'
+      :storyConflict
+        ?'Weekly and Daily MSNR storylines conflict; waiting for the Daily roadblock to resolve.'
+        :msnrBias==='WAIT'
+          ?'No decisive Weekly/Daily MSNR storyline is established.'
+          :'Waiting for a fresh A/V, RBS/SBR or decision level to reach price and receive lower-timeframe confirmation.';
+    evidence.push(
+      'Weekly storyline: '+weeklyBias+'.',
+      'Daily storyline: '+dailyBias+'.',
+      freshLevels[0]?'Fresh '+freshLevels[0].type+' at '+roundPrice(freshLevels[0].level)+'.':'No fresh MSNR level.',
+      flipLevels[0]?'Flip '+flipLevels[0].type+' at '+roundPrice(flipLevels[0].level)+'.':'No active SBR/RBS flip.',
+      active?(active.type+' is near price.'):'No active MSNR level near price.',
+      touched?'MSNR level touched.':closeNear?'Price is testing the MSNR level.':'Level not yet reached.',
+      lowerConfirm?'Lower-timeframe confirmation present.':'Waiting for lower-timeframe confirmation.',
+      blocking?'A nearby structural roadblock is present.':'No immediate roadblock.'
+    );
   } else if(key==='PRICE_ACTION'){
     const swings=marketStructure(current);
     const candidateLevels=[
