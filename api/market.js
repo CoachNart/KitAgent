@@ -622,7 +622,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     reason=trade?'A higher-timeframe candle range was swept and reclaimed with price targeting the opposite range extreme.':(signal&&higherBias!==signal)?'The CRT sweep conflicts with higher-timeframe market structure. No counter-structure trade is issued.':'Waiting for a completed candle range to be swept, reclaimed through its midpoint and leave sufficient room.';
     evidence.push(ref?'CRT range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No higher-timeframe reference range.',signal==='LONG'?'Sell-side range swept and reclaimed.':signal==='SHORT'?'Buy-side range swept and reclaimed.':'No qualifying sweep/reclaim.',confirmed?'Range midpoint reclaimed.':'No midpoint reclaim.');
   }
-  // Keep every rejection visible to the UI/debug layer instead of collapsing all failed gates into a generic NO SETUP.\n  if(!trade){\n    const gateChecks=[\n      ['HTF direction',higherBias!=='WAIT'],\n      ['Execution structure',selectedBias!=='WAIT'||key==='LIQUIDITY_REVERSAL'||key==='CRT'],\n      ['Live quote',quoteIsUsable],\n      ['2R target',Boolean(evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR))]\n    ];\n    for(const [label,passed] of gateChecks) if(!passed) failures.push(label+' failed.');\n  }\n  const confidence=trade?Math.min(95,Math.max(38,Math.round(
+  const confidence=trade?Math.min(95,Math.max(38,Math.round(
     50+
     (key==='LIQUIDITY_REVERSAL'||key==='CRT'?0:(higherBias===bias?12:0))+
     (key==='TOP_DOWN'&&selectedBias===bias?8:0)+
