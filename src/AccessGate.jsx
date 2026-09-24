@@ -8,7 +8,7 @@ export default function AccessGate({user,children}){
  const [profile,setProfile]=useState(null),[loaded,setLoaded]=useState(false),[now,setNow]=useState(Date.now());
  useEffect(()=>{if(!db||!user?.uid){setLoaded(true);return undefined}return onSnapshot(doc(db,'users',user.uid),s=>{setProfile(s.exists()?s.data():null);setLoaded(true)},()=>setLoaded(true))},[user?.uid]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
- if(!loaded||!profile)return <div className="access-locked"><div className="access-locked-card"><span className="access-kicker">VERIFYING ACCESS</span><h2>Setting up your KitSetups access</h2><p>Confirming your account and activating your free 3-day access.</p></div></div>;
+ if(!loaded||!profile)return children;
  const plan=String(profile.plan||'free').toLowerCase();
  const subscriptionEnd=toMs(profile.subscriptionEndsAt);
  const created=toMs(profile.createdAt);
