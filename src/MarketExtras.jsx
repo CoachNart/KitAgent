@@ -27,7 +27,8 @@ export function StrategySelector({value,onChange}){
  </label>
 }
 
-export function StrategyExplanation({setup,strategy}){\n const [open,setOpen]=useState(false);
+export function StrategyExplanation({setup,strategy}){
+ const [open,setOpen]=useState(false);
  const item=STRATEGY_LIBRARY.find(x=>x.key===strategy)||STRATEGY_LIBRARY[0];
  const evidence=setup?.strategyEvidence?.length?setup.strategyEvidence:item.rules;
  const detail={
@@ -40,15 +41,20 @@ export function StrategyExplanation({setup,strategy}){\n const [open,setOpen]=us
   LIQUIDITY_REVERSAL:{entry:'Genuine liquidity sweep → reclaim → displacement → reversal execution.',invalidation:'Price fails to reclaim the swept level or breaks reversal structure.',target:'Opposing external liquidity.'},
   CRT:{entry:'Completed candle range → one-side sweep → reclaim through the range midpoint → execution.',invalidation:'The sweep extreme is lost or price fails to reclaim the range.',target:'Opposite side of the reference range, subject to the live risk model.'}
  }[item.key]||{};
- return <section className="strategy-explanation" aria-label={item.name+' strategy explanation'}>
-  <div className="strategy-explanation-head"><div><span className="extras-kicker">STRATEGY MODEL</span><h3>{item.name}</h3><p>{item.description}</p></div><span>{item.short}</span></div>
-  <div className="strategy-explanation-grid">
-   <div><b>Entry model</b><span>{detail.entry}</span></div>
-   <div><b>Live evidence</b><span>{evidence.length?evidence.map((x,i)=><em key={i}>{x}</em>):'No qualifying evidence yet.'}</span></div>
-   <div><b>Invalidation</b><span>{detail.invalidation}</span></div>
-   <div><b>Target model</b><span>{detail.target}</span></div>
-   <div><b>Current engine state</b><span>{setup?.strategyReason||'Analyze the market to run this strategy against live candles.'}</span></div>
-   <div><b>Decision</b><span>{setup?.strategyValid?'Strategy conditions are satisfied by the current market data.':'No trade is issued until the strategy conditions are satisfied.'}</span></div>
+ return <section className={`strategy-explanation ${open?'is-open':''}`} aria-label={item.name+' strategy explanation'}>
+  <button type="button" className="strategy-explanation-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
+   <span><span className="extras-kicker"><CircleHelp size={11}/> STRATEGY MODEL</span><strong>{item.name}</strong><small>{open?item.description:item.short}</small></span>
+   <ChevronDown className={open?'open':''} size={16}/>
+  </button>
+  <div className="strategy-explanation-body">
+   <div className="strategy-explanation-grid">
+    <div><b>Entry model</b><span>{detail.entry}</span></div>
+    <div><b>Live evidence</b><span>{evidence.length?evidence.map((x,i)=><em key={i}>{x}</em>):'No qualifying evidence yet.'}</span></div>
+    <div><b>Invalidation</b><span>{detail.invalidation}</span></div>
+    <div><b>Target model</b><span>{detail.target}</span></div>
+    <div><b>Current engine state</b><span>{setup?.strategyReason||'Analyze the market to run this strategy against live candles.'}</span></div>
+    <div><b>Decision</b><span>{setup?.strategyValid?'Strategy conditions are satisfied by the current market data.':'No trade is issued until the strategy conditions are satisfied.'}</span></div>
+   </div>
   </div>
  </section>
 }
@@ -67,56 +73,24 @@ function saveWatchlist(items) {
 }
 
 export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
-  const [items, setItems] = useState(readWatchlist);
-  const saved = items.some(x => x.symbol === symbol && x.market === market);
-
-  useEffect(() => { saveWatchlist(items); }, [items]);
-
-  const toggle = () => {
-    setItems(current => {
-      const exists = current.some(x => x.symbol === symbol && x.market === market);
-      return exists
-        ? current.filter(x => !(x.symbol === symbol && x.market === market))
-        : [{ symbol, market }, ...current].slice(0, 12);
-    });
-  };
-
-  return (
-    <section className="market-watchlist" aria-label="Market watchlist">
-      <div className="watchlist-head">
-        <div className="watchlist-title">
-          <span className="extras-kicker"><Star size={11} /> WATCHLIST</span>
-          <strong>Your markets</strong>
-          <small>Saved on this device · available whenever you return</small>
-        </div>
-        <button type="button" className={saved ? 'watch-current saved' : 'watch-current'} onClick={toggle}>
-          {saved ? <Check size={13} /> : <Plus size={13} />}
-          {saved ? 'Saved' : 'Add market'}
-        </button>
-      </div>
-
-      <div className="watchlist-items">
-        {items.length ? items.map(item => (
-          <button
-            type="button"
-            key={item.market + ':' + item.symbol}
-            className={item.symbol === symbol && item.market === market ? 'watch-chip active' : 'watch-chip'}
-            onClick={() => onSelect?.(item.symbol, item.market)}
-            title={`Open ${item.symbol}`}
-          >
-            <span className="watch-dot" />
-            <span>{item.symbol}</span>
-            <em>{item.market === 'forex' ? 'FX' : item.market === 'commodities' ? 'CMDTY' : item.market === 'indices' ? 'INDEX' : 'PERP'}</em>
-            {item.symbol === symbol && item.market === market && <span className="watch-active-mark">LIVE</span>}
-          </button>
-        )) : (
-          <div className="watch-empty">
-            <Bookmark size={14} />
-            <span><b>No saved markets yet.</b> Add one and it stays here when you leave and come back.</span>
-          </div>
-        )}
-      </div>
-    </section>
-  );
+ const [items,setItems]=useState(readWatchlist);
+ const [open,setOpen]=useState(false);
+ const saved=items.some(x=>x.symbol===symbol&&x.market===market);
+ useEffect(()=>{saveWatchlist(items)},[items]);
+ const toggle=()=>setItems(current=>{const exists=current.some(x=>x.symbol===symbol&&x.market===market);return exists?current.filter(x=>!(x.symbol===symbol&&x.market===market)):[{symbol,market},...current].slice(0,12)});
+ return <section className={`market-watchlist ${open?'is-open':''}`} aria-label="Market watchlist">
+  <button type="button" className="watchlist-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
+   <span className="watchlist-toggle-main"><span className="watchlist-toggle-icon"><Star size={13}/></span><span><b>Watchlist</b><small>{items.length?items.length+' saved market'+(items.length===1?'':'s')+(symbol?' · '+symbol:''):'Save markets for quick access'}</small></span></span>
+   <span className="watchlist-toggle-right"><em>{items.length}</em><ChevronDown className={open?'open':''} size={16}/></span>
+  </button>
+  <div className="watchlist-panel">
+   <div className="watchlist-head">
+    <div className="watchlist-title"><span className="extras-kicker"><Star size={11}/> WATCHLIST</span><strong>Your markets</strong><small>Saved on this device · available whenever you return</small></div>
+    <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={13}/>:<Plus size={13}/>} {saved?'Saved':'Add market'}</button>
+   </div>
+   <div className="watchlist-items">
+    {items.length?items.map(item=><button type="button" key={item.market+':'+item.symbol} className={item.symbol===symbol&&item.market===market?'watch-chip active':'watch-chip'} onClick={()=>onSelect?.(item.symbol,item.market)} title={`Open ${item.symbol}`}><span className="watch-dot"/><span>{item.symbol}</span><em>{item.market==='forex'?'FX':item.market==='commodities'?'CMDTY':item.market==='indices'?'INDEX':'PERP'}</em>{item.symbol===symbol&&item.market===market&&<span className="watch-active-mark">LIVE</span>}</button>):<div className="watch-empty"><Bookmark size={14}/><span><b>No saved markets yet.</b> Add one and it stays here when you leave and come back.</span></div>}
+   </div>
+  </div>
+ </section>
 }
-
