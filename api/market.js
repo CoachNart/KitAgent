@@ -427,15 +427,15 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   // Direction is strategy-specific. Higher-timeframe structure is a filter for
   // continuation models, not a universal signal generator.
   let bias=(key==='LIQUIDITY_REVERSAL'||key==='CRT')?'WAIT':higherBias;
-  const liveQuoteUsable=Boolean(liveQuote?.tradeable);
-  const livePrice=liveQuoteUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
+  const quoteIsUsable=Boolean(liveQuote?.tradeable);
+  const livePrice=quoteIsUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
   const evidence=[],failures=[]; let trade=null,orderType='NO_SETUP',entry=null,reason='';
   const validTrade=(t,tradeBias=bias,marketPrice=livePrice,tradeOrderType='')=>{
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<2.25)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
     if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.entry>=marketPrice)||(tradeBias==='SHORT'&&t.entry<=marketPrice)))return false;
-    if(tradeOrderType==='MARKET'&&!liveQuoteUsable)return false;
+    if(tradeOrderType==='MARKET'&&!quoteIsUsable)return false;
     if(tradeOrderType==='MARKET'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice)))return false;
     return true;
   };
