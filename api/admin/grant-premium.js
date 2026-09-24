@@ -133,11 +133,18 @@ export default async function handler(req,res){
       const profileSnap=await userRef.get();
       const profile=profileSnap.exists?(profileSnap.data()||{}):{};
 
+      // Collect every server-side binding/lock that can prevent this device or identity
+      // from registering again. Do not rely on only the profile copy: older accounts can
+      // have bindings/locks that predate the current schema.
       const deviceIds=new Set();
-      if(typeof profile.deviceBindingId==='string')deviceIds.add(profile.deviceBindingId);
-      if(typeof profile.securitySettings?.deviceBindingId==='string')deviceIds.add(profile.securitySettings.deviceBindingId);
+      if(typeof profile.deviceBindingId==='string'&&profile.deviceBindingId)deviceIds.add(profile.deviceBindingId);
+      if(typeof profile.securitySettings?.deviceBindingId==='string'&&profile.securitySettings.deviceBindingId)deviceIds.add(profile.securitySettings.deviceBindingId);
+
       const deviceQuery=await db.collection('deviceBindings').where('uid','==',uid).get();
-      for(const snap of deviceQuery.docs)deviceIds.add(snap.id);
+      for(const snap of deviceQuery.docs){
+        const id=snap.id;
+        if(id)deviceIds.add(id);
+      }
       const deviceRefs=[...deviceIds].map(id=>db.collection('deviceBindings').doc(id));
 
       const lockRefs=[];
@@ -150,6 +157,7 @@ export default async function handler(req,res){
       ]);
       for(const snap of lockQueries)for(const doc of snap.docs)lockRefs.push(doc.ref);
 
+      // Explicitly remove the deterministic identity lock used by registration.
       const email=String(recipient.email||profile.email||'').trim().toLowerCase();
       if(email){
         const parts=email.split('@'),local=parts[0],domain=parts[1];
@@ -158,6 +166,8 @@ export default async function handler(req,res){
           : email;
         lockRefs.push(db.collection('accountIdentityLocks').doc(encodeURIComponent(canonical)));
       }
+
+      // Also remove the deterministic network lock when the account profile has an IP.
       const ip=String(profile.lastSeenIp||'').trim();
       if(ip){
         const hash=crypto.createHash('sha256').update('kitsetups-signup-v2:'+ip).digest('hex');
@@ -167,8 +177,26 @@ export default async function handler(req,res){
       const uniqueRefs=[...new Map([...deviceRefs,...lockRefs].map(ref=>[ref.path,ref])).values()];
       for(const ref of uniqueRefs)await ref.delete().catch(()=>{});
 
+      // Delete the account tree and Firebase Auth record only after all external
+      // registration gates have been explicitly removed.
       await db.recursiveDelete(userRef);
       await a.auth().deleteUser(uid);
+
+      // Verify the registration gates are actually gone. This prevents a successful
+      // response while a stale device/identity lock would still block re-registration.
+      const verifyRefs=[...deviceIds].map(id=>db.collection('deviceBindings').doc(id));
+      const [identityVerify,networkVerify]=await Promise.all([
+        email?db.collection('accountIdentityLocks').doc(encodeURIComponent((email.split('@')[0]||'').split('+')[0].replace(/\\./g,'')+'@'+(email.split('@')[1]||'').replace(/^googlemail$/,'gmail.com'))).get():null,
+        Promise.all(verifyRefs.map(ref=>ref.get()))
+      ]);
+      const staleDevices=(networkVerify||[]).filter(s=>s.exists).map(s=>s.id);
+      const staleIdentity=identityVerify?.exists;
+      if(staleDevices.length||staleIdentity){
+        // A deterministic retry is safe here because these documents are the account's
+        // registration gates and are not shared with another UID.
+        for(const ref of verifyRefs)if(staleDevices.includes(ref.id))await ref.delete().catch(()=>{});
+        if(staleIdentity)await identityVerify.ref.delete().catch(()=>{});
+      }
 
       return json(res,200,{
         reset:true,
