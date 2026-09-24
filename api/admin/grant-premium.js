@@ -121,6 +121,39 @@ export default async function handler(req,res){
       return json(res,200,{removed:true,email});
     }
 
+    if(action==='release-device-binding'){
+      const deviceId=String(body.deviceId||'').trim().toLowerCase();
+      if(!/^[a-f0-9]{64}$/.test(deviceId))return json(res,400,{error:'A valid device binding is required.'});
+      const deviceRef=db.collection('deviceBindings').doc(deviceId);
+      const deviceSnap=await deviceRef.get();
+      if(!deviceSnap.exists)return json(res,200,{released:false,deviceId,message:'No server-side device binding exists for this device.'});
+      const ownerUid=String(deviceSnap.data()?.uid||'').trim();
+      await deviceRef.delete();
+      let ownerEmail='';
+      if(ownerUid){
+        try{
+          const owner=await a.auth().getUser(ownerUid);
+          ownerEmail=owner.email||'';
+        }catch{}
+        const ownerRef=db.collection('users').doc(ownerUid);
+        const ownerSnap=await ownerRef.get();
+        if(ownerSnap.exists){
+          const profile=ownerSnap.data()||{};
+          const security={...(profile.securitySettings||{})};
+          if(security.deviceBindingId===deviceId){
+            delete security.deviceBindingId;
+            await ownerRef.set({securitySettings:security,updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+          }
+          if(profile.deviceBindingId===deviceId){
+            await ownerRef.set({deviceBindingId:admin.firestore.FieldValue.delete(),updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+          }
+        }
+      }
+      const verify=await deviceRef.get();
+      if(verify.exists)return json(res,500,{error:'The device binding could not be fully released.'});
+      return json(res,200,{released:true,deviceId,previousOwnerUid:ownerUid,previousOwnerEmail:ownerEmail,message:'Device binding released. This device can now be used to create a new KitSetups account.'});
+    }
+
     if(action==='hard-reset'){
       let uid=String(body.uid||'').trim();
       const requestedEmail=String(body.email||'').trim().toLowerCase();
