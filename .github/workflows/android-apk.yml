@@ -32,8 +32,13 @@ jobs:
       - name: Build web bundle
         run: npm run build
 
-      - name: Generate Android project
-        run: npx cap add android
+      - name: Prepare Android project
+        run: |
+          if [ -d android ]; then
+            echo "Android project already exists; syncing it instead of re-adding it."
+          else
+            npx cap add android
+          fi
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -52,7 +57,15 @@ jobs:
           s = s.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/kitsetups_icon"')
           s = s.replace('android:theme="@style/AppTheme.NoActionBarLaunch"', 'android:theme="@style/AppTheme.NoActionBarLaunch" android:usesCleartextTraffic="false" android:resizeableActivity="true"')
           marker = '</activity>'
-          deep_link = '''\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="https" android:host="kitsetups.xyz" />\n                <data android:scheme="https" android:host="www.kitsetups.xyz" />\n            </intent-filter>\n          '''
+          deep_link = '''
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="kitsetups.xyz" />
+                <data android:scheme="https" android:host="www.kitsetups.xyz" />
+            </intent-filter>
+          '''
           if 'android:host="kitsetups.xyz"' not in s:
               s = s.replace(marker, deep_link + marker, 1)
           p.write_text(s)
