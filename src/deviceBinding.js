@@ -1,9 +1,20 @@
-const STORAGE_KEY = 'kitagent_device_binding_v4';
+const STORAGE_KEY = 'kitagent_device_binding_v5';
+const LEGACY_STORAGE_KEY = 'kitagent_device_binding_v3';
 
 async function sha256(value) {
   const data = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function osFamily() {
+  const platform = String(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '').toLowerCase();
+  if (platform.includes('android')) return 'android';
+  if (platform.includes('iphone') || platform.includes('ipad') || platform.includes('ios') || /macintosh/.test(platform) && navigator.maxTouchPoints > 1) return 'ios';
+  if (platform.includes('win')) return 'windows';
+  if (platform.includes('mac')) return 'mac';
+  if (platform.includes('linux')) return 'linux';
+  return 'other';
 }
 
 function canvasSignal() {
@@ -29,30 +40,52 @@ function webglSignal() {
   } catch { return ''; }
 }
 
-function stableDeviceSignals() {
-  // Avoid browser-specific UA/client-hint values so different browsers on one device share the base signal.
-  return [
-    navigator.language || '',
-    Array.isArray(navigator.languages) ? navigator.languages.slice(0, 4).join(',') : '',
-    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-    navigator.hardwareConcurrency || '',
-    `${screen.width}x${screen.height}`,
-    `${screen.availWidth}x${screen.availHeight}`,
-    screen.colorDepth || '',
-    window.devicePixelRatio || '',
-    navigator.maxTouchPoints || 0,
-    navigator.cookieEnabled ? 'cookies' : 'no-cookies',
-    canvasSignal(),
-    webglSignal(),
-  ].join('|');
+export function getDeviceBindingProfile() {
+  const width = Number(screen.width) || 0;
+  const height = Number(screen.height) || 0;
+  const availWidth = Number(screen.availWidth) || 0;
+  const availHeight = Number(screen.availHeight) || 0;
+  return {
+    osFamily: osFamily(),
+    language: String(navigator.language || '').toLowerCase(),
+    languages: Array.isArray(navigator.languages) ? navigator.languages.slice(0, 4).map(String).join(',').toLowerCase() : '',
+    timezone: String(Intl.DateTimeFormat().resolvedOptions().timeZone || ''),
+    hardwareConcurrency: Number(navigator.hardwareConcurrency) || 0,
+    deviceMemory: Number(navigator.deviceMemory) || 0,
+    screenWidth: width,
+    screenHeight: height,
+    availWidth,
+    availHeight,
+    colorDepth: Number(screen.colorDepth) || 0,
+    pixelRatio: Math.round((Number(window.devicePixelRatio) || 0) * 100) / 100,
+    maxTouchPoints: Number(navigator.maxTouchPoints) || 0,
+    canvas: canvasSignal(),
+    webgl: webglSignal(),
+  };
 }
 
 export async function getDeviceBindingFingerprint() {
-  return sha256(stableDeviceSignals());
+  const profile = getDeviceBindingProfile();
+  const stable = [
+    profile.osFamily,
+    profile.language,
+    profile.languages,
+    profile.timezone,
+    profile.hardwareConcurrency,
+    profile.deviceMemory,
+    profile.screenWidth,
+    profile.screenHeight,
+    profile.availWidth,
+    profile.availHeight,
+    profile.colorDepth,
+    profile.pixelRatio,
+    profile.maxTouchPoints,
+  ].join('|');
+  return sha256(stable);
 }
 
 export async function getDeviceBindingId() {
-  const existing = localStorage.getItem(STORAGE_KEY);
+  const existing = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
   if (existing && /^[a-f0-9]{64}$/.test(existing)) return existing;
   const id = await getDeviceBindingFingerprint();
   localStorage.setItem(STORAGE_KEY, id);
