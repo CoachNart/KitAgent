@@ -62,6 +62,15 @@ export default async function handler(req,res){
     const {a,decoded}=auth;
     const db=a.firestore();
 
+    if(req.method==='GET' && String(req.query?.q||'')==='__admins__'){
+      const rows=[];
+      const ownerEmail='03nart@gmail.com';
+      rows.push({email:ownerEmail,source:'owner',active:true});
+      const snap=await db.collection('adminAccess').where('active','==',true).get();
+      for(const doc of snap.docs){const email=doc.id.toLowerCase();if(!rows.some(x=>x.email===email))rows.push({email,source:'admin',active:true})}
+      return json(res,200,{admin:true,admins:rows});
+    }
+
     if(req.method==='GET'){
       const q=String(req.query?.q||'').trim().toLowerCase();
       const users=[];
@@ -96,18 +105,9 @@ export default async function handler(req,res){
     const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
     const action=String(body.action||'grant-premium').trim().toLowerCase();
 
-    if(req.method==='GET' && String(req.query?.q||'')==='__admins__'){
-      const rows=[];
-      const ownerEmail='03nart@gmail.com';
-      rows.push({email:ownerEmail,source:'owner',active:true});
-      const snap=await db.collection('adminAccess').where('active','==',true).get();
-      for(const doc of snap.docs){const email=doc.id.toLowerCase();if(!rows.some(x=>x.email===email))rows.push({email,source:'admin',active:true})}
-      return json(res,200,{admin:true,admins:rows});
-    }
-
     if(action==='add-admin'){
       const email=String(body.email||'').trim().toLowerCase();
-      if(!/^\\S+@\\S+\\.\\S+$/.test(email))return json(res,400,{error:'Enter a valid admin email.'});
+      if(!/^\S+@\S+\.\S+$/.test(email))return json(res,400,{error:'Enter a valid admin email.'});
       if(email==='03nart@gmail.com')return json(res,200,{added:false,owner:true,email});
       await db.collection('adminAccess').doc(email).set({email,active:true,addedBy:decoded.email||decoded.uid,addedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
       return json(res,200,{added:true,email});
