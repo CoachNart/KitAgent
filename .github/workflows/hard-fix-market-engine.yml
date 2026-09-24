@@ -1,5 +1,7 @@
 name: Hard fix market engine
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: write
@@ -12,88 +14,60 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
           p=Path('api/market.js')
           s=p.read_text()
-
-          # A stale live quote must block MARKET execution, not prevent the engine
-          # from studying completed candles and issuing a valid LIMIT setup.
-          old="""  if(!liveQuoteUsable(liveQuote))throw Object.assign(new Error('Live market quote is unavailable or stale. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});\n  const consistencyAtr=atr(current,14);\n  if(!quoteConsistentWithCandle(liveMid,current.at(-1),consistencyAtr,marketContext)){\n    throw Object.assign(new Error('Live market price is inconsistent with the latest candle data. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});\n  }"""
-          new="""  const quoteIsUsable=Boolean(liveQuote?.tradeable)&&liveQuoteUsable(liveQuote);\n  const consistencyAtr=atr(current,14);\n  if(quoteIsUsable&&!quoteConsistentWithCandle(liveMid,current.at(-1),consistencyAtr,marketContext)){\n    throw Object.assign(new Error('Live market price is inconsistent with the latest candle data. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});\n  }"""
-          if old in s:
-              s=s.replace(old,new,1)
-
-          # Give each named strategy a real secondary execution path. This does
-          # not replace the strategy; it prevents the final shared execution gates
-          # from killing a valid structural opportunity after the strategy has found
-          # directional evidence. RR stays >= 2.0 and targets remain structural.
+          old="""  if(!liveQuoteUsable(liveQuote))throw Object.assign(new Error('Live market quote is unavailable or stale. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  const consistencyAtr=atr(current,14);
+  if(!quoteConsistentWithCandle(liveMid,current.at(-1),consistencyAtr,marketContext)){
+    throw Object.assign(new Error('Live market price is inconsistent with the latest candle data. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  }"""
+          new="""  const quoteIsUsable=Boolean(liveQuote?.tradeable)&&liveQuoteUsable(liveQuote);
+  const consistencyAtr=atr(current,14);
+  if(quoteIsUsable&&!quoteConsistentWithCandle(liveMid,current.at(-1),consistencyAtr,marketContext)){
+    throw Object.assign(new Error('Live market price is inconsistent with the latest candle data. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});
+  }"""
+          if old in s:s=s.replace(old,new,1)
           start=s.find('  // Strategy-preserving recovery:')
           end=s.find('  const confidence=',start)
           if start!=-1 and end!=-1:
-              fallback="""  // Strategy-preserving execution recovery. The primary strategy branch above
-  // remains authoritative. This path only converts the strategy's own structural
-  // evidence into an executable MARKET/LIMIT candidate when the primary branch
-  // found the setup but was unable to place it at the exact execution candle.
+            fallback="""  // Strategy-preserving execution recovery: keep every named strategy,
+  // but allow its own structural evidence to reach a real execution candidate.
   if(!trade){
     const fallbackBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend);
     if(fallbackBias==='LONG'||fallbackBias==='SHORT'){
-      const structural=[];
-      const baseZones=entryZones(current,fallbackBias,livePrice,a,96);
-      for(const z of baseZones)structural.push(z);
-      const st=marketStructure(current);
-      const swings=fallbackBias==='LONG'?st.lows:st.highs;
+      const structural=[...entryZones(current,fallbackBias,livePrice,a,96)];
+      const st=marketStructure(current),swings=fallbackBias==='LONG'?st.lows:st.highs;
       for(const x of swings.slice(-12)){
         if(!Number.isFinite(x.p))continue;
         const ahead=fallbackBias==='LONG'?x.p<livePrice:x.p>livePrice;
-        const distance=Math.abs(livePrice-x.p);
-        if(!ahead||distance>Math.min(a*3.5,livePrice*.02))continue;
-        structural.push({low:fallbackBias==='LONG'?x.p-a*.18:x.p-a*.18,high:fallbackBias==='LONG'?x.p+a*.18:x.p+a*.18,mid:x.p,index:x.i,type:fallbackBias==='LONG'?'STRUCTURAL DEMAND':'STRUCTURAL SUPPLY'});
+        if(!ahead||Math.abs(livePrice-x.p)>Math.min(a*3.5,livePrice*.02))continue;
+        structural.push({low:x.p-a*.18,high:x.p+a*.18,mid:x.p,index:x.i,type:fallbackBias==='LONG'?'STRUCTURAL DEMAND':'STRUCTURAL SUPPLY'});
       }
-      if(key==='MSNR'){
-        for(const x of msnrLevels(biasCandles,fallbackBias).slice(0,8)){
-          if(Number.isFinite(x.level))structural.push({low:x.level-a*.18,high:x.level+a*.18,mid:x.level,index:x.index,type:x.type});
-        }
-      }
+      if(key==='MSNR')for(const x of msnrLevels(biasCandles,fallbackBias).slice(0,8))if(Number.isFinite(x.level))structural.push({low:x.level-a*.18,high:x.level+a*.18,mid:x.level,index:x.index,type:x.type});
+      const br=structureBreak(current,fallbackBias,90,36),sw=liquiditySweep(current,fallbackBias,36,24),dp=displacement(current,fallbackBias),eg=candleEngulfing(current,fallbackBias),rj=rejectionCandle(current,fallbackBias);
       let qualified=false;
-      const localBreak=structureBreak(current,fallbackBias,90,36);
-      const localSweep=liquiditySweep(current,fallbackBias,36,24);
-      const localDisp=displacement(current,fallbackBias);
-      const localEngulf=candleEngulfing(current,fallbackBias);
-      const localReject=rejectionCandle(current,fallbackBias);
       if(key==='TOP_DOWN')qualified=selectedBias===fallbackBias||entryStructure.trend===fallbackBias;
-      else if(key==='PULLBACK')qualified=Boolean(localBreak||localDisp||baseZones.length);
-      else if(key==='BREAKOUT')qualified=Boolean(localBreak||entryStructure.bullishBreak&&fallbackBias==='LONG'||entryStructure.bearishBreak&&fallbackBias==='SHORT');
-      else if(key==='SMC')qualified=Boolean(localSweep||localBreak||baseZones.length);
+      else if(key==='PULLBACK')qualified=Boolean(br||dp||structural.length);
+      else if(key==='BREAKOUT')qualified=Boolean(br||(entryStructure.bullishBreak&&fallbackBias==='LONG')||(entryStructure.bearishBreak&&fallbackBias==='SHORT'));
+      else if(key==='SMC')qualified=Boolean(sw||br||structural.length);
       else if(key==='MSNR')qualified=Boolean(msnrLevels(biasCandles,fallbackBias).length);
-      else if(key==='PRICE_ACTION')qualified=Boolean(localBreak||localEngulf||localReject);
-      else if(key==='LIQUIDITY_REVERSAL')qualified=Boolean(localSweep);
+      else if(key==='PRICE_ACTION')qualified=Boolean(br||eg||rj);
+      else if(key==='LIQUIDITY_REVERSAL')qualified=Boolean(sw);
       else if(key==='CRT'){
-        const ref=structure.length>1?structure.at(-2):structure.at(-1);
-        const rh=ref?.high,rl=ref?.low;
+        const ref=structure.length>1?structure.at(-2):structure.at(-1),rh=ref?.high,rl=ref?.low;
         qualified=Boolean(ref&&((fallbackBias==='LONG'&&current.some(x=>x.time>ref.time&&x.low<rl&&x.close>rl))||(fallbackBias==='SHORT'&&current.some(x=>x.time>ref.time&&x.high>rh&&x.close<rh))));
-        if(qualified&&Number.isFinite(rh)&&Number.isFinite(rl))structural.unshift({low:rl,high:rh,mid:(rl+rh)/2,index:Math.max(0,structure.length-2),type:'CRT RANGE MIDPOINT'});
+        if(qualified&&Number.isFinite(rh)&&Number.isFinite(rl))structural.unshift({low:rl,high:rh,mid:(rl+rh)/2,index:0,type:'CRT RANGE MIDPOINT'});
       }
       if(qualified&&structural.length){
-        const pending=chooseLimitForBias(structural,fallbackBias,livePrice);
-        const immediate=chooseMarketFromZones(structural,fallbackBias);
-        const chosen=immediate||pending;
-        if(chosen){
-          trade=chosen.trade;entry=chosen.entry;orderType=immediate?'MARKET':'LIMIT';bias=fallbackBias;
-          reason=info.name+' identified a valid structural execution opportunity.';
-          evidence.push('Strategy execution candidate confirmed.');
-        }
+        const pending=chooseLimitForBias(structural,fallbackBias,livePrice),immediate=chooseMarketFromZones(structural,fallbackBias),chosen=immediate||pending;
+        if(chosen){trade=chosen.trade;entry=chosen.entry;orderType=immediate?'MARKET':'LIMIT';bias=fallbackBias;reason=info.name+' identified a valid structural execution opportunity.';evidence.push('Strategy execution candidate confirmed.');}
       }
     }
   }
 """
-              s=s[:start]+fallback+s[end:]
-
-          # The former 0.65 ATR minimum risk and 2% max structural risk were too
-          # restrictive for low-volatility FX and fast crypto. Keep structural SL
-          # and the 2R quality floor, but stop rejecting otherwise valid structures.
+            s=s[:start]+fallback+s[end:]
           s=s.replace('const maxRisk=Math.min(a*2.2,entry*.02);','const maxRisk=Math.min(a*3.0,entry*.03);')
           s=s.replace('const minimumRisk=Math.max(a*.65,entry*.001);','const minimumRisk=Math.max(a*.35,entry*.0005);')
-
           p.write_text(s)
           PY
       - name: Validate JavaScript
