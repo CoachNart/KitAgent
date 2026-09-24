@@ -9,8 +9,8 @@ export default function AccessGate({user,children}){
  useEffect(()=>{if(!db||!user?.uid){setLoaded(true);return undefined}return onSnapshot(doc(db,'users',user.uid),s=>{setProfile(s.exists()?s.data():null);setLoaded(true)},()=>setLoaded(true))},[user?.uid]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
  if(!loaded||!profile)return children;
- const plan=String(profile.plan||'free').toLowerCase();
- const subscriptionEnd=toMs(profile.subscriptionEndsAt);
+ const plan=String(profile.plan||profile.subscription?.plan||'free').toLowerCase();
+ const subscriptionEnd=toMs(profile.subscriptionEndsAt)||toMs(profile.subscription?.endsAt)||toMs(profile.subscription?.expiresAt);
  const created=toMs(profile.createdAt);
  const started=toMs(profile.trialStartedAt)||created;
  const storedTrialEnd=toMs(profile.trialEndsAt);
@@ -20,8 +20,9 @@ export default function AccessGate({user,children}){
  const freshAccount=created>0&&created+TRIAL_MS>now;
  const derivedEnd=started?started+TRIAL_MS:0;
  const trialEnd=freshAccount?Math.max(storedTrialEnd,derivedEnd,created+TRIAL_MS):(storedTrialEnd||derivedEnd);
- const premiumActive=plan==='premium'&&(!subscriptionEnd||subscriptionEnd>now);
- const premiumExpired=plan==='premium'&&subscriptionEnd>0&&subscriptionEnd<=now;
+ const subscriptionStatus=String(profile.subscription?.status||'').toLowerCase();
+ const premiumActive=(plan==='premium'||subscriptionStatus==='active'||subscriptionStatus==='current')&&(!subscriptionEnd||subscriptionEnd>now);
+ const premiumExpired=(plan==='premium'||subscriptionStatus==='active'||subscriptionStatus==='current')&&subscriptionEnd>0&&subscriptionEnd<=now;
  const trialActive=plan!=='premium'&&trialEnd>now;
  if(premiumActive||trialActive)return children;
  const expiredPremium=premiumExpired;
