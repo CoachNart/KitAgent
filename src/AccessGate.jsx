@@ -20,7 +20,7 @@ export default function AccessGate({user,children}){
  const freshAccount=created>0&&created+TRIAL_MS>now;
  const derivedEnd=started?started+TRIAL_MS:0;
  const trialEnd=freshAccount?Math.max(storedTrialEnd,derivedEnd,created+TRIAL_MS):(storedTrialEnd||derivedEnd);
- const premiumActive=plan==='premium'&&subscriptionEnd>now;
+ const premiumActive=plan==='premium'&&(!subscriptionEnd||subscriptionEnd>now);
  const trialActive=plan!=='premium'&&trialEnd>now;
  if(premiumActive||trialActive)return children;
  return <div className="access-locked"><div className="access-locked-card"><div className="access-lock-icon"><LockKeyhole size={18}/></div><span className="access-kicker">PREMIUM ACCESS</span><h2>Your free access has ended</h2><p>Subscribe to Premium to continue using Market Analysis and Chart Terminal.</p><div className="access-lock-meta"><span><Clock3 size={12}/> Access expired</span><b>Premium · $20 / 30D</b></div><button type="button" className="access-subscribe" onClick={()=>window.dispatchEvent(new CustomEvent('kitagent-open-profile'))}>View Premium plan</button><small>Your account and wallet remain safe. No transaction is executed from this notice.</small></div></div>
