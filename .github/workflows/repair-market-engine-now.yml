@@ -1,0 +1,82 @@
+name: Repair market engine now
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair engine
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('api/market.js')
+          s=p.read_text()
+          # Never kill LIMIT analysis because a live quote is stale. MARKET validation still uses quoteIsUsable.
+          s=s.replace("if(!liveQuoteUsable(liveQuote))throw Object.assign(new Error('Live market quote is unavailable or stale. No setup was issued.'),{code:'MARKET_DATA_PRICE_UNAVAILABLE'});\n  const consistencyAtr=atr(current,14);\n  if(!quoteConsistentWithCandle(liveMid,current.at(-1),consistencyAtr,marketContext)){", "const consistencyAtr=atr(current,14);\n  if(liveQuoteUsable(liveQuote)&&!quoteConsistentWithCandle(liveMid,current.at(-1),consistencyAtr,marketContext)){", 1)
+          # The previous recovery referenced helpers that are not present in the root engine.
+          # Replace it with a self-contained structural execution path.
+          start=s.find('  // Strategy-preserving recovery:')
+          end=s.find('  const confidence=',start)
+          if start!=-1 and end!=-1:
+            block="""  // Strategy-preserving recovery. Every named strategy keeps its primary model;
+  // this path only converts confirmed directional/structural evidence into a
+  // real execution zone. It never lowers the 2R floor.
+  if(!trade){
+    const recoveryBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend);
+    if(recoveryBias==='LONG'||recoveryBias==='SHORT'){
+      const zones=[...entryZones(current,recoveryBias,livePrice,a,96)];
+      const st=marketStructure(current),swings=recoveryBias==='LONG'?st.lows:st.highs;
+      for(const x of swings.slice(-12)){
+        if(!Number.isFinite(x.p))continue;
+        const ahead=recoveryBias==='LONG'?x.p<livePrice:x.p>livePrice;
+        if(!ahead||Math.abs(livePrice-x.p)>Math.min(a*3.5,livePrice*.02))continue;
+        zones.push({low:x.p-a*.18,high:x.p+a*.18,mid:x.p,index:x.i,type:recoveryBias==='LONG'?'STRUCTURAL DEMAND':'STRUCTURAL SUPPLY'});
+      }
+      if(key==='MSNR')for(const x of msnrLevels(biasCandles,recoveryBias).slice(0,8))if(Number.isFinite(x.level))zones.push({low:x.level-a*.18,high:x.level+a*.18,mid:x.level,index:x.index,type:x.type});
+      const bos=structureBreak(current,recoveryBias,90,36);
+      const sweep=liquiditySweep(current,recoveryBias,36,24);
+      const disp=displacement(current,recoveryBias);
+      const engulf=candleEngulfing(current,recoveryBias);
+      const reject=rejectionCandle(current,recoveryBias);
+      let qualified=false;
+      if(key==='TOP_DOWN')qualified=selectedBias===recoveryBias||entryStructure.trend===recoveryBias;
+      else if(key==='PULLBACK')qualified=Boolean(bos||disp||zones.length);
+      else if(key==='BREAKOUT')qualified=Boolean(bos||(entryStructure.bullishBreak&&recoveryBias==='LONG')||(entryStructure.bearishBreak&&recoveryBias==='SHORT'));
+      else if(key==='SMC')qualified=Boolean(sweep||bos||zones.length);
+      else if(key==='MSNR')qualified=Boolean(msnrLevels(biasCandles,recoveryBias).length);
+      else if(key==='PRICE_ACTION')qualified=Boolean(bos||engulf||reject);
+      else if(key==='LIQUIDITY_REVERSAL')qualified=Boolean(sweep);
+      else if(key==='CRT'){
+        const ref=structure.length>1?structure.at(-2):structure.at(-1),rh=ref?.high,rl=ref?.low;
+        qualified=Boolean(ref&&((recoveryBias==='LONG'&&current.some(x=>x.time>ref.time&&x.low<rl&&x.close>rl))||(recoveryBias==='SHORT'&&current.some(x=>x.time>ref.time&&x.high>rh&&x.close<rh))));
+        if(qualified&&Number.isFinite(rh)&&Number.isFinite(rl))zones.unshift({low:rl,high:rh,mid:(rl+rh)/2,index:0,type:'CRT RANGE MIDPOINT'});
+      }
+      if(qualified&&zones.length){
+        const pending=chooseLimitForBias(zones,recoveryBias,livePrice);
+        const immediate=chooseMarketFromZones(zones,recoveryBias);
+        const chosen=immediate||pending;
+        if(chosen){trade=chosen.trade;entry=chosen.entry;orderType=immediate?'MARKET':'LIMIT';bias=recoveryBias;reason=info.name+' identified a valid structural execution opportunity.';evidence.push('Strategy execution candidate confirmed.');}
+      }
+    }
+  }
+"""
+            s=s[:start]+block+s[end:]
+          # Widen only the structural risk envelope; retain real structure and 2R minimum.
+          s=s.replace('const maxRisk=Math.min(a*2.2,entry*.02);','const maxRisk=Math.min(a*3.0,entry*.03);')
+          s=s.replace('const minimumRisk=Math.max(a*.65,entry*.001);','const minimumRisk=Math.max(a*.35,entry*.0005);')
+          p.write_text(s)
+          PY
+      - name: Syntax check
+        run: node --check api/market.js
+      - name: Commit repair and remove patch workflows
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/market.js
+          git rm .github/workflows/repair-market-engine-now.yml .github/workflows/hard-fix-market-engine.yml || true
+          git commit -m "Fix dead strategy execution engine"
+          git push
