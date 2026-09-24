@@ -444,7 +444,6 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   if(bias==='WAIT'&&!['TOP_DOWN'].includes(key)){
     bias=selectedBias!=='WAIT'?selectedBias:entryStructure.trend;
   }
-  const quoteIsUsable=Boolean(liveQuote?.tradeable);
   const livePrice=quoteIsUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
   const evidence=[],failures=[]; let trade=null,orderType='NO_SETUP',entry=null,reason='';
