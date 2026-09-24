@@ -122,12 +122,37 @@ export default async function handler(req,res){
     }
 
     if(action==='release-device-binding'){
-      const deviceId=String(body.deviceId||'').trim().toLowerCase();
-      if(!/^[a-f0-9]{64}$/.test(deviceId))return json(res,400,{error:'A valid device binding is required.'});
+      let deviceId=String(body.deviceId||'').trim().toLowerCase();
+      const requestedEmail=String(body.email||'').trim().toLowerCase();
+      if(deviceId&&!/^[a-f0-9]{64}$/.test(deviceId))return json(res,400,{error:'Invalid device binding ID.'});
+      let ownerUid='';
+      if(!deviceId&&requestedEmail){
+        try{ownerUid=(await a.auth().getUserByEmail(requestedEmail)).uid}catch(error){
+          if(error?.code==='auth/user-not-found')return json(res,404,{error:'No Firebase Authentication account exists for that email.',released:false});
+          throw error;
+        }
+        const matches=await db.collection('deviceBindings').where('uid','==',ownerUid).limit(20).get();
+        if(matches.empty)return json(res,200,{released:false,email:requestedEmail,message:'No server-side device binding is attached to that account.'});
+        const deleted=[];
+        for(const doc of matches.docs){await doc.ref.delete();deleted.push(doc.id)}
+        const ownerRef=db.collection('users').doc(ownerUid);
+        const ownerSnap=await ownerRef.get();
+        if(ownerSnap.exists){
+          const profile=ownerSnap.data()||{}; const security={...(profile.securitySettings||{})};
+          let changed=false;
+          if(security.deviceBindingId){delete security.deviceBindingId;changed=true}
+          const patch={updatedAt:admin.firestore.FieldValue.serverTimestamp()};
+          if(changed)patch.securitySettings=security;
+          if(profile.deviceBindingId)patch.deviceBindingId=admin.firestore.FieldValue.delete();
+          if(changed||profile.deviceBindingId)await ownerRef.set(patch,{merge:true});
+        }
+        return json(res,200,{released:true,email:requestedEmail,deviceIds:deleted,message:'Released '+deleted.length+' device binding'+(deleted.length===1?'':'s')+' for this account.'});
+      }
+      if(!deviceId)return json(res,400,{error:'Enter an email or device binding ID.'});
       const deviceRef=db.collection('deviceBindings').doc(deviceId);
       const deviceSnap=await deviceRef.get();
       if(!deviceSnap.exists)return json(res,200,{released:false,deviceId,message:'No server-side device binding exists for this device.'});
-      const ownerUid=String(deviceSnap.data()?.uid||'').trim();
+      ownerUid=String(deviceSnap.data()?.uid||'').trim();
       await deviceRef.delete();
       let ownerEmail='';
       if(ownerUid){
