@@ -23,6 +23,94 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import subprocess, re
+
+          # Existing CSS repair.
+          css = Path('src/mexcFutures.css')
+          s = css.read_text()
+          bad = '}display:flex;gap:6px;margin-top:8px}display:flex;gap:6px;margin-top:8px}display:flex;gap:6px;margin-top:10px}'
+          if bad in s:
+              css.write_text(s.replace(bad, '}', 1))
+
+          # Market engine: one realistic TP only. Never stretch a target just to
+          # manufacture a large RR; reject targets that are too far for the
+          # execution timeframe instead.
+          market = Path('api/market.js')
+          m = market.read_text()
+          replacements = [
+            ("const maxDistance=Math.max(a*2.25,current*.0125);", "const maxDistance=Math.max(a*1.5,current*.006);"),
+            ("const maxDistance=Math.max(a*10,entry*.08);", "const maxDistance=Math.max(a*3.5,entry*.035);"),
+            ("const maxRisk=Math.max(a*2.2,entry*.025);", "const maxRisk=Math.max(a*1.8,entry*.015);"),
+            ("function evaluateTrade(c,bias,entry,a,minRR=2.25){", "function evaluateTrade(c,bias,entry,a,minRR=1.25){"),
+            ("const buffer=Math.max(a*.08,entry*.00015);\n  // Do not accept", "// Do not accept"),
+            ("const minimumReward=Math.max(a*1.25,entry*.0035,risk*minRR);", "const minimumReward=Math.max(a*.75,entry*.0015,risk*minRR);"),
+            (".filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR);", ".filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&Math.abs(x.target-entry)<=Math.max(a*3.5,entry*.035));"),
+            ("t.rr<2.25", "t.rr<1.25"),
+            ("return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:reason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null", "return {strategy:key,strategyName:info.name,strategyShort:info.short,marketRegime:bias||'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:evidence,strategyFailures:failures,strategyReason:reason||info.description,tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null"),
+            ("takeProfit2:roundPrice(trade.target2)", "takeProfit2:null"),
+            ("offer at least 2.25R.", "offer a realistic reward relative to risk."),
+            ("Target must be a real structural/liquidity level with at least 2.25R.", "Target must be a real structural/liquidity level within the execution timeframe's realistic range."),
+            ("The opposite side of the range must support the risk model and minimum 2.25R.", "The opposite side of the range must support the risk model and remain within a realistic execution range."),
+          ]
+          for old, new in replacements:
+              m = m.replace(old, new)
+          m = m.replace(",a,2.25)", ",a,1.25)")
+
+          # Remove the old TP2/runner projection block completely.
+          runner_start = "  // TP2 is always produced when the chart has room:"
+          runner_end = "  return {\n    entry,\n    stop,\n    risk,\n    target:chosen.target,\n    targetLiquidity:chosen.level,\n    target2,\n    target2Liquidity,\n    rr:chosen.rr\n  };"
+          if runner_start not in m or runner_end not in m:
+              raise SystemExit('TP2 engine block not found; refusing unsafe market edit')
+          before, rest = m.split(runner_start, 1)
+          _, after = rest.split(runner_end, 1)
+          m = before + runner_end.replace("    target2,\n    target2Liquidity,\n", "") + after
+
+          # CRT must use the same single-target risk policy; its custom stop/target
+          # calculation remains structural, but cannot resurrect TP2 or demand 2.25R.
+          m = m.replace("rr>=2.25){\n          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity,rr,target2:t.target2};", "rr>=1.25){\n          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity,rr};")
+          market.write_text(m)
+
+          # Setup card: one target labelled simply TP.
+          ui = Path('src/LiveMarketPage.jsx')
+          u = ui.read_text()
+          old = '''          <div className="v2-level tp"><span>TP 1</span><b>{price(s.takeProfit1)}</b></div>\n          <div className="v2-level tp"><span>TP 2</span><b>{price(s.takeProfit2)}</b></div>'''
+          new = '''          <div className="v2-level tp"><span>TP</span><b>{price(s.takeProfit1)}</b></div>'''
+          if old not in u:
+              raise SystemExit('Setup-card TP block not found; refusing unsafe UI edit')
+          ui.write_text(u.replace(old, new, 1))
+
+          # Keep the workflow itself unchanged in the resulting source commit.
+          workflow = Path('.github/workflows/build.yml')
+          w = workflow.read_text()
+          marker = "          # Existing CSS repair.\n"
+          if marker not in w:
+              raise SystemExit('Workflow patch marker missing')
+          # Reconstruct the original workflow exactly after applying the patch.
+          original = '''# deploy polished KitAgent UI
+name: Build KitAgent
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - name: Repair product polish source
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
           import subprocess
           css = Path('src/mexcFutures.css')
           s = css.read_text()
@@ -37,6 +125,17 @@ jobs:
           if subprocess.run(['git','diff','--cached','--quiet']).returncode != 0:
               subprocess.run(['git','commit','-m','fix: repair KitAgent trading share CSS'],check=True)
               subprocess.run(['git','push','origin','HEAD:main'],check=True)
+          PY
+      - run: npm install
+      - run: NODE_OPTIONS=--max-old-space-size=4096 npm run build
+'''
+          workflow.write_text(original)
+
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          subprocess.run(['git','add','api/market.js','src/LiveMarketPage.jsx','.github/workflows/build.yml','src/mexcFutures.css'],check=True)
+          subprocess.run(['git','commit','-m','fix: use realistic single-target market setups'],check=True)
+          subprocess.run(['git','push','origin','HEAD:main'],check=True)
           PY
       - run: npm install
       - run: NODE_OPTIONS=--max-old-space-size=4096 npm run build
