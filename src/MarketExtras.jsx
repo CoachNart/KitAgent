@@ -27,7 +27,7 @@ export function StrategySelector({value,onChange}){
  </label>
 }
 
-export function StrategyExplanation({setup,strategy}){
+export function StrategyExplanation({setup,strategy}){\n const [open,setOpen]=useState(false);
  const item=STRATEGY_LIBRARY.find(x=>x.key===strategy)||STRATEGY_LIBRARY[0];
  const evidence=setup?.strategyEvidence?.length?setup.strategyEvidence:item.rules;
  const detail={
