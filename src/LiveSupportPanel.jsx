@@ -13,7 +13,7 @@ export default function LiveSupportPanel({user,name,email}){
   const [category,setCategory]=useState('Technical issue');
   const [draft,setDraft]=useState('');
   const [busy,setBusy]=useState(false);
-  const [loading,setLoading]=useState(true);
+  const [loading,setLoading]=useState(false);
   const [notice,setNotice]=useState('');
   const [error,setError]=useState('');
   const [newRequest,setNewRequest]=useState(false);
