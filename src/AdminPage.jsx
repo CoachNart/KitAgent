@@ -70,6 +70,21 @@ export default function AdminPage({user}){
 
   const visible=useMemo(()=>users.slice(0,20),[users]);
 
+  const hardReset=async()=>{
+    if(!selected||busy)return;
+    const label=selected.displayName||selected.email||selected.uid;
+    const confirmed=window.confirm('HARD RESET '+label+'? This permanently deletes the Firebase account, profile, trades, transactions, support tickets, payment verification data, device bindings, signup locks, and other account-linked data. The user will need to create a completely new KitSetups account. This cannot be undone.');
+    if(!confirmed)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      await call({method:'POST',body:{action:'hard-reset',uid:selected.uid}});
+      setUsers(current=>current.filter(item=>item.uid!==selected.uid));
+      setNotice(label+' was hard reset. Their account and device binding are fully cleared and they can register again.');
+      setSelected(null);
+    }catch(e){setError(e.message||'Hard reset failed.')}
+    finally{setBusy(false)}
+  };
+
   const grant=async()=>{
     if(!selected||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -124,7 +139,8 @@ export default function AdminPage({user}){
             <div className="admin-duration-grid">{[7,30,90].map(value=><button key={value} className={days===value?'active':''} onClick={()=>setDays(value)}><strong>{value}</strong><span>days</span></button>)}</div>
             <div className="admin-current"><Clock3 size={14}/><span>Current Premium expiry</span><b>{formatDate(selected.subscriptionEndsAt)}</b></div>
             <button className="admin-grant" disabled={busy} onClick={grant}><Gift size={16}/>{busy?'Granting Premium…':`Grant ${days} days Premium`}</button>
-            <small className="admin-note">If the user already has active Premium, the gifted days are added to the existing expiry.</small>
+            <button className="admin-reset" disabled={busy} onClick={hardReset}><XCircle size={15}/>{busy?'Resetting account…':'Hard reset account'}</button>
+            <small className="admin-note">Hard reset permanently removes the account, device binding, signup locks, and all account-linked Firestore data. The user can register again from the same device.</small>
           </>}
         </div>
       </section>
