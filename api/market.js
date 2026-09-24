@@ -250,33 +250,24 @@ function targetBeforeLiquidity(c,bias,level,entry,a){
   return bias==='LONG'?level-buffer:level+buffer;
 }
 function evaluateTrade(c,bias,entry,a,minRR=SETUP_MIN_RR){
-  const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop),minimumRisk=Math.max(a*.65,entry*.001);
-  if(!Number.isFinite(entry)||entry<=0||!Number.isFinite(stop))return null;
+  if(!Number.isFinite(entry)||entry<=0||!['LONG','SHORT'].includes(bias)||!Number.isFinite(a)||a<=0)return null;
+  const stop=stopForEntry(c,bias,entry,a);
+  if(!Number.isFinite(stop))return null;
   if((bias==='LONG'&&stop>=entry)||(bias==='SHORT'&&stop<=entry))return null;
-  if(!risk||risk<minimumRisk)return null;
+  const risk=Math.abs(entry-stop);
+  const minimumRisk=Math.max(a*.65,entry*.001);
+  if(!Number.isFinite(risk)||risk<minimumRisk)return null;
   const pools=targetPool(c,bias,entry,a);
-  // Front-run the validated liquidity zone. The extreme remains the structural
-  // reference, while the actual TP sits slightly inside it.
-  // Do not accept a technically valid but practically tiny target. The first
-  // objective must have enough room to absorb normal volatility and still leave
-  // the trade with a meaningful exit after entry.
   const minimumReward=Math.max(a*.75,entry*.0015,risk*minRR);
+  const maxTargetDistance=Math.min(a*4.5,entry*.04);
   const candidates=pools.map(level=>{
     const target=targetBeforeLiquidity(c,bias,level,entry,a);
     const reward=Math.abs(target-entry);
     return {level,target,reward,rr:reward/risk};
-  }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&Math.abs(x.target-entry)<=Math.min(a*4.5,entry*.04));
+  }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR&&x.reward<=maxTargetDistance);
   if(!candidates.length)return null;
   const chosen=candidates[0];
-
-  return {
-    entry,
-    stop,
-    risk,
-    target:chosen.target,
-    targetLiquidity:chosen.level,
-    rr:chosen.rr
-  };
+  return {entry,stop,risk,target:chosen.target,targetLiquidity:chosen.level,rr:chosen.rr};
 }
 function marketStructure(c){
   const {highs,lows}=confirmedSwings(c),h=highs.slice(-8),l=lows.slice(-8);
