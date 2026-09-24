@@ -675,20 +675,25 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       const crtStop=signal==='LONG'?sweepExtreme-buffer:sweepExtreme+buffer;
       const crtTarget=signal==='LONG'?rangeHigh:rangeLow;
       const crtEntry=signal==='LONG'?rangeLow:rangeHigh;
-      const pending=chooseExecution(signal,crtEntry,{low:rangeLow,high:rangeHigh,mid:mid,index:parentIndex,type:'CRT RANGE RETEST'},livePrice);
-      if(pending){
-        trade=pending.trade;entry=pending.entry;orderType=pending.orderType;bias=signal;
+      const buildCrtTrade=(entryPrice)=>{
+        const target=targetBeforeLiquidity(current,signal,crtTarget,entryPrice,a);
+        const risk=Math.abs(entryPrice-crtStop);
+        const rr=risk>0?Math.abs(target-entryPrice)/risk:0;
+        if(!Number.isFinite(target)||!Number.isFinite(risk)||risk<=0||!Number.isFinite(rr))return null;
+        return {entry:entryPrice,stop:crtStop,target,targetLiquidity:crtTarget,risk,rr};
+      };
+      const pending=buildCrtTrade(crtEntry);
+      if(pending&&pendingTooClose(crtEntry,livePrice)){
+        const mt=buildCrtTrade(livePrice);
+        if(mt&&validTrade(mt,signal,livePrice,'MARKET')){
+          trade=mt;entry=livePrice;orderType='MARKET';bias=signal;
+        }
+      } else if(pending&&validTrade(pending,signal,livePrice,'LIMIT')){
+        trade=pending;entry=crtEntry;orderType='LIMIT';bias=signal;
       } else {
-        const mt=evaluateTrade(current,signal,livePrice,a,SETUP_MIN_RR);
-        if(mt){
-          mt.stop=crtStop;
-          mt.target=targetBeforeLiquidity(current,signal,crtTarget,livePrice,a);
-          mt.targetLiquidity=crtTarget;
-          mt.risk=Math.abs(livePrice-crtStop);
-          mt.rr=mt.risk>0?Math.abs(mt.target-livePrice)/mt.risk:0;
-          if(validTrade(mt,signal,livePrice,'MARKET')){
-            trade=mt;entry=livePrice;orderType='MARKET';bias=signal;
-          }
+        const mt=buildCrtTrade(livePrice);
+        if(mt&&validTrade(mt,signal,livePrice,'MARKET')){
+          trade=mt;entry=livePrice;orderType='MARKET';bias=signal;
         }
       }
     }
@@ -708,6 +713,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       aligned?'CRT direction is compatible with higher-timeframe structure.':'CRT direction conflicts with higher-timeframe structure.',
       beforeMid?'Price remains in the entry half of the CRT range.':'Price has reached/passed the CRT midpoint.'
     );
+  }
   // Strategy-preserving recovery: if the full pattern did not produce a trade,
   // give that same strategy one additional execution path using its own directional
   // evidence plus a real structural retracement zone. This does not manufacture a
