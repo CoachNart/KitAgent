@@ -116,9 +116,22 @@ function displacement(c,bias){
 }
 function liquiditySweep(c,bias,lookback=20,maxAge=Infinity){
   const st=marketStructure(c),start=Math.max(2,c.length-lookback),recentStart=Number.isFinite(maxAge)?Math.max(0,c.length-maxAge):0;
-  if(bias==='LONG'){const ref=st.lows.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++){if(i<recentStart)continue;if(c[i].low<ref.p&&c[i].close>ref.p)return {type:'SELL-SIDE SWEEP',level:ref.p,index:i};}}}
-  if(bias==='SHORT'){const ref=st.highs.filter(x=>x.i>=start&&x.i<c.length-2).at(-1);if(ref){for(let i=ref.i+1;i<c.length;i++){if(i<recentStart)continue;if(c[i].high>ref.p&&c[i].close<ref.p)return {type:'BUY-SIDE SWEEP',level:ref.p,index:i};}}}
-  return null;
+  const refs=(bias==='LONG'?st.lows:st.highs)
+    .filter(x=>x.i>=start&&x.i<c.length-2)
+    .slice().sort((a,b)=>b.i-a.i);
+  let best=null;
+  for(const ref of refs){
+    for(let i=ref.i+1;i<c.length;i++){
+      if(i<recentStart)continue;
+      const swept=bias==='LONG'&&c[i].low<ref.p&&c[i].close>ref.p
+        ||bias==='SHORT'&&c[i].high>ref.p&&c[i].close<ref.p;
+      if(swept){
+        const candidate={type:bias==='LONG'?'SELL-SIDE SWEEP':'BUY-SIDE SWEEP',level:ref.p,index:i,referenceIndex:ref.i};
+        if(!best||candidate.index>best.index)best=candidate;
+      }
+    }
+  }
+  return best;
 }
 function fairValueGaps(c,bias){
   const out=[];for(let i=2;i<c.length;i++){const a=c[i-2],d=c[i];if(bias==='LONG'&&d.low>a.high)out.push({low:a.high,high:d.low,mid:(a.high+d.low)/2,index:i,type:'BULLISH FVG'});if(bias==='SHORT'&&d.high<a.low)out.push({low:d.high,high:a.low,mid:(d.high+a.low)/2,index:i,type:'BEARISH FVG'});}return out.filter(x=>x.index>=Math.max(2,c.length-80));
@@ -150,7 +163,7 @@ function zoneFreshBeforeCurrent(c,z,bias){
   return true;
 }
 function entryZones(c,bias,current,a,maxAge=24){
-  const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-2);
+  const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-1);
   const maxDistance=Math.min(a*2.0,current*.008);
   return zones.filter(z=>{
     const ahead=bias==='LONG'?z.mid<current:z.mid>current;
@@ -464,8 +477,9 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     // A pullback can be a pending limit while price is approaching the POI, or
     // a market execution when the current candle has reached a still-fresh POI
     // and the continuation evidence is present.
-    if(impulse&&(m&&continuation||z)){
-      const chosen=m&&continuation?m:z;trade=chosen.trade;entry=chosen.entry;orderType=m&&continuation?'MARKET':'LIMIT';
+    if(impulse&&((m&&continuation)||z)){
+      const chosen=m&&continuation?m:z;
+      trade=chosen.trade;entry=chosen.entry;orderType=m&&continuation?'MARKET':'LIMIT';
     }
     reason=trade?'A confirmed impulse is being followed by a valid retracement/continuation entry.':'Waiting for a confirmed impulse and a fresh, unmitigated pullback zone.';
     evidence.push(impulse?'Directional impulse confirmed.':'No qualifying directional impulse.',zones[0]?zones[0].type:'No fresh FVG/order block.',continuation?'Continuation displacement present.':'No continuation displacement.');
