@@ -201,19 +201,43 @@ function targetPool(c,bias,entry,a){
     .filter(level=>bias==='LONG'?level>entry&&level-entry<=maxDistance:level<entry&&entry-level<=maxDistance)
     .sort((x,y)=>bias==='LONG'?x-y:y-x);
 }
+function liquidityTargetBuffer(c,bias,level,entry,a){
+  // Liquidity is a zone rather than an exact wick price. Derive a small
+  // front-run buffer from the actual candles that form the level instead of
+  // using a fixed percentage or inventing a new price.
+  const tolerance=Math.max(a*.18,entry*.0006);
+  const touches=(c||[]).slice(-120).filter(x=>{
+    if(!Number.isFinite(x?.high)||!Number.isFinite(x?.low))return false;
+    return Math.abs((bias==='LONG'?x.high:x.low)-level)<=tolerance;
+  });
+  const localRanges=touches.map(x=>x.high-x.low).filter(x=>Number.isFinite(x)&&x>0);
+  const localRange=localRanges.length?sma(localRanges,Math.min(5,localRanges.length)):null;
+  const atrBuffer=Number.isFinite(a)?a*.12:0;
+  const rangeBuffer=Number.isFinite(localRange)?localRange*.15:0;
+  const floor=entry>0?entry*.0002:0;
+  const buffer=Math.max(atrBuffer,rangeBuffer,floor);
+  const maxBuffer=Math.max(a*.35,entry*.0025);
+  return Math.min(buffer,maxBuffer);
+}
+function targetBeforeLiquidity(c,bias,level,entry,a){
+  const buffer=liquidityTargetBuffer(c,bias,level,entry,a);
+  return bias==='LONG'?level-buffer:level+buffer;
+}
 function evaluateTrade(c,bias,entry,a,minRR=2.25){
   const stop=stopForEntry(c,bias,entry,a),risk=Math.abs(entry-stop),minimumRisk=Math.max(a*.65,entry*.001);
   if(!Number.isFinite(entry)||entry<=0||!Number.isFinite(stop))return null;
   if((bias==='LONG'&&stop>=entry)||(bias==='SHORT'&&stop<=entry))return null;
   if(!risk||risk<minimumRisk)return null;
   const pools=targetPool(c,bias,entry,a);
+  // Front-run the validated liquidity zone. The extreme remains the structural
+  // reference, while the actual TP sits slightly inside it.
   const buffer=Math.max(a*.08,entry*.00015);
   // Do not accept a technically valid but practically tiny target. The first
   // objective must have enough room to absorb normal volatility and still leave
   // the trade with a meaningful exit after entry.
   const minimumReward=Math.max(a*1.25,entry*.0035,risk*minRR);
   const candidates=pools.map(level=>{
-    const target=bias==='LONG'?level-buffer:level+buffer;
+    const target=targetBeforeLiquidity(c,bias,level,entry,a);
     const reward=Math.abs(target-entry);
     return {level,target,reward,rr:reward/risk};
   }).filter(x=>Number.isFinite(x.target)&&x.reward>=minimumReward&&x.rr>=minRR);
@@ -225,7 +249,7 @@ function evaluateTrade(c,bias,entry,a,minRR=2.25){
   // the validated target envelope. This keeps the UI from publishing a setup
   // with a blank second target while avoiding an arbitrary price level.
   const target2Candidate=pools.slice(1).map(level=>{
-    const target=bias==='LONG'?level-buffer:level+buffer;
+    const target=targetBeforeLiquidity(c,bias,level,entry,a);
     return {level,target,rr:Math.abs(target-entry)/risk};
   }).filter(x=>
     (bias==='LONG'?x.target>chosen.target:x.target<chosen.target) &&
@@ -561,10 +585,14 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
         const buffer=Math.max(a*.1,livePrice*.0002);
         const crtStop=signal==='LONG'?sweepExtreme-buffer:sweepExtreme+buffer;
         const risk=Math.abs(livePrice-crtStop);
-        const target=signal==='LONG'?rangeHigh:rangeLow;
+        // CRT previously used the exact range wick as TP, bypassing the shared
+        // liquidity-buffer logic. Keep the range extreme as the structural
+        // reference, but place the actual TP slightly inside that zone.
+        const target=targetBeforeLiquidity(current,signal,signal==='LONG'?rangeHigh:rangeLow,livePrice,a);
+        const targetLiquidity=signal==='LONG'?rangeHigh:rangeLow;
         const rr=Math.abs(target-livePrice)/risk;
         if(risk>0&&Number.isFinite(rr)&&rr>=2.25){
-          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity:target,rr,target2:t.target2};
+          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity,rr,target2:t.target2};
         }
       }
     }
