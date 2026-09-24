@@ -506,3 +506,51 @@
   .market-watchlist .watchlist-items{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .market-watchlist .watchlist-title small{display:none!important}
 }
+
+/* Final watchlist trigger: no outer card when closed; the compact surface only exists while open. */
+.market-watchlist{
+  margin:0 0 8px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+.market-watchlist .watchlist-toggle{
+  width:auto!important;
+  min-height:30px!important;
+  height:30px!important;
+  padding:0 3px!important;
+  border:0!important;
+  border-radius:7px!important;
+  background:transparent!important;
+  color:#9eabb0!important;
+  gap:7px!important;
+}
+.market-watchlist .watchlist-toggle:hover{
+  background:rgba(255,255,255,.025)!important;
+  color:#dce7e9!important;
+}
+.market-watchlist .watchlist-toggle-main{gap:0!important}
+.market-watchlist .watchlist-toggle-main b{font-size:9px!important;font-weight:800!important}
+.market-watchlist .watchlist-toggle-main small{display:none!important}
+.market-watchlist .watchlist-toggle-right{gap:5px!important}
+.market-watchlist .watchlist-toggle-right em{
+  min-width:15px!important;height:15px!important;font-size:6px!important;
+  border-radius:5px!important;
+}
+.market-watchlist .watchlist-toggle-right svg{width:12px!important;height:12px!important}
+.market-watchlist .watchlist-panel{
+  margin-top:5px!important;
+  border:1px solid rgba(255,255,255,.06)!important;
+  border-radius:10px!important;
+  background:linear-gradient(180deg,rgba(17,24,28,.78),rgba(8,12,15,.9))!important;
+  box-shadow:0 12px 30px rgba(0,0,0,.18)!important;
+  overflow:hidden!important;
+}
+.market-watchlist .watchlist-head{padding:8px 9px 6px!important}
+.market-watchlist .watchlist-title .extras-kicker{font-size:6px!important}
+@media(max-width:520px){
+  .market-watchlist .watchlist-toggle{height:29px!important;min-height:29px!important}
+}
