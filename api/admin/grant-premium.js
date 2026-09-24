@@ -185,8 +185,13 @@ export default async function handler(req,res){
       // Verify the registration gates are actually gone. This prevents a successful
       // response while a stale device/identity lock would still block re-registration.
       const verifyRefs=[...deviceIds].map(id=>db.collection('deviceBindings').doc(id));
+      const identityDocId=email?encodeURIComponent(
+        (()=>{const [local,domain]=email.split('@');return local&&domain&&['gmail.com','googlemail.com'].includes(domain)
+          ? local.split('+')[0].replace(/\\./g,'')+'@gmail.com'
+          : email})()
+      ):null;
       const [identityVerify,networkVerify]=await Promise.all([
-        email?db.collection('accountIdentityLocks').doc(encodeURIComponent((email.split('@')[0]||'').split('+')[0].replace(/\\./g,'')+'@'+(email.split('@')[1]||'').replace(/^googlemail$/,'gmail.com'))).get():null,
+        identityDocId?db.collection('accountIdentityLocks').doc(identityDocId).get():null,
         Promise.all(verifyRefs.map(ref=>ref.get()))
       ]);
       const staleDevices=(networkVerify||[]).filter(s=>s.exists).map(s=>s.id);
