@@ -439,3 +439,70 @@
 .watch-chip-market{margin-left:auto!important;font-size:5px!important;letter-spacing:.07em!important;color:#60757c!important;flex:none!important}.market-watchlist .watch-active-mark{font-size:4.5px!important;letter-spacing:.06em!important;color:#71dfe4!important;flex:none!important}
 .market-watchlist .watch-empty{grid-column:1/-1!important;display:flex!important;align-items:center!important;gap:7px!important;padding:7px 4px!important;color:#708087!important;font-size:7px!important}.market-watchlist .watch-empty span{display:grid!important;gap:2px!important}.market-watchlist .watch-empty b{font-size:7px!important;color:#a7b5ba!important}.market-watchlist .watch-empty small{font-size:6px!important;color:#607077!important}
 @media(max-width:620px){.market-watchlist .watchlist-items{grid-template-columns:repeat(2,minmax(0,1fr))!important}.market-watchlist .watchlist-head{padding:7px 8px 5px!important}.market-watchlist .watchlist-title small{display:none!important}.market-watchlist .watch-chip{height:24px!important;min-height:24px!important}}
+
+
+/* Final watchlist cleanup — compact terminal utility, not a large content card. */
+.market-watchlist{
+  margin:0 0 7px!important;
+  padding:0!important;
+  border-radius:9px!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  background:rgba(9,14,17,.68)!important;
+  box-shadow:none!important;
+}
+.market-watchlist .watchlist-toggle{
+  min-height:28px!important;
+  height:28px!important;
+  padding:0 8px!important;
+}
+.market-watchlist .watchlist-toggle-icon{
+  width:17px!important;
+  height:17px!important;
+  border-radius:5px!important;
+}
+.market-watchlist .watchlist-toggle-main b{font-size:7.5px!important}
+.market-watchlist .watchlist-toggle-main small{font-size:5.5px!important}
+.market-watchlist .watchlist-toggle-right em{min-width:14px!important;height:14px!important;font-size:5.5px!important}
+.market-watchlist.is-open .watchlist-toggle{border-bottom:1px solid rgba(255,255,255,.04)!important}
+.market-watchlist .watchlist-head{
+  padding:7px 8px 5px!important;
+  gap:8px!important;
+}
+.market-watchlist .watchlist-title{gap:1px!important}
+.market-watchlist .watchlist-title .extras-kicker{font-size:5.5px!important}
+.market-watchlist .watchlist-title strong{font-size:8px!important}
+.market-watchlist .watchlist-title small{font-size:5.5px!important}
+.market-watchlist .watch-current{
+  height:21px!important;
+  min-height:21px!important;
+  padding:0 6px!important;
+  border-radius:5px!important;
+  font-size:5.5px!important;
+}
+.market-watchlist .watchlist-current-row{
+  margin:0 8px 5px!important;
+  padding:4px 6px!important;
+  border-radius:5px!important;
+}
+.market-watchlist .watchlist-items{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:3px!important;
+  padding:0 8px 7px!important;
+}
+.market-watchlist .watch-chip{
+  min-height:23px!important;
+  height:23px!important;
+  padding:0 5px!important;
+  gap:4px!important;
+  border-radius:5px!important;
+}
+.market-watchlist .watch-chip strong{font-size:6.5px!important}
+.market-watchlist .watch-chip-market{font-size:4.5px!important}
+.market-watchlist .watch-active-mark{font-size:4px!important}
+@media(max-width:720px){
+  .market-watchlist .watchlist-items{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:480px){
+  .market-watchlist .watchlist-items{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .market-watchlist .watchlist-title small{display:none!important}
+}
