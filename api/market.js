@@ -411,7 +411,12 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   const validTrade=(t,tradeBias=bias,marketPrice=livePrice,tradeOrderType='')=>{
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<1.25)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
-    if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.entry>=marketPrice)||(tradeBias==='SHORT'&&t.entry<=marketPrice)))return false;
+    if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)){
+      const maxPendingDistance=Math.max(a*1.5,marketPrice*.006);
+      if((tradeBias==='LONG'&&t.entry>=marketPrice)||(tradeBias==='SHORT'&&t.entry<=marketPrice))return false;
+      if(Math.abs(t.entry-marketPrice)>maxPendingDistance)return false;
+      if((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice))return false;
+    }
     if(tradeOrderType==='MARKET'&&!quoteIsUsable)return false;
     if(tradeOrderType==='MARKET'&&Number.isFinite(marketPrice)&&((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice)))return false;
     return true;
@@ -559,18 +564,16 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       const crtEntry=mid;
       const t=evaluateTrade(current,signal,crtEntry,a,1.25);
       if(t&&validTrade(t,signal,livePrice,'LIMIT')){
-        // The CRT invalidation must remain beyond the actual sweep extreme.
-        const buffer=Math.max(a*.1,livePrice*.0002);
+        // CRT executes at the range midpoint, while the swept extreme remains
+        // the structural invalidation reference.
+        const buffer=Math.max(a*.1,crtEntry*.0002);
         const crtStop=signal==='LONG'?sweepExtreme-buffer:sweepExtreme+buffer;
-        const risk=Math.abs(livePrice-crtStop);
-        // CRT previously used the exact range wick as TP, bypassing the shared
-        // liquidity-buffer logic. Keep the range extreme as the structural
-        // reference, but place the actual TP slightly inside that zone.
-        const target=targetBeforeLiquidity(current,signal,signal==='LONG'?rangeHigh:rangeLow,livePrice,a);
+        const risk=Math.abs(crtEntry-crtStop);
+        const target=targetBeforeLiquidity(current,signal,signal==='LONG'?rangeHigh:rangeLow,crtEntry,a);
         const targetLiquidity=signal==='LONG'?rangeHigh:rangeLow;
-        const rr=Math.abs(target-livePrice)/risk;
+        const rr=Math.abs(target-crtEntry)/risk;
         if(risk>0&&Number.isFinite(rr)&&rr>=1.25){
-          crtTrade={...t,entry:livePrice,stop:crtStop,target,targetLiquidity,rr};
+          crtTrade={...t,entry:crtEntry,stop:crtStop,target,targetLiquidity,rr,risk};
         }
       }
     }
