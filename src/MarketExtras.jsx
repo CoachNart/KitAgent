@@ -85,11 +85,16 @@ export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
   </button>
   <div className="watchlist-panel">
    <div className="watchlist-head">
-    <div className="watchlist-title"><span className="extras-kicker"><Star size={11}/> WATCHLIST</span><strong>Your markets</strong><small>Saved on this device · available whenever you return</small></div>
-    <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={13}/>:<Plus size={13}/>} {saved?'Saved':'Add market'}</button>
+    <div className="watchlist-title"><span className="extras-kicker"><Star size={10}/> SAVED MARKETS</span><strong>Quick access</strong><small>{items.length?'Tap a pair to open its live analysis.':'Save pairs here for one-tap access.'}</small></div>
+    <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={12}/>:<Plus size={12}/>} {saved?'Saved':`Save ${symbol||'pair'}`}</button>
    </div>
+   {symbol&&<div className="watchlist-current-row"><span className="watch-current-label">CURRENT</span><b>{symbol}</b><em>{market==='forex'?'FOREX':market==='commodities'?'COMMODITIES':market==='indices'?'INDICES':'CRYPTO'}</em></div>}
    <div className="watchlist-items">
-    {items.length?items.map(item=><button type="button" key={item.market+':'+item.symbol} className={item.symbol===symbol&&item.market===market?'watch-chip active':'watch-chip'} onClick={()=>onSelect?.(item.symbol,item.market)} title={`Open ${item.symbol}`}><span className="watch-dot"/><span>{item.symbol}</span><em>{item.market==='forex'?'FX':item.market==='commodities'?'CMDTY':item.market==='indices'?'INDEX':'PERP'}</em>{item.symbol===symbol&&item.market===market&&<span className="watch-active-mark">LIVE</span>}</button>):<div className="watch-empty"><Bookmark size={14}/><span><b>No saved markets yet.</b> Add one and it stays here when you leave and come back.</span></div>}
+    {items.length?items.map(item=><button type="button" key={item.market+':'+item.symbol} className={item.symbol===symbol&&item.market===market?'watch-chip active':'watch-chip'} onClick={()=>onSelect?.(item.symbol,item.market)} title={`Open ${item.symbol}`}>
+      <span className="watch-chip-main"><span className="watch-dot"/><strong>{item.symbol}</strong></span>
+      <span className="watch-chip-market">{item.market==='forex'?'FX':item.market==='commodities'?'CMDTY':item.market==='indices'?'INDEX':'PERP'}</span>
+      {item.symbol===symbol&&item.market===market&&<span className="watch-active-mark">ACTIVE</span>}
+    </button>):<div className="watch-empty"><Bookmark size={13}/><span><b>No saved pairs</b><small>Add the current market above.</small></span></div>}
    </div>
   </div>
  </section>
