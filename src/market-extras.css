@@ -554,3 +554,10 @@
 @media(max-width:520px){
   .market-watchlist .watchlist-toggle{height:29px!important;min-height:29px!important}
 }
+
+/* Closed watchlist must occupy zero panel space. */
+.market-watchlist{margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+.market-watchlist:not(.is-open) .watchlist-panel{display:none!important;height:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important}
+.market-watchlist.is-open .watchlist-panel{display:block!important}
+.market-watchlist.is-open{margin:0 0 8px!important}
+.market-watchlist .watchlist-toggle{margin:0!important}
