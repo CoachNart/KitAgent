@@ -543,19 +543,28 @@ function compressionRange(c,lookback=18){
 }
 function breakoutSignal(c,bias){
   if(!Array.isArray(c)||c.length<24||!['LONG','SHORT'].includes(bias))return null;
-  const range=compressionRange(c,18);if(!range)return null;
-  const boundary=bias==='LONG'?range.high:range.low;
-  const start=Math.max(range.end+1,c.length-8);
-  for(let i=c.length-1;i>=start;i--){
+  // Evaluate each recent closed candle against the compression that existed
+  // BEFORE that candle. The previous implementation built one range ending at
+  // c.length-2, which effectively inspected only the newest candle and could
+  // also include an older breakout candle inside its own "compression" range.
+  const first=Math.max(18,c.length-8);
+  for(let i=c.length-1;i>=first;i--){
+    const rangeSlice=c.slice(i-18,i);
+    if(rangeSlice.length<18)continue;
+    const high=Math.max(...rangeSlice.map(x=>x.high)),low=Math.min(...rangeSlice.map(x=>x.low));
+    const ranges=rangeSlice.map(x=>x.high-x.low).filter(x=>Number.isFinite(x)&&x>0);
+    const avg=ranges.length?sma(ranges,ranges.length):null;
+    const prior=rangeSlice.slice(0,Math.max(1,rangeSlice.length-6)).map(x=>x.high-x.low).filter(x=>Number.isFinite(x)&&x>0);
+    const priorAvg=prior.length?sma(prior,prior.length):avg;
+    if(!Number.isFinite(high)||!Number.isFinite(low)||high<=low||!Number.isFinite(avg)||!Number.isFinite(priorAvg))continue;
+    if(high-low>Math.max(priorAvg*4.5,avg*18*.65))continue;
     const x=c[i],body=Math.abs(x.close-x.open),span=x.high-x.low;
     if(!span||body/span<.55)continue;
+    const boundary=bias==='LONG'?high:low;
     const broke=bias==='LONG'?x.close>boundary:x.close<boundary;
-    if(!broke)continue;
-    const prior=c.slice(Math.max(0,i-8),i).map(k=>k.high-k.low).filter(Number.isFinite);
-    const priorAvg=prior.length?sma(prior,prior.length):span;
-    if(!Number.isFinite(priorAvg)||span<priorAvg*1.15)continue;
+    if(!broke||span<priorAvg*1.15)continue;
     const retest=c.slice(i+1).some(k=>bias==='LONG'?k.low<=boundary:k.high>=boundary);
-    if(retest||i===c.length-1)return {range,breakLevel:boundary,retest,breakCandle:x,breakIndex:i};
+    return {range:{high,low,width:high-low,start:i-18,end:i-1},breakLevel:boundary,retest,breakCandle:x,breakIndex:i};
   }
   return null;
 }
