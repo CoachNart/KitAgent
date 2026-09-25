@@ -180,7 +180,8 @@ function topDownEntries(c,bias,price){
  if(state==='INVALID'||state==='TOUCHED_NO_CONFIRMATION')return[];
  return[{entry:z.level,invalidation:bias==='LONG'?z.level-zone:z.level+zone,target:targetLevels(c,bias,z.level)[0]?.level,
   kind:state==='CONFIRMED'?'HTF POI + REACTION':'HTF POI LIMIT',pending:state==='PENDING'}]
-}function msnrEntries(c,bias,price){
+}
+function msnrEntries(c,bias,price){
  const z=recentSwing(c,bias,price);if(!z)return[];
  const a=atr(c,14)||0,zone=Math.max(a*.4,Math.abs(price)*.0015),state=poiState(c,bias,z.level,zone);
  if(state==='INVALID'||state==='TOUCHED_NO_CONFIRMATION')return[];
