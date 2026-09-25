@@ -613,7 +613,14 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const zones=aligned?[...entryZones(current,contextBias,livePrice,a,48),...structuralEntryZones(current,contextBias,livePrice,a,36)]:[];
     const impulse=aligned&&displacement(current,contextBias),response=aligned&&priceActionPattern(current,contextBias);
     const touched=Boolean(zones[0]&&zoneTouchesCandle(current,zones[0]));
-    const chosen=aligned&&zones.length&&(impulse||response)?(touched?chooseMarketFromZones(zones,contextBias):null)||chooseLimitForBias(zones,contextBias,livePrice):null;
+    let chosen=null;
+    if(aligned&&zones.length){
+      if(touched&&(impulse||response))chosen=chooseMarketFromZones(zones,contextBias);
+      if(!chosen&&(impulse||response))chosen=chooseLimitForBias(zones,contextBias,livePrice);
+      // Top-down continuation can legitimately be a pending order when the
+      // POI is valid but price has not reached it yet.
+      if(!chosen&&impulse)chosen=chooseLimitForBias(zones,contextBias,livePrice);
+    }
     if(chosen){trade=chosen.trade;entry=chosen.entry;orderType=chosen.orderType||'LIMIT';bias=contextBias;}
     reason=trade?'Top-down direction, intermediate structure and execution location are aligned with confirmation.':'Waiting for higher-timeframe alignment, a genuine POI and execution confirmation.';
     evidence.push('Context '+tf.bias+': '+contextBias+'.','Structure '+tf.structure+': '+middleBias+'.','Execution '+tf.entry+': '+entryBias+'.',impulse?'Directional displacement confirmed.':'No qualifying execution displacement.',response?'Price-action response present.':'No execution candle response.',zones[0]?zones[0].type:'No fresh execution POI.');
@@ -655,7 +662,14 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   } else if(key==='BREAKOUT'){
     const signal=breakoutSignal(current,bias),accepted=Boolean(signal&&((bias==='LONG'&&signal.breakCandle.close>signal.breakLevel)||(bias==='SHORT'&&signal.breakCandle.close<signal.breakLevel))),retest=Boolean(signal&&(signal.retest||signal.breakIndex===current.length-1));
     let chosen=null;
-    if(signal&&accepted&&retest){const t=evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR);if(t&&validTrade(t,bias,livePrice,'MARKET'))chosen={trade:t,entry:livePrice,orderType:'MARKET'};}
+    if(signal&&accepted&&retest){
+      const t=evaluateTrade(current,bias,livePrice,a,SETUP_MIN_RR);
+      if(t&&validTrade(t,bias,livePrice,'MARKET'))chosen={trade:t,entry:livePrice,orderType:'MARKET'};
+      if(!chosen){
+        const pending=evaluateTrade(current,bias,signal.breakLevel,a,SETUP_MIN_RR);
+        if(pending&&validTrade(pending,bias,livePrice,'LIMIT'))chosen={trade:pending,entry:signal.breakLevel,orderType:'LIMIT',zone:{mid:signal.breakLevel,index:signal.breakIndex,type:'BREAKOUT RETEST'}};
+      }
+    }
     if(chosen){trade=chosen.trade;entry=chosen.entry;orderType=chosen.orderType;}
     reason=trade?'A compressed range broke decisively, closed beyond the boundary and was retested.':'Waiting for a true range breakout, decisive close and retest/acceptance.';
     evidence.push(signal?'Compressed range '+roundPrice(signal.range.low)+' — '+roundPrice(signal.range.high)+'.':'No qualifying compression range.',signal?'Breakout close confirmed.':'No decisive breakout close.',retest?'Broken level retested.':'No breakout retest.');
@@ -665,7 +679,16 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const smcBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),sweep=smcBias!=='WAIT'?liquiditySweep(current,smcBias,30,18):null,choch=smcBias!=='WAIT'?changeOfCharacter(current,smcBias,60,20):null,bos=smcBias!=='WAIT'?structureBreak(current,smcBias,60,14):null,disp=smcBias!=='WAIT'?recentDisplacement(current,smcBias,sweep?.index??Math.max(0,current.length-16),current.length-1):null;
     const zones=smcBias!=='WAIT'?[...entryZones(current,smcBias,livePrice,a,60),...structuralEntryZones(current,smcBias,livePrice,a,40)]:[];
     const validSequence=Boolean(sweep&&choch&&choch.breakIndex>sweep.index&&bos&&bos.breakIndex>=choch.breakIndex&&disp&&disp.index>=choch.breakIndex);
-    const chosen=validSequence&&zones.length?((zoneTouchesCandle(current,zones[0])?chooseMarketFromZones(zones,smcBias):null)||chooseLimitForBias(zones,smcBias,livePrice)):null;
+    let chosen=null;
+    if(validSequence&&smcBias!=='WAIT'){
+      if(zones.length)chosen=(zoneTouchesCandle(current,zones[0])?chooseMarketFromZones(zones,smcBias):null)||chooseLimitForBias(zones,smcBias,livePrice);
+      // If the original POI has been consumed, the post-BOS structural level
+      // remains a valid SMC retest location.
+      if(!chosen&&bos){
+        const pending=evaluateTrade(current,smcBias,bos.level,a,SETUP_MIN_RR);
+        if(pending&&validTrade(pending,smcBias,livePrice,'LIMIT'))chosen={trade:pending,entry:bos.level,orderType:'LIMIT',zone:{mid:bos.level,index:bos.breakIndex,type:'SMC BOS RETEST'}};
+      }
+    }
     if(chosen){trade=chosen.trade;entry=chosen.entry;orderType=chosen.orderType||'LIMIT';bias=smcBias;}
     reason=trade?'Liquidity sweep, CHoCH, BOS, displacement and a fresh POI are aligned.':smcBias==='WAIT'?'Higher-timeframe structure is neutral; no SMC direction is established.':'Waiting for liquidity → CHoCH → BOS → displacement → fresh POI.';
     evidence.push(sweep?sweep.type+' confirmed.':'No qualifying liquidity sweep.',choch?'CHoCH confirmed after sweep.':'No post-sweep CHoCH.',bos?'BOS confirmed.':'No qualifying BOS.',disp?'Displacement confirmed.':'No displacement.',zones[0]?zones[0].type:'No fresh SMC POI.');
@@ -733,7 +756,16 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const paBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),structureAligned=paBias!=='WAIT'&&structureBias(marketStructure(structure))===paBias,st=marketStructure(current);
     const levels=(paBias==='LONG'?st.lows:st.highs).slice(-8).filter(x=>paBias==='LONG'?x.p<last.close:x.p>last.close);
     const level=levels.sort((x,y)=>Math.abs(last.close-x.p)-Math.abs(last.close-y.p))[0],pattern=structureAligned?priceActionPattern(current,paBias):null,touched=Boolean(level&&last.low<=level.p&&last.high>=level.p);
-    if(structureAligned&&level&&pattern&&touched){const t=evaluateTrade(current,paBias,livePrice,a,SETUP_MIN_RR);if(t&&validTrade(t,paBias,livePrice,'MARKET')){trade=t;entry=livePrice;orderType='MARKET';bias=paBias;}}
+    if(structureAligned&&level&&pattern){
+      if(touched){
+        const t=evaluateTrade(current,paBias,livePrice,a,SETUP_MIN_RR);
+        if(t&&validTrade(t,paBias,livePrice,'MARKET')){trade=t;entry=livePrice;orderType='MARKET';bias=paBias;}
+      }
+      if(!trade){
+        const pending=evaluateTrade(current,paBias,level.p,a,SETUP_MIN_RR);
+        if(pending&&validTrade(pending,paBias,livePrice,'LIMIT')){trade=pending;entry=level.p;orderType='LIMIT';bias=paBias;}
+      }
+    }
     reason=trade?'Higher-timeframe structure, key swing location and a confirmed price-action response are aligned.':'Waiting for price to reach a meaningful swing level and print a valid rejection/engulfing response.';
     evidence.push(structureAligned?'Higher-timeframe structure aligned.':'Higher-timeframe structure not aligned.',level?'Swing level '+roundPrice(level.p)+'.':'No meaningful swing level.',pattern?pattern.type+' confirmation.':'No qualifying candle pattern.',touched?'Level interacted with the confirmation candle.':'No level interaction.');
   } else if(key==='LIQUIDITY_REVERSAL'){
