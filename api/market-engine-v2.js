@@ -188,6 +188,29 @@ function crtEntries(c,bias){
  const target=bias==='LONG'?Math.max(...c.slice(Math.max(0,sw.index-8),sw.index+1).map(x=>x.high)):Math.min(...c.slice(Math.max(0,sw.index-8),sw.index+1).map(x=>x.low));
  return[{entry:sw.level,invalidation:sw.extreme,target,kind:'CRT SWEEP + RECLAIM'}]
 }
+function strategyEntries(c,bias,strategy,price){
+ if(strategy==='TOP_DOWN')return topDownEntries(c,bias,price);
+ if(strategy==='PULLBACK')return pullbackEntries(c,bias);
+ if(strategy==='BREAKOUT')return breakoutEntries(c,bias);
+ if(strategy==='SMC')return smcEntries(c,bias,price);
+ if(strategy==='MSNR')return msnrEntries(c,bias,price);
+ if(strategy==='PRICE_ACTION')return priceActionEntries(c,bias,price);
+ if(strategy==='LIQUIDITY_REVERSAL')return liquidityEntries(c,bias);
+ if(strategy==='CRT')return crtEntries(c,bias);
+ return[];
+}
+function refinedTrade(c,bias,strategy,price){
+ const a=atr(c,14)||0,maxPending=Math.max(a*2.5,price*.012);
+ for(const z of strategyEntries(c,bias,strategy,price)){
+  if(!Number.isFinite(z.entry)||z.entry<=0)continue;
+  if(Math.abs(z.entry-price)>maxPending)continue;
+  if(bias==='LONG'&&z.entry>price+a*.35)continue;
+  if(bias==='SHORT'&&z.entry<price-a*.35)continue;
+  const t=buildTrade(c,bias,z.entry,z.invalidation,z.target);
+  if(t)return{...t,entryKind:z.kind};
+ }
+ return null
+}
 function bos(c,bias){const s=swings(c),src=bias==='LONG'?s.h:s.l;for(const p of src.slice(-30).reverse())for(let i=p.i+1;i<c.length;i++)if(bias==='LONG'?c[i].close>p.p:c[i].close<p.p)return{level:p.p,index:i,age:c.length-1-i};return null}
 function sweep(c,bias){const s=swings(c),src=bias==='LONG'?s.l:s.h;for(const p of src.slice(-30).reverse())for(let i=p.i+1;i<c.length;i++){if(bias==='LONG'&&c[i].low<p.p&&c[i].close>p.p)return{level:p.p,extreme:c[i].low,index:i,age:c.length-1-i};if(bias==='SHORT'&&c[i].high>p.p&&c[i].close<p.p)return{level:p.p,extreme:c[i].high,index:i,age:c.length-1-i}}return null}
 function recentDisplacement(c,bias){for(let i=c.length-1;i>=Math.max(1,c.length-12);i--){const x=c[i],r=x.high-x.low,b=Math.abs(x.close-x.open),prior=c.slice(Math.max(0,i-6),i).map(k=>k.high-k.low),av=sma(prior,prior.length);if(r&&b/r>=.55&&av&&r>=av*1.1&&(bias==='LONG'?x.close>x.open&&x.close>=x.high-r*.25:x.close<x.open&&x.close<=x.low+r*.25))return{i,candle:x}}return null}
