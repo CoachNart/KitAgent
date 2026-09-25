@@ -762,14 +762,16 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const reject=msnrBias!=='WAIT'&&rejectionCandle(current,msnrBias);
     const touched=Boolean(active&&last.low<=active.level&&last.high>=active.level);
     const closeNear=Boolean(active&&Math.abs(last.close-active.level)<=Math.min(a*1.25,last.close*.0025));
-    const lowerConfirm=Boolean(formation||engulf||reject||(bos&&bos.breakIndex>=current.length-12));
+    const recentPa=msnrBias!=='WAIT'?recentPriceActionPattern(current,msnrBias,10):null;
+    const lowerConfirm=Boolean(formation||engulf||reject||recentPa||(bos&&bos.breakIndex>=current.length-12));
     const flipValid=Boolean(nearFlip&&lowerConfirm);
     const freshValid=Boolean(nearFresh&&touched&&lowerConfirm);
+    const stagedLevel=Boolean(active&&lowerConfirm);
     // A roadblock is not a trade signal by itself. It is used to reject targets
     // that sit immediately in front of the proposed entry.
     const blocking=roadblocks.filter(r=>Math.abs(r.level-livePrice)<=Math.min(a*2.5,livePrice*.004)).length>0;
     let candidate=null;
-    if(msnrBias!=='WAIT'&&!storyConflict&&(freshValid||flipValid||closeNear)){
+    if(msnrBias!=='WAIT'&&!storyConflict&&(freshValid||flipValid||closeNear||stagedLevel)){
       candidate=chooseExecution(msnrBias,active.level,active,livePrice);
       if(!candidate&&touched){
         candidate=chooseMarketFromZones([{...active,mid:livePrice}],msnrBias);
