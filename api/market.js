@@ -551,6 +551,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
   const livePrice=quoteIsUsable?(bias==='LONG'?Number(liveQuote.ask):bias==='SHORT'?Number(liveQuote.bid):liveMid):liveMid;
   if(!Number.isFinite(livePrice))throw new Error('Executable market price is unavailable');
   const evidence=[],failures=[]; let trade=null,orderType='NO_SETUP',entry=null,reason='';
+  // Keep confidence in the strategy-plan scope so every strategy branch and every return path can safely use it.
+  let confidence=0;
   const validTrade=(t,tradeBias=bias,marketPrice=livePrice,tradeOrderType='')=>{
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<SETUP_MIN_RR)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
@@ -785,7 +787,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       beforeMid?'Price remains in the entry half of the CRT range.':'Price has reached/passed the CRT midpoint.'
     );
   }
-  // No generic cross-strategy fallback. Each strategy must earn its own setup.\n  let confidence=0;
+  // No generic cross-strategy fallback. Each strategy must earn its own setup.
   if(trade){
     confidence=Math.min(95,Math.max(38,Math.round(
       50+
