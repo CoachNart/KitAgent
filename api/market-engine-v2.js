@@ -205,6 +205,29 @@ function msnrEntries(c,bias,price){
   kind:state==='CONFIRMED'?'MSNR LEVEL + REJECTION':'MSNR LEVEL LIMIT',pending:state==='PENDING'}]
 }
 
+function crtEntries(c,bias){
+ const a=atr(c,14)||0;
+ if(!a||c.length<25)return[];
+ const out=[];
+ const start=Math.max(2,c.length-8);
+ for(let i=start;i<c.length-1;i++){
+  const parent=c[i-1],x=c[i],next=c[i+1];
+  const range=parent.high-parent.low;
+  if(!Number.isFinite(range)||range<a*.8)continue;
+  if(bias==='LONG'&&x.low<parent.low&&x.close>parent.low){
+   const confirm=next.close>parent.low;
+   if(!confirm)continue;
+   out.push({entry:next.close,invalidation:x.low,target:parent.high,kind:'CRT LOW SWEEP + RECLAIM',pending:false});
+  }
+  if(bias==='SHORT'&&x.high>parent.high&&x.close<parent.high){
+   const confirm=next.close<parent.high;
+   if(!confirm)continue;
+   out.push({entry:next.close,invalidation:x.high,target:parent.low,kind:'CRT HIGH SWEEP + RECLAIM',pending:false});
+  }
+ }
+ return out.sort((x,y)=>Math.abs(c.at(-1).close-x.entry)-Math.abs(c.at(-1).close-y.entry));
+}
+
 function strategyEntries(c,bias,strategy,price){
  if(strategy==='TOP_DOWN')return topDownEntries(c,bias,price);
  if(strategy==='PULLBACK')return pullbackEntries(c,bias);
