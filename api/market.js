@@ -743,7 +743,23 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     const beforeMid=Boolean(Number.isFinite(mid)&&Number.isFinite(livePrice)&&
       (signal==='LONG'?livePrice<mid:signal==='SHORT'?livePrice>mid:false));
 
-    if(aligned&&reclaimCandle&&Number.isFinite(sweepExtreme)&&Number.isFinite(rangeWidth)&&rangeWidth>0&&beforeMid){
+    // CRT is not a sweep-only reversal. Require the reclaim to be followed by
+    // an actual lower-timeframe control shift and directional confirmation.
+    const crtShift=signal!=='WAIT'?changeOfCharacter(current,signal,50,16):null;
+    const crtPattern=signal!=='WAIT'?priceActionPattern(current,signal):null;
+    const crtDisplacement=signal!=='WAIT'?displacement(current,signal):false;
+    const shiftAfterReclaim=Boolean(crtShift&&crtShift.breakIndex>reclaimIndex);
+    const directionalConfirmation=Boolean(crtPattern||crtDisplacement);
+    const htfAtr=atr(structure,14);
+    const rangeQuality=Boolean(Number.isFinite(rangeWidth)&&Number.isFinite(htfAtr)&&rangeWidth>=Math.max(htfAtr*.75,a*2));
+    // Once price has consumed more than 30% of the range from the swept edge,
+    // the original CRT location edge is considered gone. Do not leave a stale
+    // LIMIT order waiting through the middle of the range.
+    const entryProgress=Number.isFinite(rangeWidth)&&rangeWidth>0&&Number.isFinite(livePrice)
+      ?(signal==='LONG'?(livePrice-rangeLow)/rangeWidth:(rangeHigh-livePrice)/rangeWidth):1;
+    const entryLocationValid=Number.isFinite(entryProgress)&&entryProgress>=0&&entryProgress<=.30;
+
+    if(aligned&&reclaimCandle&&Number.isFinite(sweepExtreme)&&Number.isFinite(rangeWidth)&&rangeWidth>0&&beforeMid&&rangeQuality&&shiftAfterReclaim&&directionalConfirmation&&entryLocationValid){
       const buffer=Math.max(a*.10,(signal==='LONG'?sweepExtreme:rangeHigh)*.0002);
       const crtStop=signal==='LONG'?sweepExtreme-buffer:sweepExtreme+buffer;
       const crtTarget=signal==='LONG'?rangeHigh:rangeLow;
@@ -772,18 +788,30 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     }
 
     reason=trade
-      ?'A completed CRT range was swept, reclaimed and remains in the entry half of the range.'
+      ?'CRT range sweep, reclaim, lower-timeframe shift and directional confirmation are aligned at a fresh entry location.'
       :signal==='WAIT'
         ?'Waiting for a completed higher-timeframe range to be swept and reclaimed.'
         :!aligned
           ?'The CRT sweep conflicts with higher-timeframe market structure. No counter-structure trade is issued.'
-          :!beforeMid
-            ?'The CRT reclaim has already reached the range midpoint; the entry edge is gone.'
-            :'Waiting for a valid CRT execution with sufficient structural room.';
+          :!rangeQuality
+            ?'CRT range is too small relative to volatility; no trade is issued in compression.'
+            :!shiftAfterReclaim
+              ?'CRT reclaim is present, but no post-reclaim lower-timeframe structure shift has confirmed control.'
+              :!directionalConfirmation
+                ?'CRT structure shifted, but directional candle/displacement confirmation is missing.'
+                :!entryLocationValid
+                  ?'The CRT reclaim has consumed too much of the range; the original entry edge is gone.'
+                  :!beforeMid
+                    ?'The CRT reclaim has reached the range midpoint; the entry edge is gone.'
+                    :'Waiting for a valid CRT execution with sufficient structural room.';
     evidence.push(
       parent?'CRT range '+roundPrice(rangeLow)+' — '+roundPrice(rangeHigh)+'.':'No untouched higher-timeframe CRT range.',
       signal==='LONG'?'Sell-side range swept and reclaimed.':signal==='SHORT'?'Buy-side range swept and reclaimed.':'No qualifying CRT sweep/reclaim.',
       aligned?'CRT direction is compatible with higher-timeframe structure.':'CRT direction conflicts with higher-timeframe structure.',
+      rangeQuality?'CRT range has sufficient volatility room.':'CRT range is too compressed.',
+      shiftAfterReclaim?'Post-reclaim structure shift confirmed.':'No post-reclaim structure shift.',
+      directionalConfirmation?(crtPattern?crtPattern.type+' confirmation present.':'Directional displacement confirmed.'):'No directional confirmation.',
+      entryLocationValid?'Entry remains within the first 30% of the range.':'Entry location has moved too far from the swept edge.',
       beforeMid?'Price remains in the entry half of the CRT range.':'Price has reached/passed the CRT midpoint.'
     );
   }
