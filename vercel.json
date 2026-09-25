@@ -22,7 +22,7 @@
   ],
   "crons": [{"path": "/api/affiliate-payout", "schedule": "5 0 1 * *"}],
   "rewrites": [
-    {"source": "/api/market", "destination": "/api/market-engine-v2"},
+    {"source": "/api/market", "destination": "/api/market-engine-v3"},
     {"source": "/(.*)", "destination": "/index.html"}
   ],
   "cleanUrls": false
