@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -32,7 +32,7 @@ jobs:
         run: npm run build
 
       - name: Add Android platform
-        run: npx cap add android
+        run: npx cap add android --verbose
 
       - name: Sync Capacitor
         run: npx cap sync android
