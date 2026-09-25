@@ -212,7 +212,7 @@ function zoneFreshBeforeCurrent(c,z,bias){
 }
 function entryZones(c,bias,current,a,maxAge=24){
   const zones=[...fairValueGaps(c,bias),...orderBlockCandidates(c,bias)].filter(z=>z.index<c.length-1);
-  const maxDistance=Math.min(a*2.5,current*.015);
+  const maxDistance=Math.min(a*3.5,current*.02);
   return zones.filter(z=>{
     const ahead=bias==='LONG'?z.mid<current:z.mid>current;
     const age=c.length-1-z.index;
@@ -254,25 +254,25 @@ function liquidityCandidates(c,bias,entry,a){
 }
 function protectiveStop(c,bias,entry,a){
   const buffer=Math.max(a*.16,entry*.00025);
-  const swings=structuralSwingLevels(c,bias,entry,a,100);
-  const preferred=swings.filter(x=>x.touches>=2||x.quality>=3);
-  // Prefer a tested/protected swing rather than the latest tiny pivot. For a
-  // long, invalidation belongs below a meaningful demand low; for a short,
-  // above a meaningful supply high.
-  let chosen=preferred.find(x=>x.lastIndex>=Math.max(0,c.length-80))||swings[0];
-  let invalidation=chosen?.level;
-  const sweep=liquiditySweep(c,bias,30,18);
-  if(Number.isFinite(sweep?.level)){
-    if(bias==='LONG')invalidation=Math.min(Number.isFinite(invalidation)?invalidation:Infinity,sweep.level);
-    else invalidation=Math.max(Number.isFinite(invalidation)?invalidation:-Infinity,sweep.level);
-  }
-  if(!Number.isFinite(invalidation))return null;
-  const stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;
   const maxRisk=Math.min(a*2.2,entry*.02);
-  // Never pull a structural stop inward just to satisfy the risk cap.
-  if(bias==='LONG'&&stop<entry-maxRisk)return null;
-  if(bias==='SHORT'&&stop>entry+maxRisk)return null;
-  return stop;
+  const swings=structuralSwingLevels(c,bias,entry,a,100);
+  const candidates=swings
+    .filter(x=>x.touches>=2||x.significant||x.quality>=3)
+    .map(x=>({level:x.level,quality:x.quality,lastIndex:x.lastIndex,touches:x.touches,source:'STRUCTURAL SWING'}));
+  const sweep=liquiditySweep(c,bias,30,18);
+  if(Number.isFinite(sweep?.level))candidates.push({level:sweep.level,quality:3,lastIndex:sweep.index,touches:1,source:'LIQUIDITY SWEEP'});
+  // Test every meaningful invalidation candidate against the risk envelope. The
+  // old implementation selected one "best" swing first and then rejected the
+  // entire trade if that swing was too far away, even when a valid tested swing
+  // existed closer to entry. That single choice could starve every strategy.
+  const valid=candidates
+    .map(x=>{
+      const stop=bias==='LONG'?x.level-buffer:x.level+buffer;
+      return {...x,stop,distance:Math.abs(entry-stop)};
+    })
+    .filter(x=>Number.isFinite(x.stop)&&((bias==='LONG'&&x.stop<entry)||(bias==='SHORT'&&x.stop>entry))&&x.distance<=maxRisk)
+    .sort((x,y)=>y.quality-x.quality||y.touches-x.touches||y.lastIndex-x.lastIndex||x.distance-y.distance);
+  return valid[0]?.stop??null;
 }
 function stopForEntry(c,bias,entry,a){return protectiveStop(c,bias,entry,a);}
 function targetPool(c,bias,entry,a){
@@ -372,9 +372,10 @@ function normalizeStrategy(v){const key=String(v||'TOP_DOWN').toUpperCase();retu
 const CANDLE_INTERVAL_MS={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'4h':14400000,'1d':86400000,'1wk':604800000,'1w':604800000,'1H':3600000,'4H':14400000,'1D':86400000,'1W':604800000};
 function closedCandles(c,timeframe,market=''){
   if(!Array.isArray(c)||c.length<2)return [];
-  // TradFi candles are supplied by the market provider and are retained here;
-  // crypto candles are trimmed when the newest bar is still forming.
-  if(['forex','commodities','indices'].includes(market))return c;
+  // Strategy logic must operate on completed candles for every market. Provider
+  // session handling is separate from candle completion: if the newest candle
+  // has not reached the selected interval boundary, exclude it from structure,
+  // pattern and confirmation calculations.
   const sourceTimeframe=TIMEFRAME_MAP[timeframe]?.crypto||timeframe;
   const last=c.at(-1),interval=CANDLE_INTERVAL_MS[sourceTimeframe];
   if(!last||!Number.isFinite(Number(last.time))||!interval)return c;
@@ -618,7 +619,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     if(!t||!Number.isFinite(t.entry)||t.entry<=0||!Number.isFinite(t.stop)||!Number.isFinite(t.target)||!Number.isFinite(t.rr)||t.rr<SETUP_MIN_RR)return false;
     if((tradeBias==='LONG'&&(t.stop>=t.entry||t.target<=t.entry))||(tradeBias==='SHORT'&&(t.stop<=t.entry||t.target>=t.entry)))return false;
     if(tradeOrderType==='LIMIT'&&Number.isFinite(marketPrice)){
-      const maxPendingDistance=Math.min(a*2.5,marketPrice*.015);
+      const maxPendingDistance=Math.min(a*3.5,marketPrice*.02);
       if((tradeBias==='LONG'&&t.entry>=marketPrice)||(tradeBias==='SHORT'&&t.entry<=marketPrice))return false;
       if(Math.abs(t.entry-marketPrice)>maxPendingDistance)return false;
       if((tradeBias==='LONG'&&t.target<=marketPrice)||(tradeBias==='SHORT'&&t.target>=marketPrice))return false;
@@ -665,7 +666,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       if(!chosen&&zones.length)chosen=chooseLimitForBias(zones,contextBias,livePrice);
     }
     if(chosen){trade=chosen.trade;entry=chosen.entry;orderType=chosen.orderType||'LIMIT';bias=contextBias;}
-    reason=trade?'Top-down direction, intermediate structure and execution location are aligned with confirmation.':'Waiting for higher-timeframe alignment, a genuine POI and execution confirmation.';
+    reason=trade?'Top-down direction, intermediate structure and execution location are aligned with confirmation.':'Waiting for higher-timeframe alignment and a genuine execution POI with sufficient structural RR.';
     evidence.push('Context '+tf.bias+': '+contextBias+'.','Structure '+tf.structure+': '+middleBias+'.','Execution '+tf.entry+': '+entryBias+'.',impulse?'Directional displacement confirmed.':'No qualifying execution displacement.',response?'Price-action response present.':'No execution candle response.',zones[0]?zones[0].type:'No fresh execution POI.');
   } else if(key==='PULLBACK'){
     // Pullback execution is allowed to work from the actual impulse break level.
@@ -715,7 +716,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       }
     }
     if(chosen){trade=chosen.trade;entry=chosen.entry;orderType=chosen.orderType;}
-    reason=trade?'A compressed range broke decisively, closed beyond the boundary and was retested.':'Waiting for a true range breakout, decisive close and retest/acceptance.';
+    reason=trade?'A compressed range broke decisively and the confirmed break level is executable.':'Waiting for a true range breakout, decisive close and an executable continuation level.';
     evidence.push(signal?'Compressed range '+roundPrice(signal.range.low)+' — '+roundPrice(signal.range.high)+'.':'No qualifying compression range.',signal?'Breakout close confirmed.':'No decisive breakout close.',retest?'Broken level retested.':'No breakout retest.');
   } else if(key==='SMC'){
     // Preserve the HTF filter when it is directional; when HTF is neutral, a
