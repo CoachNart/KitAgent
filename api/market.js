@@ -99,14 +99,45 @@ function pivotLow(c,i,left=2,right=2){if(i<left||i>=c.length-right)return false;
 function confirmedSwings(c){
   const highs=[],lows=[];for(let i=2;i<c.length-2;i++){if(pivotHigh(c,i))highs.push({p:c[i].high,i});if(pivotLow(c,i))lows.push({p:c[i].low,i});}return {highs,lows};
 }
+// A "structural" swing is not simply the closest wick. Cluster nearby confirmed
+// pivots into the same level and require either repeated tests or a meaningful
+// rejection/excursion away from the level. This keeps tiny one-off wicks from
+// becoming the engine's entry, stop, or target reference.
+function structuralSwingLevels(c,bias,entry=null,a=null,lookback=160){
+  if(!Array.isArray(c)||!['LONG','SHORT'].includes(bias))return [];
+  const st=marketStructure(c),source=bias==='LONG'?st.lows:st.highs;
+  const start=Math.max(0,c.length-lookback),tol=Math.max(Number(a)||atr(c,14)||0,1e-12)*.22;
+  const swings=source.filter(s=>s.i>=start&&Number.isFinite(s.p)&&(!Number.isFinite(entry)||(bias==='LONG'?s.p<entry:s.p>entry)));
+  const groups=[];
+  for(const s of swings){
+    let g=groups.find(x=>Math.abs(x.level-s.p)<=tol);
+    if(!g){g={level:s.p,touches:0,lastIndex:s.i,firstIndex:s.i,points:[]};groups.push(g);}
+    g.points.push(s);g.touches=g.points.length;g.lastIndex=Math.max(g.lastIndex,s.i);g.firstIndex=Math.min(g.firstIndex,s.i);
+    g.level=g.points.reduce((sum,x)=>sum+x.p,0)/g.points.length;
+  }
+  return groups.map(g=>{
+    const post=g.points.map(s=>{
+      const end=Math.min(c.length-1,s.i+Math.max(6,Math.min(24,Math.round(c.length*.06))));
+      const slice=c.slice(s.i+1,end+1);
+      if(!slice.length)return 0;
+      return bias==='LONG'?Math.max(...slice.map(x=>x.high))-g.level:g.level-Math.min(...slice.map(x=>x.low));
+    });
+    const excursion=Math.max(0,...post);
+    const significant=excursion>=Math.max((Number(a)||atr(c,14)||0)*.6,tol*2);
+    return {...g,level:Number(g.level),excursion,significant,quality:(g.touches>=2?2:0)+(significant?1:0)};
+  }).filter(g=>g.touches>=2||g.significant)
+    .sort((x,y)=>y.quality-x.quality||y.lastIndex-x.lastIndex);
+}
 function structureBreak(c,bias,lookback=30,maxAge=Infinity){
   const st=marketStructure(c),start=Math.max(2,c.length-lookback),recentStart=Number.isFinite(maxAge)?Math.max(0,c.length-maxAge):0;
-  const refs=bias==='LONG'?st.highs:st.lows;
-  for(const ref of refs.filter(x=>x.i>=start&&x.i<c.length-2).slice().reverse()){
-    for(let i=ref.i+1;i<c.length;i++){
+  const refs=structuralSwingLevels(c,bias,null,atr(c,14),lookback)
+    .filter(x=>x.lastIndex>=start&&x.lastIndex<c.length-2)
+    .sort((x,y)=>y.quality-x.quality||y.lastIndex-x.lastIndex);
+  for(const ref of refs){
+    for(let i=ref.lastIndex+1;i<c.length;i++){
       if(i<recentStart)continue;
-      if((bias==='LONG'&&c[i].close>ref.p)||(bias==='SHORT'&&c[i].close<ref.p))
-        return {type:'BOS',level:ref.p,index:ref.i,breakIndex:i};
+      if((bias==='LONG'&&c[i].close>ref.level)||(bias==='SHORT'&&c[i].close<ref.level))
+        return {type:'BOS',level:ref.level,index:ref.lastIndex,breakIndex:i,touches:ref.touches,quality:ref.quality};
     }
   }
   return null;
@@ -206,41 +237,37 @@ function structuralEntryZones(c,bias,current,a,maxAge=40){
   return out.sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
 }
 function liquidityCandidates(c,bias,entry,a){
-  const st=marketStructure(c),source=bias==='LONG'?st.highs:st.lows;
-  const tolerance=Math.max(a*.18,entry*.0006),groups=[];
-  for(const swing of source.filter(x=>x.i>=Math.max(0,c.length-120))){
-    if(!Number.isFinite(swing.p))continue;
-    const valid=bias==='LONG'?swing.p>entry:swing.p<entry;
-    if(!valid)continue;
-    let group=groups.find(g=>Math.abs(g.level-swing.p)<=tolerance);
-    if(!group){group={level:swing.p,touches:0,lastIndex:swing.i};groups.push(group);}
-    group.touches+=1;group.lastIndex=Math.max(group.lastIndex,swing.i);
-  }
-  const recentExtreme=bias==='LONG'
-    ?Math.max(...c.slice(-80).map(x=>x.high))
-    :Math.min(...c.slice(-80).map(x=>x.low));
-  if(Number.isFinite(recentExtreme)&&(bias==='LONG'?recentExtreme>entry:recentExtreme<entry)){
-    const group=groups.find(g=>Math.abs(g.level-recentExtreme)<=tolerance);
-    if(group)group.touches+=1;
-    else groups.push({level:recentExtreme,touches:1,lastIndex:c.length-1});
-  }
-  return groups.map(g=>({...g,distance:Math.abs(g.level-entry),type:g.touches>=2
-    ?(bias==='LONG'?'EQUAL HIGHS / BUY-SIDE LIQUIDITY':'EQUAL LOWS / SELL-SIDE LIQUIDITY')
-    :(bias==='LONG'?'SWING HIGH / BUY-SIDE LIQUIDITY':'SWING LOW / SELL-SIDE LIQUIDITY')
-  })).sort((x,y)=>x.distance-y.distance);
+  const structural=structuralSwingLevels(c,bias,entry,a,160);
+  const candidates=structural.map(g=>({
+    ...g,
+    distance:Math.abs(g.level-entry),
+    type:g.touches>=2
+      ?(bias==='LONG'?'EQUAL HIGHS / BUY-SIDE LIQUIDITY':'EQUAL LOWS / SELL-SIDE LIQUIDITY')
+      :(bias==='LONG'?'TESTED SWING HIGH / BUY-SIDE LIQUIDITY':'TESTED SWING LOW / SELL-SIDE LIQUIDITY')
+  }));
+  // Never manufacture a target from the single most recent extreme. A repeated
+  // or materially rejected structural level gets priority; the closest wick
+  // only wins when it is itself a qualified structural level.
+  return candidates.sort((x,y)=>y.quality-x.quality||y.touches-x.touches||x.distance-y.distance||y.lastIndex-x.lastIndex);
 }
 function protectiveStop(c,bias,entry,a){
-  const st=marketStructure(c),sweep=liquiditySweep(c,bias,20,12),buffer=Math.max(a*.16,entry*.00025);
-  const swings=bias==='LONG'?st.lows:st.highs;
-  const recent=swings.filter(x=>x.i>=Math.max(0,c.length-50)&& (bias==='LONG'?x.p<entry:x.p>entry));
-  let invalidation=bias==='LONG'
-    ?(recent.at(-1)?.p??st.protectedLow??Math.min(...c.slice(-20).map(x=>x.low)))
-    :(recent.at(-1)?.p??st.protectedHigh??Math.max(...c.slice(-20).map(x=>x.high)));
-  if(sweep)invalidation=bias==='LONG'?Math.min(invalidation,sweep.level):Math.max(invalidation,sweep.level);
-  let stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;
+  const buffer=Math.max(a*.16,entry*.00025);
+  const swings=structuralSwingLevels(c,bias,entry,a,100);
+  const preferred=swings.filter(x=>x.touches>=2||x.quality>=3);
+  // Prefer a tested/protected swing rather than the latest tiny pivot. For a
+  // long, invalidation belongs below a meaningful demand low; for a short,
+  // above a meaningful supply high.
+  let chosen=preferred.find(x=>x.lastIndex>=Math.max(0,c.length-80))||swings[0];
+  let invalidation=chosen?.level;
+  const sweep=liquiditySweep(c,bias,30,18);
+  if(Number.isFinite(sweep?.level)){
+    if(bias==='LONG')invalidation=Math.min(Number.isFinite(invalidation)?invalidation:Infinity,sweep.level);
+    else invalidation=Math.max(Number.isFinite(invalidation)?invalidation:-Infinity,sweep.level);
+  }
+  if(!Number.isFinite(invalidation))return null;
+  const stop=bias==='LONG'?invalidation-buffer:invalidation+buffer;
   const maxRisk=Math.min(a*2.2,entry*.02);
   // Never pull a structural stop inward just to satisfy the risk cap.
-  // If the real invalidation is too far away, reject the trade instead.
   if(bias==='LONG'&&stop<entry-maxRisk)return null;
   if(bias==='SHORT'&&stop>entry+maxRisk)return null;
   return stop;
@@ -644,8 +671,9 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     // level itself is the continuation POI. This keeps the model selective
     // without making "fresh zone" availability a single point of failure.
     const pullBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend);
-    const impulse=pullBias!=='WAIT'?structureBreak(structure,pullBias,70,45):null;
-    const zones=pullBias!=='WAIT'?[...entryZones(current,pullBias,livePrice,a,60),...structuralEntryZones(current,pullBias,livePrice,a,40)]:[];
+    const impulse=pullBias!=='WAIT'?structureBreak(structure,pullBias,120,45):null;
+    const testedSwingZones=pullBias!=='WAIT'?structuralSwingLevels(current,pullBias,livePrice,a,120):[];
+    const zones=pullBias!=='WAIT'?[...testedSwingZones.map(x=>({low:x.level-a*.08,high:x.level+a*.08,mid:x.level,index:x.lastIndex,type:x.touches>=2?'TESTED SWING POI':'STRUCTURAL SWING POI'})),...entryZones(current,pullBias,livePrice,a,60),...structuralEntryZones(current,pullBias,livePrice,a,40)]:[];
     const response=pullBias!=='WAIT'&&priceActionPattern(current,pullBias);
     let chosen=null;
     if(impulse&&pullBias!=='WAIT'){
