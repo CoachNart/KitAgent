@@ -21,6 +21,9 @@
     }
   ],
   "crons": [{"path": "/api/affiliate-payout", "schedule": "5 0 1 * *"}],
-  "rewrites": [{"source": "/(.*)", "destination": "/index.html"}],
+  "rewrites": [
+    {"source": "/api/market", "destination": "/api/market-repair"},
+    {"source": "/(.*)", "destination": "/index.html"}
+  ],
   "cleanUrls": false
 }
