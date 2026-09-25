@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import marketHandler from './api/market.js';
+import marketHandler from './api/market-engine-v3.js';
 import registerDeviceHandler from './api/register-device.js';
 import verifyPaymentHandler from './api/verify-payment.js';
 import signalsHandler from './api/signals.js';
