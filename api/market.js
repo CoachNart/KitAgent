@@ -618,15 +618,40 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     reason=trade?'Top-down direction, intermediate structure and execution location are aligned with confirmation.':'Waiting for higher-timeframe alignment, a genuine POI and execution confirmation.';
     evidence.push('Context '+tf.bias+': '+contextBias+'.','Structure '+tf.structure+': '+middleBias+'.','Execution '+tf.entry+': '+entryBias+'.',impulse?'Directional displacement confirmed.':'No qualifying execution displacement.',response?'Price-action response present.':'No execution candle response.',zones[0]?zones[0].type:'No fresh execution POI.');
   } else if(key==='PULLBACK'){
-    // A neutral HTF is not a bearish/bullish conflict. If the higher timeframe
-    // has no established trend, use the confirmed selected-timeframe structure
-    // as the directional context rather than suppressing every pullback setup.
-    const pullBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),impulse=structureBreak(structure,pullBias,70,45),zones=pullBias!=='WAIT'?[...entryZones(current,pullBias,livePrice,a,60),...structuralEntryZones(current,pullBias,livePrice,a,40)]:[];
-    const response=pullBias!=='WAIT'&&priceActionPattern(current,pullBias),touched=Boolean(zones[0]&&zoneTouchesCandle(current,zones[0]));
-    const chosen=impulse&&zones.length?((touched&&response?chooseMarketFromZones(zones,pullBias):null)||chooseLimitForBias(zones,pullBias,livePrice)):null;
+    // Pullback execution is allowed to work from the actual impulse break level.
+    // A valid pullback does not need a pristine FVG/OB: the broken structural
+    // level itself is the continuation POI. This keeps the model selective
+    // without making "fresh zone" availability a single point of failure.
+    const pullBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend);
+    const impulse=pullBias!=='WAIT'?structureBreak(structure,pullBias,70,45):null;
+    const zones=pullBias!=='WAIT'?[...entryZones(current,pullBias,livePrice,a,60),...structuralEntryZones(current,pullBias,livePrice,a,40)]:[];
+    const response=pullBias!=='WAIT'&&priceActionPattern(current,pullBias);
+    let chosen=null;
+    if(impulse&&pullBias!=='WAIT'){
+      const breakLevel=Number(impulse.level);
+      const levelAhead=Number.isFinite(breakLevel)&&(pullBias==='LONG'?breakLevel<livePrice:breakLevel>livePrice);
+      const nearBreak=levelAhead&&Math.abs(livePrice-breakLevel)<=Math.max(a*.75,livePrice*.004);
+      // If price is already reacting at the broken level, execute at market.
+      if(response&&nearBreak){
+        const mt=evaluateTrade(current,pullBias,livePrice,a,SETUP_MIN_RR);
+        if(mt&&validTrade(mt,pullBias,livePrice,'MARKET'))chosen={trade:mt,entry:livePrice,orderType:'MARKET'};
+      }
+      // Otherwise leave a structural LIMIT at the broken level. The normal
+      // evaluator still enforces structural invalidation and the 2R floor.
+      if(!chosen&&levelAhead){
+        const lt=evaluateTrade(current,pullBias,breakLevel,a,SETUP_MIN_RR);
+        if(lt&&validTrade(lt,pullBias,livePrice,'LIMIT'))chosen={trade:lt,entry:breakLevel,orderType:'LIMIT',zone:{mid:breakLevel,index:impulse.index,type:'PULLBACK BREAK-LEVEL'}};
+      }
+      // Prefer a genuine fresh POI when it is available and gives a valid
+      // structural trade, but never require one to issue a pullback LIMIT.
+      if(!chosen&&zones.length){
+        const zc=chooseLimitForBias(zones,pullBias,livePrice);
+        if(zc)chosen=zc;
+      }
+    }
     if(pullBias!=='WAIT'&&chosen){trade=chosen.trade;entry=chosen.entry;orderType=chosen.orderType||'LIMIT';bias=pullBias;}
-    reason=trade?'Established impulse followed by a fresh retracement zone with continuation conditions.':'Waiting for a confirmed impulse and a fresh pullback that preserves directional structure.';
-    evidence.push(impulse?'Prior directional impulse confirmed.':'No qualifying directional impulse.',zones[0]?zones[0].type:'No fresh pullback POI.',response?'Retracement response confirmed.':'Waiting for pullback response.');
+    reason=trade?'Directional impulse and structural pullback location satisfy the trade model.':'Waiting for a confirmed directional impulse and a valid retracement location.';
+    evidence.push(impulse?'Prior directional impulse confirmed.':'No qualifying directional impulse.',impulse?'Broken structural level available as pullback POI.':(zones[0]?zones[0].type:'No pullback POI.'),response?'Retracement response confirmed.':'No current response candle; LIMIT may remain pending.');
   } else if(key==='BREAKOUT'){
     const signal=breakoutSignal(current,bias),accepted=Boolean(signal&&((bias==='LONG'&&signal.breakCandle.close>signal.breakLevel)||(bias==='SHORT'&&signal.breakCandle.close<signal.breakLevel))),retest=Boolean(signal&&(signal.retest||signal.breakIndex===current.length-1));
     let chosen=null;
