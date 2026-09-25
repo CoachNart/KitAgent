@@ -744,7 +744,8 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     // Full MSNR hierarchy: Weekly storyline -> Daily roadblock/level ->
     // H4 confirmation -> selected execution timeframe. The selected timeframe
     // is only the trigger; it does not invent the directional story.
-    const weeklyBias=structureBias(marketStructure(biasCandles));
+    const weeklyCandles=candlesByTf['1W']?closedCandles(candlesByTf['1W'],'1W',marketContext):[];
+    const weeklyBias=structureBias(marketStructure(weeklyCandles));
     const dailyCandles=candlesByTf['1D']?closedCandles(candlesByTf['1D'],'1D',marketContext):biasCandles;
     const dailyBias=structureBias(marketStructure(dailyCandles));
     const storyBias=weeklyBias!=='WAIT'?weeklyBias:(dailyBias!=='WAIT'?dailyBias:bias);
@@ -993,7 +994,7 @@ export default async function handler(req,res){if(req.method!=='GET')return json
 if((market==='crypto'||market==='perpetual')&&!/^[A-Z0-9]+(?:\/USDT)?$/.test(symbol))return json(res,400,{error:'Invalid crypto symbol'});
   const strategy=normalizeStrategy(req.query?.strategy);
   const context=strategyTimeframes(timeframe,strategy);
-  const needed=[...new Set([context.entry,context.structure,context.bias])];
+  const needed=[...new Set([context.entry,context.structure,context.bias,...(strategy==='MSNR'?['1W']:[])])];
   const fetched=await Promise.all(needed.map(async tf=>[tf,await candlesFor(market,symbol,tf)]));
   const candlesByTf=Object.fromEntries(fetched);
   const liveQuote=(['forex','commodities','indices'].includes(market))?await yahooPrice(symbol,market):await bybitPrice(symbol.replace(/[^A-Z0-9]/gi,''));
