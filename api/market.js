@@ -600,7 +600,10 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     reason=trade?'Top-down direction, intermediate structure and execution location are aligned with confirmation.':'Waiting for higher-timeframe alignment, a genuine POI and execution confirmation.';
     evidence.push('Context '+tf.bias+': '+contextBias+'.','Structure '+tf.structure+': '+middleBias+'.','Execution '+tf.entry+': '+entryBias+'.',impulse?'Directional displacement confirmed.':'No qualifying execution displacement.',response?'Price-action response present.':'No execution candle response.',zones[0]?zones[0].type:'No fresh execution POI.');
   } else if(key==='PULLBACK'){
-    const pullBias=higherBias,impulse=structureBreak(structure,pullBias,70,45),zones=pullBias!=='WAIT'?[...entryZones(current,pullBias,livePrice,a,60),...structuralEntryZones(current,pullBias,livePrice,a,40)]:[];
+    // A neutral HTF is not a bearish/bullish conflict. If the higher timeframe
+    // has no established trend, use the confirmed selected-timeframe structure
+    // as the directional context rather than suppressing every pullback setup.
+    const pullBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),impulse=structureBreak(structure,pullBias,70,45),zones=pullBias!=='WAIT'?[...entryZones(current,pullBias,livePrice,a,60),...structuralEntryZones(current,pullBias,livePrice,a,40)]:[];
     const response=pullBias!=='WAIT'&&priceActionPattern(current,pullBias),touched=Boolean(zones[0]&&zoneTouchesCandle(current,zones[0]));
     const chosen=impulse&&zones.length?((touched&&response?chooseMarketFromZones(zones,pullBias):null)||chooseLimitForBias(zones,pullBias,livePrice)):null;
     if(pullBias!=='WAIT'&&chosen){trade=chosen.trade;entry=chosen.entry;orderType=chosen.orderType||'LIMIT';bias=pullBias;}
@@ -614,7 +617,9 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     reason=trade?'A compressed range broke decisively, closed beyond the boundary and was retested.':'Waiting for a true range breakout, decisive close and retest/acceptance.';
     evidence.push(signal?'Compressed range '+roundPrice(signal.range.low)+' — '+roundPrice(signal.range.high)+'.':'No qualifying compression range.',signal?'Breakout close confirmed.':'No decisive breakout close.',retest?'Broken level retested.':'No breakout retest.');
   } else if(key==='SMC'){
-    const smcBias=higherBias,sweep=smcBias!=='WAIT'?liquiditySweep(current,smcBias,30,18):null,choch=smcBias!=='WAIT'?changeOfCharacter(current,smcBias,60,20):null,bos=smcBias!=='WAIT'?structureBreak(current,smcBias,60,14):null,disp=smcBias!=='WAIT'&&displacement(current,smcBias);
+    // Preserve the HTF filter when it is directional; when HTF is neutral, a
+    // confirmed selected/entry structure may establish the SMC direction.
+    const smcBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),sweep=smcBias!=='WAIT'?liquiditySweep(current,smcBias,30,18):null,choch=smcBias!=='WAIT'?changeOfCharacter(current,smcBias,60,20):null,bos=smcBias!=='WAIT'?structureBreak(current,smcBias,60,14):null,disp=smcBias!=='WAIT'&&displacement(current,smcBias);
     const zones=smcBias!=='WAIT'?[...entryZones(current,smcBias,livePrice,a,60),...structuralEntryZones(current,smcBias,livePrice,a,40)]:[];
     const validSequence=Boolean(sweep&&choch&&choch.breakIndex>sweep.index&&bos&&bos.breakIndex>=choch.breakIndex&&disp);
     const chosen=validSequence&&zones.length?((zoneTouchesCandle(current,zones[0])?chooseMarketFromZones(zones,smcBias):null)||chooseLimitForBias(zones,smcBias,livePrice)):null;
@@ -680,14 +685,18 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       blocking?'A nearby structural roadblock is present.':'No immediate roadblock.'
     );
   } else if(key==='PRICE_ACTION'){
-    const paBias=higherBias,structureAligned=paBias!=='WAIT'&&structureBias(marketStructure(structure))===paBias,st=marketStructure(current);
+    // Neutral higher-timeframe structure should not permanently disable price
+    // action. Use the confirmed selected/entry structure unless HTF conflicts.
+    const paBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),structureAligned=paBias!=='WAIT'&&structureBias(marketStructure(structure))===paBias,st=marketStructure(current);
     const levels=(paBias==='LONG'?st.lows:st.highs).slice(-8).filter(x=>paBias==='LONG'?x.p<last.close:x.p>last.close);
     const level=levels.sort((x,y)=>Math.abs(last.close-x.p)-Math.abs(last.close-y.p))[0],pattern=structureAligned?priceActionPattern(current,paBias):null,touched=Boolean(level&&last.low<=level.p&&last.high>=level.p);
     if(structureAligned&&level&&pattern&&touched){const t=evaluateTrade(current,paBias,livePrice,a,SETUP_MIN_RR);if(t&&validTrade(t,paBias,livePrice,'MARKET')){trade=t;entry=livePrice;orderType='MARKET';bias=paBias;}}
     reason=trade?'Higher-timeframe structure, key swing location and a confirmed price-action response are aligned.':'Waiting for price to reach a meaningful swing level and print a valid rejection/engulfing response.';
     evidence.push(structureAligned?'Higher-timeframe structure aligned.':'Higher-timeframe structure not aligned.',level?'Swing level '+roundPrice(level.p)+'.':'No meaningful swing level.',pattern?pattern.type+' confirmation.':'No qualifying candle pattern.',touched?'Level interacted with the confirmation candle.':'No level interaction.');
   } else if(key==='LIQUIDITY_REVERSAL'){
-    const revBias=higherBias,sweep=revBias!=='WAIT'?liquiditySweep(current,revBias,30,12):null,reclaim=Boolean(sweep&&((revBias==='LONG'&&last.close>sweep.level)||(revBias==='SHORT'&&last.close<sweep.level))),choch=revBias!=='WAIT'?changeOfCharacter(current,revBias,60,12):null,disp=revBias!=='WAIT'&&displacement(current,revBias),retest=Boolean(sweep&&current.slice(sweep.index+1).some(x=>revBias==='LONG'?x.low<=sweep.level:x.high>=sweep.level));
+    // A reversal still needs a real sweep/reclaim/CHoCH sequence. A neutral HTF
+    // can use confirmed local structure; an established HTF direction remains the filter.
+    const revBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),sweep=revBias!=='WAIT'?liquiditySweep(current,revBias,30,12):null,reclaim=Boolean(sweep&&((revBias==='LONG'&&last.close>sweep.level)||(revBias==='SHORT'&&last.close<sweep.level))),choch=revBias!=='WAIT'?changeOfCharacter(current,revBias,60,12):null,disp=revBias!=='WAIT'&&displacement(current,revBias),retest=Boolean(sweep&&current.slice(sweep.index+1).some(x=>revBias==='LONG'?x.low<=sweep.level:x.high>=sweep.level));
     const t=revBias!=='WAIT'&&sweep&&reclaim&&choch&&choch.breakIndex>sweep.index&&disp&&retest?evaluateTrade(current,revBias,sweep.level,a,SETUP_MIN_RR):null;
     if(t){const mt=evaluateTrade(current,revBias,livePrice,a,SETUP_MIN_RR);if(mt&&validTrade(mt,revBias,livePrice,'MARKET')){trade=mt;entry=livePrice;orderType='MARKET';bias=revBias;}else if(validTrade(t,revBias,livePrice,'LIMIT')){trade=t;entry=sweep.level;orderType='LIMIT';bias=revBias;}}
     reason=trade?'Liquidity was swept, reclaimed, structurally reversed and retested with displacement.':'Waiting for a genuine liquidity sweep followed by reclaim, CHoCH, displacement and retest.';
