@@ -103,11 +103,13 @@ function confirmedSwings(c){
 // pivots into the same level and require either repeated tests or a meaningful
 // rejection/excursion away from the level. This keeps tiny one-off wicks from
 // becoming the engine's entry, stop, or target reference.
-function structuralSwingLevels(c,bias,entry=null,a=null,lookback=160){
+function structuralSwingLevels(c,bias,entry=null,a=null,lookback=160,mode='entry'){
   if(!Array.isArray(c)||!['LONG','SHORT'].includes(bias))return [];
-  const st=marketStructure(c),source=bias==='LONG'?st.lows:st.highs;
+  const st=marketStructure(c);
+  const targetMode=mode==='target';
+  const source=targetMode?(bias==='LONG'?st.highs:st.lows):(bias==='LONG'?st.lows:st.highs);
   const start=Math.max(0,c.length-lookback),tol=Math.max(Number(a)||atr(c,14)||0,1e-12)*.22;
-  const swings=source.filter(s=>s.i>=start&&Number.isFinite(s.p)&&(!Number.isFinite(entry)||(bias==='LONG'?s.p<entry:s.p>entry)));
+  const swings=source.filter(s=>s.i>=start&&Number.isFinite(s.p)&&(!Number.isFinite(entry)||(targetMode?(bias==='LONG'?s.p>entry:s.p<entry):(bias==='LONG'?s.p<entry:s.p>entry))));
   const groups=[];
   for(const s of swings){
     let g=groups.find(x=>Math.abs(x.level-s.p)<=tol);
@@ -237,7 +239,7 @@ function structuralEntryZones(c,bias,current,a,maxAge=40){
   return out.sort((x,y)=>Math.abs(current-x.mid)-Math.abs(current-y.mid));
 }
 function liquidityCandidates(c,bias,entry,a){
-  const structural=structuralSwingLevels(c,bias,entry,a,160);
+  const structural=structuralSwingLevels(c,bias,entry,a,160,'target');
   const candidates=structural.map(g=>({
     ...g,
     distance:Math.abs(g.level-entry),
