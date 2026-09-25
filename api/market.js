@@ -810,7 +810,7 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
       }
       if(!trade){
         const pending=evaluateTrade(current,paBias,level.level,a,SETUP_MIN_RR);
-        if(pending&&validTrade(pending,paBias,livePrice,'LIMIT')){trade=pending;entry=level.p;orderType='LIMIT';bias=paBias;}
+        if(pending&&validTrade(pending,paBias,livePrice,'LIMIT')){trade=pending;entry=level.level;orderType='LIMIT';bias=paBias;}
       }
     }
     reason=trade?'Higher-timeframe structure, key swing location and a confirmed price-action response are aligned.':'Waiting for price to reach a meaningful swing level and print a valid rejection/engulfing response.';
