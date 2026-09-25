@@ -132,7 +132,7 @@ function structuralSwingLevels(c,bias,entry=null,a=null,lookback=160,mode='entry
 }
 function structureBreak(c,bias,lookback=30,maxAge=Infinity){
   const st=marketStructure(c),start=Math.max(2,c.length-lookback),recentStart=Number.isFinite(maxAge)?Math.max(0,c.length-maxAge):0;
-  const refs=structuralSwingLevels(c,bias,null,atr(c,14),lookback)
+  const refs=structuralSwingLevels(c,bias,null,atr(c,14),lookback,'target')
     .filter(x=>x.lastIndex>=start&&x.lastIndex<c.length-2)
     .sort((x,y)=>y.quality-x.quality||y.lastIndex-x.lastIndex);
   for(const ref of refs){
@@ -801,20 +801,20 @@ function strategyPlan(candlesByTf,strategy,instrumentSymbol,executionTimeframe,m
     // Neutral higher-timeframe structure should not permanently disable price
     // action. Use the confirmed selected/entry structure unless HTF conflicts.
     const paBias=higherBias!=='WAIT'?higherBias:(selectedBias!=='WAIT'?selectedBias:entryStructure.trend),structureAligned=paBias!=='WAIT'&&structureBias(marketStructure(structure))===paBias,st=marketStructure(current);
-    const levels=(paBias==='LONG'?st.lows:st.highs).slice(-8).filter(x=>paBias==='LONG'?x.p<last.close:x.p>last.close);
-    const level=levels.sort((x,y)=>Math.abs(last.close-x.p)-Math.abs(last.close-y.p))[0],pattern=structureAligned?priceActionPattern(current,paBias):null,recentPattern=structureAligned?recentPriceActionPattern(current,paBias,8):null,touched=Boolean(level&&last.low<=level.p&&last.high>=level.p);
+    const levels=paBias!=='WAIT'?structuralSwingLevels(current,paBias,livePrice,a,120):[];
+    const level=levels[0]||null,pattern=structureAligned?priceActionPattern(current,paBias):null,recentPattern=structureAligned?recentPriceActionPattern(current,paBias,8):null,touched=Boolean(level&&last.low<=level.level&&last.high>=level.level);
     if(structureAligned&&level&&(pattern||recentPattern)){
       if(touched){
         const t=evaluateTrade(current,paBias,livePrice,a,SETUP_MIN_RR);
         if(t&&validTrade(t,paBias,livePrice,'MARKET')){trade=t;entry=livePrice;orderType='MARKET';bias=paBias;}
       }
       if(!trade){
-        const pending=evaluateTrade(current,paBias,level.p,a,SETUP_MIN_RR);
+        const pending=evaluateTrade(current,paBias,level.level,a,SETUP_MIN_RR);
         if(pending&&validTrade(pending,paBias,livePrice,'LIMIT')){trade=pending;entry=level.p;orderType='LIMIT';bias=paBias;}
       }
     }
     reason=trade?'Higher-timeframe structure, key swing location and a confirmed price-action response are aligned.':'Waiting for price to reach a meaningful swing level and print a valid rejection/engulfing response.';
-    evidence.push(structureAligned?'Higher-timeframe structure aligned.':'Higher-timeframe structure not aligned.',level?'Swing level '+roundPrice(level.p)+'.':'No meaningful swing level.',pattern?pattern.type+' current confirmation.':recentPattern?recentPattern.type+' recent confirmation.':'No qualifying candle pattern.',touched?'Level interacted with the confirmation candle.':'No level interaction.');
+    evidence.push(structureAligned?'Higher-timeframe structure aligned.':'Higher-timeframe structure not aligned.',level?'Structural swing level '+roundPrice(level.level)+'.':'No meaningful swing level.',pattern?pattern.type+' current confirmation.':recentPattern?recentPattern.type+' recent confirmation.':'No qualifying candle pattern.',touched?'Level interacted with the confirmation candle.':'No level interaction.');
   } else if(key==='LIQUIDITY_REVERSAL'){
     // A reversal still needs a real sweep/reclaim/CHoCH sequence. A neutral HTF
     // can use confirmed local structure; an established HTF direction remains the filter.
