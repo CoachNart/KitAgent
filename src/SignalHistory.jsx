@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import './signal-history.css';
 import './history-mobile-fix.css';
-import {Activity,BarChart3,ChevronRight,Clock3,RefreshCw,Search,Target,TrendingDown,TrendingUp} from 'lucide-react';
+import {Activity,BarChart3,ChevronRight,Clock3,RefreshCw,Search,Target,Trash2,TrendingDown,TrendingUp} from 'lucide-react';
 import {auth} from './firebase.js';
 
 function num(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)>=1000?2:Number(v)>=1?5:8});}
@@ -13,8 +13,9 @@ function isClosed(s){return ['target_hit','stop_hit','missed_entry'].includes(St
 
 export default function SignalHistory({activity=[]}){
   const [signals,setSignals]=useState(()=>{try{const v=JSON.parse(localStorage.getItem('kitsetups-signal-history-cache')||'[]');return Array.isArray(v)?v:[]}catch{return[]}});
-  const [loading,setLoading]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('signals'),[query,setQuery]=useState(''),[clearOpen,setClearOpen]=useState(false),[clearText,setClearText]=useState(''),[clearing,setClearing]=useState(false);
+  const [loading,setLoading]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('signals'),[query,setQuery]=useState(''),[clearOpen,setClearOpen]=useState(false),[clearText,setClearText]=useState(''),[clearing,setClearing]=useState(false),[deleteTarget,setDeleteTarget]=useState(null),[deleting,setDeleting]=useState(false);
   const load=async(userOverride)=>{const user=userOverride||auth?.currentUser;if(!user)return;setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{headers:{Authorization:'Bearer '+token},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Signal history could not be loaded.');const next=Array.isArray(body.signals)?body.signals:[];setSignals(next);try{localStorage.setItem('kitsetups-signal-history-cache',JSON.stringify(next))}catch{}}catch(e){setError(e.message||'Signal history could not be loaded.')}};
+  const deleteSignal=async()=>{const user=auth?.currentUser;if(!user||!deleteTarget?.id)return;setDeleting(true);setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{method:'DELETE',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({signalId:deleteTarget.id})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Could not delete this setup.');setSignals(prev=>prev.filter(s=>(s.id||s.signalId)!==deleteTarget.id));setDeleteTarget(null)}catch(e){setError(e.message||'Could not delete this setup.')}finally{setDeleting(false)}};
   const clearHistory=async()=>{const user=auth?.currentUser;if(!user||clearText.trim()!=='CLEAR')return;setClearing(true);setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{method:'DELETE',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({confirmation:'CLEAR'})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Could not clear signal history.');setSignals([]);try{localStorage.removeItem('kitsetups-signal-history-cache')}catch{}setClearText('');setClearOpen(false)}catch(e){setError(e.message||'Could not clear signal history.')}finally{setClearing(false)}};
   useEffect(()=>{let unsubscribe=()=>{};if(auth?.onAuthStateChanged)unsubscribe=auth.onAuthStateChanged(user=>load(user));else load();const onSignal=()=>load();window.addEventListener('kitagent-signal-recorded',onSignal);return()=>{unsubscribe?.();window.removeEventListener('kitagent-signal-recorded',onSignal)}},[]);
   useEffect(()=>{const timer=setInterval(()=>load(),30000);return()=>clearInterval(timer)},[]);
@@ -29,8 +30,19 @@ export default function SignalHistory({activity=[]}){
       <div className="history-summary"><div className="summary-primary"><span>GENERATED</span><strong>{stats.total}</strong><small>Executable signals</small></div><div><span>OPEN</span><strong>{stats.active}</strong><small>Live trades</small></div><div><span>CLOSED</span><strong>{stats.closed}</strong><small>Resolved records</small></div><div><span>WIN RATE</span><strong className="cyan">{stats.winRate==null?'—':stats.winRate+'%'}</strong><small>{stats.verified} verified</small></div><div><span>LOSS RATE</span><strong className="red">{stats.lossRate==null?'—':stats.lossRate+'%'}</strong><small>{stats.verified} verified</small></div><div><span>AVG P&amp;L</span><strong className={stats.avgPnl==null?'':stats.avgPnl>=0?'green':'red'}>{stats.avgPnl==null?'—':(stats.avgPnl>=0?'+':'')+stats.avgPnl.toFixed(2)+'%'}</strong><small>Verified trades only</small></div></div>
       <div className="history-toolbar"><div className="history-view-tabs"><button className={view==='signals'?'active':''} onClick={()=>setView('signals')}><BarChart3 size={13}/> Signals</button><button className={view==='activity'?'active':''} onClick={()=>setView('activity')}><Activity size={13}/> Activity{activity.length?' · '+activity.length:''}</button></div>{view==='signals'&&<label className="history-search"><Search size={14}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search symbol or signal ID"/></label>}</div>
       {view==='signals' ? (
-        <div className="history-content"><div className="history-filter-row">{filters.map(([id,label,count])=><button key={id} className={filter===id?'active':''} onClick={()=>setFilter(id)}>{label}<b>{count}</b></button>)}</div>{error&&signals.length===0?<EmptyState error={error} retry={()=>load()}/>:visible.length===0?<EmptyState filtered={tradeSignals.length>0||query.length>0}/>:<div className="signal-list">{visible.map(signal=><SignalCard key={signal.id||signal.signalId} signal={signal}/>)}</div>}</div>
+        <div className="history-content"><div className="history-filter-row">{filters.map(([id,label,count])=><button key={id} className={filter===id?'active':''} onClick={()=>setFilter(id)}>{label}<b>{count}</b></button>)}</div>{error&&signals.length===0?<EmptyState error={error} retry={()=>load()}/>:visible.length===0?<EmptyState filtered={tradeSignals.length>0||query.length>0}/>:<div className="signal-list">{visible.map(signal=><SignalCard key={signal.id||signal.signalId} signal={signal} onDelete={()=>setDeleteTarget(signal)}/>)}</div>}</div>
       ) : <ActivityView activity={activity}/>} 
+      {deleteTarget && (
+        <div className="clear-history-overlay" role="dialog" aria-modal="true" onMouseDown={e=>e.target===e.currentTarget&&!deleting&&setDeleteTarget(null)}>
+          <div className="clear-history-modal individual-delete-modal">
+            <span className="tiny-label">REMOVE SETUP</span>
+            <h3>Delete this setup?</h3>
+            <p>This permanently removes this history record only. Other setups and your track-record stats remain intact.</p>
+            <div className="delete-setup-preview"><div><span>SYMBOL</span><b>{deleteTarget.symbol||'—'}</b></div><div><span>GENERATED</span><b>{when(deleteTarget.generatedAt)}</b></div></div>
+            <div className="clear-history-actions"><button type="button" onClick={()=>setDeleteTarget(null)} disabled={deleting}>Cancel</button><button type="button" className="danger" onClick={deleteSignal} disabled={deleting}>{deleting?'Deleting…':'Delete setup'}</button></div>
+          </div>
+        </div>
+      )}
       {clearOpen && (
         <div className="clear-history-overlay" role="dialog" aria-modal="true" onMouseDown={e=>e.target===e.currentTarget&&setClearOpen(false)}>
           <div className="clear-history-modal"><span className="tiny-label">RESET TRACK RECORD</span><h3>Clear signal history?</h3><p>This permanently removes your generated setups for this account. Your account, subscription, settings and exchange connection remain untouched.</p><label>Type <b>CLEAR</b> to confirm<input autoFocus value={clearText} onChange={e=>setClearText(e.target.value)} placeholder="CLEAR" autoComplete="off" spellCheck="false"/></label><div className="clear-history-actions"><button type="button" onClick={()=>{setClearOpen(false);setClearText('')}} disabled={clearing}>Cancel</button><button type="button" className="danger" onClick={clearHistory} disabled={clearing||clearText.trim()!=='CLEAR'}>{clearing?'Clearing…':'Clear history'}</button></div></div>
@@ -40,7 +52,7 @@ export default function SignalHistory({activity=[]}){
   );
 }
 
-function SignalCard({signal:s}) {
+function SignalCard({signal:s,onDelete}) {
   const long = s.direction === 'LONG';
   const state = statusOf(s);
   const verified = state.closed &&
@@ -133,12 +145,14 @@ function SignalCard({signal:s}) {
         <span className="footer-source">
           {s.outcomeEvidence?.source === 'binance_1m_ohlc' ? 'MARKET VERIFIED' : 'LIVE MARKET ANALYSIS'}
         </span>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('kitagent-open-market-history', { detail: s }))}
-        >
-          View setup <ChevronRight size={14} />
-        </button>
+        <div className="signal-footer-actions">
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kitagent-open-market-history', { detail: s }))}>
+            View setup <ChevronRight size={14} />
+          </button>
+          <button type="button" className="signal-delete-button" onClick={onDelete} aria-label={`Delete ${s.symbol||'setup'} from history`} title="Delete setup">
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
     </article>
   );
