@@ -3,6 +3,7 @@ import { yahooCandles, yahooPrice, yahooInstruments } from '../server/yahooMarke
 const TIMEFRAME_MAP={'1m':{forex:'1m',crypto:'1m'},'5m':{forex:'5m',crypto:'5m'},'15m':{forex:'15m',crypto:'15m'},'30m':{forex:'30m',crypto:'30m'},'1H':{forex:'1h',crypto:'1h'},'4H':{forex:'4h',crypto:'4h'},'1D':{forex:'1d',crypto:'1d'},'1W':{forex:'1wk',crypto:'1w'}};
 const TIMEFRAME_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
 const SETUP_MIN_RR=2.0;
+// Production strategy execution repair: strategy-specific confirmation may stage valid LIMITs before retest.
 function adjacentTimeframe(tf,steps=1){const i=Math.max(0,TIMEFRAME_ORDER.indexOf(tf));return TIMEFRAME_ORDER[Math.min(TIMEFRAME_ORDER.length-1,i+steps)]||'1H';}
 function strategyTimeframes(tf,strategy){
   const key=normalizeStrategy(strategy),higher=adjacentTimeframe(tf,1),higher2=adjacentTimeframe(tf,2);
