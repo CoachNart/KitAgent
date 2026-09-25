@@ -6,7 +6,7 @@ function refinedTrade(c,bias,strategy,price){
   if(bias==='LONG'&&z.entry>price+a*.35)continue;
   if(bias==='SHORT'&&z.entry<price-a*.35)continue;
   const t=buildTrade(c,bias,z.entry,z.invalidation,z.target);
-  if(t)return{...t,entryKind:z.kind};
+  if(t)return{...t,entryKind:z.kind,pending:z.pending===true};
  }
  return null
 }
