@@ -135,6 +135,15 @@ export default async function handler(req,res){
     const db=getAdmin().firestore(),collection=db.collection('users').doc(decoded.uid).collection('signals');
     if(req.method==='DELETE'){
       const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
+      if(body.signalId){
+        const signalId=clean(body.signalId,200).trim();
+        if(!signalId)return json(res,400,{error:'A setup id is required.'});
+        const ref=collection.doc(signalId);
+        const existing=await ref.get();
+        if(!existing.exists)return json(res,404,{error:'Setup not found.'});
+        await ref.delete();
+        return json(res,200,{ok:true,deleted:1,signalId});
+      }
       if(String(body.confirmation||'').trim()!=='CLEAR')return json(res,400,{error:'Type CLEAR to confirm history deletion.'});
       const snapshot=await collection.get();let deleted=0,batch=db.batch(),count=0;
       for(const doc of snapshot.docs){batch.delete(doc.ref);deleted++;count++;if(count===450){await batch.commit();batch=db.batch();count=0;}}
