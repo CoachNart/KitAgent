@@ -283,10 +283,12 @@ function targetPool(c,bias,entry,a){
     ?[Math.max(...window.map(x=>x.high)),...(previous.length?[Math.max(...previous.map(x=>x.high))]:[])]
     : [Math.min(...window.map(x=>x.low)),...(previous.length?[Math.min(...previous.map(x=>x.low))]:[])];
   const maxDistance=Math.min(a*6.0,entry*.06);
-  return [...new Set([...structural,...extremes])]
+  const ordered=[...new Set([...structural,...extremes])];
+  // Structural liquidity is authoritative. Window extremes are only a fallback
+  // when no qualified tested swing can satisfy the RR/range constraints.
+  return ordered
     .filter(level=>Number.isFinite(level))
-    .filter(level=>bias==='LONG'?level>entry&&level-entry<=maxDistance:level<entry&&entry-level<=maxDistance)
-    .sort((x,y)=>bias==='LONG'?x-y:y-x);
+    .filter(level=>bias==='LONG'?level>entry&&level-entry<=maxDistance:level<entry&&entry-level<=maxDistance);
 }
 function liquidityTargetBuffer(c,bias,level,entry,a){
   // Liquidity is a zone rather than an exact wick price. Derive a small
