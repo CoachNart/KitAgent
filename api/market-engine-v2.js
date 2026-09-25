@@ -1,15 +1,3 @@
-function refinedTrade(c,bias,strategy,price){
- const a=atr(c,14)||0,maxPending=Math.max(a*2.5,price*.012);
- for(const z of strategyEntries(c,bias,strategy,price)){
-  if(!Number.isFinite(z.entry)||z.entry<=0)continue;
-  if(Math.abs(z.entry-price)>maxPending)continue;
-  if(bias==='LONG'&&z.entry>price+a*.35)continue;
-  if(bias==='SHORT'&&z.entry<price-a*.35)continue;
-  const t=buildTrade(c,bias,z.entry,z.invalidation,z.target);
-  if(t)return{...t,entryKind:z.kind,pending:z.pending===true};
- }
- return null
-}
 import { authenticate, requireActiveAccess } from '../server/access.js';
 import { yahooCandles, yahooPrice, yahooInstruments } from '../server/yahooMarket.js';
 
