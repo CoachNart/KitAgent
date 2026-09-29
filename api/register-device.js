@@ -12,7 +12,7 @@ function getAdmin() {
       return admin;
     }
     if (credentialPath && fs.existsSync(credentialPath)) {
-      admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath, 'utf8')) });
+      admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath, 'utf8'))) });
       return admin;
     }
     const error = new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING'); error.code = error.message; throw error;
