@@ -12,7 +12,7 @@ function getAdmin() {
       return admin;
     }
     if (credentialPath && fs.existsSync(credentialPath)) {
-      admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath, 'utf8'))) });
+      admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(credentialPath, 'utf8')) });
       return admin;
     }
     const error = new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING'); error.code = error.message; throw error;
@@ -32,7 +32,9 @@ export default async function handler(req,res){
     if(!/^[a-f0-9]{64}$/.test(deviceId||'')||!/^[a-f0-9]{64}$/.test(deviceFingerprint))return json(res,400,{error:'Invalid device binding.',code:'DEVICE_ID_INVALID'});
     const db=a.firestore(),deviceRef=db.collection('deviceBindings').doc(deviceId),userRef=db.collection('users').doc(decoded.uid);const profile={osFamily:String(deviceProfile.osFamily||''),language:String(deviceProfile.language||''),timezone:String(deviceProfile.timezone||''),hardwareConcurrency:Number(deviceProfile.hardwareConcurrency)||0,deviceMemory:Number(deviceProfile.deviceMemory)||0,screenWidth:Number(deviceProfile.screenWidth)||0,screenHeight:Number(deviceProfile.screenHeight)||0,availWidth:Number(deviceProfile.availWidth)||0,availHeight:Number(deviceProfile.availHeight)||0,colorDepth:Number(deviceProfile.colorDepth)||0,pixelRatio:Number(deviceProfile.pixelRatio)||0,maxTouchPoints:Number(deviceProfile.maxTouchPoints)||0};
 
-    const existingDevice=await deviceRef.get();const candidateQuery=profile.osFamily?await db.collection('deviceBindings').where('osFamily','==',profile.osFamily).limit(100).get():{empty:true,docs:[]};for(const candidate of candidateQuery.docs){const data=candidate.data()||{};const uid=String(data.uid||'');if(!uid||uid===decoded.uid)continue;const score=(data.osFamily===profile.osFamily?3:0)+(data.timezone&&data.timezone===profile.timezone?2:0)+(Number(data.hardwareConcurrency)===profile.hardwareConcurrency&&profile.hardwareConcurrency?2:0)+(Number(data.maxTouchPoints)===profile.maxTouchPoints?2:0)+(((Number(data.screenWidth)===profile.screenWidth&&Number(data.screenHeight)===profile.screenHeight)||(Number(data.screenWidth)===profile.screenHeight&&Number(data.screenHeight)===profile.screenWidth))?3:0)+(Number(data.availWidth)===profile.availWidth&&Number(data.availHeight)===profile.availHeight&&profile.availWidth?1:0)+(Math.abs(Number(data.pixelRatio)-profile.pixelRatio)<0.01&&profile.pixelRatio?2:0)+(Number(data.colorDepth)===profile.colorDepth&&profile.colorDepth?1:0)+(Number(data.deviceMemory)===profile.deviceMemory&&profile.deviceMemory?1:0);if(score>=13){try{await a.auth().getUser(uid);return json(res,409,{error:'This device is already registered to another KitSetups account.',code:'DEVICE_ALREADY_REGISTERED'})}catch(error){if(error?.code!=='auth/user-not-found')throw error;}}}
+    // Exact device binding is enforced. Generic hardware/browser profile similarity is
+    // not a sufficient identity signal and can collide across legitimate users.
+    const existingDevice=await deviceRef.get();
     let staleOwnerUid=null;
     if(existingDevice.exists){
       const owner=existingDevice.data()?.uid;
@@ -50,14 +52,13 @@ export default async function handler(req,res){
       if(device?.uid&&device.uid!==decoded.uid&&!stale){const e=new Error('DEVICE_ALREADY_REGISTERED');e.code=e.message;throw e}
       if(user?.securitySettings?.deviceBindingId&&user.securitySettings.deviceBindingId!==deviceId){const e=new Error('ACCOUNT_ALREADY_BOUND');e.code=e.message;throw e}
 
-      const deviceData={uid:decoded.uid,deviceFingerprint,...profile,lastSeenAt:a.firestore.FieldValue.serverTimestamp(),version:4};
+      const deviceData={uid:decoded.uid,deviceFingerprint,...profile,lastSeenAt:a.firestore.FieldValue.serverTimestamp(),version:5};
       if(!deviceSnap.exists||stale)tx.set(deviceRef,{...deviceData,createdAt:a.firestore.FieldValue.serverTimestamp()},{merge:true});
-      else tx.update(deviceRef,{lastSeenAt:deviceData.lastSeenAt,deviceFingerprint});
+      else tx.update(deviceRef,{lastSeenAt:deviceData.lastSeenAt,deviceFingerprint,...profile});
 
       if(userSnap.exists){
         const security={...(user.securitySettings||{}),deviceBindingId:deviceId};
         const patch={securitySettings:security,updatedAt:a.firestore.FieldValue.serverTimestamp()};
-        // Never restart an existing trial. Repair dates only when they are genuinely absent.
         if(!user.trialStartedAt||!user.trialEndsAt){const nowMs=Date.now();patch.trialStartedAt=new Date(nowMs);patch.trialEndsAt=new Date(nowMs+3*86400000)}
         tx.update(userRef,patch);
       }else{
@@ -67,7 +68,7 @@ export default async function handler(req,res){
     });
     return json(res,200,{allowed:true,deviceId});
   }catch(error){
-    if(error?.code==='DEVICE_ALREADY_REGISTERED')return json(res,409,{error:'This device is already registered to another KitAgent account.',code:error.code});
+    if(error?.code==='DEVICE_ALREADY_REGISTERED')return json(res,409,{error:'This device is already registered to another KitSetups account.',code:error.code});
     if(error?.code==='ACCOUNT_ALREADY_BOUND')return json(res,409,{error:'This account is already bound to another device.',code:error.code});
     if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_MISSING')return json(res,500,{error:'Firebase Admin credentials are missing.',code:error.code});
     if(error?.code==='FIREBASE_ADMIN_CREDENTIALS_INVALID')return json(res,500,{error:'Firebase Admin credentials are invalid.',code:error.code});
