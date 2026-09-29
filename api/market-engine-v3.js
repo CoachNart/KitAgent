@@ -273,7 +273,7 @@ function sma(a,n){const v=a.filter(Number.isFinite).slice(-n);return v.length?v.
 function atr(c,n=14){const tr=[];for(let i=1;i<c.length;i++)tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close)));return sma(tr,n)}
 function pivots(c){const h=[],l=[];for(let i=3;i<c.length-3;i++){let hi=true,lo=true;for(let j=1;j<=3;j++){if(c[i].high<=c[i-j].high||c[i].high<c[i+j].high)hi=false;if(c[i].low>=c[i-j].low||c[i].low>c[i+j].low)lo=false}if(hi)h.push({p:c[i].high,i});if(lo)l.push({p:c[i].low,i})}return{h,l}}
 function groupedLevels(c,bias,entry,opposite=false){const a=atr(c)||Math.abs(entry)*.002,s=pivots(c),src=opposite?(bias==='LONG'?s.h:s.l):(bias==='LONG'?s.l:s.h),side=opposite?(bias==='LONG'?x=>x.p>entry:x=>x.p<entry):(bias==='LONG'?x=>x.p<entry:x=>x.p>entry),tol=Math.max(a*.22,Math.abs(entry)*.0008),groups=[];for(const p of src.filter(side).filter(x=>x.i>=Math.max(0,c.length-240))){let g=groups.find(x=>Math.abs(x.mid-p.p)<=tol);if(!g){g={mid:p.p,points:[]};groups.push(g)}g.points.push(p);g.mid=g.points.reduce((q,x)=>q+x.p,0)/g.points.length}return groups.map(g=>{const edge=opposite?(bias==='LONG'?Math.max(...g.points.map(x=>x.p)):Math.min(...g.points.map(x=>x.p))):(bias==='LONG'?Math.min(...g.points.map(x=>x.p)):Math.max(...g.points.map(x=>x.p)));const excursion=g.points.reduce((best,p)=>Math.max(best,bias==='LONG'?Math.max(0,...c.slice(p.i+1,Math.min(c.length,p.i+30)).map(x=>x.high-p.p)):Math.max(0,...c.slice(p.i+1,Math.min(c.length,p.i+30)).map(x=>p.p-x.low))),0);const touches=g.points.length;const age=c.length-1-Math.max(...g.points.map(x=>x.i));const displacement=excursion/a;const score=displacement+Math.min(touches,4)*.8+Math.min(age/30,3)*.15;const strong=displacement>=1||touches>=3||(displacement>=.75&&age>=18);return{...g,edge,excursion,touches,age,score,displacement,strong}}).filter(x=>x.strong).sort((a,b)=>b.score-a.score)}
-async async function candles(market,symbol,tf){if(['forex','commodities','indices'].includes(market))return norm((await yahooCandles(symbol,tf,market)).rows);const clean=symbol.replace(/[^A-Z0-9]/gi,'');const u=new URL('https://api.bybit.com/v5/market/kline');u.searchParams.set('category','linear');u.searchParams.set('symbol',clean);u.searchParams.set('interval',BYBIT_INTERVAL[tf]);u.searchParams.set('limit','300');const r=await fetch(u,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Bybit candles unavailable');const b=await r.json();if(b.retCode!==0)throw new Error(b.retMsg||'Bybit candles unavailable');return norm(b.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]))}
+async function candles(market,symbol,tf){if(['forex','commodities','indices'].includes(market))return norm((await yahooCandles(symbol,tf,market)).rows);const clean=symbol.replace(/[^A-Z0-9]/gi,'');const u=new URL('https://api.bybit.com/v5/market/kline');u.searchParams.set('category','linear');u.searchParams.set('symbol',clean);u.searchParams.set('interval',BYBIT_INTERVAL[tf]);u.searchParams.set('limit','300');const r=await fetch(u,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Bybit candles unavailable');const b=await r.json();if(b.retCode!==0)throw new Error(b.retMsg||'Bybit candles unavailable');return norm(b.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]))}
 function round(v){if(!Number.isFinite(v))return null;if(v>=1000)return+v.toFixed(2);if(v>=100)return+v.toFixed(3);if(v>=1)return+v.toFixed(5);if(v>=.1)return+v.toFixed(6);return+v.toPrecision(7)}
 function trend(c){const s=pivots(c),h=s.h.slice(-5),l=s.l.slice(-5);if(h.length<2||l.length<2)return'WAIT';const hh=h.at(-1).p>h.at(-2).p,hl=l.at(-1).p>l.at(-2).p,lh=h.at(-1).p<h.at(-2).p,ll=l.at(-1).p<l.at(-2).p;return hh&&hl?'LONG':lh&&ll?'SHORT':'WAIT'}
 function reject(setup,reason){setup.tradeReady=false;setup.setupStatus='NO SETUP';setup.orderType='NO_SETUP';setup.setupReason=reason;setup.confidence=0;setup.entry=null;setup.limitEntry=null;setup.stopLoss=null;setup.takeProfit1=null;setup.takeProfit2=null;setup.riskReward='—';setup.riskRewardValue=null;return setup}
@@ -320,4 +320,54 @@ async function hardenSetup(payload){
  setup.confidence=confidence;setup.structureEvidence={swingEdge:round(stop.edge),swingTouches:stop.touches,swingDisplacementAtr:+stop.displacement.toFixed(2),swingAgeBars:stop.age,targetEdge:round(target.edge),targetTouches:target.touches,targetDisplacementAtr:+target.displacement.toFixed(2),higherTimeframeBias:htfBias,middleTimeframeBias:structureBias};
  return payload
 }
-export default async function handler(req,res){if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});if(String(req.query?.action||'')==='header'){try{const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear',{headers:{Accept:'application/json'}});if(!r.ok)return json(res,502,{error:'Bybit ticker provider unavailable'});const body=await r.json();if(body?.retCode!==0||!Array.isArray(body?.result?.list))return json(res,502,{error:body?.retMsg||'Bybit ticker provider unavailable'});const wanted=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT']);return json(res,200,{ok:true,result:body.result.list.filter(x=>wanted.has(x.symbol)).map(x=>({symbol:x.symbol,lastPrice:x.lastPrice,price24hPcnt:x.price24hPcnt}))})}catch(e){return json(res,502,{ok:false,error:e?.message||'Bybit ticker provider unavailable'})}}let body=null,status=200;const proxy={...res,setHeader(){},end(data){try{body=JSON.parse(data)}catch{body={ok:false,error:'Market engine returned invalid JSON'}}}};try{const market=String(req.query?.market||'forex').toLowerCase(),symbol=String(req.query?.symbol||'').trim().toUpperCase(),timeframe=String(req.query?.timeframe||'1H'),strategy=normalizeStrategy(req.query?.strategy);if(req.query?.action==='instruments'){if(['forex','commodities','indices'].includes(market))return json(res,200,{ok:true,instruments:yahooInstruments(market)});if(['crypto','perpetual'].includes(market))return json(res,200,{ok:true,instruments:await bybitInstruments()});return json(res,400,{error:'Unsupported market'})}const decoded=await authenticate(req);await requireActiveAccess(decoded.uid);if(!STRATEGIES[strategy])return json(res,400,{error:'Unsupported strategy'});const plan=tfPlan(timeframe,strategy);if(!symbol)return json(res,400,{error:'Missing symbol'});const needed=[...new Set([plan.entry,plan.structure,plan.bias,...(plan.extra||[])])];const pairs=await Promise.all(needed.map(async tf=>[tf,closed(await candlesFor(market,symbol,tf),tf)]));const data={c:Object.fromEntries(pairs),tf:timeframe};const quote=await priceFor(market,symbol);if(!quoteFresh(quote,market))throw new Error('Live market quote is stale. No setup was issued.');const setup=strategyPlan(data,strategy,quote.mid);const final=setup||{strategy,strategyName:STRATEGIES[strategy].name,strategyShort:STRATEGIES[strategy].short,tradeReady:false,setupStatus:'NO SETUP',setupReason:'No qualified setup.',orderType:'NO_SETUP',confidence:0,bias:'WAIT',directionBias:'WAIT',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,riskReward:'—',higherTimeframe:plan.bias,middleTimeframe:plan.structure,entryTimeframe:plan.entry};if(final.tradeReady){try{body=await hardenSetup({ok:true,market,symbol,timeframe,strategy,setup:final,quote})?.setup?{ok:true,market,symbol,timeframe,strategy,setup:final,quote}:null}catch(e){reject(final,'Structural validation failed; no setup issued.')}}body=body||{ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:final,quote,confluence:[{timeframe:plan.bias,bias:trend(data.c[plan.bias]||[]),role:'CONTEXT',confidence:final.confidence},{timeframe:plan.structure,bias:trend(data.c[plan.structure]||[]),role:'STRUCTURE',confidence:final.confidence},{timeframe:plan.entry,bias:trend(data.c[plan.entry]||[]),role:'OPPORTUNITY',confidence:final.confidence}],aligned:final.tradeReady?3:0,totalTimeframes:3,source:['forex','commodities','indices'].includes(market)?'Yahoo Finance':'Bybit linear perpetuals',generatedAt:new Date().toISOString()};}catch(e){return json(res,500,{ok:false,error:e?.message||'Market analysis failed',code:e?.code||'MARKET_ERROR'})}return json(res,status,body)}
+export default async function handler(req,res){
+ if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
+ if(String(req.query?.action||'')==='header'){
+  try{
+   const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear',{headers:{Accept:'application/json'}});
+   if(!r.ok)return json(res,502,{error:'Bybit ticker provider unavailable'});
+   const body=await r.json();
+   if(body?.retCode!==0||!Array.isArray(body?.result?.list))return json(res,502,{error:body?.retMsg||'Bybit ticker provider unavailable'});
+   const wanted=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT']);
+   return json(res,200,{ok:true,result:body.result.list.filter(x=>wanted.has(x.symbol)).map(x=>({symbol:x.symbol,lastPrice:x.lastPrice,price24hPcnt:x.price24hPcnt}))});
+  }catch(e){return json(res,502,{ok:false,error:e?.message||'Bybit ticker provider unavailable'})}
+ }
+ let status=200;
+ try{
+  const market=String(req.query?.market||'forex').toLowerCase();
+  const symbol=String(req.query?.symbol||'').trim().toUpperCase();
+  const timeframe=String(req.query?.timeframe||'1H');
+  const strategy=normalizeStrategy(req.query?.strategy);
+  if(req.query?.action==='instruments'){
+   if(['forex','commodities','indices'].includes(market))return json(res,200,{ok:true,instruments:yahooInstruments(market)});
+   if(['crypto','perpetual'].includes(market))return json(res,200,{ok:true,instruments:await bybitInstruments()});
+   return json(res,400,{error:'Unsupported market'});
+  }
+  const decoded=await authenticate(req);
+  await requireActiveAccess(decoded.uid);
+  if(!STRATEGIES[strategy])return json(res,400,{error:'Unsupported strategy'});
+  const plan=tfPlan(timeframe,strategy);
+  if(!symbol)return json(res,400,{error:'Missing symbol'});
+  const needed=[...new Set([plan.entry,plan.structure,plan.bias,...(plan.extra||[])])];
+  const pairs=await Promise.all(needed.map(async tf=>[tf,closed(await candlesFor(market,symbol,tf),tf)]));
+  const data={c:Object.fromEntries(pairs),tf:timeframe};
+  const quote=await priceFor(market,symbol);
+  if(!quoteFresh(quote,market))throw new Error('Live market quote is stale. No setup was issued.');
+  const setup=strategyPlan(data,strategy,quote.mid);
+  const final=setup||{strategy,strategyName:STRATEGIES[strategy].name,strategyShort:STRATEGIES[strategy].short,tradeReady:false,setupStatus:'NO SETUP',setupReason:'No qualified setup.',orderType:'NO_SETUP',confidence:0,bias:'WAIT',directionBias:'WAIT',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,riskReward:'—',higherTimeframe:plan.bias,middleTimeframe:plan.structure,entryTimeframe:plan.entry};
+  const payload={ok:true,market,symbol,timeframe,strategy,strategyInfo:STRATEGIES[strategy],setup:final,quote};
+  if(final.tradeReady){
+   try{await hardenSetup(payload)}catch(e){reject(final,'Structural validation failed; no setup issued.')}
+  }
+  payload.confluence=[
+   {timeframe:plan.bias,bias:trend(data.c[plan.bias]||[]),role:'CONTEXT',confidence:final.confidence},
+   {timeframe:plan.structure,bias:trend(data.c[plan.structure]||[]),role:'STRUCTURE',confidence:final.confidence},
+   {timeframe:plan.entry,bias:trend(data.c[plan.entry]||[]),role:'OPPORTUNITY',confidence:final.confidence}
+  ];
+  payload.aligned=final.tradeReady?3:0;
+  payload.totalTimeframes=3;
+  payload.source=['forex','commodities','indices'].includes(market)?'Yahoo Finance':'Bybit linear perpetuals';
+  payload.generatedAt=new Date().toISOString();
+  return json(res,status,payload);
+ }catch(e){return json(res,500,{ok:false,error:e?.message||'Market analysis failed',code:e?.code||'MARKET_ERROR'})}
+}
