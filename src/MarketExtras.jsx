@@ -3,14 +3,14 @@ import { Bookmark, Check, ChevronDown, ChevronUp, CircleHelp, Plus, X, Target, S
 
 
 const STRATEGY_LIBRARY=[
- {key:'TOP_DOWN',name:'Top-Down',short:'HTF structure first',description:'Higher-timeframe direction → intermediate structure → execution confirmation.',rules:['HTF establishes direction','Middle TF confirms or conflicts','Execution TF must provide a live trade condition']},
- {key:'PULLBACK',name:'Pullback',short:'Impulse → retracement → continuation',description:'Trades continuation after a confirmed directional impulse and a fresh retracement into a qualified POI.',rules:['Directional impulse','Fresh FVG / order block','Zone remains executable','Minimum 2R']},
- {key:'BREAKOUT',name:'Breakout & Retest',short:'Break → retest → continuation',description:'Requires a meaningful range boundary, decisive close beyond it, then a confirmed retest and acceptance before entry; wick-only breaks do not qualify.',rules:['Meaningful range boundary','Decisive close beyond boundary','Confirmed retest','Continuation acceptance']},
- {key:'SMC',name:'SMC',short:'Liquidity → displacement → BOS → POI',description:'Uses a higher-timeframe directional bias, then requires liquidity to be swept, a CHoCH, BOS, displacement and a fresh POI.',rules:['Higher-timeframe bias','Liquidity sweep','CHoCH → BOS','Displacement + fresh POI']},
- {key:'MSNR',name:'MSNR',short:'Malaysian Support & Resistance',description:'Uses the Daily/4H storyline with body-based A/V levels, fresh support/resistance, SBR/RBS flips and kissing-candle bases, then requires lower-timeframe confirmation.',rules:['Weekly / Daily storyline','Fresh A/V or decision level','SBR / RBS flip or base','Tap + lower-TF BOS / engulfing / rejection']},
- {key:'PRICE_ACTION',name:'Price Action',short:'Structure + candle confirmation',description:'Trades a meaningful structural swing only after price reaches it and prints a qualifying rejection or engulfing response.',rules:['Structural level','Rejection or engulfing','Structural invalidation','Minimum 2R']},
- {key:'LIQUIDITY_REVERSAL',name:'Liquidity Reversal',short:'Sweep → reclaim → reversal',description:'Waits for a genuine liquidity sweep, reclaim, reversal CHoCH, displacement and retest before considering a reversal.',rules:['Genuine sweep','Reclaim','Reversal CHoCH','Displacement + retest']},
- {key:'CRT',name:'CRT',short:'Range → sweep → reclaim',description:'Candle Range Theory: uses a completed parent-candle range, waits for one side to be swept and reclaimed back inside the range, then targets the opposite range boundary.',rules:['Completed reference range','One-side liquidity sweep','Midpoint reclaim','Range-based invalidation','Minimum 2R']}
+ {key:'TOP_DOWN',name:'Top-Down',short:'Higher timeframe → setup → entry',description:'KitSetups starts with the bigger market direction, checks the middle structure, then looks for a tradeable condition on the selected execution timeframe.',steps:[['1 · Direction','The higher timeframe sets the market bias. KitSetups will not issue a continuation trade against that direction.'],['2 · Structure','The next timeframe must support the same direction and show meaningful structure, such as a confirmed break or sustained swing sequence.'],['3 · Setup','The selected execution timeframe must reach a qualified structural level and show a valid reaction or limit opportunity.'],['4 · Protection','The stop is placed beyond a validated structural swing, with a volatility buffer—not simply at the latest wick.'],['5 · Target','The target is the next meaningful opposing swing or liquidity area and must provide at least 2R.']],rules:['Higher timeframe direction','Middle timeframe agreement','Execution condition','Structural stop','Meaningful target + 2R']},
+ {key:'PULLBACK',name:'Pullback',short:'Impulse → retracement → continuation',description:'KitSetups looks for a strong directional move, waits for price to retrace into a qualified area, then requires the continuation structure to remain intact.',steps:[['1 · Direction','The higher timeframes establish the direction first.'],['2 · Impulse','A meaningful directional move must exist; weak or choppy movement is not enough.'],['3 · Retracement','Price must pull back into a qualified structural area rather than entering after an extended move.'],['4 · Protection','The stop sits beyond the structural swing that would prove the pullback thesis wrong.'],['5 · Target','The engine targets meaningful opposing structure and requires at least 2R.']],rules:['Directional impulse','Fresh retracement area','Continuation structure','Structural invalidation','Minimum 2R']},
+ {key:'BREAKOUT',name:'Breakout & Retest',short:'Break → retest → continuation',description:'KitSetups does not chase the first breakout candle. It waits for a meaningful level to break with a decisive close, then checks whether the old boundary holds as support or resistance.',steps:[['1 · Range','A meaningful recent range boundary must be identifiable.'],['2 · Break','Price must close decisively beyond that boundary; a wick through it is not enough.'],['3 · Retest','Price must return to the broken level and show acceptance in the breakout direction.'],['4 · Protection','The stop is placed beyond the validated retest structure or structural swing.'],['5 · Target','The engine selects the next meaningful structural/liquidity target with at least 2R.']],rules:['Meaningful range','Decisive close','Confirmed retest','Continuation acceptance','Structural target + 2R']},
+ {key:'SMC',name:'SMC',short:'Liquidity → displacement → structure break',description:'KitSetups uses liquidity and market structure together. A sweep alone is not enough; the move must show displacement and structural evidence before an entry is considered.',steps:[['1 · Direction','Higher-timeframe structure provides the directional framework.'],['2 · Liquidity','Price must interact with a meaningful prior high/low where liquidity can be taken.'],['3 · Confirmation','A structural shift such as CHoCH/BOS and a strong displacement move must support the idea.'],['4 · Entry area','The engine looks for a fresh order block or fair-value gap that price can react from.'],['5 · Protection & target','The stop goes beyond the entry structure and the target is meaningful external liquidity, with at least 2R.']],rules:['Higher-timeframe bias','Liquidity interaction','CHoCH/BOS','Displacement','Fresh POI + structural target']},
+ {key:'MSNR',name:'MSNR',short:'Higher-timeframe level → reaction',description:'KitSetups follows the broader support/resistance storyline, identifies a fresh decision level, then waits for price to react before issuing the trade.',steps:[['1 · Storyline','Weekly and Daily structure establish the broader direction.'],['2 · Level','A fresh 4H/Daily decision area must be relevant to the current price.'],['3 · Reaction','Price must reach the area and provide lower-timeframe confirmation rather than simply touching it.'],['4 · Protection','The stop sits beyond the structural level that invalidates the reaction.'],['5 · Target','The engine looks toward the next meaningful structural/liquidity level and requires at least 2R.']],rules:['Weekly/Daily storyline','Fresh decision level','Confirmed reaction','Structural invalidation','Meaningful target + 2R']},
+ {key:'PRICE_ACTION',name:'Price Action',short:'Structure + candle confirmation',description:'KitSetups waits for price to reach an important structural level and then uses the candle reaction as the trigger.',steps:[['1 · Structure','A meaningful swing level must be identified first.'],['2 · Arrival','Price must actually reach the level; the engine does not trade a candle pattern in the middle of nowhere.'],['3 · Candle signal','A qualifying rejection or engulfing response must confirm the direction.'],['4 · Protection','The stop sits beyond the structural level that would invalidate the candle idea.'],['5 · Target','The next meaningful structural/liquidity level must offer at least 2R.']],rules:['Meaningful structural level','Price reaches level','Rejection/engulfing','Structural invalidation','Minimum 2R']},
+ {key:'LIQUIDITY_REVERSAL',name:'Liquidity Reversal',short:'Sweep → reclaim → reversal',description:'KitSetups looks for price to take a prior high or low, reclaim the level, and then prove that the reversal has structure behind it before entering.',steps:[['1 · Liquidity pool','A meaningful prior high or low must be available to sweep.'],['2 · Sweep','Price moves through that level and takes liquidity.'],['3 · Reclaim','Price closes back through the swept level instead of accepting beyond it.'],['4 · Confirmation','The reversal must show structural change and displacement before entry.'],['5 · Protection & target','The stop goes beyond the sweep extreme and the target is opposing external liquidity, with at least 2R.']],rules:['Meaningful liquidity','Sweep','Closed reclaim','Reversal structure','Sweep invalidation + 2R target']},
+ {key:'CRT',name:'CRT',short:'Range → sweep → reclaim → opposite side',description:'Candle Range Theory uses a completed reference candle as the range. KitSetups waits for one side of that range to be swept and reclaimed before targeting the opposite side.',steps:[['1 · Reference range','A completed parent candle with a meaningful range becomes the reference.'],['2 · Sweep','Price must take one side of that range.'],['3 · Reclaim','Price must close back inside the range after the sweep.'],['4 · Protection','The sweep extreme becomes the key invalidation point, with structural validation applied afterward.'],['5 · Target','The opposite side of the reference range is the initial target, subject to the engine’s structural and 2R checks.']],rules:['Completed parent range','One-side sweep','Close back inside','Sweep invalidation','Opposite range boundary + 2R']}
 ];
 
 export function StrategySelector({value,onChange}){
@@ -28,32 +28,46 @@ export function StrategySelector({value,onChange}){
 }
 
 export function StrategyExplanation({setup,strategy}){
- const [open,setOpen]=useState(false);
  const item=STRATEGY_LIBRARY.find(x=>x.key===strategy)||STRATEGY_LIBRARY[0];
  const evidence=setup?.strategyEvidence?.length?setup.strategyEvidence:item.rules;
- const detail={
-  TOP_DOWN:{entry:'HTF direction → intermediate confirmation → current execution condition.',invalidation:'Reject when higher-timeframe direction is absent or middle structure hard-conflicts.',target:'Qualified structural/liquidity targets under the existing risk model.'},
-  PULLBACK:{entry:'Directional impulse → fresh retracement POI → continuation response.',invalidation:'Zone invalidation or structural break against the HTF direction.',target:'Next qualified external liquidity beyond the entry.'},
-  BREAKOUT:{entry:'Decisive close through a meaningful boundary → confirmed retest of that same broken level → continuation entry.',invalidation:'The retest structure breaks back through the broken boundary.',target:'Next qualified structural/liquidity level after the retest.'},
-  SMC:{entry:'Liquidity sweep → CHoCH → BOS → displacement → fresh POI.',invalidation:'The post-sweep reversal structure fails or the protected POI is lost.',target:'External liquidity created by the prior structure.'},
-  MSNR:{entry:'Weekly/Daily storyline → fresh Daily/4H MSNR level → tap → lower-timeframe confirmation.',invalidation:'The MSNR level breaks without the expected reaction/confirmation.',target:'Next structural/liquidity level from the live market.'},
-  PRICE_ACTION:{entry:'Meaningful swing level → rejection or engulfing confirmation at that level → market execution.',invalidation:'The structural level fails and invalidates the candle thesis.',target:'Next qualified structural / liquidity level with at least 2R.'},
-  LIQUIDITY_REVERSAL:{entry:'Genuine liquidity sweep → reclaim → reversal CHoCH → displacement → retest → execution.',invalidation:'Price fails to reclaim the swept level, loses reversal structure or invalidates the protected sweep.',target:'Opposing external liquidity.'},
-  CRT:{entry:'Completed parent candle range → one-side sweep → close/reclaim back inside the range → execution.',invalidation:'The sweep extreme is lost or price fails to close/reclaim back inside the range.',target:'Opposite boundary of the reference range, subject to the live risk model.'}
- }[item.key]||{};
+ const [open,setOpen]=useState(true);
+ const humanEvidence=(value)=>{
+  const s=String(value||'');
+  return s
+   .replace(/HTF (LONG|SHORT)/g,'Higher-timeframe direction: $1')
+   .replace(/Structure (LONG|SHORT)/g,'Middle structure: $1')
+   .replace(/Weekly (LONG|SHORT)/g,'Weekly direction: $1')
+   .replace(/Daily (LONG|SHORT)/g,'Daily direction: $1')
+   .replace('Structural invalidation stop.','Stop is protected by a validated structural swing.')
+   .replace('POI invalidation stop.','Stop is protected beyond the entry area.')
+   .replace('Sweep invalidation stop.','Stop is protected beyond the sweep extreme.')
+   .replace('Confirmed structural impulse.','A recent directional impulse is confirmed.')
+   .replace('Measured retracement.','Price has retraced into the planned area.')
+   .replace('Rejection/engulfing confirmed.','A qualifying rejection or engulfing candle is confirmed.')
+   .replace('Reclaim confirmed.','Price reclaimed the swept level.')
+   .replace('Range liquidity swept/reclaimed.','One side of the reference range was swept and reclaimed.')
+   .replace('Structural liquidity.','Meaningful structural liquidity is present.');
+ };
+ const state=setup?.strategyValid
+   ? 'The required conditions are currently satisfied, so the engine can issue a trade.'
+   : setup?.strategyReason||'The engine is still waiting for every required condition to line up.';
  return <section className={`strategy-explanation ${open?'is-open':''}`} aria-label={item.name+' strategy explanation'}>
   <button type="button" className="strategy-explanation-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
-   <span><span className="extras-kicker"><CircleHelp size={11}/> STRATEGY MODEL</span><strong>{item.name}</strong><small>{open?item.description:item.short}</small></span>
+   <span><span className="extras-kicker"><CircleHelp size={11}/> HOW KITSETUPS BUILDS IT</span><strong>{item.name}</strong><small>{open?'Read the process from market direction to entry, stop and target.':item.short}</small></span>
    <ChevronDown className={open?'open':''} size={16}/>
   </button>
   <div className="strategy-explanation-body">
-   <div className="strategy-explanation-grid">
-    <div><b>Entry model</b><span>{detail.entry}</span></div>
-    <div><b>Live evidence</b><span>{evidence.length?evidence.map((x,i)=><em key={i}>{x}</em>):'No qualifying evidence yet.'}</span></div>
-    <div><b>Invalidation</b><span>{detail.invalidation}</span></div>
-    <div><b>Target model</b><span>{detail.target}</span></div>
-    <div><b>Current engine state</b><span>{setup?.strategyReason||'Analyze the market to run this strategy against live candles.'}</span></div>
-    <div><b>Decision</b><span>{setup?.strategyValid?'Strategy conditions are satisfied by the current market data.':'No trade is issued until the strategy conditions are satisfied.'}</span></div>
+   <div className="strategy-explanation-intro">
+    <strong>How this strategy works</strong>
+    <p>{item.description}</p>
+   </div>
+   <div className="strategy-step-grid">
+    {item.steps.map(([title,body])=><div key={title}><b>{title}</b><span>{body}</span></div>)}
+   </div>
+   <div className="strategy-current">
+    <div><b>What the engine sees now</b><span>{humanEvidence(state)}</span></div>
+    <div><b>Live evidence</b><span>{evidence.length?evidence.map((x,i)=><em key={i}>{humanEvidence(x)}</em>):'No qualifying evidence yet.'}</span></div>
+    <div><b>Trade rule</b><span>KitSetups issues no setup until the strategy conditions, structural validation, risk limits and minimum 2R target requirement all pass.</span></div>
    </div>
   </div>
  </section>
