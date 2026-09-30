@@ -6,14 +6,14 @@ import './market-extras.css';
 export const FOREX=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJPY','CHFJPY','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','EURUSD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','GBPUSD','NZDCAD','NZDCHF','NZDJPY','NZDUSD','USDCAD','USDCHF','USDJPY','USDNOK','USDSEK','USDZAR','USDSGD','EURPLN','EURSEK','EURNOK','EURTRY','GBPPLN','GBPSEK','GBPNOK','NOKSEK','NZDSGD','SGDJPY','CHFSGD','CADSGD','AUDSGD','AUDNOK','AUDSEK','CADNOK','CADSEK','CHFPLN','CHFZAR','EURSGD','GBPZAR','NZDZAR','USDHKD','USDMXN','USDTRY','USDTHB','USDHUF','USDCNH'];
 export const COMMODITIES=[];
 export const INDICES=[];
-export const TIMEFRAMES=['15m','30m','1H'];
+export const TIMEFRAMES=['15m','30m','1H','2H','4H'];
 const TIMEFRAME_GUIDE={
  '15m':{title:'15M opportunity horizon',desc:'Hunts intraday opportunities with the selected strategy. Higher context is handled automatically when that strategy needs it.'},
  '30m':{title:'30M opportunity horizon',desc:'Hunts more developed intraday opportunities. Strategy rules determine the supporting context and confirmation.'},
- '1H':{title:'1H opportunity horizon',desc:'Hunts larger intraday opportunities. The selected strategy determines the structure, confirmation and entry logic.'},
- '4H':{title:'4H opportunity horizon',desc:'Hunts swing opportunities. The selected strategy automatically chooses any higher context it needs.'},
- '1D':{title:'1D opportunity horizon',desc:'Hunts multi-day opportunities. Strategy rules remain in control while higher context is handled automatically.'},
- '1W':{title:'1W opportunity horizon',desc:'Hunts longer-term opportunities. The selected strategy decides what constitutes a valid setup.'}
+ '1H':{title:'1H opportunity horizon',desc:'Uses a broader intraday structure to find fewer, more developed opportunities.'},
+ '2H':{title:'2H opportunity horizon',desc:'Uses a higher swing structure for larger setups while keeping the selected strategy in control.'},
+ '4H':{title:'4H opportunity horizon',desc:'Looks for larger swing opportunities using higher-timeframe structure and the selected strategy rules.'},
+}
 };
 const MARKET_TABS=[['forex','Forex'],['commodities','Commodities'],['indices','Indices'],['perpetual','Crypto']];
 const instrumentCache=new Map();
