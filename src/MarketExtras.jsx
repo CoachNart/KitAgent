@@ -64,10 +64,11 @@ export function StrategyExplanation({setup,strategy}){
    <div className="strategy-step-grid">
     {item.steps.map(([title,body])=><div key={title}><b>{title}</b><span>{body}</span></div>)}
    </div>
+   <div className="strategy-terms"><b>Simple terms</b><span><strong>BOS</strong> = a meaningful break of prior structure · <strong>CHoCH</strong> = a meaningful change in structure · <strong>Liquidity</strong> = orders/stops clustered around obvious highs or lows · <strong>POI</strong> = the price area the engine uses for entry.</span></div>
    <div className="strategy-current">
     <div><b>What the engine sees now</b><span>{humanEvidence(state)}</span></div>
     <div><b>Live evidence</b><span>{evidence.length?evidence.map((x,i)=><em key={i}>{humanEvidence(x)}</em>):'No qualifying evidence yet.'}</span></div>
-    <div><b>Trade rule</b><span>KitSetups issues no setup until the strategy conditions, structural validation, risk limits and minimum 2R target requirement all pass.</span></div>
+    <div><b>Trade rule</b><span>KitSetups issues no setup until the strategy conditions, structural validation and risk limits all pass. <strong>2R</strong> means the planned target is at least twice as far from entry as the stop.</span></div>
    </div>
   </div>
  </section>
