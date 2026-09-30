@@ -12,8 +12,7 @@ const TIMEFRAME_GUIDE={
  '30m':{title:'30M opportunity horizon',desc:'Hunts more developed intraday opportunities. Strategy rules determine the supporting context and confirmation.'},
  '1H':{title:'1H opportunity horizon',desc:'Uses a broader intraday structure to find fewer, more developed opportunities.'},
  '2H':{title:'2H opportunity horizon',desc:'Uses a higher swing structure for larger setups while keeping the selected strategy in control.'},
- '4H':{title:'4H opportunity horizon',desc:'Looks for larger swing opportunities using higher-timeframe structure and the selected strategy rules.'},
-}
+ '4H':{title:'4H opportunity horizon',desc:'Looks for larger swing opportunities using higher-timeframe structure and the selected strategy rules.'}
 };
 const MARKET_TABS=[['forex','Forex'],['commodities','Commodities'],['indices','Indices'],['perpetual','Crypto']];
 const instrumentCache=new Map();
