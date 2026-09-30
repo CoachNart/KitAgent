@@ -1,9 +1,9 @@
 import { authenticate, requireActiveAccess } from '../server/access.js';
 import { yahooCandles, yahooPrice, yahooInstruments } from '../server/yahooMarket.js';
 
-const TF_ORDER=['1m','5m','15m','30m','1H','4H','1D','1W'];
-const TF_MS={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1H':3600000,'4H':14400000,'1D':86400000,'1W':604800000};
-const BYBIT_INTERVAL={'1m':'1','5m':'5','15m':'15','30m':'30','1H':'60','4H':'240','1D':'D','1W':'W'};
+const TF_ORDER=['15m','30m','1H','4H','1D','1W'];
+const TF_MS={'15m':900000,'30m':1800000,'1H':3600000,'4H':14400000,'1D':86400000,'1W':604800000};
+const BYBIT_INTERVAL={'15m':'15','30m':'30','1H':'60','4H':'240','1D':'D','1W':'W'};
 const MIN_RR=2;
 const STRATEGIES={TOP_DOWN:{name:'Top-Down',short:'HTF structure first'},PULLBACK:{name:'Pullback',short:'Impulse → retracement → continuation'},BREAKOUT:{name:'Breakout & Retest',short:'Break → retest → continuation'},SMC:{name:'SMC',short:'Liquidity → displacement → BOS → POI'},MSNR:{name:'MSNR',short:'Malaysian Support & Resistance'},PRICE_ACTION:{name:'Price Action',short:'Structure + candle confirmation'},LIQUIDITY_REVERSAL:{name:'Liquidity Reversal',short:'Sweep → reclaim → reversal'},CRT:{name:'CRT',short:'Candle range → sweep → reclaim'}};
 function json(res,status,p){res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store, max-age=0');res.end(JSON.stringify(p))}
