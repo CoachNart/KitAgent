@@ -561,3 +561,20 @@
 .market-watchlist.is-open .watchlist-panel{display:block!important}
 .market-watchlist.is-open{margin:0 0 8px!important}
 .market-watchlist .watchlist-toggle{margin:0!important}
+
+
+/* Strategy explanation v4 — readable process, not jargon. */
+.strategy-explanation-intro{padding:12px 0 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+.strategy-explanation-intro strong{display:block;font-size:11px;color:#e7f3f5;margin-bottom:4px}
+.strategy-explanation-intro p{margin:0;font-size:10px;line-height:1.58;color:#aab7bc;max-width:760px}
+.strategy-step-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin-top:9px}
+.strategy-step-grid>div{padding:10px;border:1px solid rgba(255,255,255,.055);border-radius:9px;background:rgba(255,255,255,.018)}
+.strategy-step-grid b{display:block;font-size:8px;line-height:1.25;color:#68dce8;margin-bottom:6px}
+.strategy-step-grid span{display:block;font-size:9.5px;line-height:1.55;color:#bdc9cd}
+.strategy-current{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:9px}
+.strategy-current>div{padding:10px;border:1px solid rgba(255,255,255,.05);border-radius:9px;background:rgba(255,255,255,.014)}
+.strategy-current b{display:block;font-size:7.5px;letter-spacing:.08em;text-transform:uppercase;color:#697980;margin-bottom:5px}
+.strategy-current span{display:block;font-size:9.5px;line-height:1.52;color:#b8c5c9}
+.strategy-current em{display:block;font-style:normal;padding-left:7px;margin-top:4px;border-left:2px solid rgba(104,220,232,.3);color:#d0dcdf}
+@media(max-width:900px){.strategy-step-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.strategy-current{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.strategy-step-grid,.strategy-current{grid-template-columns:1fr}.strategy-step-grid>div,.strategy-current>div{padding:9px}.strategy-step-grid span,.strategy-current span{font-size:10px}}
