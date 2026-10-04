@@ -16,27 +16,34 @@ function pivotHigh(c,i){if(i<2||i>=c.length-2)return false;for(let j=1;j<=2;j++)
 function pivotLow(c,i){if(i<2||i>=c.length-2)return false;for(let j=1;j<=2;j++){if(c[i].low>=c[i-j].low||c[i].low>c[i+j].low)return false}return true}
 function swings(c){const h=[],l=[];for(let i=2;i<c.length-2;i++){if(pivotHigh(c,i))h.push({p:c[i].high,i});if(pivotLow(c,i))l.push({p:c[i].low,i})}return{h,l}}
 function structureState(c){
- const s=swings(c),highs=s.h.slice(-8),lows=s.l.slice(-8);
- if(highs.length<3||lows.length<3)return{bias:'WAIT',strength:0,bos:null,choch:null,protectedHigh:null,protectedLow:null,breaks:[]};
+ const s=swings(c),highs=s.h.slice(-10),lows=s.l.slice(-10);
+ if(highs.length<3||lows.length<3)return{bias:'WAIT',strength:0,bos:null,choch:false,protectedHigh:null,protectedLow:null,breaks:[]};
  const h=highs.at(-1),ph=highs.at(-2),l=lows.at(-1),pl=lows.at(-2);
  const hh=h.p>ph.p,lh=h.p<ph.p,hl=l.p>pl.p,ll=l.p<pl.p;
  const a=Math.max(atr(c,14)||0,Math.abs(c.at(-1)?.close||0)*.0008),avg=sma(c.slice(-20).map(x=>x.high-x.low),20)||a,breaks=[];
- const scan=(levels,dir)=>{for(const p of levels.slice(-6).reverse()){for(let i=p.i+1;i<c.length;i++){const x=c[i],r=x.high-x.low,b=Math.abs(x.close-x.open),cross=dir==='LONG'?x.close>p.p:x.close<p.p;if(!cross)continue;const distance=Math.abs(x.close-p.p);breaks.push({level:p.p,index:i,age:c.length-1-i,distance,significant:distance>=Math.max(a*.18,avg*.08)&&r>=avg*.8&&b/r>=.45});break;}}};
+ const scan=(levels,dir)=>{for(const p of levels.slice(-8).reverse()){for(let i=p.i+1;i<c.length;i++){const x=c[i],r=x.high-x.low,b=Math.abs(x.close-x.open),cross=dir==='LONG'?x.close>p.p:x.close<p.p;if(!cross)continue;const distance=Math.abs(x.close-p.p);breaks.push({level:p.p,index:i,age:c.length-1-i,distance,significant:distance>=Math.max(a*.18,avg*.08)&&r>=avg*.8&&b/r>=.45});break;}}};
  scan(highs,'LONG');scan(lows,'SHORT');
  const longBreak=breaks.filter(x=>x.significant&&c[x.index]?.close>x.level&&x.age<=12).sort((x,y)=>x.age-y.age)[0]||null;
  const shortBreak=breaks.filter(x=>x.significant&&c[x.index]?.close<x.level&&x.age<=12).sort((x,y)=>x.age-y.age)[0]||null;
  const bullish=hh&&hl,bearish=lh&&ll;
- let bias=bullish&&!bearish?'LONG':bearish&&!bullish?'SHORT':'WAIT',strength=bias==='WAIT'?0:3;
- if(longBreak&&!shortBreak){bias='LONG';strength+=3}
- if(shortBreak&&!longBreak){bias='SHORT';strength+=3}
- if(longBreak&&shortBreak){
-  const latest=longBreak.age<=shortBreak.age?longBreak:shortBreak;
-  bias=latest===longBreak?'LONG':'SHORT';
-  strength=3+(latest.significant?3:0);
+ // Protected structure is the swing that must fail before the regime can flip.
+ // A lower-timeframe correction is not itself a bearish trend: the existing
+ // bullish regime remains intact while its protected higher low holds.
+ const protectedLow=bullish?(lows.filter(x=>x.i<h.i).at(-1)||l):null;
+ const protectedHigh=bearish?(highs.filter(x=>x.i<l.i).at(-1)||h):null;
+ const current=c.at(-1)?.close;
+ let bias=bullish?'LONG':bearish?'SHORT':'WAIT',strength=bias==='WAIT'?0:4;
+ if(bias==='LONG'&&protectedLow&&current<protectedLow.p){
+  // A genuine bearish transition requires bearish swing sequence; otherwise
+  // classify it as TRANSITION/WAIT rather than immediately shorting a correction.
+  bias=(lh&&ll)?'SHORT':'WAIT';strength=bias==='SHORT'?4:0;
  }
- const protectedLow=bullish?l:null,protectedHigh=bearish?h:null,current=c.at(-1)?.close;
- if((bias==='LONG'&&protectedLow&&current<protectedLow.p)||(bias==='SHORT'&&protectedHigh&&current>protectedHigh.p)){bias='WAIT';strength=0}
- return{bias,strength,bos:bias==='LONG'?longBreak:bias==='SHORT'?shortBreak:null,choch:bias==='LONG'?!!shortBreak:bias==='SHORT'?!!longBreak:false,protectedHigh,protectedLow,breaks};
+ if(bias==='SHORT'&&protectedHigh&&current>protectedHigh.p){
+  bias=(hh&&hl)?'LONG':'WAIT';strength=bias==='LONG'?4:0;
+ }
+ const regimeBOS=bias==='LONG'?longBreak:bias==='SHORT'?shortBreak:null;
+ const oppositeBreak=bias==='LONG'?shortBreak:bias==='SHORT'?longBreak:null;
+ return{bias,strength,bos:regimeBOS,choch:!!oppositeBreak,protectedHigh,protectedLow,breaks,transition:!!oppositeBreak&&bias!=='WAIT'};
 }
 function trend(c){return structureState(c).bias}
 function structuralDirection(context,structure,execution){
@@ -216,14 +223,19 @@ function breakoutRetestEntries(c,bias){
  return candidates.sort((x,y)=>y.retestIndex-x.retestIndex);
 }
 function smcEntries(c,bias,price){
- const out=[],a=atr(c,14)||0,disp=recentDisplacement(c,bias),bosEvent=bos(c,bias);
+ const out=[],a=atr(c,14)||0,disp=recentDisplacement(c,bias),bosEvent=bos(c,bias),sw=sweep(c,bias);
+ // SMC is sequenced: HTF direction -> liquidity event -> displacement/BOS -> POI.
+ // An isolated OB/FVG or isolated BOS is never enough.
+ if(!disp||!bosEvent)return out;
+ if(sw&&sw.age>12)return out;
  for(const z of [...fairValueGaps(c,bias),...orderBlocks(c,bias)]){
   if(z.index>=c.length-2)continue;
   if(bias==='LONG'&&z.mid>=price)continue;if(bias==='SHORT'&&z.mid<=price)continue;
   const zone=Math.max(a*.3,Math.abs(z.mid)*.001);
   if(!reactionAt(c,bias,z.mid,zone))continue;
-  if(!disp&&!bosEvent)continue;
-  out.push({entry:z.mid,invalidation:bias==='LONG'?z.low:z.high,target:targetLevels(c,bias,z.mid)[0]?.level,kind:z.kind+' + REACTION'});
+  const related=z.index>=Math.max(0,(sw?.index||0)-12);
+  if(sw&&!related)continue;
+  out.push({entry:z.mid,invalidation:bias==='LONG'?z.low:z.high,target:targetLevels(c,bias,z.mid)[0]?.level,kind:z.kind+' + DISPLACEMENT + BOS + POI'});
  }
  return out
 }
@@ -247,31 +259,33 @@ function topDownEntries(c,bias,price){
   kind:state==='CONFIRMED'?'HTF POI + REACTION':'HTF POI LIMIT',pending:state==='PENDING'}]
 }
 function msnrEntries(c,bias,price){
- const z=recentSwing(c,bias,price);if(!z)return[];
+ const z=recentSwing(c,bias,price);if(!z||(!z.major&&z.touches<2))return[];
  const a=atr(c,14)||0,zone=Math.max(a*.4,Math.abs(price)*.0015),state=poiState(c,bias,z.level,zone);
  if(state==='INVALID'||state==='TOUCHED_NO_CONFIRMATION')return[];
  return[{entry:z.level,invalidation:bias==='LONG'?z.level-zone:z.level+zone,target:targetLevels(c,bias,z.level)[0]?.level,
-  kind:state==='CONFIRMED'?'MSNR LEVEL + REJECTION':'MSNR LEVEL LIMIT',pending:state==='PENDING'}]
+  kind:state==='CONFIRMED'?'MSNR ZONE + REJECTION':'MSNR ZONE LIMIT',pending:state==='PENDING'}]
 }
 
-function crtEntries(c,bias){
+function crtEntries(c,bias,rangeC){
  const a=atr(c,14)||0;
  if(!a||c.length<25)return[];
+ const rangeBars=Array.isArray(rangeC)&&rangeC.length?rangeC:c;
+ const parent=rangeBars.at(-1);
+ if(!parent)return[];
  const out=[];
- const start=Math.max(2,c.length-8);
+ // CRT requires one specific reference candle, a sweep of exactly one edge,
+ // and a close back inside that same range. A wick alone is not a signal.
+ const start=Math.max(2,c.length-12);
  for(let i=start;i<c.length-1;i++){
-  const parent=c[i-1],x=c[i],next=c[i+1];
-  const range=parent.high-parent.low;
+  const x=c[i],next=c[i+1],range=parent.high-parent.low;
   if(!Number.isFinite(range)||range<a*.8)continue;
   if(bias==='LONG'&&x.low<parent.low&&x.close>parent.low){
-   const confirm=next.close>parent.low;
-   if(!confirm)continue;
-   out.push({entry:next.close,invalidation:x.low,target:parent.high,kind:'CRT LOW SWEEP + RECLAIM',pending:false});
+   if(next.close<=parent.low)continue;
+   out.push({entry:next.close,invalidation:x.low,target:parent.high,kind:'CRT LOW SWEEP + CLOSE-BACK + MSS',pending:false});
   }
   if(bias==='SHORT'&&x.high>parent.high&&x.close<parent.high){
-   const confirm=next.close<parent.high;
-   if(!confirm)continue;
-   out.push({entry:next.close,invalidation:x.high,target:parent.low,kind:'CRT HIGH SWEEP + RECLAIM',pending:false});
+   if(next.close>=parent.high)continue;
+   out.push({entry:next.close,invalidation:x.high,target:parent.low,kind:'CRT HIGH SWEEP + CLOSE-BACK + MSS',pending:false});
   }
  }
  return out.sort((x,y)=>Math.abs(c.at(-1).close-x.entry)-Math.abs(c.at(-1).close-y.entry));
@@ -303,12 +317,12 @@ function refinedTrade(c,bias,strategy,price){
 function bos(c,bias){const s=swings(c),src=bias==='LONG'?s.h:s.l;for(const p of src.slice(-30).reverse())for(let i=p.i+1;i<c.length;i++)if(bias==='LONG'?c[i].close>p.p:c[i].close<p.p)return{level:p.p,index:i,age:c.length-1-i};return null}
 function sweep(c,bias){const s=swings(c),src=bias==='LONG'?s.l:s.h;for(const p of src.slice(-30).reverse())for(let i=p.i+1;i<c.length;i++){if(bias==='LONG'&&c[i].low<p.p&&c[i].close>p.p)return{level:p.p,extreme:c[i].low,index:i,age:c.length-1-i};if(bias==='SHORT'&&c[i].high>p.p&&c[i].close<p.p)return{level:p.p,extreme:c[i].high,index:i,age:c.length-1-i}}return null}
 function recentDisplacement(c,bias){for(let i=c.length-1;i>=Math.max(1,c.length-12);i--){const x=c[i],r=x.high-x.low,b=Math.abs(x.close-x.open),prior=c.slice(Math.max(0,i-6),i).map(k=>k.high-k.low),av=sma(prior,prior.length);if(r&&b/r>=.55&&av&&r>=av*1.1&&(bias==='LONG'?x.close>x.open&&x.close>=x.high-r*.25:x.close<x.open&&x.close<=x.low+r*.25))return{i,candle:x}}return null}
-function candleSignal(c,bias){if(c.length<3)return false;const x=c.at(-1),p=c.at(-2),r=x.high-x.low;if(!r)return false;const engulf=bias==='LONG'?x.close>x.open&&p.close<p.open&&x.open<=p.close&&x.close>=p.open:bias==='SHORT'?x.close<x.open&&p.close>p.open&&x.open>=p.close&&x.close<=p.open:false;const wick=bias==='LONG'?Math.min(x.open,x.close)-x.low:x.high-Math.max(x.open,x.close);return engulf||wick>=Math.abs(x.close-x.open)*1.4}
+function candleSignal(c,bias){if(c.length<3)return false;const x=c.at(-1),p=c.at(-2),r=x.high-x.low;if(!r)return false;const engulf=bias==='LONG'?x.close>x.open&&p.close<p.open&&x.open<=p.close&&x.close>=p.open:bias==='SHORT'?x.close<x.open&&p.close>p.open&&x.open>=p.close&&x.close<=p.open:false;const wick=bias==='LONG'?Math.min(x.open,x.close)-x.low:x.high-Math.max(x.open,x.close);const body=Math.abs(x.close-x.open);const closeAway=bias==='LONG'?x.close>x.open&&x.close>=x.low+r*.55:x.close<x.open&&x.close<=x.high-r*.55;const rejection=wick>=r*.30&&closeAway&&(body/r>=.25||wick>=body*1.5);return engulf||rejection}
 function rangeBreak(c,bias){for(let i=c.length-1;i>=Math.max(20,c.length-12);i--){const prior=c.slice(i-20,i),hi=Math.max(...prior.map(x=>x.high)),lo=Math.min(...prior.map(x=>x.low)),x=c[i],body=Math.abs(x.close-x.open),r=x.high-x.low;if(!r||body/r<.55)continue;if((bias==='LONG'&&x.close>hi)||(bias==='SHORT'&&x.close<lo)){const avg=sma(prior.map(k=>k.high-k.low),20)||r;if(r>=avg*1.1)return{level:bias==='LONG'?hi:lo,index:i}}}return null}
 function tfPlan(tf,s){const i=TF_ORDER.indexOf(tf);if(!['15m','30m','1H','2H','4H'].includes(tf))throw Object.assign(new Error('Execution timeframe must be 15m, 30m, 1H, 2H, or 4H'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});const hi=TF_ORDER[Math.min(i+1,TF_ORDER.length-1)],hi2=TF_ORDER[Math.min(i+2,TF_ORDER.length-1)],hi3=TF_ORDER[Math.min(i+3,TF_ORDER.length-1)];if(s==='MSNR')return{entry:tf,structure:'4H',bias:'1D',extra:['1W']};if(s==='CRT')return{entry:tf,structure:hi,bias:hi2,extra:[hi3].filter(Boolean)};return{entry:tf,structure:hi,bias:hi2,extra:[hi3].filter(Boolean)}}
 function normalizeStrategy(x){const s=String(x||'').toUpperCase().replace(/[-\s]/g,'_');return s==='PRICEACTION'?'PRICE_ACTION':s}
 function quoteFresh(q,market){if(!q||!Number.isFinite(+q.mid)||!q.time)return false;const age=Date.now()-Date.parse(q.time);if(!Number.isFinite(age)||age< -30000)return false;const state=String(q.marketState||'').toLowerCase();const sessionOpen=['open','pre','post','regular'].includes(state);const maxAge=sessionOpen?25*60*1000:24*60*60*1000;return age<=maxAge&&q.stale!==true}
-function strategyPlan(data,strategy,price){const p=tfPlan(data.tf,strategy),cur=data.c[p.entry],structure=data.c[p.structure]||cur,htf=data.c[p.bias]||structure,a=atr(cur,14);if(!cur||cur.length<40||!a)return null;const candidates=[];const contextState=structureState(htf),structureStateNow=structureState(structure),executionState=structureState(cur),hierarchy=structuralDirection(contextState,structureStateNow,executionState);for(const bias of ['LONG','SHORT']){const hb=contextState.bias,sb=structureStateNow.bias,xb=executionState.bias;const layers=[hb,sb,xb];const aligned=layers.filter(x=>x===bias).length;const opposed=layers.some(x=>x!==bias&&x!=='WAIT');const gate=directionGate(contextState,structureStateNow,executionState,bias,strategy,cur);if(!gate.allowed)continue;/* MTF context is a quality input, not a universal veto. Strategy-specific logic decides whether a conflict is acceptable. */let trade=null,evidence=[],reason='',entryKind='';if(strategy==='TOP_DOWN'){if(sb===bias||sb==='WAIT'){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='Higher-timeframe direction and a tested execution POI align; entry is anchored to the structural retest, not the current price.';evidence=['HTF '+hb,'Structure '+sb,entryKind,'Structural invalidation stop.']}}}else if(strategy==='PULLBACK'){const br=bos(cur,bias);if(br&&br.age<=8)trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='An impulse leg is followed by a measured retracement entry with invalidation beyond the pullback zone.';evidence=[br?'Confirmed structural impulse.':'Recent directional impulse.','Measured retracement.',entryKind,'Structural invalidation stop.']}}else if(strategy==='BREAKOUT'){const br=breakoutRetestEntries(cur,bias,price)[0];if(br){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='A decisive range break must be followed by a confirmed retest of the broken boundary; entries are taken only after that retest validates continuation.';evidence=['Break level '+roundPrice(br.breakoutLevel)+'.','Decisive close outside range.','Confirmed retest/acceptance.',entryKind,'Structural invalidation beyond retest extreme.']}}}else if(strategy==='SMC'){const sw=sweep(cur,bias),br=bos(cur,bias),disp=recentDisplacement(cur,bias);const evidenceCount=[sw,br,disp].filter(Boolean).length;if(evidenceCount>=2&&((br&&disp)||(sw&&disp)))trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='SMC entry is anchored to a recent order block or fair-value gap after liquidity/structure evidence, with the stop beyond that POI.';evidence=[sw?'Liquidity sweep/reclaim.':'Structural liquidity.',br?'BOS context.':'Structure context.',disp?'Displacement confirmed.':'POI confirmation.',entryKind,'POI invalidation stop.']}}else if(strategy==='MSNR'){const wb=trend(data.c['1W']||[]),db=trend(data.c['1D']||[]),story=(wb===bias&&db===bias)||(db===bias&&hb===bias);if(story){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='MSNR storyline identifies a tested decision level; entry is staged at that level with invalidation beyond the level.';evidence=['Weekly '+wb,'Daily '+db,'MSNR decision level.',entryKind,'Structural invalidation stop.']}}}else if(strategy==='PRICE_ACTION'){if(candleSignal(cur,bias)){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='Price action is confirmed at a structural level; entry is tied to the level that produced the rejection rather than an arbitrary market price.';evidence=[candleSignal(cur,bias)?'Rejection/engulfing confirmed.':'Structural price-action context.',entryKind,'Structural invalidation stop.']}}}else if(strategy==='LIQUIDITY_REVERSAL'){const sw=sweep(cur,bias);if(sw){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='Liquidity was swept and reclaimed; the entry returns to the swept level instead of chasing the reversal candle.';evidence=['Liquidity sweep '+roundPrice(sw.level)+'.','Reclaim confirmed.',entryKind,'Sweep invalidation stop.']}}}else if(strategy==='CRT'){const parent=structure.at(-1),range=parent?parent.high-parent.low:0,sw=sweep(cur,bias);if(parent&&range>0&&sw){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='CRT uses the swept range edge as the execution reference and places invalidation beyond the sweep.';evidence=['CRT range '+roundPrice(parent.low)+' — '+roundPrice(parent.high)+'.','Range liquidity swept/reclaimed.',entryKind,'Sweep invalidation stop.']}}}if(trade&&trade.rr>=MIN_RR){const distance=Math.abs(trade.entry-price)/price;
+function strategyPlan(data,strategy,price){const p=tfPlan(data.tf,strategy),cur=data.c[p.entry],structure=data.c[p.structure]||cur,htf=data.c[p.bias]||structure,a=atr(cur,14);if(!cur||cur.length<40||!a)return null;const candidates=[];const contextState=structureState(htf),structureStateNow=structureState(structure),executionState=structureState(cur),hierarchy=structuralDirection(contextState,structureStateNow,executionState);for(const bias of ['LONG','SHORT']){const hb=contextState.bias,sb=structureStateNow.bias,xb=executionState.bias;const layers=[hb,sb,xb];const aligned=layers.filter(x=>x===bias).length;const opposed=layers.some(x=>x!==bias&&x!=='WAIT');const gate=directionGate(contextState,structureStateNow,executionState,bias,strategy,cur);if(!gate.allowed)continue;/* MTF context is a quality input, not a universal veto. Strategy-specific logic decides whether a conflict is acceptable. */let trade=null,evidence=[],reason='',entryKind='';if(strategy==='TOP_DOWN'){if(sb===bias||sb==='WAIT'){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='Higher-timeframe direction and a tested execution POI align; entry is anchored to the structural retest, not the current price.';evidence=['HTF '+hb,'Structure '+sb,entryKind,'Structural invalidation stop.']}}}else if(strategy==='PULLBACK'){const br=bos(cur,bias);if(br&&br.age<=8)trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='An impulse leg is followed by a measured retracement entry with invalidation beyond the pullback zone.';evidence=[br?'Confirmed structural impulse.':'Recent directional impulse.','Measured retracement.',entryKind,'Structural invalidation stop.']}}else if(strategy==='BREAKOUT'){const br=breakoutRetestEntries(cur,bias,price)[0];if(br){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='A decisive range break must be followed by a confirmed retest of the broken boundary; entries are taken only after that retest validates continuation.';evidence=['Break level '+roundPrice(br.breakoutLevel)+'.','Decisive close outside range.','Confirmed retest/acceptance.',entryKind,'Structural invalidation beyond retest extreme.']}}}else if(strategy==='SMC'){const sw=sweep(cur,bias),br=bos(cur,bias),disp=recentDisplacement(cur,bias);const evidenceCount=[sw,br,disp].filter(Boolean).length;if(evidenceCount>=2&&((br&&disp)||(sw&&disp)))trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='SMC entry is anchored to a recent order block or fair-value gap after liquidity/structure evidence, with the stop beyond that POI.';evidence=[sw?'Liquidity sweep/reclaim.':'Structural liquidity.',br?'BOS context.':'Structure context.',disp?'Displacement confirmed.':'POI confirmation.',entryKind,'POI invalidation stop.']}}else if(strategy==='MSNR'){const wb=trend(data.c['1W']||[]),db=trend(data.c['1D']||[]),story=(wb===bias&&db===bias)||(db===bias&&hb===bias);if(story){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='MSNR storyline identifies a tested decision level; entry is staged at that level with invalidation beyond the level.';evidence=['Weekly '+wb,'Daily '+db,'MSNR decision level.',entryKind,'Structural invalidation stop.']}}}else if(strategy==='PRICE_ACTION'){if(candleSignal(cur,bias)){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='Price action is confirmed at a structural level; entry is tied to the level that produced the rejection rather than an arbitrary market price.';evidence=[candleSignal(cur,bias)?'Rejection/engulfing confirmed.':'Structural price-action context.',entryKind,'Structural invalidation stop.']}}}else if(strategy==='LIQUIDITY_REVERSAL'){const sw=sweep(cur,bias);if(sw){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='Liquidity was swept and reclaimed; the entry returns to the swept level instead of chasing the reversal candle.';evidence=['Liquidity sweep '+roundPrice(sw.level)+'.','Reclaim confirmed.',entryKind,'Sweep invalidation stop.']}}}else if(strategy==='CRT'){const parent=structure.at(-1),range=parent?parent.high-parent.low:0,sw=sweep(cur,bias);if(parent&&range>0&&sw&&sw.age<=4){trade=refinedTrade(cur,bias,strategy,price);if(trade){entryKind=trade.entryKind;reason='CRT requires a higher-timeframe reference range, a one-sided liquidity sweep, close-back inside the range, and directional confirmation toward the opposite range edge.';evidence=['HTF CRT range '+roundPrice(parent.low)+' — '+roundPrice(parent.high)+'.','Liquidity sweep + close-back.','Opposite-side range objective.',entryKind,'Sweep invalidation stop.']}}}if(trade&&trade.rr>=MIN_RR){const distance=Math.abs(trade.entry-price)/price;
  const contextScore=(hb===bias?2:0)+(sb===bias?2:0)+(xb===bias?2:0)-(hb!==bias&&hb!=='WAIT'?1:0)-(sb!==bias&&sb!=='WAIT'?0.5:0);
  const score=contextScore+(aligned===3?2:aligned===2?1:0)+(trade.rr>=2.5?1.5:0)+(trade.stopQuality||0)+(trade.targetTouches||0)*.5+(trade.entryKind?1.5:0)-(distance>0.02?1:0);candidates.push({trade,bias,evidence,reason,score,entryKind,pending:trade.pending===true})}}if(!candidates.length)return{strategy,strategyName:STRATEGIES[strategy].name,strategyShort:STRATEGIES[strategy].short,marketRegime:'WAIT',strategyValid:false,strategyReady:false,strategyEvidence:[],strategyFailures:['No qualified structural opportunity passed the strategy rules and 2R validation.'],strategyReason:'No qualified setup currently meets the strategy rules and structural 2R requirement.',tradeReady:false,orderType:'NO_SETUP',entry:null,limitEntry:null,stopLoss:null,takeProfit1:null,takeProfit2:null,riskReward:'—',riskRewardValue:null,quality:'NO SETUP',setupStatus:'NO SETUP',setupReason:'No qualified setup currently meets the strategy rules and structural 2R requirement.',bias:'WAIT',directionBias:'WAIT',confidence:0,higherTimeframe:p.bias,middleTimeframe:p.structure,entryTimeframe:p.entry};const best=candidates.sort((x,y)=>y.score-x.score||y.trade.rr-x.trade.rr)[0],near=Math.abs(best.trade.entry-price)<=Math.max(a*.35,price*.0025),order=best.trade.pending?'LIMIT':(near?'MARKET':'LIMIT'),confidence=Math.min(91,Math.max(64,Math.round(64+best.score*2.15+Math.min(best.trade.rr,3)*1.1+(hierarchy.bias===best.bias?2:0)-(hierarchy.conflict?2:0))));return{strategy,strategyName:STRATEGIES[strategy].name,strategyShort:STRATEGIES[strategy].short,marketRegime:best.bias,strategyValid:true,strategyReady:true,strategyEvidence:best.evidence,strategyFailures:[],strategyReason:best.reason,entry:roundPrice(best.trade.entry),limitEntry:order==='LIMIT'?roundPrice(best.trade.entry):null,stopLoss:roundPrice(best.trade.stop),takeProfit1:roundPrice(best.trade.target),takeProfit2:null,riskReward:'1:'+best.trade.rr.toFixed(2),riskRewardValue:+best.trade.rr.toFixed(2),orderType:order,tradeReady:true,setupStatus:'TRADE READY',setupReason:best.reason,bias:best.bias,directionBias:best.bias,confidence,riskPercent:+(best.trade.risk/best.trade.entry*100).toFixed(2),stopDistance:roundPrice(best.trade.risk),marketEntry:roundPrice(price),price:roundPrice(price),liquidityTarget:roundPrice(best.trade.targetLiquidity),liquidityType:'STRUCTURAL LIQUIDITY',structuralInvalidation:roundPrice(best.trade.stop),entryMethod:best.entryKind,higherTimeframe:p.bias,middleTimeframe:p.structure,entryTimeframe:p.entry,confirmation:{strategy,bos:['BREAKOUT','SMC','PULLBACK','TOP_DOWN'].includes(strategy),sweep:['SMC','LIQUIDITY_REVERSAL','CRT'].includes(strategy),displacement:['BREAKOUT','SMC','PULLBACK'].includes(strategy),engulfing:['PRICE_ACTION','MSNR'].includes(strategy),rejection:['PRICE_ACTION','MSNR'].includes(strategy)}}}
 async function bybitInstruments(){const r=await fetch('https://api.bybit.com/v5/market/instruments-info?category=linear&status=Trading&limit=1000',{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Bybit perpetual instrument provider unavailable');const b=await r.json();if(b.retCode!==0)throw new Error(b.retMsg||'Bybit perpetual instrument provider unavailable');return(b.result?.list||[]).filter(x=>x.status==='Trading'&&x.contractType==='LinearPerpetual').map(x=>({symbol:x.baseCoin+'/'+x.quoteCoin,providerSymbol:x.symbol,name:x.baseCoin+' / '+x.quoteCoin,type:'PERPETUAL'})).sort((a,b)=>a.symbol.localeCompare(b.symbol))}
