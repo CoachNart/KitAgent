@@ -334,7 +334,7 @@ function candleSignal(c,bias){if(c.length<3)return false;const x=c.at(-1),p=c.at
 function rangeBreak(c,bias){for(let i=c.length-1;i>=Math.max(20,c.length-12);i--){const prior=c.slice(i-20,i),hi=Math.max(...prior.map(x=>x.high)),lo=Math.min(...prior.map(x=>x.low)),x=c[i],body=Math.abs(x.close-x.open),r=x.high-x.low;if(!r||body/r<.55)continue;if((bias==='LONG'&&x.close>hi)||(bias==='SHORT'&&x.close<lo)){const avg=sma(prior.map(k=>k.high-k.low),20)||r;if(r>=avg*1.1)return{level:bias==='LONG'?hi:lo,index:i}}}return null}
 function tfPlan(tf,s){
  const plan=TF_HIERARCHY[tf];
- if(!plan)throw Object.assign(new Error('Execution timeframe must be 15m, 30m, 1H, 2H, or 4H'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});
+ if(!EXECUTION_TIMEFRAMES.includes(tf)||!plan)throw Object.assign(new Error('Execution timeframe must be 15m, 30m, 1H, 2H, or 4H'),{code:'TIMEFRAME_STRATEGY_MISMATCH'});
  const entryIndex=TF_ORDER.indexOf(tf),structureIndex=TF_ORDER.indexOf(plan.structure),biasIndex=TF_ORDER.indexOf(plan.bias);
  if(entryIndex<0||structureIndex<=entryIndex||biasIndex<=structureIndex)throw Object.assign(new Error('Invalid timeframe hierarchy'),{code:'TIMEFRAME_HIERARCHY_INVALID'});
  return{entry:tf,structure:plan.structure,bias:plan.bias,extra:[...new Set((plan.extra||[]).filter(x=>x!==tf&&x!==plan.structure&&x!==plan.bias))]};
