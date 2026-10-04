@@ -335,8 +335,8 @@ async function hardenSetup(payload){
  const gate=directionGate(htfState,structureStateNow,entryState,bias,String(payload.strategy||setup.strategy||'').toUpperCase(),c);
  if(!gate.allowed)return reject(setup,gate.reason);
  // Direction is validated before price-level hardening: HTF opposition is never rescued by a high RR or confidence score.
- // MTF disagreement is retained as evidence for scoring, not as a universal rejection gate.
- // HTF strength contributes to confidence/evidence; it does not starve the engine by itself.
+ // HTF direction is authoritative; lower-timeframe disagreement is only permitted for
+ // explicitly confirmed reversal models, never for ordinary continuation setups.
  const stops=groupedLevels(c,bias,entry,false),targets=groupedLevels(c,bias,entry,true);
  if(!stops.length)return reject(setup,'No validated structural swing provides a safe invalidation distance.');
  const maxRisk=Math.min(a*3.2,entry*.025),minRisk=Math.max(a*.65,entry*.001),buffer=Math.max(a*.30,entry*.0006);
@@ -357,7 +357,7 @@ async function hardenSetup(payload){
  if(order==='LIMIT'&&Math.abs(entry-price)>a*1.5)return reject(setup,'Planned limit entry is too far from current market structure.');
  const target=targets.map(x=>({...x,distance:Math.abs(x.edge-newEntry),rr:Math.abs(x.edge-newEntry)/Math.abs(newEntry-stop.stop)}))
    .filter(x=>x.distance>=a*1.0&&x.distance<=a*8&&x.rr>=MIN_RR&&x.age<=120)
-   .sort((x,y)=>y.touches-x.touches||y.score-x.score||x.distance-y.distance)[0];
+   .sort((x,y)=>x.distance-y.distance||y.score-x.score||y.touches-x.touches)[0];
  if(!target)return reject(setup,'No nearby meaningful opposing swing or liquidity target provides sufficient natural reward-to-risk.');
  const rr=Math.abs(target.edge-newEntry)/Math.abs(newEntry-stop.stop);
  if(!Number.isFinite(rr)||rr<MIN_RR)return reject(setup,'Structural trade does not meet the minimum natural reward-to-risk requirement.');
