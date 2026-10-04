@@ -20,38 +20,24 @@ function atr(c,n=14){if(!Array.isArray(c)||c.length<2)return null;const tr=[];fo
 function norm(rows){const m=new Map();for(const r of rows||[]){const x={time:+r[0],open:+r[1],high:+r[2],low:+r[3],close:+r[4],volume:+(r[5]||0)};if([x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)&&x.high>=x.low)m.set(x.time,x)}return [...m.values()].sort((a,b)=>a.time-b.time)}
 function closed(c,tf){if(!Array.isArray(c)||c.length<3)return[];const x=c.at(-1),iv=TF_MS[tf],age=Date.now()-x.time;return Number.isFinite(iv)&&age>=0&&age<iv?c.slice(0,-1):c}
 function roundPrice(v){if(!Number.isFinite(v))return null;if(v>=1000)return+v.toFixed(2);if(v>=100)return+v.toFixed(3);if(v>=1)return+v.toFixed(5);if(v>=.1)return+v.toFixed(6);return+v.toPrecision(7)}
-function pivotHigh(c,i){if(i<2||i>=c.length-2)return false;for(let j=1;j<=2;j++){if(c[i].high<=c[i-j].high||c[i].high<c[i+j].high)return false}return true}
-function pivotLow(c,i){if(i<2||i>=c.length-2)return false;for(let j=1;j<=2;j++){if(c[i].low>=c[i-j].low||c[i].low>c[i+j].low)return false}return true}
+function pivotHigh(c,i){if(i<2||i>=c.length-2)return false;for(let j=1;j<=2;j++)if(!(c[i].high>c[i-j].high&&c[i].high>c[i+j].high))return false;return true}
+function pivotLow(c,i){if(i<2||i>=c.length-2)return false;for(let j=1;j<=2;j++)if(!(c[i].low<c[i-j].low&&c[i].low<c[i+j].low))return false;return true}
 function swings(c){const h=[],l=[];for(let i=2;i<c.length-2;i++){if(pivotHigh(c,i))h.push({p:c[i].high,i});if(pivotLow(c,i))l.push({p:c[i].low,i})}return{h,l}}
 function structureState(c){
- const s=swings(c),highs=s.h.slice(-10),lows=s.l.slice(-10);
- if(highs.length<3||lows.length<3)return{bias:'WAIT',strength:0,bos:null,choch:false,protectedHigh:null,protectedLow:null,breaks:[]};
- const h=highs.at(-1),ph=highs.at(-2),l=lows.at(-1),pl=lows.at(-2);
- const hh=h.p>ph.p,lh=h.p<ph.p,hl=l.p>pl.p,ll=l.p<pl.p;
- const a=Math.max(atr(c,14)||0,Math.abs(c.at(-1)?.close||0)*.0008),avg=sma(c.slice(-20).map(x=>x.high-x.low),20)||a,breaks=[];
- const scan=(levels,dir)=>{for(const p of levels.slice(-8).reverse()){for(let i=p.i+1;i<c.length;i++){const x=c[i],r=x.high-x.low,b=Math.abs(x.close-x.open),cross=dir==='LONG'?x.close>p.p:x.close<p.p;if(!cross)continue;const distance=Math.abs(x.close-p.p);breaks.push({level:p.p,index:i,age:c.length-1-i,distance,significant:distance>=Math.max(a*.18,avg*.08)&&r>=avg*.8&&b/r>=.45});break;}}};
+ const bars=Array.isArray(c)?c:[],s=swings(bars),highs=s.h.slice(-12),lows=s.l.slice(-12);
+ if(highs.length<3||lows.length<3)return{bias:'WAIT',strength:0,bos:null,choch:false,protectedHigh:null,protectedLow:null,breaks:[],transition:false,structure:'UNCONFIRMED'};
+ const lastHigh=highs.at(-1),prevHigh=highs.at(-2),lastLow=lows.at(-1),prevLow=lows.at(-2);
+ const hh=lastHigh.p>prevHigh.p,lh=lastHigh.p<prevHigh.p,hl=lastLow.p>prevLow.p,ll=lastLow.p<prevLow.p,bullish=hh&&hl,bearish=lh&&ll;
+ const a=Math.max(atr(bars,14)||0,Math.abs(bars.at(-1)?.close||0)*.0008),avg=sma(bars.slice(-20).map(x=>x.high-x.low),20)||a,breaks=[];
+ const scan=(levels,dir)=>{for(const p of levels.slice(-8).reverse()){for(let i=p.i+1;i<bars.length;i++){const x=bars[i],r=Math.max(0,x.high-x.low),body=Math.abs(x.close-x.open),cross=dir==='LONG'?x.close>p.p:x.close<p.p;if(!cross)continue;const distance=Math.abs(x.close-p.p);breaks.push({level:p.p,index:i,age:bars.length-1-i,distance,significant:distance>=Math.max(a*.18,avg*.08)&&r>=avg*.8&&r>0&&body/r>=.45});break}}};
  scan(highs,'LONG');scan(lows,'SHORT');
- const longBreak=breaks.filter(x=>x.significant&&c[x.index]?.close>x.level&&x.age<=12).sort((x,y)=>x.age-y.age)[0]||null;
- const shortBreak=breaks.filter(x=>x.significant&&c[x.index]?.close<x.level&&x.age<=12).sort((x,y)=>x.age-y.age)[0]||null;
- const bullish=hh&&hl,bearish=lh&&ll;
- // Protected structure is the swing that must fail before the regime can flip.
- // A lower-timeframe correction is not itself a bearish trend: the existing
- // bullish regime remains intact while its protected higher low holds.
- const protectedLow=bullish?(lows.filter(x=>x.i<h.i).at(-1)||l):null;
- const protectedHigh=bearish?(highs.filter(x=>x.i<l.i).at(-1)||h):null;
- const current=c.at(-1)?.close;
- let bias=bullish?'LONG':bearish?'SHORT':'WAIT',strength=bias==='WAIT'?0:4;
- if(bias==='LONG'&&protectedLow&&current<protectedLow.p){
-  // A genuine bearish transition requires bearish swing sequence; otherwise
-  // classify it as TRANSITION/WAIT rather than immediately shorting a correction.
-  bias=(lh&&ll)?'SHORT':'WAIT';strength=bias==='SHORT'?4:0;
- }
- if(bias==='SHORT'&&protectedHigh&&current>protectedHigh.p){
-  bias=(hh&&hl)?'LONG':'WAIT';strength=bias==='LONG'?4:0;
- }
- const regimeBOS=bias==='LONG'?longBreak:bias==='SHORT'?shortBreak:null;
- const oppositeBreak=bias==='LONG'?shortBreak:bias==='SHORT'?longBreak:null;
- return{bias,strength,bos:regimeBOS,choch:!!oppositeBreak,protectedHigh,protectedLow,breaks,transition:!!oppositeBreak&&bias!=='WAIT'};
+ const recent=dir=>breaks.filter(x=>x.significant&&(dir==='LONG'?bars[x.index]?.close>x.level:bars[x.index]?.close<x.level)&&x.age<=12).sort((x,y)=>x.age-y.age)[0]||null;
+ let bias=bullish?'LONG':bearish?'SHORT':'WAIT',protectedLow=null,protectedHigh=null;
+ if(bias==='LONG'){protectedLow=lows.filter(x=>x.i<lastHigh.i).at(-1)||lastLow;if(protectedLow&&bars.at(-1)?.close<protectedLow.p)bias=(lh&&ll)?'SHORT':'WAIT'}
+ else if(bias==='SHORT'){protectedHigh=highs.filter(x=>x.i<lastLow.i).at(-1)||lastHigh;if(protectedHigh&&bars.at(-1)?.close>protectedHigh.p)bias=(hh&&hl)?'LONG':'WAIT'}
+ const longBreak=recent('LONG'),shortBreak=recent('SHORT'),bos=bias==='LONG'?longBreak:bias==='SHORT'?shortBreak:null,oppositeBreak=bias==='LONG'?shortBreak:bias==='SHORT'?longBreak:null,choch=!!oppositeBreak;
+ const strength=bias==='WAIT'?0:((bias==='LONG'&&hh&&hl)||(bias==='SHORT'&&lh&&ll)?4:2)+(bos?.significant?2:0)-(choch?1:0);
+ return{bias,strength:Math.max(0,strength),structure:bias==='LONG'?'HH + HL':bias==='SHORT'?'LH + LL':'RANGE / TRANSITION',bos,choch,protectedHigh,protectedLow,breaks,transition:(choch&&bias!=='WAIT')||bias==='WAIT'};
 }
 function trend(c){return structureState(c).bias}
 function structuralDirection(context,structure,execution){
@@ -67,15 +53,14 @@ function structuralDirection(context,structure,execution){
 }
 const REVERSAL_STRATEGIES=new Set(['SMC','LIQUIDITY_REVERSAL','CRT']);
 function directionGate(htfState,structureStateNow,entryState,bias,strategy,cur){
- const hb=htfState?.bias||'WAIT',sb=structureStateNow?.bias||'WAIT',xb=entryState?.bias||'WAIT';
- if(hb!=='WAIT'&&hb!==bias)return{allowed:false,reason:'Higher-timeframe structure is explicitly opposite to the proposed direction.'};
- const reversal=REVERSAL_STRATEGIES.has(strategy);
+ const hb=htfState?.bias||'WAIT',sb=structureStateNow?.bias||'WAIT',xb=entryState?.bias||'WAIT',reversal=REVERSAL_STRATEGIES.has(strategy);
+ if(hb!=='WAIT'&&hb!==bias&&!reversal)return{allowed:false,reason:'Higher-timeframe structure is explicitly opposite to the proposed continuation.'};
  if(sb!=='WAIT'&&sb!==bias){
   if(!reversal)return{allowed:false,reason:'Middle-timeframe structure is explicitly opposite to the proposed continuation.'};
   const sw=sweep(cur,bias),disp=recentDisplacement(cur,bias);
   if(!(sw&&sw.age<=4&&disp&&disp.i>=Math.max(0,cur.length-12)&&entryState?.choch))return{allowed:false,reason:'Counter-structure reversal lacks sweep + CHOCH + displacement confirmation.'};
  }
- if(xb!=='WAIT'&&xb!==bias&&!reversal)return{allowed:false,reason:'Execution structure is explicitly opposite to the proposed direction.'};
+ if(xb!=='WAIT'&&xb!==bias&&!reversal)return{allowed:false,reason:'Execution structure is explicitly opposite to the proposed continuation.'};
  return{allowed:true,reason:''};
 }
 function structuralLevels(c,bias,entry,lookback=180){
