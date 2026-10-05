@@ -18,7 +18,7 @@ export function confirmedSwings(c,k=2){
 function lastBefore(a,asOf){return a.filter(x=>x.confirmationIndex<=asOf);}
 export function structure(c,asOf=c.length-1){
  if(!Array.isArray(c)||c.length<20)return{state:'UNCLEAR',direction:'NEUTRAL',trend:'UNCLEAR',swings:{highs:[],lows:[]},bos:null,choch:null,mss:null,protectedHigh:null,protectedLow:null,range:null,compression:false,expansion:false};
- const s=confirmedSwings(c,2),highs=lastBefore(s.highs,asOf),lows=lastBefore(s.lows,asOf),lh=highs.at(-1),ph=highs.at(-2),ll=lows.at(-1),pl=lows.at(-2),price=c[asOf]?.close;
+ const external=confirmedSwings(c,3),internal=confirmedSwings(c,1),s=confirmedSwings(c,2),highs=lastBefore(s.highs,asOf),lows=lastBefore(s.lows,asOf),lh=highs.at(-1),ph=highs.at(-2),ll=lows.at(-1),pl=lows.at(-2),price=c[asOf]?.close;
  if(!lh||!ph||!ll||!pl)return{state:'UNCLEAR',direction:'NEUTRAL',trend:'UNCLEAR',swings:{highs,lows},bos:null,choch:null,mss:null,protectedHigh:lh,protectedLow:ll,range:null,compression:false,expansion:false};
  const hh=lh.price>ph.price,hl=ll.price>pl.price,lowerHigh=lh.price<ph.price,lowerLow=ll.price<pl.price;
  let direction=hh&&hl?'BULLISH':lowerHigh&&lowerLow?'BEARISH':'NEUTRAL';
@@ -41,7 +41,7 @@ export function structure(c,asOf=c.length-1){
  const recentRanges=c.slice(Math.max(0,asOf-9),asOf+1).map(x=>x.high-x.low),recent=recentRanges.length?recentRanges.reduce((a,b)=>a+b,0)/recentRanges.length:avg;
  const compression=recent<avg*.72,expansion=recent>avg*1.28;
  const state=direction==='BULLISH'?'TRENDING_BULLISH':direction==='BEARISH'?'TRENDING_BEARISH':(compression?'COMPRESSION':'RANGE_OR_TRANSITION');
- return {state,direction,trend:direction==='NEUTRAL'?'RANGE':direction,swings:{highs,lows},hh,hl,lowerHigh,lowerLow,bos:last,choch,mss,protectedHigh,protectedLow,range:{high:Math.max(...c.slice(Math.max(0,asOf-30),asOf+1).map(x=>x.high)),low:Math.min(...c.slice(Math.max(0,asOf-30),asOf+1).map(x=>x.low))},compression,expansion,atr:a};
+ return {state,direction,trend:direction==='NEUTRAL'?'RANGE':direction,internal:{highs:lastBefore(internal.highs,asOf),lows:lastBefore(internal.lows,asOf)},external:{highs:lastBefore(external.highs,asOf),lows:lastBefore(external.lows,asOf)},swings:{highs,lows},hh,hl,lowerHigh,lowerLow,bos:last,choch,mss,protectedHigh,protectedLow,range:{high:Math.max(...c.slice(Math.max(0,asOf-30),asOf+1).map(x=>x.high)),low:Math.min(...c.slice(Math.max(0,asOf-30),asOf+1).map(x=>x.low))},compression,expansion,atr:a};
 }
 export function displacement(c,direction,asOf=c.length-1){
  const a=atr(c.slice(0,asOf+1),14),avg=rangeAverage(c.slice(0,asOf+1),20);if(!a||!avg)return null;
