@@ -1,8 +1,7 @@
 import { authenticate, requireActiveAccess } from '../access.js';
-import { aggregate, closedCandles, validateCandles } from './data.js';
-import { EXECUTION_TIMEFRAMES } from './data.js';
+import { aggregate, closedCandles, validateCandles, EXECUTION_TIMEFRAMES } from './data.js';
 import { STRATEGIES } from './strategies.js';
-import { analyzeOne } from './index.js';
+import { analyzeOne, fetchPrice, fetchTf } from './index.js';
 
 const SCAN_LIMIT = 18;
 const MIN_PUBLISHED = 5;
@@ -33,42 +32,31 @@ async function topSymbols(){
     .filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
     .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h))
     .slice(0,SCAN_LIMIT)
-    .map(x=>({symbol:x.symbol,lastPrice:(Number(x.bid1Price)>0&&Number(x.ask1Price)>0?(Number(x.bid1Price)+Number(x.ask1Price))/2:Number(x.lastPrice)),turnover24h:Number(x.turnover24h)}));
+    .map(x=>({symbol:x.symbol,turnover24h:Number(x.turnover24h)}));
 }
 
 async function candlesFor(symbol){
-  const base='https://api.bybit.com/v5/market/kline';
-  const get=async interval=>{
-    const u=new URL(base);
-    u.searchParams.set('category','linear');
-    u.searchParams.set('symbol',symbol);
-    u.searchParams.set('interval',interval);
-    u.searchParams.set('limit','300');
-    const r=await fetch(u);
-    if(!r.ok)throw new Error(`${symbol} ${interval} candles unavailable`);
-    const b=await r.json();
-    if(b.retCode!==0)throw new Error(b.retMsg||'Bybit candles unavailable');
-    return closedCandles(b.result.list.slice().reverse().map(x=>({
-      time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5]
-    })),interval==='15'?'15m':interval==='60'?'1H':'4H');
-  };
-  const [m15,h1,h4]=await Promise.all([get('15'),get('60'),get('240')]);
-  const m30=aggregate(m15,'30m');
-  const h2=aggregate(h1,'2H');
-  return {'15m':m15,'30m':m30,'1H':h1,'2H':h2,'4H':h4};
+  const [m15Raw,h1Raw,h4Raw]=await Promise.all([
+    fetchTf('perpetual',symbol,'15m'),
+    fetchTf('perpetual',symbol,'1H'),
+    fetchTf('perpetual',symbol,'4H')
+  ]);
+  const m15=closedCandles(m15Raw,'15m');
+  const h1=closedCandles(h1Raw,'1H');
+  const h4=closedCandles(h4Raw,'4H');
+  return {'15m':m15,'30m':aggregate(m15,'30m'),'1H':h1,'2H':aggregate(h1,'2H'),'4H':h4};
 }
 
 function candidateScore(result){
   if(!result?.trade||!result?.grade)return -1;
   if(result.direction==='BULLISH' && !(result.trade.stop<result.trade.entry && result.trade.target>result.trade.entry))return -1;
   if(result.direction==='BEARISH' && !(result.trade.stop>result.trade.entry && result.trade.target<result.trade.entry))return -1;
-  if(!['A+','A'].includes(result.grade.grade))return -1;
-  if(!Number.isFinite(result.trade.riskAtr)||result.trade.riskAtr<0.75)return -1;
+  if(!['A+','A','B'].includes(result.grade.grade))return -1;
   const rr=Number(result.trade.rr)||0;
-  return result.grade.score*100+Math.min(rr,6)*8+Math.min(result.trade.riskAtr,3.8)*4;
+  return result.grade.score*100+Math.min(rr,6)*8;
 }
 
-function toSetup(market,strategy,result){
+function toSetup(market,strategy,result,price){
   const score=candidateScore(result);
   if(score<0)return null;
   const trade=result.trade;
@@ -86,7 +74,7 @@ function toSetup(market,strategy,result){
     confidence:result.grade.score,
     entry:trade.entry,
     orderType:trade.orderType||'MARKET',
-    marketEntry:trade.marketEntry??market.lastPrice,
+    marketEntry:trade.marketEntry??price.mid,
     entryReason:trade.entryReason||null,
     stopLoss:trade.stop,
     takeProfit:trade.target,
@@ -104,6 +92,7 @@ function toSetup(market,strategy,result){
 
 async function scanSymbol(market){
   try{
+    const price=await fetchPrice('perpetual',market.symbol);
     const all=await candlesFor(market.symbol);
     const valid=Object.entries(all).every(([tf,c])=>validateCandles(c,tf).valid);
     if(!valid)return [];
@@ -111,8 +100,8 @@ async function scanSymbol(market){
     for(const [strategy] of Object.entries(STRATEGIES)){
       for(const tf of EXECUTION_TIMEFRAMES){
         try{
-          const result=await analyzeOne('perpetual',market.symbol,strategy,tf,all,market.lastPrice);
-          const setup=toSetup(market,strategy,result);
+          const result=await analyzeOne('perpetual',market.symbol,strategy,tf,all,price.mid);
+          const setup=toSetup(market,strategy,result,price);
           if(setup)candidates.push(setup);
         }catch{}
       }
