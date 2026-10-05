@@ -3,7 +3,7 @@ import {auth} from './firebase.js';
 import {ArrowUpRight,ChevronRight,Clock3,RefreshCw,ScanSearch,ShieldCheck,Target,TrendingDown,TrendingUp} from 'lucide-react';
 import './daily-setups.css';
 
-const DAY_KEY='kitagent:daily-setups:v2';
+const DAY_KEY='kitagent:daily-setups:v3';
 
 async function token(){
   const user=auth?.currentUser;
