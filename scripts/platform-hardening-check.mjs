@@ -16,7 +16,7 @@ const walk = dir => {
 };
 
 const apiFiles = exists('api')
-  ? walk('api').filter(p => /\.(js|mjs|cjs)$/.test(p))
+  ? walk('api').filter(p => /.(js|mjs|cjs)$/.test(p))
   : [];
 if (apiFiles.length > 12) fail.push(`Vercel API function tree has ${apiFiles.length} files; Hobby limit is 12.`);
 
@@ -31,7 +31,7 @@ const legacyPatterns = [
   /GBPUSD/i
 ];
 for (const file of walk('src').concat(walk('server'), walk('api'))) {
-  if (!/\.(js|jsx|mjs|cjs|ts|tsx)$/.test(file)) continue;
+  if (!/.(js|jsx|mjs|cjs|ts|tsx)$/.test(file)) continue;
   const text = fs.readFileSync(file, 'utf8');
   for (const pattern of legacyPatterns) {
     if (pattern.test(text)) fail.push(`Legacy market/provider reference ${pattern} found in ${file}`);
@@ -55,3 +55,4 @@ if (fail.length) {
 }
 
 console.log(`Platform hardening checks passed: ${apiFiles.length} API function files; legacy provider scan clean; required production files present.`);
+// Keep the hardening gate active for every production-branch push.
