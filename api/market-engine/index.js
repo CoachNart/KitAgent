@@ -16,24 +16,47 @@ async function fetchPrice(market,symbol){if(['forex','commodities','indices'].in
 function plan(tf){if(tf==='AUTO')return EXECUTION_TIMEFRAMES; if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO');return CHAIN[tf]}
 function tfFor(strategy){return strategy==='MSNR'?['4H','2H','1H','30m','15m']:null}
 function enrichExecution(candles,layers,price){
- const c=candles,s=structure(c),l=liquidityMap(c),lv=keyLevels(c),x=c.at(-1),dir=s.direction;
- const near=(arr,side)=>arr.filter(z=>side==='BULLISH'?z.level<price:z.level>price).sort((a,b)=>Math.abs(a.level-price)-Math.abs(b.level-price))[0];
- const pb=near(lv,dir);
- let breakout=null,retest=null;
+ const c=candles,s=structure(c),l=liquidityMap(c),lv=keyLevels(c),x=c.at(-1),dir=s.direction,a=s.atr||Math.max(price*.001,1e-9);
+ let pullback=null,breakout=null,retest=null,msnrLevel=null,priceActionLevel=null,crt=null;
  if(dir!=='NEUTRAL'){
-  const boundary=dir==='BULLISH'?Math.max(...c.slice(-25,-1).map(x=>x.high)):Math.min(...c.slice(-25,-1).map(x=>x.low));
+  const hs=s.swings.highs,ls=s.swings.lows,hi=hs.at(-1),lo=ls.at(-1);
+  if(hi&&lo){
+   const leg=Math.abs(hi.price-lo.price);
+   const lo38=Math.min(hi.price,lo.price)+leg*.382,hi62=Math.min(hi.price,lo.price)+leg*.618;
+   const inRetrace=dir==='BULLISH'?price<=hi.price&&price>=lo38&&price<=hi62:price>=lo.price&&price>=lo38&&price<=hi62;
+   if(leg>=a*1.5&&inRetrace)pullback={level:price,impulse:leg,retracementZone:[lo38,hi62]};
+  }
+  const prior=c.slice(-25,-1),rangeAvg=prior.length?prior.reduce((q,z)=>q+z.high-z.low,0)/prior.length:a;
+  const boundary=dir==='BULLISH'?Math.max(...prior.map(z=>z.high)):Math.min(...prior.map(z=>z.low));
+  const lastRange=x.high-x.low;
   const broke=dir==='BULLISH'?x.close>boundary:x.close<boundary;
-  if(broke&&x.high-x.low>=(c.slice(-21,-1).reduce((a,q)=>a+q.high-q.low,0)/20)*1.15)breakout={level:boundary,index:c.length-1};
-  if(!breakout){const lastBreak=c.findLastIndex(q=>dir==='BULLISH'?q.close>boundary:q.close<boundary);if(lastBreak>0){const touched=c.slice(lastBreak+1).some(q=>q.low<=boundary&&q.high>=boundary);if(touched)retest={level:boundary,index:c.length-1,invalidation:dir==='BULLISH'?Math.min(...c.slice(lastBreak+1).map(q=>q.low)):Math.max(...c.slice(lastBreak+1).map(q=>q.high))}}}
+  const displaced=lastRange>=rangeAvg*1.2&&Math.abs(x.close-x.open)/(lastRange||1)>=.55;
+  const compressed=prior.slice(-8).every(z=>(z.high-z.low)<=rangeAvg*1.15);
+  if(broke&&displaced&&compressed)breakout={level:boundary,index:c.length-1};
+  const breakIndex=[...c.keys()].reverse().find(i=>i>5&&(dir==='BULLISH'?c[i].close>boundary:c[i].close<boundary));
+  if(Number.isInteger(breakIndex)){
+   const after=c.slice(breakIndex+1);
+   const touched=after.some(z=>z.low<=boundary+a*.25&&z.high>=boundary-a*.25);
+   const accepted=after.at(-1)?(dir==='BULLISH'?after.at(-1).close>boundary:after.at(-1).close<boundary):false;
+   const rejected=after.at(-1)?(dir==='BULLISH'?after.at(-1).close>after.at(-1).open:after.at(-1).close<after.at(-1).open):false;
+   if(touched&&accepted&&rejected)retest={level:boundary,index:c.length-1,invalidation:dir==='BULLISH'?Math.min(...after.map(z=>z.low)):Math.max(...after.map(z=>z.high))};
+  }
+  msnrLevel=lv.find(z=>z.fresh&&!z.consumed&&Math.abs(z.level-price)<=Math.max(a,price*.0025));
+  priceActionLevel=lv.find(z=>Math.abs(z.level-price)<=Math.max(a,price*.0025));
+  const msnRReact=msnrLevel&&rejection(c,msnrLevel.level,Math.max(a*.35,price*.001),dir);
+  const paReact=priceActionLevel&&rejection(c,priceActionLevel.level,Math.max(a*.35,price*.001),dir);
+  const parent=layers.find(q=>q.tf==='4H')?.candles?.at(-1)||layers[0]?.candles?.at(-1)||x;
+  if(parent){
+   const start=c.findIndex(z=>z.time>parent.time),sweepStart=start<0?Math.max(0,c.length-12):start;
+   for(let i=sweepStart;i<c.length;i++){
+    const k=c[i];
+    if(dir==='BULLISH'&&k.low<parent.low&&k.close>parent.low){const later=c.slice(i+1);if(later.some(z=>z.close>k.high)||k.close>parent.low)crt={sweep:{level:parent.low,extreme:k.low,index:i,age:c.length-1-i},reclaim:true,target:parent.high,invalidation:k.low,entryZone:parent.low};}
+    if(dir==='BEARISH'&&k.high>parent.high&&k.close<parent.high){const later=c.slice(i+1);if(later.some(z=>z.close<k.low)||k.close<parent.high)crt={sweep:{level:parent.high,extreme:k.high,index:i,age:c.length-1-i},reclaim:true,target:parent.low,invalidation:k.high,entryZone:parent.high};}
+   }
+  }
+  if(msnRReact)msnrLevel={...msnrLevel,reaction:true};if(paReact)priceActionLevel={...priceActionLevel,reaction:true};
  }
- const msnrLevel=lv.find(z=>z.fresh&&!z.consumed&&Math.abs(z.level-price)<=Math.max(s.atr||price*.002,price*.003));
- const priceActionLevel=lv.find(z=>Math.abs(z.level-price)<=Math.max(s.atr||price*.002,price*.0025));
- const msnRReact=msnrLevel&&rejection(c,msnrLevel.level,Math.max(s.atr*.35,price*.001),dir);
- const paReact=priceActionLevel&&rejection(c,priceActionLevel.level,Math.max(s.atr*.35,price*.001),dir);
- const parent=layers.find(x=>x.tf!=='15m')?.candles?.at(-1)||c.at(-1);
- const sweep=l.recentSweep[0];
- const crt=sweep?{sweep:sweep,reclaim:true,target:dir==='BULLISH'?parent.high:parent.low,invalidation:sweep.extreme,entryZone:sweep.level}:null;
- return {candles:c,structure:s,liquidity:l,levels:lv,regime:regime(c,s),pullback:pb&&Math.abs(pb.level-price)<=Math.max(s.atr*1.5,price*.006)?{level:pb.level}:null,breakout,retest,msnrLevel,msnrReaction:!!msnRReact,priceActionLevel,priceActionReaction:!!paReact,crt,entry:price};
+ return {candles:c,structure:s,liquidity:l,levels:lv,regime:regime(c,s),pullback,breakout,retest,msnrLevel,msnrReaction:!!msnrLevel?.reaction,priceActionLevel,priceActionReaction:!!priceActionLevel?.reaction,crt,entry:price};
 }
 async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
  const order=CHAIN[tf],layers=order.map(x=>({tf:x,candles:allCandles[x],structure:structure(allCandles[x]),liquidity:liquidityMap(allCandles[x])}));
@@ -54,7 +77,7 @@ export default async function handler(req,res){
   const market=String(req.query.market||'forex').toLowerCase(),symbol=String(req.query.symbol||'').trim().toUpperCase(),strategy=String(req.query.strategy||'TOP_DOWN').toUpperCase().replace(/[-\s]/g,'_'),requested=String(req.query.timeframe||'AUTO');
   if(!STRATEGIES[strategy])return json(res,400,{ok:false,error:'Unsupported strategy'});
   if(!symbol)return json(res,400,{ok:false,error:'Missing symbol'});
-  const price=await fetchPrice(market,symbol),tfs=requested==='AUTO'?EXECUTION_TIMEFRAMES:[requested];
+  if(requested!=='AUTO'&&!EXECUTION_TIMEFRAMES.includes(requested))return json(res,400,{ok:false,error:'Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO'});\n  const price=await fetchPrice(market,symbol),tfs=requested==='AUTO'?EXECUTION_TIMEFRAMES:[requested];
   const needed=[...new Set(tfs.flatMap(tf=>CHAIN[tf]))],all={};
   for(const tf of needed){const raw=await fetchTf(market,symbol,tf);all[tf]=closedCandles(raw,tf);const v=validateCandles(all[tf],tf);if(!v.valid)throw new Error(tf+': '+v.failures.join(', '));}
   const results=[];for(const tf of tfs)results.push(await analyzeOne(market,symbol,strategy,tf,all,price.mid));
