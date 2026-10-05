@@ -198,7 +198,7 @@ function RiskCalculator({setup}){
     setCalculation({notional,size,risk,profit,rr,liquidation,liqDistance});
   };
 
-  return <section className="risk-calculator" aria-label="Risk calculator">
+  return <section className={`risk-calculator ${direction==='LONG'?'risk-long':'risk-short'}`} aria-label="Risk calculator">
     <div className="risk-calc-head">
       <div>
         <span className="risk-kicker">POSITION MANAGEMENT</span>
