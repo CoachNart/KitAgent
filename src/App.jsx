@@ -10,7 +10,7 @@ import LiveMarketComponent from './LiveMarketPage.jsx';
 import NotificationCenter from './NotificationCenter.jsx';
 import './ui-polish.css';
 import './header-polish.css';
-import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, Wallet, X, Zap } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, Wallet, X, Zap } from 'lucide-react';
 
 const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',Layers3],['setups','Setups',ScanSearch],['history','History',History],['profile','Profile',CircleUserRound]];
 const pairs=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','MATIC/USDT','DOT/USDT','TRX/USDT','UNI/USDT','AAVE/USDT','ARB/USDT','OP/USDT','SUI/USDT','PEPE/USDT'];
