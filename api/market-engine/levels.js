@@ -7,8 +7,8 @@ export function keyLevels(c,asOf=c.length-1){
  const tol=a*.3;
  const groups=[];
  for(const x of levels){let g=groups.find(q=>Math.abs(q.level-x.level)<=tol);if(!g){g={level:x.level,points:[]};groups.push(g)}g.points.push(x);g.level=g.points.reduce((s,p)=>s+p.level,0)/g.points.length;}
- const day=c.slice(0,asOf+1).filter(x=>{const d=new Date(x.time),last=new Date(c[asOf].time);return d.getUTCFullYear()===last.getUTCFullYear()&&d.getUTCMonth()===last.getUTCMonth()&&d.getUTCDate()===last.getUTCDate()});
- if(day.length){levels.push({type:'PREVIOUS_DAY_HIGH',level:day.length?day[0].high:null,index:asOf,age:0});levels.push({type:'PREVIOUS_DAY_LOW',level:day.length?day[0].low:null,index:asOf,age:0});}
+ const lastDay=new Date(c[asOf].time);lastDay.setUTCHours(0,0,0,0);const previousDayStart=lastDay.getTime()-86400000,previousDayEnd=lastDay.getTime();const day=c.slice(0,asOf+1).filter(x=>x.time>=previousDayStart&&x.time<previousDayEnd);
+ if(day.length){levels.push({type:'PREVIOUS_DAY_HIGH',level:Math.max(...day.map(x=>x.high)),index:asOf,age:1});levels.push({type:'PREVIOUS_DAY_LOW',level:Math.min(...day.map(x=>x.low)),index:asOf,age:1});}
  return groups.map(g=>({...g,touches:g.points.length,age:Math.min(...g.points.map(x=>x.age)),fresh:g.points.length<=2&&Math.min(...g.points.map(x=>x.age))<=80,consumed:g.points.length>=4})).sort((a,b)=>b.touches-a.touches||a.age-b.age);
 }
 export function nearestTarget(c,direction,entry){
