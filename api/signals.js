@@ -1,8 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
-import { biquoteCandles, biquotePrice } from './biquote.js';
-import { yahooCandles } from '../server/yahooMarket.js';
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -24,9 +22,7 @@ export async function marketKlines(signal) {
     if(!symbol||!Number.isFinite(startMs))return [];
     const now=Date.now();
     const market=String(signal.market||'').toLowerCase();
-    if(['forex','metals'].includes(market)){const result=market==='forex'?await yahooCandles(signal.symbol,'1m','forex'):await biquoteCandles(signal.symbol,'1m');return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
-    if(['commodities','indices'].includes(market)){const result=await yahooCandles(signal.symbol,'1m',market);return result.rows.map(r=>({time:Number(r[0]),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])})).filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));}
-    if(!['crypto','perpetual'].includes(market))return [];
+    if(market!=='perpetual')return [];
     const all=[];
     let pageEnd=now,pages=0;
     // Bybit caps each kline response at 1,000 rows. A single request cannot
@@ -62,9 +58,7 @@ export async function marketKlines(signal) {
 
 export async function currentPrice(signal) {
   const market=String(signal.market||'').toLowerCase();
-  if(['forex'].includes(market)){try{return (await yahooCandles(signal.symbol,'1m','forex')).rows.at(-1)?.[4]??null}catch{return null}}
-  if(['commodities','indices'].includes(market)){try{return (await yahooCandles(signal.symbol,'1m',market)).rows.at(-1)?.[4]??null}catch{return null}}
-  if(['metals'].includes(market)){try{return (await biquotePrice(signal.symbol)).mid}catch{return null}}
+  if(market!=='perpetual')return null;
   const candles=await marketKlines(signal);
   return candles.at(-1)?.close??null;
 }
@@ -77,12 +71,11 @@ export async function currentPrice(signal) {
  * - TP/SL are evaluated only on candles AFTER activation.
  * - If one OHLC candle touches both TP and SL, candle data cannot prove which happened first,
  *   so the trade stays OPEN. We never guess.
- * - Forex/CFD/metals outcomes are resolved from the same Biquote 1-minute market-data feed used by analysis.
  */
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
   const market=String(signal.market||'').toLowerCase();
-  if(!['crypto','perpetual','forex','commodities','indices','metals'].includes(market))return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
+  if(market!=='perpetual')return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   const candles=await marketKlines(signal); if(!candles.length)return {...signal,currentPrice:price};
   const livePrice=Number.isFinite(Number(price))?price:candles.at(-1)?.close??null;
   const dir=String(signal.direction||'').toUpperCase();
@@ -100,7 +93,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       if(candle.time<generatedMs)continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'biquote_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
+      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
         // A 1m OHLC candle cannot establish whether entry, TP or SL happened first.
         // Activate only after the entry-touching candle has completed so we never
@@ -121,8 +114,8 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
-    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'biquote_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
-    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:market==='forex'||market==='metals'?'biquote_1m_ohlc':'bybit_1m_ohlc',engineVersion:'v3',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
   }
   return {...signal,currentPrice:livePrice,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
 }
@@ -152,9 +145,9 @@ export default async function handler(req,res){
     if(req.method==='POST'){
       const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),bias=clean(setup.bias,10).toUpperCase();
       const orderType=clean(setup.orderType,20).toUpperCase();
-      if(!market||!symbol||!timeframe||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
+      if(market!=='perpetual'||!symbol||!timeframe||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
       const ref=collection.doc();
-      const signal={signalId:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-market-analysis-v2'};
+      const signal={signalId:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'live-market-analysis'};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
