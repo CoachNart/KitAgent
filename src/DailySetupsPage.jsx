@@ -86,7 +86,7 @@ export default function DailySetupsPage(){
       <div className="featured-kicker"><span>TOP SETUP</span><b>{best.grade}</b></div>
       <div className="featured-grid">
         <div className="featured-symbol"><small>{best.strategy}</small><h2>{best.symbol}</h2><div className={'bias '+best.bias.toLowerCase()}>{best.bias==='LONG'?<TrendingUp size={16}/>:<TrendingDown size={16}/>} {best.bias} <em>{best.timeframe}</em></div></div>
-        <div className="featured-metrics"><Metric label="Entry" value={money(best.entry)}/><Metric label="Stop" value={money(best.stopLoss)} danger/><Metric label="Target" value={money(best.takeProfit)} good/><Metric label="R:R" value={'1:'+best.rr}/></div>
+        <div className="featured-metrics"><div className="featured-metric"><span>Entry <em className="order-type-inline">{best.orderType||'MARKET'}</em></span><b>{money(best.entry)}</b>{best.orderType==='LIMIT'&&<small>Current {money(best.marketEntry)}</small>}</div><Metric label="Stop" value={money(best.stopLoss)} danger/><Metric label="Target" value={money(best.takeProfit)} good/><Metric label="R:R" value={'1:'+best.rr}/></div>
       </div>
       <div className="featured-foot"><span>{best.regime?.name||best.regime||'Market structure aligned'}</span><button onClick={()=>setSelected(best)}>View setup <ArrowUpRight size={14}/></button></div>
     </section>}
@@ -95,7 +95,7 @@ export default function DailySetupsPage(){
     <section className="setup-board">
       {setups.map((s,i)=><button className="setup-row" key={s.id||i} onClick={()=>setSelected(s)}>
         <span className="rank">{String(i+1).padStart(2,'0')}</span>
-        <span className="setup-main"><b>{s.symbol}</b><small>{s.strategy} · {s.timeframe}</small></span>
+        <span className="setup-main"><b>{s.symbol}</b><small>{s.strategy} · {s.timeframe}</small></span><span className="row-entry"><b>{money(s.entry)}</b><small>{s.orderType||'MARKET'}</small></span>
         <span className={'row-bias '+s.bias.toLowerCase()}>{s.bias}</span>
         <span className="row-rr"><b>1:{s.rr}</b><small>R:R</small></span>
         <span className="row-grade">{s.grade}</span><ChevronRight size={15}/>
@@ -115,7 +115,7 @@ function SetupModal({setup,close}){
    <button className="modal-close" onClick={close}>×</button>
    <div className="modal-top"><div><span>{setup.strategy}</span><h2>{setup.symbol}</h2></div><div className={'modal-bias '+setup.bias.toLowerCase()}>{setup.bias}</div></div>
    <div className="modal-meta"><span>{setup.grade} grade</span><span>{setup.timeframe} execution</span><span>{setup.regime?.name||setup.regime||'Aligned regime'}</span></div>
-   <div className="modal-levels"><Metric label="Entry" value={money(setup.entry)}/><Metric label="Stop loss" value={money(setup.stopLoss)} danger/><Metric label="Take profit" value={money(setup.takeProfit)} good/><Metric label="Risk / reward" value={'1:'+setup.rr}/></div>
+   <div className="modal-levels"><div className="featured-metric"><span>Entry <em className="order-type-inline">{setup.orderType||'MARKET'}</em></span><b>{money(setup.entry)}</b>{setup.orderType==='LIMIT'&&<small>Current {money(setup.marketEntry)}</small>}</div><Metric label="Stop loss" value={money(setup.stopLoss)} danger/><Metric label="Take profit" value={money(setup.takeProfit)} good/><Metric label="Risk / reward" value={'1:'+setup.rr}/></div>
    <div className="modal-section"><span>WHY IT QUALIFIED</span>{(setup.evidence||[]).map((x,i)=><p key={i}><ShieldCheck size={13}/>{x}</p>)}</div>
    <div className="modal-section"><span>STRUCTURE</span><p><Target size={13}/> {setup.structureDirection} structure · {setup.layers?.map(x=>x.tf+': '+x.direction).join(' · ')||'Multi-timeframe alignment checked'}</p></div>
    <div className="modal-note">This is a market-analysis setup, not an automatic order. The engine determines the thesis, invalidation and target from live market structure.</div>
