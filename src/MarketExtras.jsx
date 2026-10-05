@@ -48,8 +48,8 @@ export function StrategyExplanation({setup,strategy}){
    .replace('Range liquidity swept/reclaimed.','One side of the reference range was swept and reclaimed.')
    .replace('Structural liquidity.','Meaningful structural liquidity is present.');
  };
- const state=setup?.strategyValid
-   ? 'The required conditions are currently satisfied, so the engine can issue a trade.'
+ const state=setup?.tradeReady
+   ? 'All required strategy, structure, invalidation, target and risk checks passed on the live market read.'
    : setup?.strategyReason||'The engine is still waiting for every required condition to line up.';
  return <section className={`strategy-explanation ${open?'is-open':''}`} aria-label={item.name+' strategy explanation'}>
   <button type="button" className="strategy-explanation-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
