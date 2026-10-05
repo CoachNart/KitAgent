@@ -35,7 +35,7 @@ function enrichExecution(candles,layers,price){
    const leg=Math.abs(hi.price-lo.price);
    const lo38=Math.min(hi.price,lo.price)+leg*.382,hi62=Math.min(hi.price,lo.price)+leg*.618;
    const inRetrace=dir==='BULLISH'?price<=hi.price&&price>=lo38&&price<=hi62:price>=lo.price&&price>=lo38&&price<=hi62;
-   if(leg>=a*1.5&&inRetrace)pullback={level:price,impulse:leg,retracementZone:[lo38,hi62]};
+   if(leg>=a*1.5&&inRetrace){const plannedLevel=dir==='BULLISH'?hi62:lo38;pullback={level:plannedLevel,marketPrice:price,impulse:leg,retracementZone:[lo38,hi62]};}
   }
   const prior=c.slice(-25,-1),rangeAvg=prior.length?prior.reduce((q,z)=>q+z.high-z.low,0)/prior.length:a;
   const boundary=dir==='BULLISH'?Math.max(...prior.map(z=>z.high)):Math.min(...prior.map(z=>z.low));
