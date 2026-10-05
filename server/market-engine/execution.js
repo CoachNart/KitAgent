@@ -1,11 +1,11 @@
 import {atr} from './data.js';
-import {nearestTarget} from './levels.js';
+import {nearestTarget,keyLevels} from './levels.js';
 
 export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferredInvalidation=null){
  const directionLong=direction==='BULLISH';
  const entry=Number.isFinite(entryHint)?entryHint:c.at(-1).close;
  const inv=Number.isFinite(preferredInvalidation)?preferredInvalidation:null;
- const target=Number.isFinite(preferredTarget)?preferredTarget:nearestTarget(c,direction,entry)?.level;
+ let target=Number.isFinite(preferredTarget)?preferredTarget:nearestTarget(c,direction,entry)?.level;
  // A trade is only executable when its stop is tied to an explicit market-structure
  // invalidation supplied by the strategy. Never substitute the nearest swing just
  // to manufacture a risk distance.
@@ -17,9 +17,25 @@ export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferr
  // noise does not invalidate the thesis. Never tighten the stop to make RR pass.
  const buffer=Math.max(a*0.25,Math.abs(entry)*0.0006);
  const stop=directionLong?inv-buffer:inv+buffer;
- const risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=reward/risk;
+ const risk=Math.abs(entry-stop);
  const minimumRisk=Math.max(a*0.25,Math.abs(entry)*0.001);
- if(!(risk>=minimumRisk&&reward>0&&rr>=2))return null;
+ if(!(risk>=minimumRisk))return null;
+ let reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
+ // If the nearest structural target is too close to justify the risk,
+ // advance to the next meaningful level rather than throwing away the thesis.
+ if(!(reward>0&&rr>=2)){
+   const alternatives=keyLevels(c)
+     .map(x=>x.level)
+     .filter(level=>directionLong?level>entry:level<entry)
+     .sort((a,b)=>Math.abs(a-entry)-Math.abs(b-entry));
+   const viable=alternatives.find(level=>Math.abs(level-entry)/risk>=2);
+   if(Number.isFinite(viable)){
+     target=viable;
+     reward=Math.abs(target-entry);
+     rr=reward/risk;
+   }
+ }
+ if(!(reward>0&&rr>=2))return null;
  return {entry,stop,target,risk,reward,rr,invalidation:inv,targetLevel:target,stopBuffer:buffer};
 }
 
