@@ -143,6 +143,7 @@ function AnalysisResult({result,savedSignal}){
         <div className="strategy-trade-footer"><span>RR {hasTrade?s.riskReward:'—'}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
       </>}
     </div>
+    <RiskCalculator setup={s}/>
   </div>
 }
 
