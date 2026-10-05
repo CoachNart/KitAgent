@@ -69,11 +69,17 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   evidence.push('Reference range → one-sided sweep → reclaim → opposite side.');
  }
  if(failures.length)return {direction,failures:[...new Set(failures)],evidence};
- const level=execution.msnrLevel||execution.priceActionLevel||execution.pullback||execution.crt?.entryZone||execution.breakout?.level||null;
- const entry=execution.entry??price;
+ const level=execution.msnrLevel?.level??execution.priceActionLevel?.level??execution.pullback?.level??execution.crt?.entryZone??execution.retest?.level??execution.breakout?.level??null;
+ const currentEntry=execution.entry??price;
+ const candidateLimit=Number.isFinite(level)&&((direction==='BULLISH'&&level<price)||(direction==='BEARISH'&&level>price)) ? level : null;
+ const orderType=candidateLimit!=null&&Math.abs(candidateLimit-price)>Math.max(price*.0008,(execution.structure.atr||price*.001)*.15)?'LIMIT':'MARKET';
+ const entry=orderType==='LIMIT'?candidateLimit:currentEntry;
  const target=execution.crt?.target||execution.breakout?.target||nearestTarget(execution.candles,direction,entry)?.level;
  const inv=execution.crt?.invalidation||execution.breakout?.invalidation||nearestInvalidation(execution.candles,direction,entry)?.level;
  const trade=tradeGeometry(execution.candles,direction,entry,target,inv);
  if(!trade)return {direction,failures:['No logical invalidation/target pair provides at least 2R.'],evidence};
+ trade.orderType=orderType;
+ trade.marketEntry=price;
+ trade.entryReason=orderType==='LIMIT'?'Planned structural retracement/retest entry':'Confirmed execution at the current market price';
  return {direction,trade,failures:[],evidence};
 }
