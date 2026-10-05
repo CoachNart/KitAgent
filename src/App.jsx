@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import './kit-nav.css';
-import PerpetualsPage from './PerpetualsPage.jsx';
+import DailySetupsPage from './DailySetupsPage.jsx';
 import SignalHistory from './SignalHistory.jsx';
 import HomePage from './HomePage.jsx';
 import LessonDetail from './LessonDetail.jsx';
@@ -12,7 +12,7 @@ import './ui-polish.css';
 import './header-polish.css';
 import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, Wallet, X, Zap } from 'lucide-react';
 
-const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',Layers3],['perps','Perpetuals',CircleDollarSign],['history','History',History],['profile','Profile',CircleUserRound]];
+const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',Layers3],['setups','Setups',ScanSearch],['history','History',History],['profile','Profile',CircleUserRound]];
 const pairs=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','MATIC/USDT','DOT/USDT','TRX/USDT','UNI/USDT','AAVE/USDT','ARB/USDT','OP/USDT','SUI/USDT','PEPE/USDT'];
 const timeframes=['AUTO','15m','30m','1H','2H','4H'];
 const appSearchItems=[...pairs.map(value=>({type:'market',label:value,meta:'Market analysis',action:'market'})),...nav.map(([id,label])=>({type:'workspace',label,meta:'Workspace',action:id})),{type:'network',label:'Robinhood Chain',meta:'Network · Mainnet 4663',action:'home'}];
@@ -46,7 +46,7 @@ export default function App({user}){
     <div className="header-pulse" aria-label="System pulse"><i className="pulse-green"/><i className="pulse-red"/></div>
     <button type="button" className="profile-avatar" aria-label="Open profile" title="Profile" onClick={()=>go('profile')}><span className="profile-avatar-ring">{(displayUser?.photoURL||displayUser?.photoUrl||displayUser?.avatarUrl)?<img src={displayUser.photoURL||displayUser.photoUrl||displayUser.avatarUrl} alt="" referrerPolicy="no-referrer"/>:<span>{initials(displayUser?.displayName||displayUser?.email||'K')}</span>}</span><i className="profile-status"/></button>
   </div>
-</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='defi'&&<ChartTerminal/>} {page==='perps'&&<PerpetualsPage user={user}/>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
+</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='defi'&&<ChartTerminal/>} {page==='setups'&&<DailySetupsPage/>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
 }
 
 function KitNavigation({page,go}){
