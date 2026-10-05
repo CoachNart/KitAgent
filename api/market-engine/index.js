@@ -77,7 +77,8 @@ export default async function handler(req,res){
   const market=String(req.query.market||'forex').toLowerCase(),symbol=String(req.query.symbol||'').trim().toUpperCase(),strategy=String(req.query.strategy||'TOP_DOWN').toUpperCase().replace(/[-\s]/g,'_'),requested=String(req.query.timeframe||'AUTO');
   if(!STRATEGIES[strategy])return json(res,400,{ok:false,error:'Unsupported strategy'});
   if(!symbol)return json(res,400,{ok:false,error:'Missing symbol'});
-  if(requested!=='AUTO'&&!EXECUTION_TIMEFRAMES.includes(requested))return json(res,400,{ok:false,error:'Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO'});\n  const price=await fetchPrice(market,symbol),tfs=requested==='AUTO'?EXECUTION_TIMEFRAMES:[requested];
+  if(requested!=='AUTO'&&!EXECUTION_TIMEFRAMES.includes(requested))return json(res,400,{ok:false,error:'Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO'});
+  const price=await fetchPrice(market,symbol),tfs=requested==='AUTO'?EXECUTION_TIMEFRAMES:[requested];
   const needed=[...new Set(tfs.flatMap(tf=>CHAIN[tf]))],all={};
   for(const tf of needed){const raw=await fetchTf(market,symbol,tf);all[tf]=closedCandles(raw,tf);const v=validateCandles(all[tf],tf);if(!v.valid)throw new Error(tf+': '+v.failures.join(', '));}
   const results=[];for(const tf of tfs)results.push(await analyzeOne(market,symbol,strategy,tf,all,price.mid));
