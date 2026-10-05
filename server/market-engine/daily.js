@@ -65,7 +65,7 @@ function candidateScore(result){
   return result.grade.score*100+Math.min(rr,6)*8;
 }
 
-function toSetup(symbol,market,strategy,result){
+function toSetup(market,strategy,result){
   const score=candidateScore(result);
   if(score<0)return null;
   const trade=result.trade;
