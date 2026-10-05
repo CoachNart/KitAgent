@@ -36,15 +36,23 @@ async function topSymbols(){
 }
 
 async function candlesFor(symbol){
-  const [m15Raw,h1Raw,h4Raw]=await Promise.all([
+  // Use the same native Bybit execution candles as Market Analysis.
+  // Do not synthesize 30m/2H from lower timeframes: that can make the
+  // Scanner and Market Analysis disagree about the exact same structure.
+  const [m15Raw,m30Raw,h1Raw,h2Raw,h4Raw]=await Promise.all([
     fetchTf('perpetual',symbol,'15m'),
+    fetchTf('perpetual',symbol,'30m'),
     fetchTf('perpetual',symbol,'1H'),
+    fetchTf('perpetual',symbol,'2H'),
     fetchTf('perpetual',symbol,'4H')
   ]);
-  const m15=closedCandles(m15Raw,'15m');
-  const h1=closedCandles(h1Raw,'1H');
-  const h4=closedCandles(h4Raw,'4H');
-  return {'15m':m15,'30m':aggregate(m15,'30m'),'1H':h1,'2H':aggregate(h1,'2H'),'4H':h4};
+  return {
+    '15m':closedCandles(m15Raw,'15m'),
+    '30m':closedCandles(m30Raw,'30m'),
+    '1H':closedCandles(h1Raw,'1H'),
+    '2H':closedCandles(h2Raw,'2H'),
+    '4H':closedCandles(h4Raw,'4H')
+  };
 }
 
 function candidateScore(result){
