@@ -820,3 +820,64 @@
 }
 
 /* Production deployment marker: market-analysis UI/runtime fixes are complete. */
+
+
+/* Risk calculator — premium position-sizing surface below the generated setup. */
+.risk-calculator{
+  margin-top:12px;
+  padding:16px;
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:15px;
+  background:linear-gradient(145deg,rgba(255,255,255,.026),rgba(255,255,255,.012));
+  box-shadow:0 15px 38px rgba(0,0,0,.12);
+}
+.risk-calc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:13px;border-bottom:1px solid rgba(255,255,255,.055)}
+.risk-kicker{display:block;font-size:7px;letter-spacing:.15em;color:#687980;font-weight:850}
+.risk-calc-head h3{margin:5px 0 3px;font-size:17px;letter-spacing:-.025em;color:#edf6f7}
+.risk-calc-head p{margin:0;color:#718189;font-size:9px;line-height:1.45}
+.risk-direction{flex:none;padding:6px 8px;border:1px solid rgba(114,221,255,.13);border-radius:7px;color:#8bddeb;background:rgba(114,221,255,.035);font-size:7px;font-weight:850;letter-spacing:.12em}
+.risk-calc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:13px}
+.risk-field{display:grid;gap:5px;min-width:0}
+.risk-field>span{font-size:6.5px;letter-spacing:.13em;color:#68777e;font-weight:850}
+.risk-field>div{height:39px;display:flex;align-items:center;gap:6px;padding:0 10px;border:1px solid rgba(255,255,255,.065);border-radius:9px;background:rgba(255,255,255,.018)}
+.risk-field input{width:100%;min-width:0;height:100%;border:0;outline:0;background:transparent;color:#e5f0f1;font-size:10px;font-weight:750;font-variant-numeric:tabular-nums}
+.risk-field input::placeholder{color:#55656c}
+.risk-field em{font-style:normal;color:#718087;font-size:9px;font-weight:750;flex:none}
+.risk-field:focus-within>div{border-color:rgba(114,221,255,.22);background:rgba(114,221,255,.018)}
+.risk-auto>div{justify-content:space-between}
+.risk-auto b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8fe2ee;font-size:10px;font-variant-numeric:tabular-nums}
+.risk-auto em{font-size:6px;letter-spacing:.1em;color:#6d8d95}
+.risk-calc-action{display:flex;align-items:center;gap:10px;margin-top:12px}
+.risk-calc-action button{height:38px;padding:0 15px;border:1px solid rgba(114,221,255,.2);border-radius:9px;background:linear-gradient(135deg,#63dcf5,#36c9ec);color:#031217;font-size:8px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.risk-calc-action button:hover{filter:brightness(1.05);transform:translateY(-1px)}
+.risk-calc-action span{color:#d39399;font-size:8px;line-height:1.4}
+.risk-results{display:grid;grid-template-columns:1.25fr repeat(5,1fr);gap:7px;margin-top:12px}
+.risk-results>div{min-width:0;padding:10px;border:1px solid rgba(255,255,255,.05);border-radius:9px;background:rgba(255,255,255,.014)}
+.risk-results span{display:block;font-size:5.8px;letter-spacing:.1em;color:#66767d;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.risk-results b{display:block;margin-top:6px;color:#dce8ea;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.risk-results small{display:block;margin-top:2px;color:#596970;font-size:6px}
+.risk-result-primary{background:rgba(114,221,255,.025)!important;border-color:rgba(114,221,255,.09)!important}
+.risk-result-primary b{color:#8fe2ee!important;font-size:12px!important}
+.risk-loss b{color:#ff8a92!important}
+.risk-profit b{color:#65dfb1!important}
+.risk-disclaimer{margin:10px 1px 0;color:#596970;font-size:7px;line-height:1.5}
+@media(max-width:850px){
+  .risk-calc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .risk-results{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:520px){
+  .risk-calculator{margin-top:10px;padding:13px;border-radius:13px}
+  .risk-calc-head h3{font-size:16px}
+  .risk-calc-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .risk-field>div{height:40px;padding:0 9px}
+  .risk-calc-action{align-items:stretch;flex-direction:column}
+  .risk-calc-action button{width:100%}
+  .risk-calc-action span{font-size:7.5px}
+  .risk-results{grid-template-columns:1fr 1fr}
+  .risk-result-primary{grid-column:1/-1}
+}
+@media(max-width:360px){
+  .risk-calc-grid{grid-template-columns:1fr}
+  .risk-results{grid-template-columns:1fr}
+  .risk-result-primary{grid-column:auto}
+}
