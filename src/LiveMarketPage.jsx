@@ -172,6 +172,12 @@ function RiskCalculator({setup}){
     setValidation('');
   },[validTrade,setup?.entry,setup?.stopLoss,setup?.takeProfit1]);
 
+  const estimatedLiquidation=(()=>{
+    const l=Number(leverage), e=Number(entry);
+    if(!(l>0&&e>0))return null;
+    return direction==='LONG'?e*(1-1/l):e*(1+1/l);
+  })();
+
   const calculate=()=>{
     const m=Number(margin), l=Number(leverage), e=Number(entry), sl=Number(stopLoss), tp=Number(takeProfit);
     if(!(m>0))return setValidation('Enter a margin greater than 0.');
@@ -207,7 +213,7 @@ function RiskCalculator({setup}){
       <label className="risk-field"><span>ENTRY</span><div><input inputMode="decimal" value={entry} onChange={e=>{setEntry(e.target.value);setCalculation(null)}}/></div></label>
       <label className="risk-field"><span>STOP LOSS</span><div><input inputMode="decimal" value={stopLoss} onChange={e=>{setStopLoss(e.target.value);setCalculation(null)}}/></div></label>
       <label className="risk-field"><span>TAKE PROFIT</span><div><input inputMode="decimal" value={takeProfit} onChange={e=>{setTakeProfit(e.target.value);setCalculation(null)}}/></div></label>
-      <div className="risk-field risk-auto"><span>EST. LIQUIDATION</span><div><b>{calculation?price(calculation.liquidation):'—'}</b><em>AUTO</em></div></div>
+      <div className="risk-field risk-auto"><span>EST. LIQUIDATION</span><div><b>{estimatedLiquidation!=null?price(estimatedLiquidation):'—'}</b><em>AUTO</em></div></div>
     </div>
 
     <div className="risk-calc-action">
