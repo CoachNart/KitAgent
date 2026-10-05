@@ -143,7 +143,8 @@ function AnalysisResult({result,savedSignal}){
         <div className="strategy-trade-footer"><span>RR {hasTrade?s.riskReward:'—'}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
       </>}
     </div>
-    <TradeBreakdown setup={s} result={result}/><RiskCalculator setup={s}/>
+    <RiskCalculator setup={s}/>
+    {hasTrade&&<TradeBreakdown setup={s} result={result}/>} 
   </div>
 }
 
@@ -235,6 +236,7 @@ function RiskCalculator({setup}){
   </section>;
 }
 function TradeBreakdown({setup,result}){
+ const [open,setOpen]=useState(false);
  const b=setup?.tradeBreakdown,ctx=b?.marketContext||{},trade=b?.trade||{},dir=String(b?.direction||setup?.bias||'').toUpperCase();
  const fmt=v=>v==null||Number.isNaN(Number(v))?'—':price(v),event=ctx.latestBOS||ctx.latestCHoCH||ctx.latestMSS,eventName=ctx.latestBOS?'BOS':ctx.latestCHoCH?'CHoCH':ctx.latestMSS?'MSS':'STRUCTURE';
  const eventDirection=event?.direction==='BULLISH'?'bullish':event?.direction==='BEARISH'?'bearish':'directional';
@@ -244,7 +246,7 @@ function TradeBreakdown({setup,result}){
  const whyStop=setup.invalidationSource?'Invalidation comes from '+String(setup.invalidationSource).toLowerCase()+'. The stop is placed beyond that reference with the volatility buffer.':'The stop is derived from validated structural invalidation.';
  const whyTarget='Target '+fmt(trade.target)+' is the selected directional structural/liquidity target; it is published only after the risk/reward check passes.';
  const rows=[['MARKET READ',whyDirection],['KEY STRUCTURE',whyTrigger],['ENTRY LOGIC',whyEntry],['INVALIDATION',whyStop],['TARGET LOGIC',whyTarget]];
- return <section className="trade-breakdown" aria-label="Trade breakdown"><div className="trade-breakdown-head"><div><span className="tiny-label">LIVE THESIS</span><h3>Why this setup is valid</h3></div><span>{setup.entryTimeframe||'—'} · {setup.strategyName||result.strategy}</span></div><div className="trade-breakdown-grid">{rows.map(([label,text],i)=><div key={label} className={i===1?'key-event':''}><b>{label}</b><p>{text}</p></div>)}</div><div className="trade-breakdown-levels"><div><span>KEY LEVEL</span><b>{fmt(event?.level)}</b><small>{event?eventName+' · '+eventDirection:'No confirmed break exposed'}</small></div><div><span>INVALIDATION</span><b>{fmt(setup.structuralInvalidation)}</b><small>{setup.invalidationSource||'Structural invalidation'}</small></div><div><span>TARGET</span><b>{fmt(trade.target)}</b><small>{setup.liquidityType||'Structural target'}</small></div><div><span>ORDER</span><b>{setup.orderType||'—'}</b><small>{setup.entryReason||'Strategy execution condition'}</small></div></div><small className="trade-breakdown-source">Verified from the same live Bybit candles and quote used to generate this setup · {(setup.analysisTimeframes||[]).join(' → ')||'multi-timeframe analysis'}.</small></section>
+ return <section className={'trade-breakdown '+(open?'is-open':'')} aria-label="Trade breakdown"><button type="button" className="trade-breakdown-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><span><span className="tiny-label">LIVE THESIS</span><strong>Why this setup is valid</strong></span><span className="trade-breakdown-toggle-right"><small>{setup.entryTimeframe||'—'} · {setup.strategyName||result.strategy}</small><ChevronDown size={14}/></span></button>{open&&<div className="trade-breakdown-body"><div className="trade-breakdown-grid">{rows.map(([label,text],i)=><div key={label} className={i===1?'key-event':''}><b>{label}</b><p>{text}</p></div>)}</div><div className="trade-breakdown-levels"><div><span>KEY LEVEL</span><b>{fmt(event?.level)}</b><small>{event?eventName+' · '+eventDirection:'No confirmed break exposed'}</small></div><div><span>INVALIDATION</span><b>{fmt(setup.structuralInvalidation)}</b><small>{setup.invalidationSource||'Structural invalidation'}</small></div><div><span>TARGET</span><b>{fmt(trade.target)}</b><small>{setup.liquidityType||'Structural target'}</small></div><div><span>ORDER</span><b>{setup.orderType||'—'}</b><small>{setup.entryReason||'Strategy execution condition'}</small></div></div><small className="trade-breakdown-source">Verified from the same live Bybit candles and quote used to generate this setup · {(setup.analysisTimeframes||[]).join(' → ')||'multi-timeframe analysis'}.</small></div>}</section>
 }
 function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
