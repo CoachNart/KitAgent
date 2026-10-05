@@ -132,7 +132,7 @@ function strategyWaitCopy(strategy){return ({TOP_DOWN:'Waiting for higher-timefr
 function AnalysisResult({result,savedSignal}){
   const s=result.setup,long=s.directionBias==='LONG',short=s.directionBias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:short?TrendingDown:Clock;
   const stopDistanceLabel=s.stopDistanceUnits!=null ? String(s.stopDistanceUnits)+' '+(s.priceUnitLabel==='pips'?'pips':'pts') : '—';
-  const direction=long?'LONG':short?'SHORT':'NO SETUP',tone=wait?'wait':(long?'long':short?'short':'wait');
+  const direction=long?'LONG':short?'SHORT':'NO TRADE',tone=wait?'wait':(long?'long':short?'short':'wait');
   return <div className="live-result">
     <div className={'setup-card-v2 '+tone}>
       <div className="setup-v2-head">
@@ -140,7 +140,7 @@ function AnalysisResult({result,savedSignal}){
         <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
         <div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div>
       </div>
-      {wait ? <div className="strategy-status-card"><span>NO SETUP</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
+      {wait ? <div className="strategy-status-card"><span>NO TRADE</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
         <div className="strategy-trade-status"><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'WAITING AT PLANNED LEVEL':'EXECUTION AVAILABLE NOW'}</b></div>
         <div className="setup-v2-levels">
           <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
