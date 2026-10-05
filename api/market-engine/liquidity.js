@@ -1,6 +1,6 @@
 import {atr} from './data.js';
 import {confirmedSwings} from './structure.js';
-function pools(c,asOf=c.length-1){
+function equalPools(c,asOf=c.length-1){
  const s=confirmedSwings(c,2),out=[];
  for(const side of ['highs','lows']){
   const a=s[side].filter(x=>x.confirmationIndex<=asOf);
@@ -13,7 +13,7 @@ function pools(c,asOf=c.length-1){
 }
 export function liquidityMap(c,asOf=c.length-1){
  const s=confirmedSwings(c,2), highs=s.highs.filter(x=>x.confirmationIndex<=asOf),lows=s.lows.filter(x=>x.confirmationIndex<=asOf),x=c[asOf],a=atr(c.slice(0,asOf+1),14)||Math.max(x.close*.001,1e-9);
- const pools=[...poolsFor(highs,'high'),...poolsFor(lows,'low'),...pools(c,asOf)];
+ const pools=[...poolsFor(highs,'high'),...poolsFor(lows,'low'),...equalPools(c,asOf)];
  const recentSweep=[];
  for(const p of [...highs.map(q=>({...q,side:'BUY_SIDE'})),...lows.map(q=>({...q,side:'SELL_SIDE'}))].slice(-30)){
   for(let i=p.confirmationIndex;i<=asOf;i++){
