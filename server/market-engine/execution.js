@@ -18,7 +18,7 @@ export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferr
  const buffer=Math.max(a*0.25,Math.abs(entry)*0.0006);
  const stop=directionLong?inv-buffer:inv+buffer;
  const risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=reward/risk;
- const minimumRisk=Math.max(a*0.5,Math.abs(entry)*0.0015);
+ const minimumRisk=Math.max(a*0.25,Math.abs(entry)*0.001);
  if(!(risk>=minimumRisk&&reward>0&&rr>=2))return null;
  return {entry,stop,target,risk,reward,rr,invalidation:inv,targetLevel:target,stopBuffer:buffer};
 }
