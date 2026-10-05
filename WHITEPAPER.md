@@ -119,7 +119,7 @@ KitAgent provides a dedicated market intelligence layer for supported markets.
 The platform is designed to support:
 
 - Crypto markets.
-- Forex markets.
+- Crypto perpetual markets.
 - Perpetual markets.
 - Multiple trading timeframes.
 - Technical market analysis.
