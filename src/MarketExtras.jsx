@@ -79,12 +79,12 @@ const WATCH_KEY = 'kitsetups-watchlist-v2';
 function readWatchlist() {
   try {
     const value = JSON.parse(localStorage.getItem(WATCH_KEY) || '[]');
-    return Array.isArray(value) ? value.filter(x => x && x.symbol).slice(0, 12) : [];
+    return Array.isArray(value) ? value.filter(x => x && x.symbol).map(x => ({symbol:x.symbol})).slice(0, 12) : [];
   } catch { return []; }
 }
 
 function saveWatchlist(items) {
-  try { localStorage.setItem(WATCH_KEY, JSON.stringify(items.slice(0, 12))); } catch {}
+  try { localStorage.setItem(WATCH_KEY, JSON.stringify(items.map(x => ({symbol:x.symbol})).slice(0, 12))); } catch {}
 }
 
 export function MarketWatchlist({ symbol, onSelect }) {
