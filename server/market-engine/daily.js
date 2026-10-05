@@ -33,7 +33,7 @@ async function topSymbols(){
     .filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
     .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h))
     .slice(0,SCAN_LIMIT)
-    .map(x=>({symbol:x.symbol,lastPrice:Number(x.lastPrice),turnover24h:Number(x.turnover24h)}));
+    .map(x=>({symbol:x.symbol,lastPrice:(Number(x.bid1Price)>0&&Number(x.ask1Price)>0?(Number(x.bid1Price)+Number(x.ask1Price))/2:Number(x.lastPrice)),turnover24h:Number(x.turnover24h)}));
 }
 
 async function candlesFor(symbol){
@@ -62,9 +62,10 @@ function candidateScore(result){
   if(!result?.trade||!result?.grade)return -1;
   if(result.direction==='BULLISH' && !(result.trade.stop<result.trade.entry && result.trade.target>result.trade.entry))return -1;
   if(result.direction==='BEARISH' && !(result.trade.stop>result.trade.entry && result.trade.target<result.trade.entry))return -1;
-  if(!['A+','A','B'].includes(result.grade.grade))return -1;
+  if(!['A+','A'].includes(result.grade.grade))return -1;
+  if(!Number.isFinite(result.trade.riskAtr)||result.trade.riskAtr<0.75)return -1;
   const rr=Number(result.trade.rr)||0;
-  return result.grade.score*100+Math.min(rr,6)*8;
+  return result.grade.score*100+Math.min(rr,6)*8+Math.min(result.trade.riskAtr,3.8)*4;
 }
 
 function toSetup(market,strategy,result){
