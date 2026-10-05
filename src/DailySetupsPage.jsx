@@ -95,7 +95,7 @@ export default function DailySetupsPage(){
     <section className="setup-board">
       {setups.map((s,i)=><button className="setup-row" key={s.id||i} onClick={()=>setSelected(s)}>
         <span className="rank">{String(i+1).padStart(2,'0')}</span>
-        <span className="setup-main"><b>{s.symbol}</b><small>{s.strategy} · {s.timeframe}</small></span><span className="row-entry"><b>{money(s.entry)}</b><small>{s.orderType||'MARKET'}</small></span>
+        <span className="setup-main"><b>{s.symbol}</b><small>{s.strategy} · {s.timeframe}</small></span><span className="row-entry"><b>{money(s.entry)} <em className="order-type-inline">{s.orderType||'MARKET'}</em></b></span>
         <span className={'row-bias '+s.bias.toLowerCase()}>{s.bias}</span>
         <span className="row-rr"><b>1:{s.rr}</b><small>R:R</small></span>
         <span className="row-grade">{s.grade}</span><ChevronRight size={15}/>
