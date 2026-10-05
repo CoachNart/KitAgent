@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {BarChart3,ChevronDown,RefreshCw,ScanSearch,TrendingDown,TrendingUp,Clock} from 'lucide-react';
 import {auth} from './firebase.js';
-import {MarketWatchlist, StrategySelector, StrategyExplanation} from './MarketExtras.jsx';
+import {MarketWatchlist, StrategySelector} from './MarketExtras.jsx';
 import './market-extras.css';
 export const TIMEFRAMES=['AUTO','15m','30m','1H','2H','4H'];
 const TIMEFRAME_GUIDE={
@@ -88,6 +88,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
           </label>
 
           <StrategySelector value={strategy} onChange={setStrategy}/>
+          <button type="button" className="setup-guide-button" onClick={()=>window.dispatchEvent(new CustomEvent('kitsetups-open-setup-guide'))}> <span>Read setup breakdown</span> <ChevronDown size={13}/></button>
 
           <button type="button" className="live-analyze" onClick={analyze} disabled={loading||sourceLoading||!pair}>
             {loading?<><RefreshCw className="spin"/> Reading market</>:sourceLoading?<><RefreshCw className="spin"/> Loading source</>:<><BarChart3/> Analyze pair</>}
@@ -112,7 +113,6 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
         {result&&
           <>
             <AnalysisResult result={result} savedSignal={savedSignal}/>
-            <StrategyExplanation setup={result.setup} strategy={result.strategy||strategy}/>
           </>
         }
       </section>
