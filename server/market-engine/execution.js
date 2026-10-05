@@ -1,5 +1,6 @@
 import {atr} from './data.js';
-import {keyLevels,nearestTarget,nearestInvalidation} from './levels.js';
+import {atr} from './data.js';
+import {nearestTarget,nearestInvalidation} from './levels.js';
 export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferredInvalidation=null){
  const a=atr(c);if(!a)return null;
  const directionLong=direction==='BULLISH';
