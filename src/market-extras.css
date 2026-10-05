@@ -942,3 +942,17 @@
 .setup-guide-footer{display:flex;justify-content:center;padding:22px}.setup-guide-footer button{display:inline-flex;align-items:center;gap:6px;padding:10px 13px;border:1px solid rgba(114,221,255,.16);border-radius:10px;background:rgba(114,221,255,.025);color:#8fd9ea;font-size:9px;font-weight:800;cursor:pointer}.setup-guide-footer button:hover{border-color:rgba(114,221,255,.3);background:rgba(114,221,255,.055)}
 @media(max-width:900px){.setup-live-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.setup-live-proof{grid-column:span 2}.setup-strategy-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.setup-principle-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.setup-guide-page{padding:4px 0 50px}.setup-guide-hero{padding:20px 17px;border-radius:18px}.setup-guide-back{margin-bottom:22px}.setup-guide-hero h1{font-size:35px}.setup-guide-flow{gap:5px}.setup-guide-flow i{display:none}.setup-guide-flow span{font-size:8px;padding:7px}.setup-guide-section-head{align-items:flex-start;flex-direction:column}.setup-guide-live,.setup-guide-library,.setup-guide-principles{padding:15px;border-radius:16px}.setup-live-grid,.setup-strategy-steps,.setup-principle-grid{grid-template-columns:1fr}.setup-live-proof{grid-column:span 1}.setup-strategy-title{gap:10px}.setup-strategy-title h3{font-size:22px}.setup-rules{grid-template-columns:1fr}.setup-strategy-steps>div{min-height:0}.setup-guide-tabs button{min-width:115px}.setup-guide-button{height:36px}}
+
+
+/* Live thesis accordion — intentionally separate from the position calculator. */
+.trade-breakdown{margin-top:10px;padding:0;overflow:hidden}
+.trade-breakdown-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 14px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.trade-breakdown-toggle>span:first-child{display:flex;flex-direction:column;gap:4px}
+.trade-breakdown-toggle strong{font-size:13px;color:#e9f3f4;letter-spacing:-.02em}
+.trade-breakdown-toggle-right{display:flex;align-items:center;gap:9px;color:#708087}
+.trade-breakdown-toggle-right small{font-size:7px}
+.trade-breakdown-toggle-right svg{transition:transform .2s ease}
+.trade-breakdown.is-open .trade-breakdown-toggle-right svg{transform:rotate(180deg)}
+.trade-breakdown-body{padding:0 14px 14px}
+.trade-breakdown-body .trade-breakdown-grid{margin-top:2px}
+.trade-breakdown-body .trade-breakdown-levels{margin-top:8px}
