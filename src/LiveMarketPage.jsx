@@ -149,12 +149,14 @@ function AnalysisResult({result,savedSignal}){
 
 
 function RiskCalculator({setup}){
-  const direction=String(setup?.bias||'').toUpperCase();
+  const generatedDirection=String(setup?.bias||'').toUpperCase();
   const validTrade=Boolean(
     setup?.tradeReady &&
-    ['LONG','SHORT'].includes(direction) &&
+    ['LONG','SHORT'].includes(generatedDirection) &&
     [setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v)))
   );
+  const [manualDirection,setManualDirection]=useState('LONG');
+  const direction=validTrade?generatedDirection:manualDirection;
   const [margin,setMargin]=useState('');
   const [leverage,setLeverage]=useState('5');
   const [entry,setEntry]=useState('');
@@ -196,23 +198,22 @@ function RiskCalculator({setup}){
     setCalculation({notional,size,risk,profit,rr,liquidation,liqDistance});
   };
 
-  if(!validTrade)return null;
   return <section className="risk-calculator" aria-label="Risk calculator">
     <div className="risk-calc-head">
       <div>
         <span className="risk-kicker">POSITION MANAGEMENT</span>
         <h3>Risk calculator</h3>
-        <p>Size this generated setup before entering the trade.</p>
+        <p>{validTrade?'Size this generated setup before entering the trade.':'Set up a position manually, or generate a qualified setup to auto-fill these prices.'}</p>
       </div>
-      <span className="risk-direction">{direction}</span>
+      {validTrade ? <span className="risk-direction">{direction}</span> : <select className="risk-direction-select" aria-label="Direction" value={manualDirection} onChange={e=>{setManualDirection(e.target.value);setCalculation(null)}}><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select>}
     </div>
 
     <div className="risk-calc-grid">
       <label className="risk-field"><span>MARGIN</span><div><em>$</em><input inputMode="decimal" value={margin} onChange={e=>{setMargin(e.target.value);setCalculation(null)}} placeholder="1,000"/></div></label>
       <label className="risk-field"><span>LEVERAGE</span><div><input inputMode="decimal" value={leverage} onChange={e=>{setLeverage(e.target.value);setCalculation(null)}} placeholder="5"/><em>×</em></div></label>
-      <label className="risk-field"><span>ENTRY</span><div><input inputMode="decimal" value={entry} onChange={e=>{setEntry(e.target.value);setCalculation(null)}}/></div></label>
-      <label className="risk-field"><span>STOP LOSS</span><div><input inputMode="decimal" value={stopLoss} onChange={e=>{setStopLoss(e.target.value);setCalculation(null)}}/></div></label>
-      <label className="risk-field"><span>TAKE PROFIT</span><div><input inputMode="decimal" value={takeProfit} onChange={e=>{setTakeProfit(e.target.value);setCalculation(null)}}/></div></label>
+      <label className="risk-field"><span>ENTRY {validTrade&&<em className="risk-autofill-label">AUTO</em>}</span><div><input inputMode="decimal" value={entry} onChange={e=>{setEntry(e.target.value);setCalculation(null)}}/></div></label>
+      <label className="risk-field"><span>STOP LOSS {validTrade&&<em className="risk-autofill-label">AUTO</em>}</span><div><input inputMode="decimal" value={stopLoss} onChange={e=>{setStopLoss(e.target.value);setCalculation(null)}}/></div></label>
+      <label className="risk-field"><span>TAKE PROFIT {validTrade&&<em className="risk-autofill-label">AUTO</em>}</span><div><input inputMode="decimal" value={takeProfit} onChange={e=>{setTakeProfit(e.target.value);setCalculation(null)}}/></div></label>
       <div className="risk-field risk-auto"><span>EST. LIQUIDATION</span><div><b>{estimatedLiquidation!=null?price(estimatedLiquidation):'—'}</b><em>AUTO</em></div></div>
     </div>
 
