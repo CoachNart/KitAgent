@@ -134,7 +134,7 @@ function AnalysisResult({result,savedSignal}){
       {wait ? <div className="strategy-status-card"><span>NO TRADE</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
         <div className="strategy-trade-status"><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'WAITING AT PLANNED LEVEL':'EXECUTION AVAILABLE NOW'}</b></div>
         <div className="setup-v2-levels">
-          <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
+          <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'} <em className="order-type-inline">{s.orderType||'MARKET'}</em></span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
           <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
           <div className="v2-level tp"><span>TP</span><b>{price(s.takeProfit1)}</b></div>
         </div>
