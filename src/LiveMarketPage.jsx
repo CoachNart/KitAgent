@@ -6,8 +6,9 @@ import './market-extras.css';
 export const FOREX=['AUDCAD','AUDCHF','AUDJPY','AUDNZD','AUDUSD','CADCHF','CADJPY','CHFJPY','EURAUD','EURCAD','EURCHF','EURGBP','EURJPY','EURNZD','EURUSD','GBPAUD','GBPCAD','GBPCHF','GBPJPY','GBPNZD','GBPUSD','NZDCAD','NZDCHF','NZDJPY','NZDUSD','USDCAD','USDCHF','USDJPY','USDNOK','USDSEK','USDZAR','USDSGD','EURPLN','EURSEK','EURNOK','EURTRY','GBPPLN','GBPSEK','GBPNOK','NOKSEK','NZDSGD','SGDJPY','CHFSGD','CADSGD','AUDSGD','AUDNOK','AUDSEK','CADNOK','CADSEK','CHFPLN','CHFZAR','EURSGD','GBPZAR','NZDZAR','USDHKD','USDMXN','USDTRY','USDTHB','USDHUF','USDCNH'];
 export const COMMODITIES=[];
 export const INDICES=[];
-export const TIMEFRAMES=['15m','30m','1H','2H','4H'];
+export const TIMEFRAMES=['AUTO','15m','30m','1H','2H','4H'];
 const TIMEFRAME_GUIDE={
+ 'AUTO':{title:'AUTO execution horizon',desc:'Evaluates 15M, 30M, 1H, 2H and 4H for the cleanest valid execution structure. No timeframe is forced.'},
  '15m':{title:'15M opportunity horizon',desc:'Hunts intraday opportunities with the selected strategy. Higher context is handled automatically when that strategy needs it.'},
  '30m':{title:'30M opportunity horizon',desc:'Hunts more developed intraday opportunities. Strategy rules determine the supporting context and confirmation.'},
  '1H':{title:'1H opportunity horizon',desc:'Uses a broader intraday structure to find fewer, more developed opportunities.'},
@@ -24,9 +25,9 @@ async function authToken(forceRefresh=false){const user=await waitForAuthUser();
 async function persistSignal(body){const user=await waitForAuthUser(2500),setup=body?.setup;if(!user||!setup?.tradeReady||!['MARKET','LIMIT'].includes(String(setup.orderType||'').toUpperCase())||!['LONG','SHORT'].includes(String(setup.bias||'').toUpperCase())||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,strategy:body.strategy||body.setup?.strategy||body.setup?.strategyName||'',setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;const result=await response.json();window.dispatchEvent(new CustomEvent('kitagent-signal-recorded',{detail:result.signal}));return result;}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
 export default function LiveMarketPage(){const [market,setMarket]=useState('forex'),[pair,setPair]=useState(''),[timeframe,setTimeframe]=useState('1H'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[sourceLoading,setSourceLoading]=useState(true),[error,setError]=useState(''),[result,setResult]=useState(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup');return raw?JSON.parse(raw):null}catch{return null}}),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState([]),[pickerOpen,setPickerOpen]=useState(false);
 
- useEffect(()=>{if(!TIMEFRAMES.includes(timeframe))setTimeframe('1H')},[timeframe]);
+ useEffect(()=>{if(!TIMEFRAMES.includes(timeframe))setTimeframe('AUTO')},[timeframe]);
 
- useEffect(()=>{if(result?.market&&result?.symbol){setMarket(result.market);setPair(result.symbol.includes('/')?result.symbol:result.market==='perpetual'?result.symbol.replace(/USDT$/,'/USDT'):result.symbol);setTimeframe(TIMEFRAMES.includes(result.timeframe)?result.timeframe:'1H');setStrategy(result.strategy||result.setup?.strategy||'TOP_DOWN')}},[]);
+ useEffect(()=>{if(result?.market&&result?.symbol){setMarket(result.market);setPair(result.symbol.includes('/')?result.symbol:result.market==='perpetual'?result.symbol.replace(/USDT$/,'/USDT'):result.symbol);setTimeframe(TIMEFRAMES.includes(result.timeframe)?result.timeframe:'AUTO');setStrategy(result.strategy||result.setup?.strategy||'TOP_DOWN')}},[]);
 
  useEffect(()=>{let cancelled=false;setError('');setInstrumentQuery('');setPickerOpen(false);const local=[];if(local.length){setInstruments(local);setPair(p=>p&&local.some(x=>x.symbol===p)?p:local[0]?.symbol||'');setSourceLoading(false);return()=>{cancelled=true}}const cached=instrumentCache.get(market);if(cached?.length){setInstruments(cached);setPair(p=>p&&cached.some(x=>x.symbol===p)?p:cached[0]?.symbol||'');setSourceLoading(false);return()=>{cancelled=true}}setSourceLoading(true);let request=instrumentRequests.get(market);if(!request){request=(async()=>{const token=await authToken();const requestOptions={headers:token?{Authorization:'Bearer '+token}: {},cache:'no-store'};let r=await fetch('/api/market?action=instruments&market='+encodeURIComponent(market),requestOptions);let body=await r.json().catch(()=>({}));if((r.status===401||r.status===403)){const freshToken=await authToken(true);if(freshToken){r=await fetch('/api/market?action=instruments&market='+encodeURIComponent(market),{headers:{Authorization:'Bearer '+freshToken},cache:'no-store'});body=await r.json().catch(()=>({}));}}if(!r.ok){throw new Error(body?.error||'Live market instruments are temporarily unavailable. Please retry.');}if(!Array.isArray(body?.instruments)||!body.instruments.length)throw new Error(market==='forex'?'No Forex instruments are currently available. Please retry.':market==='commodities'?'No commodity instruments are currently available. Please retry.':['crypto','perpetual'].includes(market)?'No Crypto perpetual instruments are currently available. Please retry.':'No index instruments are currently available. Please retry.');const live=body.instruments.map(x=>({symbol:x.symbol,name:x.name||''}));instrumentCache.set(market,live);return live})().finally(()=>instrumentRequests.delete(market));instrumentRequests.set(market,request)}request.then(live=>{if(cancelled)return;setInstruments(live);setPair(p=>p&&live.some(x=>x.symbol===p)?p:live[0]?.symbol||'');}).catch(e=>{if(!cancelled){setInstruments([]);setPair('');setError(e?.message||'Unable to load live instruments from the market-data source. Please retry.')}}).finally(()=>{if(!cancelled)setSourceLoading(false)});return()=>{cancelled=true}},[market]);
 
@@ -87,11 +88,12 @@ export default function LiveMarketPage(){const [market,setMarket]=useState('fore
           </label>
 
           <label className="live-field timeframe">
-            <span>TIMEFRAME</span>
+            <span>EXECUTION TIMEFRAME</span>
             <div>
               <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=><option key={x} value={x}>{x}</option>)}</select>
               <ChevronDown/>
             </div>
+            <small className="timeframe-note">Final entry confirmation. Higher timeframes are analyzed automatically.</small>
           </label>
 
           <StrategySelector value={strategy} onChange={setStrategy}/>
@@ -134,7 +136,7 @@ function AnalysisResult({result,savedSignal}){
   return <div className="live-result">
     <div className={'setup-card-v2 '+tone}>
       <div className="setup-v2-head">
-        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · {result.timeframe}</span><h3>{['forex','commodities','indices'].includes(result.market)?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div>
+        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · EXECUTION {s.entryTimeframe||result.timeframe}</span><h3>{['forex','commodities','indices'].includes(result.market)?result.symbol:result.symbol.replace('USDT','/USDT')}</h3></div>
         <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
         <div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div>
       </div>
