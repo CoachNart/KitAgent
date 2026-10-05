@@ -146,6 +146,86 @@ function AnalysisResult({result,savedSignal}){
   </div>
 }
 
+
+function RiskCalculator({setup}){
+  const direction=String(setup?.bias||'').toUpperCase();
+  const validTrade=Boolean(
+    setup?.tradeReady &&
+    ['LONG','SHORT'].includes(direction) &&
+    [setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v)))
+  );
+  const [margin,setMargin]=useState('');
+  const [leverage,setLeverage]=useState('5');
+  const [entry,setEntry]=useState('');
+  const [stopLoss,setStopLoss]=useState('');
+  const [takeProfit,setTakeProfit]=useState('');
+  const [calculation,setCalculation]=useState(null);
+  const [validation,setValidation]=useState('');
+
+  useEffect(()=>{
+    if(!validTrade)return;
+    setEntry(String(setup.entry));
+    setStopLoss(String(setup.stopLoss));
+    setTakeProfit(String(setup.takeProfit1));
+    setCalculation(null);
+    setValidation('');
+  },[validTrade,setup?.entry,setup?.stopLoss,setup?.takeProfit1]);
+
+  const calculate=()=>{
+    const m=Number(margin), l=Number(leverage), e=Number(entry), sl=Number(stopLoss), tp=Number(takeProfit);
+    if(!(m>0))return setValidation('Enter a margin greater than 0.');
+    if(!(l>0))return setValidation('Enter leverage greater than 0.');
+    if(!(e>0&&sl>0&&tp>0))return setValidation('Entry, stop loss and take profit must be valid prices.');
+    if(direction==='LONG' && !(sl<e&&tp>e))return setValidation('For a LONG setup, SL must be below entry and TP above entry.');
+    if(direction==='SHORT' && !(sl>e&&tp<e))return setValidation('For a SHORT setup, SL must be above entry and TP below entry.');
+    const notional=m*l;
+    const size=notional/e;
+    const risk=Math.abs(e-sl)*size;
+    const profit=Math.abs(tp-e)*size;
+    const rr=risk>0?profit/risk:0;
+    const liquidation=direction==='LONG'?e*(1-1/l):e*(1+1/l);
+    const liqDistance=Math.abs(liquidation-e)/e*100;
+    setValidation('');
+    setCalculation({notional,size,risk,profit,rr,liquidation,liqDistance});
+  };
+
+  if(!validTrade)return null;
+  return <section className="risk-calculator" aria-label="Risk calculator">
+    <div className="risk-calc-head">
+      <div>
+        <span className="risk-kicker">POSITION MANAGEMENT</span>
+        <h3>Risk calculator</h3>
+        <p>Size this generated setup before entering the trade.</p>
+      </div>
+      <span className="risk-direction">{direction}</span>
+    </div>
+
+    <div className="risk-calc-grid">
+      <label className="risk-field"><span>MARGIN</span><div><em>$</em><input inputMode="decimal" value={margin} onChange={e=>{setMargin(e.target.value);setCalculation(null)}} placeholder="1,000"/></div></label>
+      <label className="risk-field"><span>LEVERAGE</span><div><input inputMode="decimal" value={leverage} onChange={e=>{setLeverage(e.target.value);setCalculation(null)}} placeholder="5"/><em>×</em></div></label>
+      <label className="risk-field"><span>ENTRY</span><div><input inputMode="decimal" value={entry} onChange={e=>{setEntry(e.target.value);setCalculation(null)}}/></div></label>
+      <label className="risk-field"><span>STOP LOSS</span><div><input inputMode="decimal" value={stopLoss} onChange={e=>{setStopLoss(e.target.value);setCalculation(null)}}/></div></label>
+      <label className="risk-field"><span>TAKE PROFIT</span><div><input inputMode="decimal" value={takeProfit} onChange={e=>{setTakeProfit(e.target.value);setCalculation(null)}}/></div></label>
+      <div className="risk-field risk-auto"><span>EST. LIQUIDATION</span><div><b>{calculation?price(calculation.liquidation):'—'}</b><em>AUTO</em></div></div>
+    </div>
+
+    <div className="risk-calc-action">
+      <button type="button" onClick={calculate}>Calculate position</button>
+      {validation&&<span role="alert">{validation}</span>}
+    </div>
+
+    {calculation&&<div className="risk-results">
+      <div className="risk-result-primary"><span>POSITION SIZE</span><b>{price(calculation.size)}</b><small>units</small></div>
+      <div><span>POSITION VALUE</span><b>{price(calculation.notional)}</b></div>
+      <div className="risk-loss"><span>MAX LOSS AT SL</span><b>−{price(calculation.risk)}</b></div>
+      <div className="risk-profit"><span>POTENTIAL PROFIT</span><b>+{price(calculation.profit)}</b></div>
+      <div><span>RISK / REWARD</span><b>1 : {calculation.rr.toFixed(2)}</b></div>
+      <div><span>LIQUIDATION DISTANCE</span><b>{calculation.liqDistance.toFixed(2)}%</b></div>
+    </div>}
+
+    <p className="risk-disclaimer">Estimated liquidation uses a simplified isolated-margin formula. Actual liquidation varies by exchange maintenance margin, fees and position mode.</p>
+  </section>;
+}
 function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
 function Breakdown({title,value,detail}){return <div className="breakdown-item"><span>{title}</span><b>{value}</b><small>{detail}</small></div>}
