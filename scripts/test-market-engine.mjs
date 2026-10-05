@@ -1,8 +1,8 @@
-import {evaluateStrategy,STRATEGIES} from '../api/market-engine/strategies.js';
-import {grade,noTrade} from '../api/market-engine/grading.js';
-import {tradeGeometry} from '../api/market-engine/execution.js';
-import {structure,confirmedSwings} from '../api/market-engine/structure.js';
-import {liquidityMap} from '../api/market-engine/liquidity.js';
+import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
+import {grade,noTrade} from '../server/market-engine/grading.js';
+import {tradeGeometry} from '../server/market-engine/execution.js';
+import {structure,confirmedSwings} from '../server/market-engine/structure.js';
+import {liquidityMap} from '../server/market-engine/liquidity.js';
 const tests=[];const assert=(name,okOrFn,detail='')=>{let ok=false;try{ok=typeof okOrFn==='function'?!!okOrFn():!!okOrFn}catch(e){detail=e.message}tests.push({name,ok,detail});};
 const bar=(i,o,h,l,c)=>({time:Date.UTC(2026,0,1)+i*900000,open:o,high:h,low:l,close:c,volume:100});
 const candles=Array.from({length:120},(_,i)=>{const base=100+(Math.floor(i/6)%2?3:-3)+(i*.03);const o=base,c=base+(i%2?.5:-.2);return bar(i,o,Math.max(o,c)+1,Math.min(o,c)-1,c)});
