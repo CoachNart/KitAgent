@@ -87,29 +87,29 @@ function saveWatchlist(items) {
   try { localStorage.setItem(WATCH_KEY, JSON.stringify(items.slice(0, 12))); } catch {}
 }
 
-export function MarketWatchlist({ symbol, market='perpetual', onSelect }) {
+export function MarketWatchlist({ symbol, onSelect }) {
  const [items,setItems]=useState(readWatchlist);
  const [open,setOpen]=useState(false);
- const saved=items.some(x=>x.symbol===symbol&&x.market===market);
+ const saved=items.some(x=>x.symbol===symbol);
  useEffect(()=>{saveWatchlist(items)},[items]);
- const toggle=()=>setItems(current=>{const exists=current.some(x=>x.symbol===symbol&&x.market===market);return exists?current.filter(x=>!(x.symbol===symbol&&x.market===market)):[{symbol,market},...current].slice(0,12)});
- return <section className={`market-watchlist ${open?'is-open':''}`} aria-label="Market watchlist">
+ const toggle=()=>setItems(current=>{const exists=current.some(x=>x.symbol===symbol);return exists?current.filter(x=>x.symbol!==symbol):[{symbol},...current].slice(0,12)});
+ return <section className={`market-watchlist ${open?'is-open':''}`} aria-label="Crypto perpetual watchlist">
   <button type="button" className="watchlist-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
-   <span className="watchlist-toggle-main"><span><b>Watchlist</b><small>{items.length?items.length+' saved market'+(items.length===1?'':'s')+(symbol?' · '+symbol:''):'Save markets for quick access'}</small></span></span>
+   <span className="watchlist-toggle-main"><span><b>Watchlist</b><small>{items.length?items.length+' saved perpetual'+(items.length===1?'':'s')+(symbol?' · '+symbol:''):'Save perpetuals for quick access'}</small></span></span>
    <span className="watchlist-toggle-right"><em>{items.length}</em><ChevronDown className={open?'open':''} size={16}/></span>
   </button>
   <div className="watchlist-panel">
    <div className="watchlist-head">
-    <div className="watchlist-title"><span className="extras-kicker">SAVED MARKETS</span><strong>Quick access</strong><small>{items.length?'Tap a pair to open its live analysis.':'Save pairs here for one-tap access.'}</small></div>
-    <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={12}/>:<Plus size={12}/>} {saved?'Saved':`Save ${symbol||'pair'}`}</button>
+    <div className="watchlist-title"><span className="extras-kicker">SAVED PERPETUALS</span><strong>Quick access</strong><small>{items.length?'Tap a contract to open its live analysis.':'Save contracts here for one-tap access.'}</small></div>
+    <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={12}/>:<Plus size={12}/>} {saved?'Saved':`Save ${symbol||'contract'}`}</button>
    </div>
-   {symbol&&<div className="watchlist-current-row"><span className="watch-current-label">CURRENT</span><b>{symbol}</b><em>{market==='forex'?'FOREX':market==='commodities'?'COMMODITIES':market==='indices'?'INDICES':'CRYPTO'}</em></div>}
+   {symbol&&<div className="watchlist-current-row"><span className="watch-current-label">CURRENT</span><b>{symbol}</b><em>PERPETUAL</em></div>}
    <div className="watchlist-items">
-    {items.length?items.map(item=><button type="button" key={item.market+':'+item.symbol} className={item.symbol===symbol&&item.market===market?'watch-chip active':'watch-chip'} onClick={()=>onSelect?.(item.symbol,item.market)} title={`Open ${item.symbol}`}>
+    {items.length?items.map(item=><button type="button" key={item.symbol} className={item.symbol===symbol?'watch-chip active':'watch-chip'} onClick={()=>onSelect?.(item.symbol)} title={`Open ${item.symbol}`}>
       <span className="watch-chip-main"><span className="watch-dot"/><strong>{item.symbol}</strong></span>
-      <span className="watch-chip-market">{item.market==='forex'?'FX':item.market==='commodities'?'CMDTY':item.market==='indices'?'INDEX':'PERP'}</span>
-      {item.symbol===symbol&&item.market===market&&<span className="watch-active-mark">ACTIVE</span>}
-    </button>):<div className="watch-empty"><Bookmark size={13}/><span><b>No saved pairs</b><small>Add the current market above.</small></span></div>}
+      <span className="watch-chip-market">PERP</span>
+      {item.symbol===symbol&&<span className="watch-active-mark">ACTIVE</span>}
+    </button>):<div className="watch-empty"><Bookmark size={13}/><span><b>No saved perpetuals</b><small>Add the current contract above.</small></span></div>}
    </div>
   </div>
  </section>
