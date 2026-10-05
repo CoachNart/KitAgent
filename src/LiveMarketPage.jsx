@@ -30,7 +30,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
  const filteredPairs=useMemo(()=>{const q=instrumentQuery.trim().toUpperCase();return q?instruments.filter(x=>`${x.symbol} ${x.name||''}`.toUpperCase().includes(q)):instruments},[instruments,instrumentQuery]);
  const customCryptoSymbol=useMemo(()=>{const raw=instrumentQuery.trim().toUpperCase().replace(/\s+/g,'');if(!raw)return '';const base=raw.replace(/\/USDT$/,'').replace(/USDT$/,'');if(!/^[A-Z0-9]+$/.test(base))return '';const candidate=`${base}/USDT`;return instruments.some(x=>x.symbol===candidate)?'':candidate},[instrumentQuery,instruments]);
 
- const analyze=async()=>{if(!pair)return;setLoading(true);setError('');try{const endpoint='/api/market';const token=await authToken();if(!token)throw new Error('Authentication is still initializing. Please retry.');const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session is still initializing. Please retry.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);try{localStorage.setItem('kitagent:last-market-setup',JSON.stringify(body));}catch{}window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));persistSignal(body).then(saved=>{if(saved?.signal)setSavedSignal(saved.signal)});}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
+ const analyze=async()=>{if(!pair)return;setLoading(true);setError('');try{const endpoint='/api/market';const token=await authToken();if(!token)throw new Error('Authentication is still initializing. Please retry.');const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session is still initializing. Please retry.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);try{localStorage.setItem('kitagent:last-market-setup:v3',JSON.stringify(body));}catch{}window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));persistSignal(body).then(saved=>{if(saved?.signal)setSavedSignal(saved.signal)});}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
 
  return (
     <div className="live-market page-wrap">
@@ -129,7 +129,7 @@ function AnalysisResult({result,savedSignal}){
       <div className="setup-v2-head">
         <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · EXECUTION {s.entryTimeframe||result.timeframe}</span><h3>{result.symbol.includes('/')?result.symbol:result.symbol.replace(/USDT$/,'/USDT')}</h3></div>
         <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
-        <div className="setup-v2-confidence"><b>{s.confidence}%</b><span>CONFIDENCE</span></div>
+        <div className="setup-v2-confidence"><b>{hasTrade?s.confidence||0:0}%</b><span>CONFIDENCE</span></div>
       </div>
       {wait ? <div className="strategy-status-card"><span>NO TRADE</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
         <div className="strategy-trade-status"><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'WAITING AT PLANNED LEVEL':'EXECUTION AVAILABLE NOW'}</b></div>
@@ -138,7 +138,7 @@ function AnalysisResult({result,savedSignal}){
           <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
           <div className="v2-level tp"><span>TP</span><b>{price(s.takeProfit1)}</b></div>
         </div>
-        <div className="strategy-trade-footer"><span>RR {s.riskReward}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
+        <div className="strategy-trade-footer"><span>RR {hasTrade?s.riskReward:'—'}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
       </>}
     </div>
   </div>
