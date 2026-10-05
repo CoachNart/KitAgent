@@ -120,9 +120,10 @@ export async function dailySetups(){
     if(!existing||setup.rankScore>existing.rankScore)bestBySymbol.set(setup.symbol,setup);
   }
   let setups=[...bestBySymbol.values()].sort((a,b)=>b.rankScore-a.rankScore);
-  // A symbol gets one primary setup for the daily board. This prevents five
-  // variants of the same coin from consuming the day's slots.
-  setups=setups.slice(0,10);
+  // The Daily Setups board has a hard five-setup publication cap.
+  // A symbol gets one primary setup, then only the top five qualified symbols
+  // are published. Never expose 6–10 setups and never manufacture weak ones.
+  setups=setups.slice(0,MIN_PUBLISHED);
   return {
     dayKey:dayKey(),
     generatedAt:new Date().toISOString(),
