@@ -11,10 +11,16 @@ export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferr
  // to manufacture a risk distance.
  if(!Number.isFinite(inv)||!Number.isFinite(target))return null;
  if(directionLong ? !(inv < entry && target > entry) : !(inv > entry && target < entry))return null;
- const stop=inv;
+ const a=atr(c,14)||Math.max(Math.abs(entry)*0.001,1e-9);
+ // The structural level is the invalidation reference, not the exact stop price.
+ // Place the stop beyond that swing/zone by a volatility buffer so normal wick
+ // noise does not invalidate the thesis. Never tighten the stop to make RR pass.
+ const buffer=Math.max(a*0.25,Math.abs(entry)*0.0006);
+ const stop=directionLong?inv-buffer:inv+buffer;
  const risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=reward/risk;
- if(!(risk>0&&reward>0&&rr>=2))return null;
- return {entry,stop,target,risk,reward,rr,invalidation:inv,targetLevel:target};
+ const minimumRisk=Math.max(a*0.5,Math.abs(entry)*0.0015);
+ if(!(risk>=minimumRisk&&reward>0&&rr>=2))return null;
+ return {entry,stop,target,risk,reward,rr,invalidation:inv,targetLevel:target,stopBuffer:buffer};
 }
 
 export function executionConfirmation(c,direction){
