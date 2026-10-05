@@ -121,9 +121,11 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
 }
 function strategyWaitCopy(strategy){return ({TOP_DOWN:'Waiting for higher-timeframe structure and a confirmed execution condition.',PULLBACK:'Waiting for a fresh pullback into a qualified FVG or order block.',BREAKOUT:'Waiting for a decisive break, a retest of the broken level, and confirmed continuation.',SMC:'Waiting for a liquidity sweep, displacement and structure break at a valid point of interest.',MSNR:'Waiting for price to tap a fresh MSNR level and confirm the reaction on the lower timeframe.',PRICE_ACTION:'Waiting for a clean structural level with a confirmed rejection or engulfing candle.',LIQUIDITY_REVERSAL:'Waiting for a liquidity sweep, reclaim and displacement before reversal entry.',CRT:'Waiting for a completed candle range to be swept and reclaimed before targeting the opposite side.'}[strategy]||'No valid entry condition is present yet.');}
 function AnalysisResult({result,savedSignal}){
-  const s=result.setup,long=s.directionBias==='LONG',short=s.directionBias==='SHORT',wait=!s.tradeReady,Icon=long?TrendingUp:short?TrendingDown:Clock;
+  const s=result.setup||{};
+  const hasTrade=Boolean(s.tradeReady&&['LONG','SHORT'].includes(String(s.bias||'').toUpperCase())&&['MARKET','LIMIT'].includes(String(s.orderType||'').toUpperCase())&&[s.entry,s.stopLoss,s.takeProfit1].every(v=>Number.isFinite(Number(v))));
+  const long=hasTrade&&s.bias==='LONG',short=hasTrade&&s.bias==='SHORT',wait=!hasTrade,Icon=long?TrendingUp:short?TrendingDown:Clock;
   const stopDistanceLabel=s.stopDistanceUnits!=null ? String(s.stopDistanceUnits)+' '+(s.priceUnitLabel==='pips'?'pips':'pts') : '—';
-  const direction=long?'LONG':short?'SHORT':'NO TRADE',tone=wait?'wait':(long?'long':short?'short':'wait');
+  const direction=long?'LONG':short?'SHORT':'NO TRADE',tone=wait?'wait':(long?'long':'short');
   return <div className="live-result">
     <div className={'setup-card-v2 '+tone}>
       <div className="setup-v2-head">
@@ -131,7 +133,7 @@ function AnalysisResult({result,savedSignal}){
         <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
         <div className="setup-v2-confidence"><b>{hasTrade?s.confidence||0:0}%</b><span>CONFIDENCE</span></div>
       </div>
-      {wait ? <div className="strategy-status-card"><span>NO TRADE</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
+      {!hasTrade ? <div className="strategy-status-card"><span>NO TRADE</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
         <div className="strategy-trade-status"><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'WAITING AT PLANNED LEVEL':'EXECUTION AVAILABLE NOW'}</b></div>
         <div className="setup-v2-levels">
           <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'} <em className="order-type-inline">{s.orderType||'MARKET'}</em></span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
