@@ -818,3 +818,5 @@
 @media(max-width:390px){
   .live-market-head h2{font-size:21px}.setup-v2-confidence b{font-size:15px}.setup-v2-symbol h3{font-size:16px}.strategy-trade-status{align-items:flex-start!important;flex-direction:column!important}.strategy-trade-status b{text-align:left!important}
 }
+
+/* Production deployment marker: market-analysis UI/runtime fixes are complete. */
