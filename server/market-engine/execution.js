@@ -7,12 +7,16 @@ export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferr
  const inv=Number.isFinite(preferredInvalidation)?preferredInvalidation:nearestInvalidation(c,direction,entry)?.level;
  const target=Number.isFinite(preferredTarget)?preferredTarget:nearestTarget(c,direction,entry)?.level;
  if(!Number.isFinite(inv)||!Number.isFinite(target))return null;
- // Directional trade geometry is a hard invariant: LONG stops must be below entry and targets above; SHORT is the inverse.
+ // Hard directional invariant: LONG stop below entry/target above; SHORT is inverse.
  if(directionLong ? !(inv < entry && target > entry) : !(inv > entry && target < entry))return null;
- const buffer=Math.max(a*.22,entry*.0004),stop=directionLong?inv-buffer:inv+buffer,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=reward/risk;
+ // The stop is thesis invalidation plus volatility buffer, never a near-entry tick stop.
+ const buffer=Math.max(a*.28,entry*.0006);
+ const stop=directionLong?inv-buffer:inv+buffer;
+ const risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=reward/risk;
  if(directionLong ? !(stop < entry && target > entry) : !(stop > entry && target < entry))return null;
- if(!(risk>=a*.45&&risk<=a*3.8&&reward>=a*1.1&&rr>=2))return null;
- return {entry,stop,target,risk,reward,rr,invalidation:inv,targetLevel:target};
+ // Reject fragile setups whose invalidation is too close to execution or whose target is too small.
+ if(!(risk>=a*.75&&risk<=a*3.8&&reward>=a*1.5&&rr>=2))return null;
+ return {entry,stop,target,risk,reward,rr,atr:a,riskAtr:risk/a,rewardAtr:reward/a,invalidation:inv,targetLevel:target};
 }
 export function executionConfirmation(c,direction){
  const x=c.at(-1),p=c.at(-2),a=atr(c);if(!x||!p||!a)return null;
