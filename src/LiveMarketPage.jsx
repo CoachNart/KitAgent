@@ -143,7 +143,7 @@ function AnalysisResult({result,savedSignal}){
         <div className="strategy-trade-footer"><span>RR {hasTrade?s.riskReward:'—'}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
       </>}
     </div>
-    <RiskCalculator setup={s}/>
+    <TradeBreakdown setup={s} result={result}/><RiskCalculator setup={s}/>
   </div>
 }
 
@@ -233,6 +233,18 @@ function RiskCalculator({setup}){
 
     <p className="risk-disclaimer">Estimated liquidation uses a simplified isolated-margin formula. Actual liquidation varies by exchange maintenance margin, fees and position mode.</p>
   </section>;
+}
+function TradeBreakdown({setup,result}){
+ const b=setup?.tradeBreakdown,ctx=b?.marketContext||{},trade=b?.trade||{},dir=String(b?.direction||setup?.bias||'').toUpperCase();
+ const fmt=v=>v==null||Number.isNaN(Number(v))?'—':price(v),event=ctx.latestBOS||ctx.latestCHoCH||ctx.latestMSS,eventName=ctx.latestBOS?'BOS':ctx.latestCHoCH?'CHoCH':ctx.latestMSS?'MSS':'STRUCTURE';
+ const eventDirection=event?.direction==='BULLISH'?'bullish':event?.direction==='BEARISH'?'bearish':'directional';
+ const whyDirection=dir==='LONG'?'The execution structure is bullish and the higher-timeframe chain supports the same directional thesis.':dir==='SHORT'?'The execution structure is bearish and the higher-timeframe chain supports the same directional thesis.':'No directional thesis is established.';
+ const whyTrigger=event?eventName+' at '+fmt(event.level)+' confirms a '+eventDirection+' structural event on '+(setup.entryTimeframe||'the execution timeframe')+'.':'The setup passed its strategy-specific conditions without exposing a fabricated structural event.';
+ const whyEntry=setup.orderType==='LIMIT'?'Live price is '+fmt(setup.marketEntry)+' and planned entry is '+fmt(trade.entry)+'. The engine waits for the structural retracement/retest instead of chasing price.':'The entry is the live market price because the qualified execution condition is actionable now.';
+ const whyStop=setup.invalidationSource?'Invalidation comes from '+String(setup.invalidationSource).toLowerCase()+'. The stop is placed beyond that reference with the volatility buffer.':'The stop is derived from validated structural invalidation.';
+ const whyTarget='Target '+fmt(trade.target)+' is the selected directional structural/liquidity target; it is published only after the risk/reward check passes.';
+ const rows=[['MARKET READ',whyDirection],['KEY STRUCTURE',whyTrigger],['ENTRY LOGIC',whyEntry],['INVALIDATION',whyStop],['TARGET LOGIC',whyTarget]];
+ return <section className="trade-breakdown" aria-label="Trade breakdown"><div className="trade-breakdown-head"><div><span className="tiny-label">LIVE THESIS</span><h3>Why this setup is valid</h3></div><span>{setup.entryTimeframe||'—'} · {setup.strategyName||result.strategy}</span></div><div className="trade-breakdown-grid">{rows.map(([label,text],i)=><div key={label} className={i===1?'key-event':''}><b>{label}</b><p>{text}</p></div>)}</div><div className="trade-breakdown-levels"><div><span>KEY LEVEL</span><b>{fmt(event?.level)}</b><small>{event?eventName+' · '+eventDirection:'No confirmed break exposed'}</small></div><div><span>INVALIDATION</span><b>{fmt(setup.structuralInvalidation)}</b><small>{setup.invalidationSource||'Structural invalidation'}</small></div><div><span>TARGET</span><b>{fmt(trade.target)}</b><small>{setup.liquidityType||'Structural target'}</small></div><div><span>ORDER</span><b>{setup.orderType||'—'}</b><small>{setup.entryReason||'Strategy execution condition'}</small></div></div><small className="trade-breakdown-source">Verified from the same live Bybit candles and quote used to generate this setup · {(setup.analysisTimeframes||[]).join(' → ')||'multi-timeframe analysis'}.</small></section>
 }
 function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
