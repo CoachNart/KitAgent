@@ -1,13 +1,16 @@
-import {displacement,rejection,structure} from './structure.js';
+import {displacement,structure} from './structure.js';
 import {latestSweep} from './liquidity.js';
-import {fvg,orderBlocks,nearestTarget,nearestInvalidation} from './levels.js';
+import {fvg,orderBlocks,nearestTarget} from './levels.js';
 import {executionConfirmation,tradeGeometry} from './execution.js';
+
 function thesisBase(m){return m.direction==='BULLISH'||m.direction==='BEARISH';}
+
 function directionFor(ctx,exec,strategy){
  const h=ctx.at(-1)?.structure?.direction||'NEUTRAL',e=exec.structure.direction;
  if(strategy==='LIQUIDITY_REVERSAL'||strategy==='SMC'||strategy==='CRT')return e!=='NEUTRAL'?e:h;
  return h!=='NEUTRAL'?h:e;
 }
+
 export const STRATEGIES={
  TOP_DOWN:{name:'Top-Down'},
  PULLBACK:{name:'CRT Pullback'},
@@ -18,6 +21,7 @@ export const STRATEGIES={
  LIQUIDITY_REVERSAL:{name:'Liquidity Reversal'},
  CRT:{name:'CRT'}
 };
+
 export function evaluateStrategy({strategy,layers,execution,price}){
  const s=execution.structure, direction=directionFor(layers,execution,strategy), failures=[], evidence=[];
  if(!thesisBase({direction}))return {direction:'NEUTRAL',failures:['Market structure is unclear.'],evidence};
@@ -69,17 +73,27 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   evidence.push('Reference range → one-sided sweep → reclaim → opposite side.');
  }
  if(failures.length)return {direction,failures:[...new Set(failures)],evidence};
+
  const level=execution.msnrLevel?.level??execution.priceActionLevel?.level??execution.pullback?.level??execution.crt?.entryZone??execution.retest?.level??execution.breakout?.level??null;
  const currentEntry=execution.entry??price;
  const candidateLimit=Number.isFinite(level)&&((direction==='BULLISH'&&level<price)||(direction==='BEARISH'&&level>price)) ? level : null;
  const orderType=candidateLimit!=null&&Math.abs(candidateLimit-price)>Math.max(price*.0008,(execution.structure.atr||price*.001)*.15)?'LIMIT':'MARKET';
  const entry=orderType==='LIMIT'?candidateLimit:currentEntry;
  const target=execution.crt?.target||execution.breakout?.target||nearestTarget(execution.candles,direction,entry)?.level;
- const inv=execution.crt?.invalidation||execution.breakout?.invalidation||nearestInvalidation(execution.candles,direction,entry)?.level;
- const trade=tradeGeometry(execution.candles,direction,entry,target,inv);
- if(!trade)return {direction,failures:['No logical invalidation/target pair provides at least 2R.'],evidence};
+
+ // Stop hierarchy:
+ // 1) strategy-defined invalidation when it is an actual market event/zone;
+ // 2) otherwise the execution structure's protected swing.
+ // There is deliberately no "nearest swing" fallback.
+ const structuralInvalidation=direction==='BULLISH'
+   ? (execution.crt?.invalidation??execution.retest?.invalidation??execution.structure.protectedLow?.price??null)
+   : (execution.crt?.invalidation??execution.retest?.invalidation??execution.structure.protectedHigh?.price??null);
+
+ const trade=tradeGeometry(execution.candles,direction,entry,target,structuralInvalidation);
+ if(!trade)return {direction,failures:['No logical structural invalidation/target pair provides at least 2R.'],evidence};
  trade.orderType=orderType;
  trade.marketEntry=price;
  trade.entryReason=orderType==='LIMIT'?'Planned structural retracement/retest entry':'Confirmed execution at the current market price';
+ trade.invalidationSource=execution.crt?.invalidation!=null?'CRT sweep invalidation':execution.retest?.invalidation!=null?'Breakout retest invalidation':direction==='BULLISH'?'Protected bullish swing low':'Protected bearish swing high';
  return {direction,trade,failures:[],evidence};
 }
