@@ -15,6 +15,17 @@ async function fetchTf(market,symbol,tf){if(market!=='perpetual')throw new Error
 async function fetchPrice(market,symbol){if(market!=='perpetual')throw new Error('KitSetups supports Crypto Perpetuals only');const clean=symbol.replace(/[^A-Z0-9]/gi,'');const u=new URL('https://api.bybit.com/v5/market/tickers');u.searchParams.set('category','linear');u.searchParams.set('symbol',clean);const r=await fetch(u);if(!r.ok)throw new Error('Bybit live price unavailable');const b=await r.json(),x=b?.result?.list?.[0];if(b?.retCode!==0||!x)throw new Error(b?.retMsg||'Bybit live price unavailable');const bid=+x.bid1Price,ask=+x.ask1Price,last=+x.lastPrice,mid=bid>0&&ask>0?(bid+ask)/2:last;if(!Number.isFinite(mid)||mid<=0)throw new Error('Bybit live price unavailable');return{bid,ask,mid,time:new Date(Number(b.time||Date.now())).toISOString(),marketState:'open',stale:false,spread:Math.max(0,ask-bid)}}
 function plan(tf){if(tf==='AUTO')return EXECUTION_TIMEFRAMES; if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO');return CHAIN[tf]}
 function tfFor(strategy){return strategy==='MSNR'?['4H','2H','1H','30m','15m']:null}
+function rejection(candles, level, tolerance, direction){
+  const last=candles?.at(-1);
+  if(!last||!Number.isFinite(level)||!Number.isFinite(tolerance))return false;
+  const touched=last.low<=level+tolerance&&last.high>=level-tolerance;
+  if(!touched)return false;
+  return direction==='BULLISH'
+    ? last.close>last.open&&last.close>=level
+    : direction==='BEARISH'
+      ? last.close<last.open&&last.close<=level
+      : false;
+}
 function enrichExecution(candles,layers,price){
  const c=candles,s=structure(c),l=liquidityMap(c),lv=keyLevels(c),x=c.at(-1),dir=s.direction,a=s.atr||Math.max(price*.001,1e-9);
  let pullback=null,breakout=null,retest=null,msnrLevel=null,priceActionLevel=null,crt=null;
