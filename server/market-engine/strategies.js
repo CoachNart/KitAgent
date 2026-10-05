@@ -74,7 +74,9 @@ export function evaluateStrategy({strategy,layers,execution,price}){
  }
  if(failures.length)return {direction,failures:[...new Set(failures)],evidence};
 
- const level=execution.msnrLevel?.level??execution.priceActionLevel?.level??execution.pullback?.level??execution.crt?.entryZone??execution.retest?.level??execution.breakout?.level??null;
+ const smcPoi=[...fvg(execution.candles,direction),...orderBlocks(execution.candles,direction)].filter(z=>Number.isFinite(z.low)&&Number.isFinite(z.high));
+ const smcEntry=smcPoi.length?direction==='BULLISH'?Math.max(...smcPoi.map(z=>z.high)):Math.min(...smcPoi.map(z=>z.low)):null;
+ const level=execution.msnrLevel?.level??execution.priceActionLevel?.level??execution.pullback?.level??execution.crt?.entryZone??execution.retest?.level??execution.breakout?.level??smcEntry??null;
  const currentEntry=execution.entry??price;
  const candidateLimit=Number.isFinite(level)&&((direction==='BULLISH'&&level<price)||(direction==='BEARISH'&&level>price)) ? level : null;
  const orderType=candidateLimit!=null&&Math.abs(candidateLimit-price)>Math.max(price*.0008,(execution.structure.atr||price*.001)*.15)?'LIMIT':'MARKET';
