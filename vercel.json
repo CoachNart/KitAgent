@@ -24,6 +24,8 @@
   "crons": [{"path": "/api/affiliate-payout", "schedule": "5 0 1 * *"}],
   "rewrites": [
     {"source": "/api/market", "destination": "/api/market"},
+    {"source": "/api/register-device", "destination": "/api/account?action=register-device"},
+    {"source": "/api/verify-payment", "destination": "/api/account?action=verify-payment"},
     {"source": "/(.*)", "destination": "/index.html"}
   ]
 }
