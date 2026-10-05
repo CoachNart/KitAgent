@@ -881,3 +881,7 @@
   .risk-results{grid-template-columns:1fr}
   .risk-result-primary{grid-column:auto}
 }
+
+.risk-direction-select{height:29px;padding:0 8px;border:1px solid rgba(114,221,255,.13);border-radius:7px;background:#091116;color:#8bddeb;font-size:7px;font-weight:850;letter-spacing:.1em;outline:none}
+.risk-direction-select option{background:#091116;color:#dcebed}
+.risk-autofill-label{margin-left:5px;font-style:normal;color:#70c9d6;font-size:5.5px;letter-spacing:.1em}
