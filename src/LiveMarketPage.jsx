@@ -85,7 +85,6 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
               <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=><option key={x} value={x}>{x}</option>)}</select>
               <ChevronDown/>
             </div>
-            <small className="timeframe-note">Final entry confirmation. Higher timeframes are analyzed automatically.</small>
           </label>
 
           <StrategySelector value={strategy} onChange={setStrategy}/>
