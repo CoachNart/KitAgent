@@ -32,6 +32,7 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   if(!disp)failures.push('No meaningful directional impulse/displacement.');
   if(s.direction!==direction)failures.push('Execution structure does not support continuation.');
   if(!execution.pullback)failures.push('No qualified structural pullback location.');
+  if(!conf?.confirmed)failures.push('Pullback has not produced execution displacement and continuation confirmation.');
   evidence.push('Impulse → structural retracement → continuation.');
  }else if(strategy==='BREAKOUT'){
   if(!execution.breakout)failures.push('No established level with a decisive breakout.');
@@ -44,7 +45,7 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   if(!(s.mss||s.choch||s.bos))failures.push('No structural shift after the liquidity event.');
   const poi=[...fvg(execution.candles,direction),...orderBlocks(execution.candles,direction)];
   if(!poi.length)failures.push('No objectively identifiable fresh POI.');
-  else evidence.push('Fresh POI: '+(poi[0].low??poi[0].mid));
+  else { const related=sweep?poi.some(z=>z.index>=sweep.index):true; if(!related)failures.push('POI is not causally related to the recent liquidity event.'); else evidence.push('Fresh POI: '+(poi[0].low??poi[0].mid)); }
   evidence.push('Liquidity → MSS/CHoCH/BOS → displacement → POI.');
  }else if(strategy==='MSNR'){
   if(!execution.msnrLevel)failures.push('No fresh structurally significant support/resistance level.');
