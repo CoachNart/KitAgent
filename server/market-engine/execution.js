@@ -6,7 +6,7 @@ export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferr
  const inv=Number.isFinite(preferredInvalidation)?preferredInvalidation:nearestInvalidation(c,direction,entry)?.level;
  const target=Number.isFinite(preferredTarget)?preferredTarget:nearestTarget(c,direction,entry)?.level;
  if(!Number.isFinite(inv)||!Number.isFinite(target))return null;
- // Stop is the actual market invalidation level; no ATR/percentage distance is added.
+ // Production: stop is the actual market invalidation level; no ATR/percentage distance is added.
  if(directionLong ? !(inv < entry && target > entry) : !(inv > entry && target < entry))return null;
  const stop=inv;
  const risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=reward/risk;
