@@ -60,6 +60,8 @@ async function candlesFor(symbol){
 
 function candidateScore(result){
   if(!result?.trade||!result?.grade)return -1;
+  if(result.direction==='BULLISH' && !(result.trade.stop<result.trade.entry && result.trade.target>result.trade.entry))return -1;
+  if(result.direction==='BEARISH' && !(result.trade.stop>result.trade.entry && result.trade.target<result.trade.entry))return -1;
   if(!['A+','A','B'].includes(result.grade.grade))return -1;
   const rr=Number(result.trade.rr)||0;
   return result.grade.score*100+Math.min(rr,6)*8;
