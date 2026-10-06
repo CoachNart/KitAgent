@@ -34,7 +34,7 @@ assert('Gap level retains a body-derived zone',()=>{const x=levels.find(x=>x.bas
 // Exact V CC: Red -> Green -> Green; signal wick touches level but full body stays above.
 const vCc=[
   bar(0,120,121,119,120),
-  bar(1,100,101,99,100),
+  bar(1,101,102,99,100),
   bar(2,102,103,99,102),
   bar(3,102.5,104,99.5,103.5)
 ];
@@ -45,7 +45,7 @@ assert('V CC signal body remains above level',()=>{const e=vEvents.find(x=>x.typ
 
 // Exact A CC: Green -> Red -> Red; signal wick touches level but full body stays below.
 const aCc=[
-  bar(0,100,101,99,100),
+  bar(0,101,103,99,102),
   bar(1,98,100,97,98),
   bar(2,97.5,100.5,96,97)
 ];
@@ -98,7 +98,7 @@ assert('MSNR strategy returns a result object',!!msnrResult&&Array.isArray(msnrR
 assert('MSNR does not use the generic execution resolver',()=>{
   const direct=evaluateMSNR({candles:vCc,layers,price:103.5});
   const routed=evaluateStrategy({strategy:'MSNR',layers,execution:{candles:vCc},price:103.5});
-  return routed.direction===direct.direction && routed.grade?.score===direct.grade?.score && routed.confirmations?.length===direct.confirmations?.length;
+  return routed.direction===direct.direction && routed.failures.join('|')===direct.failures.join('|') && routed.confirmations?.length===direct.confirmations?.length;
 });
 
 // Non-MSR strategies are intentionally disabled until their own contracts are rebuilt.
