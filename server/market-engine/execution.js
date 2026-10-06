@@ -18,7 +18,9 @@ export function tradeGeometry(c,direction,entryHint,preferredTarget=null,preferr
  const buffer=Math.max(a*0.25,Math.abs(entry)*0.0006);
  const stop=directionLong?inv-buffer:inv+buffer;
  const risk=Math.abs(entry-stop);
- const minimumRisk=Math.max(a*0.25,Math.abs(entry)*0.001);
+ const minimumRisk=Math.max(a*0.35,Math.abs(entry)*0.0015);
+ // A structural stop must have meaningful room from the entry. If the protected
+ // swing is effectively at the entry, the setup is invalid rather than tightened.
  if(!(risk>=minimumRisk))return null;
  let reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
  // If the nearest structural target is too close to justify the risk,
