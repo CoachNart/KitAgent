@@ -1,4 +1,4 @@
-import {buildMSNRLevels,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
+import {buildMSNRLevels,latestMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure} from '../server/market-engine/structure.js';
 
@@ -89,7 +89,7 @@ const wickLevel=buildMSNRLevels(wickOnly).find(x=>x.originIndex===0&&x.level===1
 assert('Wick through does not create RBS',wickLevel?.type==='A');
 assert('Wick touch makes a fresh level unfresh',wickLevel?.fresh===false);
 assert('Wick rejection consumes freshness',wickLevel?.fresh===false);
-assert('MSNR requires current confirmation rather than old confirmation',()=>buildMSNRLevels([...vCc,bar(4,103,104,102,103.2)]).flatMap(x=>x.confirmations).every(x=>x.signalIndex!==3));
+assert('MSNR requires current confirmation rather than old confirmation',()=>latestMSNRConfirmations([...vCc,bar(4,103,104,102,103.2)]).every(x=>x.signalIndex!==3));
 
 // A full-body confirmation must be the current closed candle, never an open candle.
 const layers=['4H','2H','1H','30m','15m'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
