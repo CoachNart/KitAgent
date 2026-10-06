@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import './kit-nav.css';
+import ChartTerminal from './ChartTerminal.jsx';
 import DailySetupsPage from './DailySetupsPage.jsx';
 import SignalHistory from './SignalHistory.jsx';
 import HomePage from './HomePage.jsx';
@@ -11,14 +12,12 @@ import SetupEducationPage from './SetupEducationPage.jsx';
 import NotificationCenter from './NotificationCenter.jsx';
 import './ui-polish.css';
 import './header-polish.css';
-import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, Wallet, X, Zap } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, X, Zap } from 'lucide-react';
 
 const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',Layers3],['setups','Setups',ScanSearch],['history','History',History],['profile','Profile',CircleUserRound]];
 const pairs=['BTC/USDT','ETH/USDT','SOL/USDT','XRP/USDT','BNB/USDT','DOGE/USDT','ADA/USDT','AVAX/USDT','LINK/USDT','MATIC/USDT','DOT/USDT','TRX/USDT','UNI/USDT','AAVE/USDT','ARB/USDT','OP/USDT','SUI/USDT','PEPE/USDT'];
 const timeframes=['AUTO','15m','30m','1H','2H','4H'];
-const appSearchItems=[...pairs.map(value=>({type:'market',label:value,meta:'Market analysis',action:'market'})),...nav.map(([id,label])=>({type:'workspace',label,meta:'Workspace',action:id})),{type:'network',label:'Robinhood Chain',meta:'Network · Mainnet 4663',action:'home'}];
-const actions=[{id:'swap-eth',kind:'swap',title:'Swap ETH → USDC',summary:'Prepare a token swap through a supported DEX.',amount:'0.10 ETH',risk:'Market execution · slippage required'},{id:'stake-eth',kind:'stake',title:'Stake ETH',summary:'Prepare an ETH staking deposit.',amount:'0.25 ETH',risk:'Protocol interaction · terms apply'},{id:'bridge-eth',kind:'bridge',title:'Bridge ETH',summary:'Prepare a cross-chain transfer to a supported network.',amount:'0.20 ETH',risk:'Bridge transaction · review destination and fees'}];
-const nfts=[['Vault Pass #1842','KitSetups Genesis','0.84 ETH','List for sale'],['Signal #091','Signal Objects','0.31 ETH','Sell NFT'],['Agent Key #402','Agent Keys','0.12 ETH','Transfer NFT']];
+const appSearchItems=[...pairs.map(value=>({type:'market',label:value,meta:'Market analysis',action:'market'})),...nav.map(([id,label])=>({type:'workspace',label,meta:'Workspace',action:id}))];
 
 export default function App({user}){
   const [profileOverride,setProfileOverride]=useState(null),[headerTicker,setHeaderTicker]=useState({pair:'BTC/USDT',price:'—',change:0,move:'up'}),[page,setPage]=useState(()=>{try{return sessionStorage.getItem('kitsetups:current-page')||'home'}catch{return 'home'}}),[lessonId,setLessonId]=useState(null),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(()=>{try{return !sessionStorage.getItem('kitsetups:entrance-seen')}catch{return true}}),[pair,setPair]=useState('BTC/USDT'),[tf,setTf]=useState('AUTO'),[analyzed,setAnalyzed]=useState(false),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);

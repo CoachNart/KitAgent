@@ -1,3 +1,5 @@
+import './chart-terminal.css';
+import './chart-terminal-overrides.css';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {BarChart3,ChevronDown,Command,ExternalLink,Maximize2,RefreshCw,ShieldCheck,Target,TrendingDown,TrendingUp,X} from 'lucide-react';
 import {TIMEFRAMES} from './LiveMarketPage.jsx';
