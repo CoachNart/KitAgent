@@ -113,6 +113,9 @@ export function evaluateStrategy({strategy,layers,execution,price}){
     return direction==='BULLISH' ? mid>=(execution.structure.protectedLow?.price??-Infinity) : mid<=(execution.structure.protectedHigh?.price??Infinity);
   });
   const smcEntry=smcPoi.length?Number(smcPoi[0].mid??((smcPoi[0].low+smcPoi[0].high)/2)):null;
+  // Entry selection is strategy-specific. A valid thesis is NOT automatically a
+  // valid market entry. Limit entries must still be ahead of price; market entries
+  // must be tied to a fresh trigger and price must not have already extended away.
   const levelByStrategy={
     TOP_DOWN:null,
     PULLBACK:execution.pullback?.level,
@@ -123,22 +126,56 @@ export function evaluateStrategy({strategy,layers,execution,price}){
     LIQUIDITY_REVERSAL:null,
     CRT:execution.crt?.entryZone
   };
-  const level=levelByStrategy[strategy];
-  const currentEntry=Number.isFinite(execution.entry)?execution.entry:price;
-  const candidateLimit=Number.isFinite(level)&&(
-    (direction==='BULLISH'&&level<price)||(direction==='BEARISH'&&level>price)
-  )&&(
-    direction==='BULLISH' ? level>(execution.structure.protectedLow?.price??-Infinity) : level<(execution.structure.protectedHigh?.price??Infinity)
-  )&&Math.abs(level-price)>Math.max(price*.0008,atrValue*.15)?level:null;
-  // Market entries are reserved for an actual current execution trigger. A
-  // strategy passing its thesis is not itself permission to buy/sell at any
-  // arbitrary current price.
-  const marketConfirmed=!!conf?.confirmed||((s.mss||s.choch||s.bos)?.age<=1);
-  const locationReacted=!!execution.msnrReaction||!!execution.priceActionReaction||!!execution.retest||!!execution.crt?.reclaim;
-  const orderType=candidateLimit!=null?'LIMIT':'MARKET';
-  if(orderType==='MARKET'&&!marketConfirmed&&!locationReacted)
-    return {direction,failures:['No current execution trigger at the proposed market entry.'],evidence};
-  const entry=orderType==='LIMIT'?candidateLimit:currentEntry;
+  let level=levelByStrategy[strategy];
+  if(strategy==='PULLBACK'&&execution.pullback){
+    const [z1,z2]=execution.pullback.retracementZone||[];
+    const lo=Math.min(z1??level,z2??level),hi=Math.max(z1??level,z2??level);
+    // Choose the nearest retracement level that is still ahead of price:
+    // long waits below price, short waits above price. Never place a limit on
+    // the wrong side of the live market.
+    const leg=execution.pullback.impulse||0;
+    const fibs=direction==='BULLISH'
+      ? [lo,lo+leg*.5,hi].filter(v=>v<price)
+      : [hi,hi-leg*.5,lo].filter(v=>v>price);
+    if(fibs.length)level=fibs[0];
+    else level=null;
+  }
+  const protectedLevel=direction==='BULLISH'
+    ? execution.structure.protectedLow?.price
+    : execution.structure.protectedHigh?.price;
+  const distance=Math.abs((Number.isFinite(level)?level:price)-price);
+  const limitDistance=Math.max(atrValue*1.25,price*.003);
+  const levelAhead=Number.isFinite(level)&&(
+    direction==='BULLISH' ? level<price : level>price
+  );
+  const levelValid=Number.isFinite(level)&&(
+    direction==='BULLISH' ? level>=(protectedLevel??-Infinity) : level<=(protectedLevel??Infinity)
+  );
+  const candidateLimit=levelAhead&&levelValid&&distance>=Math.max(price*.0004,atrValue*.08)&&distance<=limitDistance?level:null;
+
+  const latestEvent=s.mss||s.choch||s.bos;
+  const latestEventFresh=!!latestEvent&&Number(latestEvent.age)<=1;
+  const triggerClose=execution.candles?.at(-1)?.close;
+  const triggerDistance=Number.isFinite(triggerClose)?Math.abs(price-triggerClose):Infinity;
+  const marketTrigger=!!conf?.confirmed||latestEventFresh||(
+    strategy==='BREAKOUT'&&!!execution.retest&&Number(execution.retest.age??99)<=1
+  )||(
+    ['MSNR','PRICE_ACTION'].includes(strategy)&&(execution.msnrReaction||execution.priceActionReaction)
+  )||(
+    strategy==='CRT'&&!!execution.crt?.reclaim&&Number(execution.crt.sweep?.age??99)<=1
+  );
+  const marketNotExtended=triggerDistance<=Math.max(atrValue*.6,price*.0015);
+  const breakoutFresh= strategy==='BREAKOUT'
+    ? !!execution.retest&&Number(execution.retest.age??99)<=1
+    : true;
+  const crtFresh= strategy==='CRT'
+    ? !!execution.crt?.sweep&&Number(execution.crt.sweep.age??99)<=2
+    : true;
+  const marketAllowed=marketTrigger&&marketNotExtended&&breakoutFresh&&crtFresh;
+  const orderType=candidateLimit!=null?'LIMIT':marketAllowed?'MARKET':'NO_SETUP';
+  if(orderType==='NO_SETUP')
+    return {direction,failures:['No actionable entry: the trigger is stale or price has moved away from the planned execution level.'],evidence};
+  const entry=orderType==='LIMIT'?candidateLimit:price;
   const target=execution.crt?.target
     ||execution.breakout?.target
     ||nearestTarget(execution.candles,direction,entry)?.level;
