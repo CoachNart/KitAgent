@@ -20,7 +20,7 @@ export default function SignalHistory({activity=[]}){
   useEffect(()=>{let unsubscribe=()=>{};if(auth?.onAuthStateChanged)unsubscribe=auth.onAuthStateChanged(user=>load(user));else load();const onSignal=()=>load();window.addEventListener('kitagent-signal-recorded',onSignal);return()=>{unsubscribe?.();window.removeEventListener('kitagent-signal-recorded',onSignal)}},[]);
   useEffect(()=>{const timer=setInterval(()=>load(),30000);return()=>clearInterval(timer)},[]);
   const tradeSignals=useMemo(()=>signals.filter(isRecorded),[signals]);
-  const stats=useMemo(()=>{const verified=tradeSignals.filter(s=>['target_hit','stop_hit'].includes(s.status)&&(s.result==='win'||s.result==='loss')&&s.outcomeEvidence?.engineVersion==='v3'&&Number.isFinite(Number(s.exitPrice))&&s.closedAt);const wins=verified.filter(s=>s.result==='win').length,losses=verified.filter(s=>s.result==='loss').length,pnl=verified.map(s=>Number(s.pnlPercent)).filter(Number.isFinite),closed=tradeSignals.filter(isClosed).length;return {total:tradeSignals.length,active:tradeSignals.length-closed,closed,wins,losses,winRate:verified.length?Math.round(wins/verified.length*100):null,lossRate:verified.length?Math.round(losses/verified.length*100):null,avgPnl:pnl.length?pnl.reduce((a,b)=>a+b,0)/pnl.length:null,verified:verified.length}},[tradeSignals]);
+  const stats=useMemo(()=>{const verified=tradeSignals.filter(s=>['target_hit','stop_hit'].includes(s.status)&&(s.result==='win'||s.result==='loss')&&Number.isFinite(Number(s.exitPrice))&&s.closedAt&&['bybit_1m_ohlc','binance_1m_ohlc'].includes(s.outcomeEvidence?.source)&&s.outcomeEvidence?.event);const wins=verified.filter(s=>s.result==='win').length,losses=verified.filter(s=>s.result==='loss').length,pnl=verified.map(s=>Number(s.pnlPercent)).filter(Number.isFinite),closed=tradeSignals.filter(isClosed).length;return {total:tradeSignals.length,active:tradeSignals.length-closed,closed,wins,losses,winRate:verified.length?Math.round(wins/verified.length*100):null,lossRate:verified.length?Math.round(losses/verified.length*100):null,avgPnl:pnl.length?pnl.reduce((a,b)=>a+b,0)/pnl.length:null,verified:verified.length}},[tradeSignals]);
   const visible=useMemo(()=>{const q=query.trim().toLowerCase();return tradeSignals.filter(s=>{if(filter==='open')return !isClosed(s);if(filter==='closed')return isClosed(s);if(filter==='wins')return s.status==='target_hit';if(filter==='losses')return s.status==='stop_hit';return true}).filter(s=>!q||[s.symbol,s.signalId,s.market,s.direction,s.orderType].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>new Date(b.generatedAt||b.createdAt||0)-new Date(a.generatedAt||a.createdAt||0))},[tradeSignals,filter,query]);
   const filters=[['all','All',stats.total],['open','Live',stats.active],['closed','Closed',stats.closed],['wins','TP Hit',stats.wins],['losses','Stop Hit',stats.losses]];
 
@@ -143,7 +143,7 @@ function SignalCard({signal:s,onDelete}) {
 
       <div className="signal-card-footer">
         <span className="footer-source">
-          {s.outcomeEvidence?.source === 'binance_1m_ohlc' ? 'MARKET VERIFIED' : 'LIVE MARKET ANALYSIS'}
+          {['bybit_1m_ohlc','binance_1m_ohlc'].includes(s.outcomeEvidence?.source) ? 'MARKET VERIFIED' : 'LIVE MARKET ANALYSIS'}
         </span>
         <div className="signal-footer-actions">
           <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kitagent-open-market-history', { detail: s }))}>
