@@ -50,10 +50,6 @@
   ],
   "crons": [
     {
-      "path": "/api/daily-setups",
-      "schedule": "5 0 * * *"
-    },
-    {
       "path": "/api/affiliate-payout",
       "schedule": "5 0 1 * *"
     }

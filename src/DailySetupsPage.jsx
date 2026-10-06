@@ -3,7 +3,6 @@ import {auth} from './firebase.js';
 import {ArrowUpRight,ChevronRight,Clock3,RefreshCw,ScanSearch,ShieldCheck,Target,TrendingDown,TrendingUp} from 'lucide-react';
 import './daily-setups.css';
 
-const DAY_KEY='kitagent:daily-setups:v3';
 
 async function token(){
   const user=auth?.currentUser;
@@ -21,100 +20,28 @@ function dayLabel(key){
 }
 
 export default function DailySetupsPage(){
-  const [data,setData]=useState(null);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState('');
-  const [selected,setSelected]=useState(null);
-  const [rescanning,setRescanning]=useState(false),[notice,setNotice]=useState(''),[manualRemaining,setManualRemaining]=useState(0);
-
-  const recordScannerSetups=async(next,tokenValue)=>{
-    if(!Array.isArray(next?.setups)||!tokenValue)return;
-    for(const setup of next.setups){
-      try{
-        await fetch('/api/signals',{method:'POST',headers:{Authorization:'Bearer '+tokenValue,'Content-Type':'application/json'},body:JSON.stringify({market:'perpetual',symbol:setup.providerSymbol||String(setup.symbol||'').replace('/USDT','USDT'),timeframe:setup.timeframe,source:'daily-scanner',scannerSetupId:`${setup.generatedFor||next.dayKey}-${setup.id}`,setup:{tradeReady:true,bias:setup.bias,orderType:setup.orderType,confidence:setup.confidence,entry:setup.entry,limitEntry:setup.orderType==='LIMIT'?setup.entry:null,stopLoss:setup.stopLoss,takeProfit1:setup.takeProfit,takeProfit2:null,riskReward:`1:${setup.rr}`,price:setup.marketEntry}})});
-      }catch{}
-    }
-  };
-
-  const load=async(force=false,manual=false)=>{
-    setError('');
-    setLoading(true);
-    try{
-      const t=await token();
-      if(!t)throw new Error('Authentication is still initializing. Please retry.');
-      const r=await fetch('/api/daily-setups'+(manual?'?mode=manual':''),{headers:{Authorization:'Bearer '+t},cache:'no-store'});
-      const body=await r.json().catch(()=>({}));
-      if(!r.ok||!body.ok){if(body.code==='MANUAL_SCAN_CONSUMED'){setManualRemaining(Number(body.remainingMs)||0);setNotice('Your daily scanner scan has already been used. You can scan again after 24 hours.');return;}throw new Error(body.error||'Daily setup scan failed.');}
-      setData(body);setManualRemaining(Number(body.manualRemainingMs)||Number(body.remainingMs&&manual?body.remainingMs:0)||0);setNotice(manual?'Daily scanner scan used.':'');
-      await recordScannerSetups(body,t);
-      try{localStorage.setItem(DAY_KEY,JSON.stringify(body));}catch{}
-    }catch(e){setError(e.message||'Unable to load today’s setups.');}
-    finally{setLoading(false);setRescanning(false)}
-  };
-
-  useEffect(()=>{load(false)},[]);
-  useEffect(()=>{if(!manualRemaining)return;const timer=setInterval(()=>setManualRemaining(v=>Math.max(0,v-1000)),1000);return()=>clearInterval(timer)},[manualRemaining]);
-  const manualLocked=manualRemaining>0;
-  const manualCountdown=()=>{const h=Math.floor(manualRemaining/3600000),m=Math.floor((manualRemaining%3600000)/60000);return h+'h '+String(m).padStart(2,'0')+'m'};
-
-  const setups=useMemo(()=>Array.isArray(data?.setups)?data.setups:[],[data]);
-  const best=setups[0];
-  const remaining=Math.max(0,5-setups.length);
-
-  if(loading)return <div className="daily-setups page-wrap"><DailyHeader/><div className="daily-loading"><div className="scan-ring"/><b>Scanning the market</b><span>Structure, liquidity, location, confirmation, invalidation and target quality are being checked across the highest-activity perpetuals.</span></div></div>;
-
+  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState(null),[scanning,setScanning]=useState(false),[notice,setNotice]=useState(''),[remainingMs,setRemainingMs]=useState(0);
+  const loadSaved=async()=>{setError('');setLoading(true);try{const t=await token();if(!t)throw new Error('Authentication is still initializing. Please retry.');const r=await fetch('/api/daily-setups',{headers:{Authorization:'Bearer '+t},cache:'no-store'}),body=await r.json().catch(()=>({}));if(!r.ok||!body.ok)throw new Error(body.error||'Unable to load saved scanner setups.');setData(body);setRemainingMs(Number(body.remainingMs)||0);setNotice('')}catch(e){setError(e.message||'Unable to load saved scanner setups.')}finally{setLoading(false)}};
+  const scan=async()=>{if(scanning||Number(data?.remainingSlots||0)<=0)return;setError('');setNotice('');setScanning(true);try{const t=await token();if(!t)throw new Error('Authentication is still initializing. Please retry.');const r=await fetch('/api/daily-setups',{method:'POST',headers:{Authorization:'Bearer '+t}}),body=await r.json().catch(()=>({}));if(!r.ok||!body.ok)throw new Error(body.error||'Scanner run failed.');setData(body);setRemainingMs(Number(body.remainingMs)||0);setNotice(body.notice||'')}catch(e){setError(e.message||'Scanner run failed.')}finally{setScanning(false)}};
+  useEffect(()=>{loadSaved()},[]);
+  useEffect(()=>{const timer=setInterval(()=>setRemainingMs(v=>{const next=Math.max(0,v-1000);if(v>0&&next===0)loadSaved();return next}),1000);return()=>clearInterval(timer)},[]);
+  const setups=useMemo(()=>Array.isArray(data?.setups)?data.setups:[],[data]),best=setups[0],generated=Number(data?.generatedCount)||setups.length,max=Number(data?.maxGenerated)||10,remainingSlots=Math.max(0,max-generated),limitReached=remainingSlots===0;
+  if(loading)return <div className="daily-setups page-wrap"><DailyHeader/><div className="daily-loading"><div className="scan-ring"/><b>Loading saved setups</b><span>Your scanner board is being restored. Opening this page does not start a new market scan.</span></div></div>;
   return <div className="daily-setups page-wrap">
-    <header className="daily-hero">
-      <div>
-        <span className="tiny-label">DAILY SETUP DESK</span>
-        <h1>Today’s setups</h1>
-        <p>KitSetups scans the market automatically and publishes only trades that pass the engine’s structural and risk filters.</p>
-      </div>
-      <div className="daily-date"><Clock3 size={13}/><span>{dayLabel(data?.dayKey||'')}</span></div>
-    </header>
-
-    {error&&<div className="daily-error">{error}<button onClick={()=>load(true)}>Retry</button></div>}
-    {notice&&<div className="daily-scan-notice" role="status"><span>{notice}</span>{manualLocked&&<small>Next scan in {manualCountdown()}</small>}</div>}
-
-    <section className="daily-status">
-      <div className="daily-status-main">
-        <span className="status-dot"/>
-        <div><b>{setups.length} qualified setups</b><small>{data?.scanUniverse||0} high-activity perpetuals scanned · {data?.source||'Bybit'}</small></div>
-      </div>
-      <div className="daily-status-target"><span>DAILY TARGET</span><b>{setups.length}/5</b></div>
-      <button className="daily-rescan" disabled={rescanning||manualLocked} onClick={()=>{setRescanning(true);load(true,true)}}><RefreshCw size={13} className={rescanning?'spin':''}/>{manualLocked?'Scan used for today':'Use daily scan'}</button>
-    </section>
-
-    {setups.length===0&&<div className="daily-empty"><ScanSearch size={27}/><b>No qualified setup has cleared the filters yet.</b><span>The scanner will not invent a trade to fill the daily target. A setup appears only when structure, confirmation, invalidation, target and risk/reward are coherent.</span></div>}
-
-    {remaining>0&&setups.length>0&&<div className="daily-quality-note"><ShieldCheck size={14}/><span>The engine found {setups.length} publishable setup{setups.length===1?'':'s'} so far. {remaining} more are required to reach the five-setup daily target; no synthetic signals are added.</span></div>}
-
-    {best&&<section className="daily-featured">
-      <div className="featured-kicker"><span>TOP SETUP</span><b>{best.grade}</b></div>
-      <div className="featured-grid">
-        <div className="featured-symbol"><small>{best.strategy}</small><h2>{best.symbol}</h2><div className={'setup-direction '+best.bias.toLowerCase()}>{best.bias==='LONG'?<TrendingUp size={16}/>:<TrendingDown size={16}/>} {best.bias} SETUP <em>{best.timeframe}</em></div></div>
-        <div className="featured-metrics"><div className="featured-metric"><span>Entry <em className="order-type-inline">{best.orderType||'MARKET'}</em></span><b>{money(best.entry)}</b>{best.orderType==='LIMIT'&&<small>Current {money(best.marketEntry)}</small>}</div><Metric label="Stop" value={money(best.stopLoss)} danger/><Metric label="Target" value={money(best.takeProfit)} good/><Metric label="R:R" value={'1:'+best.rr}/></div>
-      </div>
-      <div className="featured-foot"><span>{best.regime?.name||best.regime||'Market structure aligned'}</span><button onClick={()=>setSelected(best)}>View setup <ArrowUpRight size={14}/></button></div>
-    </section>}
-
-    <div className="daily-list-head"><div><span className="tiny-label">THE BOARD</span><h2>Qualified trades</h2></div><small>Ranked by engine quality</small></div>
-    <section className="setup-board">
-      {setups.map((s,i)=><button className="setup-row" key={s.id||i} onClick={()=>setSelected(s)}>
-        <span className="rank">{String(i+1).padStart(2,'0')}</span>
-        <span className="setup-main"><b>{s.symbol}</b><small>{s.strategy} · {s.timeframe}</small></span><span className="row-entry"><b>{money(s.entry)} <em className="order-type-inline">{s.orderType||'MARKET'}</em></b></span>
-        <span className={'row-direction '+s.bias.toLowerCase()}>{s.bias} SETUP</span>
-        <span className="row-rr"><b>1:{s.rr}</b><small>R:R</small></span>
-        <span className="row-grade">{s.grade}</span><ChevronRight size={15}/>
-      </button>)}
-    </section>
-
-    <footer className="daily-footer"><span>Daily board resets automatically with the Africa/Lagos calendar day.</span><span>Analysis source: Bybit Linear USDT Perpetuals</span></footer>
-
+    <header className="daily-hero"><div><span className="tiny-label">SCANNER</span><h1>Quality setup scanner</h1><p>Run the scanner manually when you want fresh opportunities. Each run ranks the same Market Analysis engine and adds up to the top 3 quality setups to your board.</p></div><div className="daily-date"><Clock3 size={13}/><span>{remainingMs>0?'Window active':'Ready to scan'}</span></div></header>
+    {error&&<div className="daily-error">{error}<button onClick={loadSaved}>Retry</button></div>}
+    {notice&&<div className="daily-scan-notice" role="status"><span>{notice}</span></div>}
+    <section className="daily-status"><div className="daily-status-main"><span className="status-dot"/><div><b>{generated}/{max} quality setups generated</b><small>{data?.scanUniverse||0} high-activity perpetuals scanned · {data?.source||'Bybit'}</small></div></div><div className="daily-status-target"><span>24H WINDOW</span><b>{generated}/{max}</b></div><button className="daily-rescan" disabled={scanning||limitReached} onClick={scan}><RefreshCw size={13} className={scanning?'spin':''}/>{scanning?'Scanning…':limitReached?'10 generated — reset pending':'Scan top 3'}</button></section>
+    {remainingMs>0&&<div className="daily-quality-note"><ShieldCheck size={14}/><span>{limitReached?'The full 10-setup board is locked until the 24-hour window resets.':'Generated setups remain on this board for the full 24-hour window.'} Reset in <b>{formatCountdown(remainingMs)}</b>. When the window resets, the old setups are automatically cleared and the counter returns to zero.</span></div>}
+    {setups.length===0&&<div className="daily-empty"><ScanSearch size={27}/><b>No scanner setups generated yet.</b><span>This page is read-only until you press <b>Scan top 3</b>. The scanner only accepts A+/A quality engine results with valid structure, confirmation, invalidation, target and at least 2R. It will never fill the board with weaker trades.</span></div>}
+    {best&&<section className="daily-featured"><div className="featured-kicker"><span>TOP SETUP</span><b>{best.grade}</b></div><div className="featured-grid"><div className="featured-symbol"><small>{best.strategy}</small><h2>{best.symbol}</h2><div className={'setup-direction '+best.bias.toLowerCase()}>{best.bias==='LONG'?<TrendingUp size={16}/>:<TrendingDown size={16}/>} {best.bias} SETUP <em>{best.timeframe}</em></div></div><div className="featured-metrics"><div className="featured-metric"><span>Entry <em className="order-type-inline">{best.orderType||'MARKET'}</em></span><b>{money(best.entry)}</b>{best.orderType==='LIMIT'&&<small>Current {money(best.marketEntry)}</small>}</div><Metric label="Stop" value={money(best.stopLoss)} danger/><Metric label="Target" value={money(best.takeProfit)} good/><Metric label="R:R" value={'1:'+best.rr}/></div></div><div className="featured-foot"><span>{best.regime?.name||best.regime||'Market structure aligned'}</span><button onClick={()=>setSelected(best)}>View setup <ArrowUpRight size={14}/></button></div></section>}
+    <div className="daily-list-head"><div><span className="tiny-label">THE BOARD</span><h2>Generated setups</h2></div><small>{generated}/{max} persisted</small></div>
+    <section className="setup-board">{setups.map((s,i)=><button className="setup-row" key={s.id||i} onClick={()=>setSelected(s)}><span className="rank">{String(i+1).padStart(2,'0')}</span><span className="setup-main"><b>{s.symbol}</b><small>{s.strategy} · {s.timeframe}</small></span><span className="row-entry"><b>{money(s.entry)} <em className="order-type-inline">{s.orderType||'MARKET'}</em></b></span><span className={'row-direction '+s.bias.toLowerCase()}>{s.bias} SETUP</span><span className="row-rr"><b>1:{s.rr}</b><small>R:R</small></span><span className="row-grade">{s.grade}</span><ChevronRight size={15}/></button>)}</section>
+    <footer className="daily-footer"><span>No automatic scanner publication. The board changes only when you press Scan top 3.</span><span>Analysis source: Bybit Linear USDT Perpetuals</span></footer>
     {selected&&<SetupModal setup={selected} close={()=>setSelected(null)}/>}
   </div>
 }
-
+function formatCountdown(ms){const total=Math.max(0,Math.floor(Number(ms||0)/1000)),h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=total%60;return h+'h '+String(m).padStart(2,'0')+'m '+String(s).padStart(2,'0')+'s'}
 function DailyHeader(){return <header className="daily-hero"><div><span className="tiny-label">DAILY SETUP DESK</span><h1>Today’s setups</h1><p>Scanning live perpetual markets for qualified opportunities.</p></div></header>}
 function Metric({label,value,danger,good}){return <div className="featured-metric"><span>{label}</span><b className={danger?'danger':good?'good':''}>{value}</b></div>}
 function SetupModal({setup,close}){
