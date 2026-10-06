@@ -80,11 +80,11 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   }else if(strategy==='MSNR'){
     if(!execution.msnrLevel)failures.push('No fresh structurally significant support/resistance level.');
     else if(execution.msnrLevel.consumed)failures.push('Decision level is too heavily consumed.');
-    if(!execution.msnrReaction&&!execution.msnrLevel)failures.push('No qualifying interaction at the decision level.');
+    if(!execution.msnrReaction)failures.push('No qualifying reaction at the decision level.');
     evidence.push('Structural level → reaction → structure-aligned continuation.');
   }else if(strategy==='PRICE_ACTION'){
     if(!execution.priceActionLevel)failures.push('No meaningful structural level.');
-    if(!execution.priceActionReaction&&!execution.priceActionLevel)failures.push('No qualifying price-action interaction.');
+    if(!execution.priceActionReaction)failures.push('No qualifying price-action interaction.');
     evidence.push('Meaningful structure → arrival → rejection/engulfing in trend direction.');
   }else if(strategy==='LIQUIDITY_REVERSAL'){
     if(!sweep)failures.push('No meaningful liquidity sweep.');
