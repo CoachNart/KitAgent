@@ -81,8 +81,8 @@ function enrichExecution(candles,layers,price){
      : currentAccepted&&currentContinuation&&currentDisplacement;
    if(!confirmedNow)continue;
    const retestExtreme=dir==='BULLISH'
-     ?Math.min(...c.slice(retestIndex, c.length).map(z=>z.low))
-     :Math.max(...c.slice(retestIndex, c.length).map(z=>z.high));
+     ?retestCandle.low
+     :retestCandle.high;
    candidates.push({level:level.price,breakIndex:brokeAt,retestIndex,after,age,retestExtreme});
   }
   const latestRetest=candidates[0];
