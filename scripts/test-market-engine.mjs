@@ -35,7 +35,7 @@ assert('Gap level retains a body-derived zone',()=>{const x=levels.find(x=>x.bas
 const vCc=[
   bar(0,120,121,119,120),
   bar(1,101,102,99,100),
-  bar(2,102,103,99,102),
+  bar(2,101,103,99,102),
   bar(3,102.5,104,99.5,103.5)
 ];
 const vLevels=buildMSNRLevels(vCc);
