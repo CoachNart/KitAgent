@@ -170,7 +170,7 @@ export default async function handler(req,res){
   if(req.method!=='GET')return json(res,405,{ok:false,error:'Method not allowed'});
   try{
     const mode=new URL(req.url||'', 'http://localhost').searchParams.get('mode')||'auto',cronAuth=String(req.headers.authorization||''),isCron=Boolean(process.env.CRON_SECRET)&&cronAuth==='Bearer '+process.env.CRON_SECRET;
-    if(isCron){const result=await runAutoScan();return json(res,result.ok?200:409,{...result,manualRemainingMs});}
+    if(isCron){const result=await runAutoScan();return json(res,result.ok?200:409,result);}
     const auth=await authenticate(req);await requireActiveAccess(auth.uid);
     const usageRef=getAdmin().firestore().collection('users').doc(auth.uid).collection('scanner').doc('usage'),usageSnap=await usageRef.get(),lastManual=usageSnap.exists?toMs(usageSnap.data()?.lastManualScanAt):0,manualRemainingMs=lastManual?Math.max(0,SCAN_WINDOW_MS-(Date.now()-lastManual)):0;
     if(mode==='manual'){const result=await runManualScan(auth.uid);return json(res,result.ok?200:429,result);}
