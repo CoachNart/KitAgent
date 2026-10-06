@@ -52,7 +52,12 @@ function confirmation(c,touch,direction){
   return null;
 }
 
-function nextTarget(c,direction,entry,after){
+function nextTarget(c,direction,entry,move,after){
+  // The impulse extreme is the first legitimate continuation objective even though
+  // it formed before the confirmation candle. Only use later structure if that level
+  // is already behind price.
+  if(direction==='BULLISH'&&move.end.price>entry)return move.end;
+  if(direction==='BEARISH'&&move.end.price<entry)return move.end;
   const s=confirmedSwings(c,2);
   const candidates=direction==='BULLISH'?s.highs.filter(x=>x.index>after&&x.price>entry):s.lows.filter(x=>x.index>after&&x.price<entry);
   return candidates[0]||null;
@@ -93,7 +98,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   const stop=direction==='BULLISH'?Math.min(touch.candle.low,move.start.price)-a*.25:Math.max(touch.candle.high,move.start.price)+a*.25;
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){failures.push('Invalid structural risk.');return {direction,failures,evidence:[]};}
-  const target=nextTarget(candles,direction,entry,confirm.index);
+  const target=nextTarget(candles,direction,entry,move,confirm.index);
   if(!target){failures.push('No opposing structural continuation target.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm}]};}
   const reward=Math.abs(target.price-entry),rr=reward/risk;
   if(!(rr>=2)){failures.push('Structural target does not provide at least 2R.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};}
