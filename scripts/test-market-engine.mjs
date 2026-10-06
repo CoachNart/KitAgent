@@ -46,7 +46,7 @@ assert('V CC signal body remains above level',()=>{const e=vEvents.find(x=>x.typ
 
 // Exact A CC: Green -> Red -> Red; signal wick touches level but full body stays below.
 const aCc=[
-  bar(0,101,103,99,102),
+  bar(0,99,103,98,100),
   bar(1,98,100,97,98),
   bar(2,97.5,100.5,96,97)
 ];
