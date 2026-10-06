@@ -15,6 +15,7 @@ const bar=(i,o,h,l,c)=>({
 });
 
 // A/V/GAP level construction is body/close based, never swing/wick based.
+// CI verification marker: MSNR 27-test suite.
 const levelCandles=[
   bar(0,110,121,109,120),
   bar(1,119,120,108,118), // A 120 (green -> red)
