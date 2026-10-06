@@ -3,9 +3,8 @@ import {confirmedSwings} from './structure.js';
 
 export const TOP_DOWN_MODEL='HTF_ALIGNMENT_EXECUTION_BOS_RETEST';
 
-function lastSwing(c,direction){
-  const s=confirmedSwings(c,2);
-  const xs=direction==='BULLISH'?s.highs:s.lows;
+function nextTarget(c,direction,afterIndex,entry){
+  const s=confirmedSwings(c,2),xs=(direction==='BULLISH'?s.highs:s.lows).filter(x=>x.index>afterIndex&& (direction==='BULLISH'?x.price>entry:x.price<entry));
   return xs.at(-1)||null;
 }
 function priorSwing(c,direction,idx){
@@ -58,7 +57,7 @@ export function evaluateTopDown({candles,layers,price}){
   const rt=retest(c,bos,direction);
   if(!rt)return{direction,failures:['Execution BOS has not produced a valid retest-and-hold.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos}]};
   if(!Number.isFinite(price)||price<=0)return{direction,failures:['Live price is unavailable.'],evidence:[]};
-  const targetSwing=lastSwing(c,direction);
+  const targetSwing=nextTarget(c,direction,bos.index,rt.price);
   if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=rt.price:targetSwing.price>=rt.price)){
     return{direction,failures:['No meaningful continuation target is available beyond the retest.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
   }
@@ -67,5 +66,5 @@ export function evaluateTopDown({candles,layers,price}){
   const score=86+(layers.length>=3?4:0)+(rt.index>=c.length-4?4:0);
   return{direction,grade:{grade:score>=92?'A+':'A',score,hardFailures:[]},failures:[],trade:tradeResult,
     evidence:[{type:'HTF_ALIGNMENT',direction,timeframes:(layers||[]).map(x=>x.tf)},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt},{type:'TARGET',price:targetSwing.price}],
-    topDown:{model:TOP_DOWN_MODEL,htfDirection,executionBOS:bos,retest:rt,target:targetSwing.price}};
+    topDown:{model:TOP_DOWN_MODEL,htfDirection:direction,executionBOS:bos,retest:rt,target:targetSwing.price}};
 }
