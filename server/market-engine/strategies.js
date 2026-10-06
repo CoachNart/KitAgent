@@ -8,7 +8,7 @@ function macroDirection(layers){return layers.find(x=>x.structure.direction!=='N
 
 function reversalEvidence(execution,macro,execDir){
   if(!thesisBase(execDir)||!thesisBase(macro)||execDir===macro)return false;
-  const shift=execution.structure.choch||execution.structure.mss;
+  const shift=execution.structure.structureBreak||execution.structure.choch||execution.structure.mss;
   const sweep=execution.liquidity?.recentSweep?.find(x=>
     x.age<=8&&(execDir==='BULLISH'?x.side==='SELL_SIDE':x.side==='BUY_SIDE')
   );
