@@ -3,6 +3,8 @@ import {confirmedSwings} from './structure.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
+export {fvgAt, meaningfulDisplacement, findSweeps};
+
 function fvgAt(c,i){
   if(i<2||!c[i-2]||!c[i-1]||!c[i])return null;
   const a=c[i-2],d=c[i];
