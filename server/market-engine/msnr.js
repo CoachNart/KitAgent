@@ -110,6 +110,7 @@ function trackLevel(seed,candles){
               signalIndex:i+1,
               breakoutIndex:i,
               level:seed.level,
+              freshBefore:true,
               signalCandle:signal,
               middleCandle:middle,
               reason:'Fresh role-reversal level was body-broken, then the very next closed candle rejected the new side.'
@@ -139,6 +140,7 @@ function trackLevel(seed,candles){
             direction,
             signalIndex:i,
             level:seed.level,
+            freshBefore:true,
             signalCandle:candle,
             middleCandle:previous,
             reason:'Fresh MSNR level was touched and rejected by a full-body confirmation candle.'
@@ -203,7 +205,7 @@ function objective(levels,direction,entry){
 
 function gradeMSNR({level,event,rr,context,target}){
   let score=0;
-  score+=level.fresh?25:0;
+  score+=event?.freshBefore?25:0;
   score+=event?30:0;
   score+=levelStrength(event?.type?.replace('_CC','')||level.type)*20;
   score+=context.aligned>0?12:context.dominant==='NEUTRAL'?7:0;
@@ -224,8 +226,14 @@ export function evaluateMSNR({candles,layers,price}){
     const level=event.levelState;
     const direction=event.direction;
     const context=currentContext(layers,direction);
-    const entry=event.signalCandle.close;
-    const a=atr(candles,14)||Math.max(entry*.001,1e-9);
+    const signalClose=event.signalCandle.close;
+    const a=atr(candles,14)||Math.max(signalClose*.001,1e-9);
+    const liveDrift=Math.abs(price-signalClose);
+    if(liveDrift>Math.max(a*.25,Math.abs(price)*.001)){
+      candidates.push({event,level,direction,context,entry:price,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'MSNR confirmation is stale: live price moved too far from the confirmation close.'});
+      continue;
+    }
+    const entry=price;
     const invalidation=direction==='BULLISH'
       ?Math.min(level.level,event.signalCandle.low)
       :Math.max(level.level,event.signalCandle.high);
@@ -261,7 +269,7 @@ export function evaluateMSNR({candles,layers,price}){
         entry,stop,target:target.level,risk,reward,rr,
         orderType:'MARKET',
         marketEntry:price,
-        entryReason:`${event.type} at fresh ${level.type} ${level.side} level; confirmation candle closed with its full body on the ${direction==='BULLISH'?'support':'resistance'} side.`,
+        entryReason:`${event.type} at fresh ${level.type} ${level.side} level; the confirmation candle closed with its full body on the ${direction==='BULLISH'?'support':'resistance'} side and live price remains executable.`,
         invalidation:invalidation,
         invalidationSource:direction==='BULLISH'
           ?'MSNR level / confirmation-candle low'
@@ -287,7 +295,7 @@ export function evaluateMSNR({candles,layers,price}){
   const level=best.level;
   const evidence=[
     `MSNR ${best.event.type}: ${level.type} ${level.side} at ${level.level}`,
-    `Freshness: ${level.fresh?'FRESH':'UNFRESH'} before confirmation`,
+    `Freshness: ${best.event.freshBefore?'FRESH':'UNFRESH'} before confirmation`,
     `Confirmation: closed candle ${best.event.signalIndex} touched the level and kept its full body on the trade side`,
     `Entry: confirmation close ${best.entry}`,
     `Invalidation: ${best.trade.invalidation} from ${best.trade.invalidationSource}`,
@@ -308,7 +316,7 @@ export function evaluateMSNR({candles,layers,price}){
         price:level.level,
         type:level.type,
         side:level.side,
-        fresh:level.fresh,
+        fresh:!!best.event.freshBefore,
         originIndex:level.originIndex,
         originTime:level.originTime,
         flipCount:level.flipCount,
