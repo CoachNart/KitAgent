@@ -24,7 +24,7 @@ for(const strategy of ['MSNR','PRICE_ACTION']){
 }
 
 const entryStructure={protectedLow:{price:95},protectedHigh:{price:105},mss:{age:0,direction:'BULLISH'},choch:null,bos:null};
-const entryCandles=[bar(118,99.5,100.8,99.2,100.6),bar(119,100.6,101,100.1,100.8)];
+const entryCandles=[bar(118,99.5,100.8,99.2,100.6),bar(119,100.1,100.4,99.9,100.2)];
 const entryBase={candles:entryCandles,pullback:null,retest:null,msnrLevel:null,msnrReaction:false,priceActionLevel:null,priceActionReaction:false,crt:null};
 const longPullback={...entryBase,pullback:{level:101,impulse:10,retracementZone:[99,103]}};
 assert('pullback long limit is placed below live price',()=>{const r=resolveEntry({strategy:'PULLBACK',execution:longPullback,direction:'BULLISH',price:102,atrValue:1,structure:entryStructure,confirmation:null});return r.orderType==='LIMIT'&&r.entry<102});
