@@ -20,7 +20,12 @@ export function liquidityMap(c,asOf=c.length-1){
    const k=c[i];
    const swept=p.side==='BUY_SIDE'?k.high>p.price:k.low<p.price;
    const reclaimed=p.side==='BUY_SIDE'?k.close<p.price:k.close>p.price;
-   if(swept&&reclaimed)recentSweep.push({side:p.side,level:p.price,extreme:p.side==='BUY_SIDE'?k.high:k.low,index:i,age:asOf-i});
+   if(swept&&reclaimed){
+    const extreme=p.side==='BUY_SIDE'?k.high:k.low;
+    const later=c.slice(i+1,asOf+1);
+    const stillValid=later.every(z=>p.side==='BUY_SIDE'?z.high<=extreme:z.low>=extreme);
+    if(stillValid)recentSweep.push({side:p.side,level:p.price,extreme,index:i,age:asOf-i});
+   }
   }
  }
  recentSweep.sort((a,b)=>a.age-b.age);
