@@ -1,8 +1,9 @@
 import {evaluateMSNR} from './msnr.js';
 import {evaluateSMC} from './smc.js';
+import {evaluateTopDown} from './topDown.js';
 
 export const STRATEGIES={
-  TOP_DOWN:{name:'Top-Down',status:'NOT_BUILT'},
+  TOP_DOWN:{name:'Top-Down',status:'READY'},
   PULLBACK:{name:'CRT Pullback',status:'NOT_BUILT'},
   BREAKOUT:{name:'Breakout & Retest',status:'NOT_BUILT'},
   SMC:{name:'SMC',status:'READY'},
@@ -13,6 +14,7 @@ export const STRATEGIES={
 };
 
 export function evaluateStrategy({strategy,layers,execution,price}){
+  if(strategy==='TOP_DOWN')return evaluateTopDown({candles:execution.candles,layers,price});
   if(strategy==='SMC')return evaluateSMC({candles:execution.candles,layers,price});
   if(strategy!=='MSNR'){
     return {
