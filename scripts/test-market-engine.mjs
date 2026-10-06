@@ -1,4 +1,4 @@
-import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
+import {evaluateStrategy,resolveEntry,STRATEGIES} from '../server/market-engine/strategies.js';
 import {grade,noTrade} from '../server/market-engine/grading.js';
 import {tradeGeometry} from '../server/market-engine/execution.js';
 import {structure,confirmedSwings} from '../server/market-engine/structure.js';
@@ -23,6 +23,23 @@ for(const strategy of ['MSNR','PRICE_ACTION']){
  assert('quality gate '+strategy+' requires actual level reaction',()=>result.failures.includes(strategy==='MSNR'?'No qualifying reaction at the decision level.':'No qualifying price-action interaction.'));
 }
 
+const entryStructure={protectedLow:{price:95},protectedHigh:{price:105},mss:{age:0,direction:'BULLISH'},choch:null,bos:null};
+const entryCandles=[bar(118,99.5,100.8,99.2,100.6),bar(119,100.6,101,100.1,100.8)];
+const entryBase={candles:entryCandles,pullback:null,retest:null,msnrLevel:null,msnrReaction:false,priceActionLevel:null,priceActionReaction:false,crt:null};
+const longPullback={...entryBase,pullback:{level:101,impulse:10,retracementZone:[99,103]}};
+assert('pullback long limit is placed below live price',()=>{const r=resolveEntry({strategy:'PULLBACK',execution:longPullback,direction:'BULLISH',price:102,atrValue:1,structure:entryStructure,confirmation:null});return r.orderType==='LIMIT'&&r.entry<102});
+const wrongSidePullback={...entryBase,pullback:{level:101,impulse:10,retracementZone:[99,103]}};
+assert('pullback never creates a limit above long live price',()=>{const r=resolveEntry({strategy:'PULLBACK',execution:wrongSidePullback,direction:'BULLISH',price:100,atrValue:1,structure:entryStructure,confirmation:null});return r.orderType!=='LIMIT'||r.entry<100});
+const breakoutFresh={...entryBase,retest:{level:99,age:0}};
+assert('fresh breakout retest uses market execution only after trigger',()=>{const r=resolveEntry({strategy:'BREAKOUT',execution:breakoutFresh,direction:'BULLISH',price:100,atrValue:1,structure:entryStructure,confirmation:null});return r.orderType==='MARKET'&&r.entry===100});
+const breakoutStale={...entryBase,retest:{level:99,age:3}};
+assert('stale breakout retest cannot generate an entry',()=>{const r=resolveEntry({strategy:'BREAKOUT',execution:breakoutStale,direction:'BULLISH',price:100,atrValue:1,structure:{...entryStructure,mss:null},confirmation:null});return r.orderType==='NO_SETUP'});
+const msnrReaction={...entryBase,msnrLevel:{level:99},msnrReaction:true};
+assert('MSNR reaction is a market trigger, not a stale limit',()=>{const r=resolveEntry({strategy:'MSNR',execution:msnrReaction,direction:'BULLISH',price:100,atrValue:1,structure:{...entryStructure,mss:null},confirmation:null});return r.orderType==='MARKET'&&r.entry===100});
+const crtFresh={...entryBase,crt:{entryZone:99,reclaim:true,sweep:{age:1}}};
+assert('CRT reclaim uses fresh market execution',()=>{const r=resolveEntry({strategy:'CRT',execution:crtFresh,direction:'BULLISH',price:100,atrValue:1,structure:{...entryStructure,mss:null},confirmation:null});return r.orderType==='MARKET'});
+const extended={...entryBase};
+assert('market entry is rejected after excessive price extension',()=>{const r=resolveEntry({strategy:'TOP_DOWN',execution:extended,direction:'BULLISH',price:110,atrValue:1,structure:{...entryStructure,mss:null},confirmation:{confirmed:true}});return r.orderType==='NO_SETUP'});
 for(const tf of ['15m','30m','1H','2H','4H','AUTO'])assert('execution timeframe '+tf,true);
 for(const name of ['clean bullish continuation','clean bearish continuation','liquidity reversal','fake breakout','genuine breakout','range-bound market','conflicting HTF/LTF structure','weak structure','A+ setup','B setup','C setup','NO-TRADE setup','valid 15M execution','valid 30M execution','valid 1H execution','valid 2H execution','valid 4H execution','Auto execution','invalidated setup','insufficient R:R'])assert('scenario contract '+name,true);
 const failed=tests.filter(x=>!x.ok);console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));if(failed.length)process.exit(1);
