@@ -33,6 +33,9 @@ const wrongSidePullback={...entryBase,pullback:{level:101,impulse:10,retracement
 assert('pullback never creates a limit above long live price',()=>{const r=resolveEntry({strategy:'PULLBACK',execution:wrongSidePullback,direction:'BULLISH',price:100,atrValue:1,structure:entryStructure,confirmation:null});return r.orderType!=='LIMIT'||r.entry<100});
 const breakoutFresh={...entryBase,retest:{level:99,age:0}};
 assert('fresh breakout retest uses market execution only after trigger',()=>{const r=resolveEntry({strategy:'BREAKOUT',execution:breakoutFresh,direction:'BULLISH',price:100,atrValue:1,structure:entryStructure,confirmation:null});return r.orderType==='MARKET'&&r.entry===100});
+const reversalExecution={...entryBase,mss:{age:0,direction:'BULLISH'}};
+assert('liquidity reversal requires current confirmation',()=>{const r=resolveEntry({strategy:'LIQUIDITY_REVERSAL',execution:reversalExecution,direction:'BULLISH',price:100,atrValue:1,structure:{...entryStructure,direction:'BULLISH'},confirmation:{confirmed:true}});return r.orderType==='MARKET'});
+assert('liquidity reversal rejects stale confirmation',()=>{const r=resolveEntry({strategy:'LIQUIDITY_REVERSAL',execution:{...reversalExecution,mss:{age:2,direction:'BULLISH'}},direction:'BULLISH',price:100,atrValue:1,structure:{...entryStructure,direction:'BULLISH'},confirmation:{confirmed:false}});return r.orderType==='NO_SETUP'});
 const breakoutStale={...entryBase,retest:{level:99,age:3}};
 assert('stale breakout retest cannot generate an entry',()=>{const r=resolveEntry({strategy:'BREAKOUT',execution:breakoutStale,direction:'BULLISH',price:100,atrValue:1,structure:{...entryStructure,mss:null},confirmation:null});return r.orderType==='NO_SETUP'});
 const msnrReaction={...entryBase,msnrLevel:{level:99},msnrReaction:true};
