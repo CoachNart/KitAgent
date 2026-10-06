@@ -234,6 +234,14 @@ export function evaluateMSNR({candles,layers,price}){
       continue;
     }
     const entry=price;
+    if(direction==='BULLISH'&&entry<=level.level){
+      candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'Live price is no longer above the confirmed MSNR support level.'});
+      continue;
+    }
+    if(direction==='BEARISH'&&entry>=level.level){
+      candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'Live price is no longer below the confirmed MSNR resistance level.'});
+      continue;
+    }
     const invalidation=direction==='BULLISH'
       ?Math.min(level.level,event.signalCandle.low)
       :Math.max(level.level,event.signalCandle.high);
@@ -297,7 +305,7 @@ export function evaluateMSNR({candles,layers,price}){
     `MSNR ${best.event.type}: ${level.type} ${level.side} at ${level.level}`,
     `Freshness: ${best.event.freshBefore?'FRESH':'UNFRESH'} before confirmation`,
     `Confirmation: closed candle ${best.event.signalIndex} touched the level and kept its full body on the trade side`,
-    `Entry: confirmation close ${best.entry}`,
+    `Entry: live market price ${best.entry} immediately after the closed confirmation candle`,
     `Invalidation: ${best.trade.invalidation} from ${best.trade.invalidationSource}`,
     `Objective: next opposing MSNR level ${best.target.type} at ${best.target.level}`,
     `R:R: 1:${best.rr.toFixed(2)}`
