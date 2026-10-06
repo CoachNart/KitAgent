@@ -56,24 +56,39 @@ function enrichExecution(candles,layers,price){
    if(!Number.isInteger(brokeAt))continue;
    const after=c.slice(brokeAt+1);
    if(!after.length)continue;
-   const touched=after.some(z=>z.low<=level.price+a*.25&&z.high>=level.price-a*.25);
-   const lastAfter=after.at(-1);
-   const accepted=lastAfter&&(dir==='BULLISH'?lastAfter.close>level.price:lastAfter.close<level.price);
-   const rejected=lastAfter&&(dir==='BULLISH'?lastAfter.close>lastAfter.open:lastAfter.close<lastAfter.open);
-   if(touched&&accepted&&rejected)candidates.push({level:level.price,breakIndex:brokeAt,after});
+   let retestIndex=-1,retestCandle=null;
+   for(let j=0;j<after.length;j++){
+    const z=after[j];
+    const touched=z.low<=level.price+a*.25&&z.high>=level.price-a*.25;
+    const held=touched&&(dir==='BULLISH'?z.close>=level.price:z.close<=level.price);
+    const rejected=held&&(dir==='BULLISH'?z.close>z.open:z.close<z.open);
+    if(held&&rejected){retestIndex=brokeAt+1+j;retestCandle=z;break;}
+   }
+   if(retestIndex<0)continue;
+   const age=c.length-1-retestIndex;
+   if(age>8)continue;
+   const continuation=c.slice(retestIndex+1);
+   const current=x;
+   const currentRange=current.high-current.low;
+   const currentBody=Math.abs(current.close-current.open);
+   const currentDisplacement=currentRange>=a*1.05&&currentBody/(currentRange||1)>=.5;
+   const currentContinuation=dir==='BULLISH'
+     ? current.close>current.open&&current.close>=Math.max(level.price,retestCandle.high)
+     : current.close<current.open&&current.close<=Math.min(level.price,retestCandle.low);
+   const currentAccepted=dir==='BULLISH'?current.close>level.price:current.close<level.price;
+   const confirmedNow=age===0
+     ? (dir==='BULLISH'?current.close>current.open:current.close<current.open)
+     : currentAccepted&&currentContinuation&&currentDisplacement;
+   if(!confirmedNow)continue;
+   const retestExtreme=dir==='BULLISH'
+     ?Math.min(...c.slice(retestIndex, c.length).map(z=>z.low))
+     :Math.max(...c.slice(retestIndex, c.length).map(z=>z.high));
+   candidates.push({level:level.price,breakIndex:brokeAt,retestIndex,after,age,retestExtreme});
   }
   const latestRetest=candidates[0];
   if(latestRetest){
-   retest={level:latestRetest.level,index:c.length-1,invalidation:dir==='BULLISH'
-     ?Math.min(...latestRetest.after.map(z=>z.low))
-     :Math.max(...latestRetest.after.map(z=>z.high))};
+   retest={level:latestRetest.level,index:latestRetest.retestIndex,invalidation:latestRetest.retestExtreme};
    breakout={level:latestRetest.level,index:latestRetest.breakIndex};
-  }else if(compressed){
-   const level=externalLevels.at(-1);
-   if(level){
-    const broke=dir==='BULLISH'?x.close>level.price:x.close<level.price;
-    if(broke&&displaced)breakout={level:level.price,index:c.length-1};
-   }
   }
   msnrLevel=lv.find(z=>z.fresh&&!z.consumed&&Math.abs(z.level-price)<=Math.max(a,price*.0025));
   priceActionLevel=lv.find(z=>Math.abs(z.level-price)<=Math.max(a,price*.0025));
