@@ -151,7 +151,8 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   const levelValid=Number.isFinite(level)&&(
     direction==='BULLISH' ? level>=(protectedLevel??-Infinity) : level<=(protectedLevel??Infinity)
   );
-  const candidateLimit=levelAhead&&levelValid&&distance>=Math.max(price*.0004,atrValue*.08)&&distance<=limitDistance?level:null;
+  const limitEligible=['PULLBACK','SMC'].includes(strategy);
+  const candidateLimit=limitEligible&&levelAhead&&levelValid&&distance>=Math.max(price*.0004,atrValue*.08)&&distance<=limitDistance?level:null;
 
   const latestEvent=s.mss||s.choch||s.bos;
   const latestEventFresh=!!latestEvent&&Number(latestEvent.age)<=1;
