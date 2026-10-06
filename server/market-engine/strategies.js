@@ -102,22 +102,42 @@ export function evaluateStrategy({strategy,layers,execution,price}){
 
   if(failures.length)return {direction,failures:[...new Set(failures)],evidence};
 
-  const smcPoi=[...fvg(execution.candles,direction),...orderBlocks(execution.candles,direction)]
+  const rawPoi=[...fvg(execution.candles,direction),...orderBlocks(execution.candles,direction)]
     .filter(z=>Number.isFinite(z.low)&&Number.isFinite(z.high));
-  const smcEntry=smcPoi.length?smcPoi[0].mid:null;
-  const level=execution.msnrLevel?.level
-    ??execution.priceActionLevel?.level
-    ??execution.pullback?.level
-    ??execution.crt?.entryZone
-    ??execution.retest?.level
-    ??smcEntry
-    ??null;
-  const currentEntry=execution.entry??price;
+  const atrValue=execution.structure.atr||price*.001;
+  // A POI is only actionable while it is still between current price and the
+  // structural invalidation. Old/far-away POIs must never manufacture an entry.
+  const smcPoi=rawPoi.filter(z=>{
+    const mid=Number(z.mid??((z.low+z.high)/2));
+    if(!Number.isFinite(mid)||Math.abs(mid-price)>atrValue*3)return false;
+    return direction==='BULLISH' ? mid>=(execution.structure.protectedLow?.price??-Infinity) : mid<=(execution.structure.protectedHigh?.price??Infinity);
+  });
+  const smcEntry=smcPoi.length?Number(smcPoi[0].mid??((smcPoi[0].low+smcPoi[0].high)/2)):null;
+  const levelByStrategy={
+    TOP_DOWN:null,
+    PULLBACK:execution.pullback?.level,
+    BREAKOUT:execution.retest?.level,
+    SMC:smcEntry,
+    MSNR:execution.msnrLevel?.level,
+    PRICE_ACTION:execution.priceActionLevel?.level,
+    LIQUIDITY_REVERSAL:null,
+    CRT:execution.crt?.entryZone
+  };
+  const level=levelByStrategy[strategy];
+  const currentEntry=Number.isFinite(execution.entry)?execution.entry:price;
   const candidateLimit=Number.isFinite(level)&&(
     (direction==='BULLISH'&&level<price)||(direction==='BEARISH'&&level>price)
-  )?level:null;
-  const orderType=candidateLimit!=null&&Math.abs(candidateLimit-price)>
-    Math.max(price*.0008,(execution.structure.atr||price*.001)*.15)?'LIMIT':'MARKET';
+  )&&(
+    direction==='BULLISH' ? level>(execution.structure.protectedLow?.price??-Infinity) : level<(execution.structure.protectedHigh?.price??Infinity)
+  )&&Math.abs(level-price)>Math.max(price*.0008,atrValue*.15)?level:null;
+  // Market entries are reserved for an actual current execution trigger. A
+  // strategy passing its thesis is not itself permission to buy/sell at any
+  // arbitrary current price.
+  const marketConfirmed=!!conf?.confirmed||((s.mss||s.choch||s.bos)?.age<=1);
+  const locationReacted=!!execution.msnrReaction||!!execution.priceActionReaction||!!execution.retest||!!execution.crt?.reclaim;
+  const orderType=candidateLimit!=null?'LIMIT':'MARKET';
+  if(orderType==='MARKET'&&!marketConfirmed&&!locationReacted)
+    return {direction,failures:['No current execution trigger at the proposed market entry.'],evidence};
   const entry=orderType==='LIMIT'?candidateLimit:currentEntry;
   const target=execution.crt?.target
     ||execution.breakout?.target
