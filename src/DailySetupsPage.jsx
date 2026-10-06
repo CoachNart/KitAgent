@@ -25,31 +25,37 @@ export default function DailySetupsPage(){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [selected,setSelected]=useState(null);
-  const [rescanning,setRescanning]=useState(false);
+  const [rescanning,setRescanning]=useState(false),[notice,setNotice]=useState(''),[manualRemaining,setManualRemaining]=useState(0);
 
-  const load=async(force=false)=>{
+  const recordScannerSetups=async(next,tokenValue)=>{if(!Array.isArray(next?.setups)||!tokenValue)return;await Promise.allSettled(next.setups.map(async setup=>{const r=await fetch('/api/signals',{method:'POST',headers:{Authorization:'Bearer '+tokenValue,'Content-Type':'application/json'},body:JSON.stringify({market:'perpetual',symbol:setup.providerSymbol||String(setup.symbol||'').replace('/USDT','USDT'),timeframe:setup.timeframe,source:'daily-scanner',scannerSetupId:`${setup.generatedFor||next.dayKey}-${setup.id}`,setup:{tradeReady:true,bias:setup.bias,orderType:setup.orderType,confidence:setup.confidence,entry:setup.entry,limitEntry:setup.orderType==='LIMIT'?setup.entry:null,stopLoss:setup.stopLoss,takeProfit1:setup.takeProfit,takeProfit2:null,riskReward:`1:${setup.rr}`,price:setup.marketEntry}})}));};
+
+  const load=async(force=false,manual=false)=>{
     setError('');
-    if(!force){
+    if(!force&&!manual){
       try{
         const cached=JSON.parse(localStorage.getItem(DAY_KEY)||'null');
         const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Lagos',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-        if(cached?.dayKey===today&&Array.isArray(cached?.setups)){setData(cached);setLoading(false);return;}
+        if(cached?.dayKey===today&&Array.isArray(cached?.setups)){setData(cached);setManualRemaining(Number(cached?.manualRemainingMs)||0);setLoading(false);return;}
       }catch{}
     }
     setLoading(true);
     try{
       const t=await token();
       if(!t)throw new Error('Authentication is still initializing. Please retry.');
-      const r=await fetch('/api/daily-setups',{headers:{Authorization:'Bearer '+t},cache:'no-store'});
+      const r=await fetch('/api/daily-setups'+(manual?'?mode=manual':''),{headers:{Authorization:'Bearer '+t},cache:'no-store'});
       const body=await r.json().catch(()=>({}));
-      if(!r.ok||!body.ok)throw new Error(body.error||'Daily setup scan failed.');
-      setData(body);
+      if(!r.ok||!body.ok){if(body.code==='MANUAL_SCAN_CONSUMED'){setManualRemaining(Number(body.remainingMs)||0);setNotice('Your daily scanner scan has already been used. You can scan again after 24 hours.');return;}throw new Error(body.error||'Daily setup scan failed.');}
+      setData(body);setManualRemaining(Number(body.manualRemainingMs)||Number(body.remainingMs&&manual?body.remainingMs:0)||0);setNotice(manual?'Daily scanner scan used.':'');
+      await recordScannerSetups(body,t);
       try{localStorage.setItem(DAY_KEY,JSON.stringify(body));}catch{}
     }catch(e){setError(e.message||'Unable to load today’s setups.');}
     finally{setLoading(false);setRescanning(false)}
   };
 
   useEffect(()=>{load(false)},[]);
+  useEffect(()=>{if(!manualRemaining)return;const timer=setInterval(()=>setManualRemaining(v=>Math.max(0,v-1000)),1000);return()=>clearInterval(timer)},[manualRemaining]);
+  const manualLocked=manualRemaining>0;
+  const manualCountdown=()=>{const h=Math.floor(manualRemaining/3600000),m=Math.floor((manualRemaining%3600000)/60000);return h+'h '+String(m).padStart(2,'0')+'m'};
 
   const setups=useMemo(()=>Array.isArray(data?.setups)?data.setups:[],[data]);
   const best=setups[0];
@@ -68,6 +74,7 @@ export default function DailySetupsPage(){
     </header>
 
     {error&&<div className="daily-error">{error}<button onClick={()=>load(true)}>Retry</button></div>}
+    {notice&&<div className="daily-scan-notice" role="status"><span>{notice}</span>{manualLocked&&<small>Next scan in {manualCountdown()}</small>}</div>}
 
     <section className="daily-status">
       <div className="daily-status-main">
@@ -75,7 +82,7 @@ export default function DailySetupsPage(){
         <div><b>{setups.length} qualified setups</b><small>{data?.scanUniverse||0} high-activity perpetuals scanned · {data?.source||'Bybit'}</small></div>
       </div>
       <div className="daily-status-target"><span>DAILY TARGET</span><b>{setups.length}/5</b></div>
-      <button className="daily-rescan" disabled={rescanning} onClick={()=>{setRescanning(true);load(true)}}><RefreshCw size={13} className={rescanning?'spin':''}/>Rescan</button>
+      <button className="daily-rescan" disabled={rescanning||manualLocked} onClick={()=>{setRescanning(true);load(true,true)}}><RefreshCw size={13} className={rescanning?'spin':''}/>{manualLocked?'Scan used for today':'Use daily scan'}</button>
     </section>
 
     {setups.length===0&&<div className="daily-empty"><ScanSearch size={27}/><b>No qualified setup has cleared the filters yet.</b><span>The scanner will not invent a trade to fill the daily target. A setup appears only when structure, confirmation, invalidation, target and risk/reward are coherent.</span></div>}
