@@ -37,20 +37,43 @@ function enrichExecution(candles,layers,price){
    const inRetrace=dir==='BULLISH'?price<=hi.price&&price>=lo38&&price<=hi62:price>=lo.price&&price>=lo38&&price<=hi62;
    if(leg>=a*1.5&&inRetrace){const plannedLevel=dir==='BULLISH'?hi62:lo38;pullback={level:plannedLevel,marketPrice:price,impulse:leg,retracementZone:[lo38,hi62]};}
   }
-  const prior=c.slice(-25,-1),rangeAvg=prior.length?prior.reduce((q,z)=>q+z.high-z.low,0)/prior.length:a;
-  const boundary=dir==='BULLISH'?Math.max(...prior.map(z=>z.high)):Math.min(...prior.map(z=>z.low));
+  // Breakout/retest is anchored to a confirmed structural swing, not a
+  // rolling high/low that changes every candle. The old implementation used the
+  // current rolling boundary for both the breakout and retest, which made a
+  // retest impossible on the same candle and usually disappeared on the next.
+  const rangePrior=c.slice(-26,-1);
+  const rangeAvg=rangePrior.length?rangePrior.reduce((q,z)=>q+z.high-z.low,0)/rangePrior.length:a;
+  const compressed=rangePrior.slice(-8).every(z=>(z.high-z.low)<=rangeAvg*1.15);
+  const externalLevels=dir==='BULLISH'?s.external.highs:s.external.lows;
   const lastRange=x.high-x.low;
-  const broke=dir==='BULLISH'?x.close>boundary:x.close<boundary;
   const displaced=lastRange>=rangeAvg*1.2&&Math.abs(x.close-x.open)/(lastRange||1)>=.55;
-  const compressed=prior.slice(-8).every(z=>(z.high-z.low)<=rangeAvg*1.15);
-  if(broke&&displaced&&compressed)breakout={level:boundary,index:c.length-1};
-  const breakIndex=[...c.keys()].reverse().find(i=>i>5&&(dir==='BULLISH'?c[i].close>boundary:c[i].close<boundary));
-  if(Number.isInteger(breakIndex)){
-   const after=c.slice(breakIndex+1);
-   const touched=after.some(z=>z.low<=boundary+a*.25&&z.high>=boundary-a*.25);
-   const accepted=after.at(-1)?(dir==='BULLISH'?after.at(-1).close>boundary:after.at(-1).close<boundary):false;
-   const rejected=after.at(-1)?(dir==='BULLISH'?after.at(-1).close>after.at(-1).open:after.at(-1).close<after.at(-1).open):false;
-   if(touched&&accepted&&rejected)retest={level:boundary,index:c.length-1,invalidation:dir==='BULLISH'?Math.min(...after.map(z=>z.low)):Math.max(...after.map(z=>z.high))};
+  const candidates=[];
+  for(const level of externalLevels.slice(-12).reverse()){
+   const brokeAt=[...c.keys()].reverse().find(i=>
+     i>level.confirmationIndex &&
+     (dir==='BULLISH'?c[i].close>level.price:c[i].close<level.price)
+   );
+   if(!Number.isInteger(brokeAt))continue;
+   const after=c.slice(brokeAt+1);
+   if(!after.length)continue;
+   const touched=after.some(z=>z.low<=level.price+a*.25&&z.high>=level.price-a*.25);
+   const lastAfter=after.at(-1);
+   const accepted=lastAfter&&(dir==='BULLISH'?lastAfter.close>level.price:lastAfter.close<level.price);
+   const rejected=lastAfter&&(dir==='BULLISH'?lastAfter.close>lastAfter.open:lastAfter.close<lastAfter.open);
+   if(touched&&accepted&&rejected)candidates.push({level:level.price,breakIndex:brokeAt,after});
+  }
+  const latestRetest=candidates[0];
+  if(latestRetest){
+   retest={level:latestRetest.level,index:c.length-1,invalidation:dir==='BULLISH'
+     ?Math.min(...latestRetest.after.map(z=>z.low))
+     :Math.max(...latestRetest.after.map(z=>z.high))};
+   breakout={level:latestRetest.level,index:latestRetest.breakIndex};
+  }else if(compressed){
+   const level=externalLevels.at(-1);
+   if(level){
+    const broke=dir==='BULLISH'?x.close>level.price:x.close<level.price;
+    if(broke&&displaced)breakout={level:level.price,index:c.length-1};
+   }
   }
   msnrLevel=lv.find(z=>z.fresh&&!z.consumed&&Math.abs(z.level-price)<=Math.max(a,price*.0025));
   priceActionLevel=lv.find(z=>Math.abs(z.level-price)<=Math.max(a,price*.0025));
