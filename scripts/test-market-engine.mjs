@@ -11,6 +11,7 @@ assert('pivot confirmation is delayed',confirmedSwings(candles).highs.concat(con
 const lm=liquidityMap(candles);assert('liquidity map exposes buy/sell pools',Array.isArray(lm.buySide)&&Array.isArray(lm.sellSide));
 const geometryFallback=tradeGeometry(candles,'BULLISH',100,100.5,99);assert('geometry advances to a viable structural target',()=>!!geometryFallback&&geometryFallback.rr>=2);assert('geometry rejects an invalid-side structural stop',tradeGeometry(candles,'BULLISH',100,100.5,101)===null);
 const fullGrade=grade({htfAlignment:true,structureClarity:true,liquidity:true,location:true,confirmation:true,target:true,rr:3,hardFailures:[]});assert('full confluence grades A+',fullGrade.grade==='A+');
+assert('A grade requires HTF alignment',grade({htfAlignment:false,structureClarity:true,liquidity:true,location:true,confirmation:true,target:true,rr:3,hardFailures:[]}).grade!=='A');
 assert('hard failure is NO-TRADE',noTrade(['structure unclear']).grade==='NO-TRADE');
 const baseExecution={candles,structure:structure(candles),liquidity:lm,levels:[],regime:'RANGE',pullback:null,breakout:null,retest:null,msnrLevel:null,msnrReaction:false,priceActionLevel:null,priceActionReaction:false,crt:null,entry:100};
 const layers=['4H','2H','1H','30m','15m'].map(tf=>({tf,candles,structure:structure(candles),liquidity:lm}));
