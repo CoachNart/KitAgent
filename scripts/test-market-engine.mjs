@@ -29,6 +29,7 @@ assert('A level uses first candle close',levels.some(x=>x.type==='A'&&x.level===
 assert('V level uses first candle close',levels.some(x=>x.type==='V'&&x.level===100&&x.originIndex===2));
 assert('Bearish gap is same-colour body pair',levels.some(x=>x.type==='BEARISH_GAP'&&x.level===118&&x.originIndex===1));
 assert('Bullish gap is same-colour body pair',levels.some(x=>x.type==='BULLISH_GAP'&&x.level===102&&x.originIndex===3));
+assert('Gap level retains a body-derived zone',()=>{const x=levels.find(x=>x.type==='BULLISH_GAP');return x&&x.zoneLow<=x.zoneHigh&&x.zoneLow!==undefined&&x.zoneHigh!==undefined});
 
 // Exact V CC: Red -> Green -> Green; signal wick touches level but full body stays above.
 const vCc=[
@@ -86,7 +87,9 @@ const wickOnly=[
 ];
 const wickLevel=buildMSNRLevels(wickOnly).find(x=>x.originIndex===0&&x.level===100);
 assert('Wick through does not create RBS',wickLevel?.type==='A');
+assert('Wick touch makes a fresh level unfresh',wickLevel?.fresh===false);
 assert('Wick rejection consumes freshness',wickLevel?.fresh===false);
+assert('MSNR requires current confirmation rather than old confirmation',()=>buildMSNRLevels([...vCc,bar(4,103,104,102,103.2)]).flatMap(x=>x.confirmations).every(x=>x.signalIndex!==3));
 
 // A full-body confirmation must be the current closed candle, never an open candle.
 const layers=['4H','2H','1H','30m','15m'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
