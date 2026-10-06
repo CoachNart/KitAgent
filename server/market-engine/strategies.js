@@ -73,10 +73,18 @@ export function resolveEntry({strategy,execution,direction,price,atrValue,struct
   const latestEventFresh=!!latestEvent&&Number(latestEvent.age)<=1;
   const triggerClose=execution.candles?.at(-1)?.close;
   const triggerDistance=Number.isFinite(triggerClose)?Math.abs(price-triggerClose):Infinity;
-  const marketTrigger=!!conf?.confirmed||latestEventFresh||
-    (strategy==='BREAKOUT'&&!!execution.retest&&Number(execution.retest.age??99)<=1)||
-    (['MSNR','PRICE_ACTION'].includes(strategy)&&(execution.msnrReaction||execution.priceActionReaction))||
-    (strategy==='CRT'&&!!execution.crt?.reclaim&&Number(execution.crt.sweep?.age??99)<=1);
+  const reversalShift=s.mss||s.choch;
+  const reversalMarketTrigger=['LIQUIDITY_REVERSAL','SMC'].includes(strategy)
+    ? !!reversalShift&&Number(reversalShift.age??99)<=1&&!!conf?.confirmed&&s.direction===direction
+    : false;
+  const marketTrigger=strategy==='LIQUIDITY_REVERSAL'
+    ? reversalMarketTrigger
+    : strategy==='SMC'
+      ? (reversalMarketTrigger||!!conf?.confirmed)
+      : !!conf?.confirmed||latestEventFresh||
+        (strategy==='BREAKOUT'&&!!execution.retest&&Number(execution.retest.age??99)<=1)||
+        (['MSNR','PRICE_ACTION'].includes(strategy)&&(execution.msnrReaction||execution.priceActionReaction))||
+        (strategy==='CRT'&&!!execution.crt?.reclaim&&Number(execution.crt.sweep?.age??99)<=1&&!!conf?.confirmed);
   const marketNotExtended=triggerDistance<=Math.max(atrValue*.6,price*.0015);
   const breakoutFresh=strategy==='BREAKOUT'
     ?!!execution.retest&&Number(execution.retest.age??99)<=1:true;
