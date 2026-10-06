@@ -85,6 +85,7 @@ function makeBaseLevels(candles){
       confirmationIndex:i+1,
       level:first.close,
       type,
+      baseType:type,
       side:sideFor(type),
       fresh:true,
       touches:0,
