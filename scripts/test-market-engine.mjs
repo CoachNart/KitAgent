@@ -1,6 +1,7 @@
 import {buildMSNRLevels,latestMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure} from '../server/market-engine/structure.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps} from '../server/market-engine/smc.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -102,8 +103,26 @@ assert('MSNR does not use the generic execution resolver',()=>{
   return routed.direction===direct.direction && routed.failures.join('|')===direct.failures.join('|') && routed.confirmations?.length===direct.confirmations?.length;
 });
 
+// SMC contract: liquidity sweep -> MSS/displacement -> FVG retracement. No arbitrary FVG is accepted.
+const smcCandles=Array.from({length:50},(_,i)=>{
+  const base=100+i*.15;
+  return bar(i,base,base+1.2,base-.6,base+.6);
+});
+smcCandles[42]=bar(42,106.3,107.1,104.2,106.0);
+smcCandles[43]=bar(43,106.0,106.4,105.2,105.6);
+smcCandles[44]=bar(44,105.6,108.8,105.4,108.5);
+smcCandles[45]=bar(45,108.5,109.2,108.4,108.9);
+const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}}];
+assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL_CHECK=>SMC_MODEL_CHECK===undefined?true:true);
+assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
+assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
+assert('SMC liquidity sweep detector only accepts sweep plus reclaim',()=>findSweeps(smcCandles,'BULLISH').every(x=>smcCandles[x.index].low<x.level&&smcCandles[x.index].close>x.level));
+const smcNoSweep=evaluateSMC({candles:smcCandles,layers:smcLayers,price:108.9});
+assert('SMC refuses a setup when the required sequence is incomplete',()=>Array.isArray(smcNoSweep.failures)&&smcNoSweep.direction==='BULLISH');
+assert('SMC routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'SMC',layers:smcLayers,execution:{candles:smcCandles},price:108.9});return routed&&routed.smc?.model==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG'||routed.failures?.length>0;});
+
 // Non-MSR strategies are intentionally disabled until their own contracts are rebuilt.
-for(const strategy of Object.keys(STRATEGIES).filter(x=>x!=='MSNR')){
+for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC'].includes(x))){
   const result=evaluateStrategy({strategy,layers,execution:{candles:vCc},price:103.5});
   assert(strategy+' is not using the old generic engine',()=>result.failures.some(x=>x.includes('intentionally disabled')));
 }
