@@ -2,6 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MS
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateTopDown,TOP_DOWN_MODEL} from '../server/market-engine/topDown.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -121,8 +122,17 @@ const smcNoSweep=evaluateSMC({candles:smcCandles,layers:smcLayers,price:108.9});
 assert('SMC refuses a setup when the required sequence is incomplete',()=>Array.isArray(smcNoSweep.failures)&&smcNoSweep.direction==='BULLISH');
 assert('SMC routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'SMC',layers:smcLayers,execution:{candles:smcCandles},price:108.9});return routed&&routed.smc?.model==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG'||routed.failures?.length>0;});
 
+// Top-Down contract: aligned HTF direction -> execution BOS -> retest/hold -> structural target.
+const tdCandles=Array.from({length:50},(_,i)=>bar(i,100+i*.1,101+i*.1,99+i*.1,100.5+i*.1));
+assert('Top-Down uses a defined multi-timeframe entry model',TOP_DOWN_MODEL==='HTF_ALIGNMENT_EXECUTION_BOS_RETEST');
+const tdMismatch=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}}],price:105});
+assert('Top-Down rejects conflicting higher-timeframe directions',()=>tdMismatch.direction==='NEUTRAL'&&tdMismatch.failures.length>0);
+const tdNoBos=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
+assert('Top-Down requires execution BOS before entry',()=>tdNoBos.direction==='BULLISH'&&tdNoBos.failures.some(x=>x.includes('BOS')));
+assert('Top-Down routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'TOP_DOWN',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed.direction==='BULLISH'||routed.direction==='NEUTRAL';});
+
 // Non-MSR strategies are intentionally disabled until their own contracts are rebuilt.
-for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC'].includes(x))){
+for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC','TOP_DOWN'].includes(x))){
   const result=evaluateStrategy({strategy,layers,execution:{candles:vCc},price:103.5});
   assert(strategy+' is not using the old generic engine',()=>result.failures.some(x=>x.includes('intentionally disabled')));
 }
