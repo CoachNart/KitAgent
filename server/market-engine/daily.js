@@ -5,7 +5,7 @@ import { closedCandles, validateCandles, EXECUTION_TIMEFRAMES } from './data.js'
 import { STRATEGIES } from './strategies.js';
 import { analyzeOne, fetchPrice, fetchTf } from './index.js';
 
-const SCAN_LIMIT=18,SCAN_BATCH=3,MAX_GENERATED=10,SCAN_WINDOW_MS=24*60*60*1000,SCAN_DOC='scanner/usage';
+const SCAN_LIMIT=18,SCAN_BATCH=3,MAX_GENERATED=10,SCAN_WINDOW_MS=24*60*60*1000,SCAN_DOC='usage';
 function getAdmin(){if(admin.apps.length)return admin;const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON,path=process.env.GOOGLE_APPLICATION_CREDENTIALS;if(raw){admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['"]|['"]$/g,'')))});return admin}if(path&&fs.existsSync(path)){admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(path,'utf8')))});return admin}throw Object.assign(new Error('Firebase Admin credentials are missing.'),{code:'FIREBASE_ADMIN_CREDENTIALS_MISSING'})}
 function toMs(v){if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(typeof v.toDate==='function')return v.toDate().getTime();if(typeof v==='number')return v;const n=Date.parse(v);return Number.isFinite(n)?n:0}
 function json(res,status,payload){res.statusCode=status;res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');res.end(JSON.stringify(payload))}
