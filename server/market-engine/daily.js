@@ -174,7 +174,7 @@ export default async function handler(req,res){
     const auth=await authenticate(req);await requireActiveAccess(auth.uid);
     const usageRef=getAdmin().firestore().collection('users').doc(auth.uid).collection('scanner').doc('usage'),usageSnap=await usageRef.get(),lastManual=usageSnap.exists?toMs(usageSnap.data()?.lastManualScanAt):0,manualRemainingMs=lastManual?Math.max(0,SCAN_WINDOW_MS-(Date.now()-lastManual)):0;
     if(mode==='manual'){const result=await runManualScan(auth.uid);return json(res,result.ok?200:429,result);}
-    const result=await runAutoScan();return json(res,result.ok?200:409,result);
+    const result=await runAutoScan();return json(res,result.ok?200:409,{...result,manualRemainingMs});
   }catch(e){return json(res,500,{ok:false,error:e?.message||'Daily setup scan failed',code:'DAILY_SETUP_SCAN_ERROR'});
   }
 }
