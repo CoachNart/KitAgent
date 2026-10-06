@@ -62,7 +62,7 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   }else if(strategy==='BREAKOUT'){
     if(!execution.breakout)failures.push('No established structural level with a decisive breakout.');
     if(!execution.retest)failures.push('Breakout has not produced a confirmed retest.');
-    if(!conf?.confirmed)failures.push('Retest lacks continuation displacement.');
+    if(!conf?.confirmed&&!execution.retest)failures.push('Retest lacks continuation confirmation.');
     evidence.push('Established swing level → decisive BOS → accepted retest.');
   }else if(strategy==='SMC'){
     if(!sweep)failures.push('No meaningful opposing liquidity sweep.');
