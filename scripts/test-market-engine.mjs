@@ -15,6 +15,14 @@ assert('hard failure is NO-TRADE',noTrade(['structure unclear']).grade==='NO-TRA
 const baseExecution={candles,structure:structure(candles),liquidity:lm,levels:[],regime:'RANGE',pullback:null,breakout:null,retest:null,msnrLevel:null,msnrReaction:false,priceActionLevel:null,priceActionReaction:false,crt:null,entry:100};
 const layers=['4H','2H','1H','30m','15m'].map(tf=>({tf,candles,structure:structure(candles),liquidity:lm}));
 for(const strategy of Object.keys(STRATEGIES)){const result=evaluateStrategy({strategy,layers,execution:baseExecution,price:100});assert('strategy branch '+strategy,!!result&&Array.isArray(result.failures));}
+const bullishStructure={...structure(candles),direction:'BULLISH',rawDirection:'BULLISH',protectedLow:{price:98,index:90}};
+const bullishLayers=['4H','2H','1H','30m','15m'].map(tf=>({tf,candles,structure:bullishStructure,liquidity:lm}));
+const levelWithoutReaction={...baseExecution,structure:bullishStructure,msnrLevel:{level:100,fresh:true,consumed:false},msnrReaction:false,priceActionLevel:{level:100},priceActionReaction:false};
+for(const strategy of ['MSNR','PRICE_ACTION']){
+ const result=evaluateStrategy({strategy,layers:bullishLayers,execution:levelWithoutReaction,price:100});
+ assert('quality gate '+strategy+' requires actual level reaction',()=>result.failures.includes(strategy==='MSNR'?'No qualifying reaction at the decision level.':'No qualifying price-action interaction.'));
+}
+
 for(const tf of ['15m','30m','1H','2H','4H','AUTO'])assert('execution timeframe '+tf,true);
 for(const name of ['clean bullish continuation','clean bearish continuation','liquidity reversal','fake breakout','genuine breakout','range-bound market','conflicting HTF/LTF structure','weak structure','A+ setup','B setup','C setup','NO-TRADE setup','valid 15M execution','valid 30M execution','valid 1H execution','valid 2H execution','valid 4H execution','Auto execution','invalidated setup','insufficient R:R'])assert('scenario contract '+name,true);
 const failed=tests.filter(x=>!x.ok);console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));if(failed.length)process.exit(1);
