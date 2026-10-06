@@ -1,3 +1,5 @@
+import admin from 'firebase-admin';
+import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../access.js';
 import { aggregate, closedCandles, validateCandles, EXECUTION_TIMEFRAMES } from './data.js';
 import { STRATEGIES } from './strategies.js';
@@ -5,6 +7,10 @@ import { analyzeOne, fetchPrice, fetchTf } from './index.js';
 
 const SCAN_LIMIT = 18;
 const MIN_PUBLISHED = 5;
+const SCAN_WINDOW_MS = 24*60*60*1000;
+const AUTO_DOC = 'scanner/daily';
+function getAdmin(){if(admin.apps.length)return admin;const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON,path=process.env.GOOGLE_APPLICATION_CREDENTIALS;if(raw){admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['\"]|['\"]$/g,'')))});return admin}if(path&&fs.existsSync(path)){admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(path,'utf8')))});return admin}throw Object.assign(new Error('Firebase Admin credentials are missing.'),{code:'FIREBASE_ADMIN_CREDENTIALS_MISSING'})}
+function toMs(v){if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(typeof v.toDate==='function')return v.toDate().getTime();if(typeof v==='number')return v;const n=Date.parse(v);return Number.isFinite(n)?n:0}
 
 function json(res,status,payload){
   res.statusCode=status;
@@ -144,14 +150,30 @@ export async function dailySetups(){
   };
 }
 
+async function runAutoScan(){
+  const ref=getAdmin().firestore().doc(AUTO_DOC),now=Date.now();
+  const snap=await ref.get(),current=snap.exists?snap.data():{},generatedAt=toMs(current.generatedAt);
+  if(current.scanState==='running'&&now-toMs(current.scanStartedAt)<15*60*1000)return {ok:false,code:'SCAN_IN_PROGRESS',error:'The automatic daily scanner is already running.'};
+  if(generatedAt&&now-generatedAt<SCAN_WINDOW_MS&&Array.isArray(current.setups))return {ok:true,source:'auto',...current,remainingMs:SCAN_WINDOW_MS-(now-generatedAt)};
+  await ref.set({scanState:'running',scanStartedAt:new Date().toISOString(),dayKey:dayKey()},{merge:true});
+  try{const result=await dailySetups();await ref.set({...result,scanState:'ready',scanMode:'automatic',persistedAt:new Date().toISOString()},{merge:true});return {ok:true,source:'auto',...result,remainingMs:SCAN_WINDOW_MS};}
+  catch(error){await ref.set({scanState:'idle',lastError:String(error?.message||error),lastErrorAt:new Date().toISOString()},{merge:true});throw error;}
+}
+async function runManualScan(uid){
+  const db=getAdmin().firestore(),ref=db.collection('users').doc(uid).collection('scanner').doc('usage'),now=Date.now();
+  const reservation=await db.runTransaction(async tx=>{const snap=await tx.get(ref),last=snap.exists?toMs(snap.data()?.lastManualScanAt):0,remaining=last?SCAN_WINDOW_MS-(now-last):0;if(remaining>0)return {allowed:false,remainingMs:remaining};tx.set(ref,{lastManualScanAt:new Date(now).toISOString(),lastManualScanId:String(now),updatedAt:new Date(now).toISOString()},{merge:true});return {allowed:true,remainingMs:SCAN_WINDOW_MS};});
+  if(!reservation.allowed)return {ok:false,code:'MANUAL_SCAN_CONSUMED',error:'Your scanner scan for this 24-hour period has already been used.',remainingMs:reservation.remainingMs};
+  try{const result=await dailySetups();return {ok:true,source:'manual',...result,remainingMs:SCAN_WINDOW_MS};}
+  catch(error){await ref.set({lastManualScanAt:null,lastManualScanId:null,updatedAt:new Date().toISOString()},{merge:true});throw error;}
+}
 export default async function handler(req,res){
   if(req.method!=='GET')return json(res,405,{ok:false,error:'Method not allowed'});
   try{
-    const auth=await authenticate(req);
-    await requireActiveAccess(auth.uid);
-    const result=await dailySetups();
-    return json(res,200,{ok:true,...result});
-  }catch(e){
-    return json(res,500,{ok:false,error:e?.message||'Daily setup scan failed',code:'DAILY_SETUP_SCAN_ERROR'});
+    const mode=new URL(req.url||'', 'http://localhost').searchParams.get('mode')||'auto',cronAuth=String(req.headers.authorization||''),isCron=Boolean(process.env.CRON_SECRET)&&cronAuth==='Bearer '+process.env.CRON_SECRET;
+    if(isCron){const result=await runAutoScan();return json(res,result.ok?200:409,result);}
+    const auth=await authenticate(req);await requireActiveAccess(auth.uid);
+    if(mode==='manual'){const result=await runManualScan(auth.uid);return json(res,result.ok?200:429,result);}
+    const result=await runAutoScan();return json(res,result.ok?200:409,result);
+  }catch(e){return json(res,500,{ok:false,error:e?.message||'Daily setup scan failed',code:'DAILY_SETUP_SCAN_ERROR'});
   }
 }
