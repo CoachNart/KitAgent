@@ -2,6 +2,7 @@ import {authenticate,requireActiveAccess} from '../access.js';
 import {normalizeRows,closedCandles,validateCandles,EXECUTION_TIMEFRAMES,roundPrice} from './data.js';
 import {structure} from './structure.js';
 import {liquidityMap} from './liquidity.js';
+import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
 import {noTrade} from './grading.js';
 
@@ -154,6 +155,8 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
     })),
     structure:execution.structure,
     marketContext:marketContext(execution),
+    regime:regime(execution.candles,execution.structure),
+    liquidity:execution.liquidity,
     msnr:result.msnr||null,
     msnrLevels:result.levels||[],
     msnrConfirmations:result.confirmations||[],
