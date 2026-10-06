@@ -44,6 +44,34 @@ function bodyBeyond(candle,direction,level){
   return direction==='BULLISH'?candle.open>level&&candle.close>level:candle.open<level&&candle.close<level;
 }
 
+function zoneBounds(first,second,type){
+  if(type==='BULLISH_GAP'||type==='BEARISH_GAP'){
+    return {
+      zoneLow:Math.min(first.close,second.open),
+      zoneHigh:Math.max(first.close,second.open)
+    };
+  }
+  return {zoneLow:first.close,zoneHigh:first.close};
+}
+
+function candleTouchesZone(candle,direction,level){
+  return direction==='BULLISH'
+    ? candle.low<=level.zoneHigh && candle.high>=level.zoneLow
+    : candle.high>=level.zoneLow && candle.low<=level.zoneHigh;
+}
+
+function bodyBeyondZone(candle,direction,level){
+  return direction==='BULLISH'
+    ? candle.open>level.zoneHigh&&candle.close>level.zoneHigh
+    : candle.open<level.zoneLow&&candle.close<level.zoneLow;
+}
+
+function breakThroughZone(candle,side,level){
+  return side==='RESISTANCE'
+    ? candle.close>level.zoneHigh
+    : candle.close<level.zoneLow;
+}
+
 function makeBaseLevels(candles){
   const out=[];
   for(let i=0;i<candles.length-1;i++){
@@ -63,8 +91,7 @@ function makeBaseLevels(candles){
       flipCount:0,
       lastTouchIndex:null,
       lastFlipIndex:null,
-      zoneLow:gap?Math.min(first.close,second.open):first.close,
-      zoneHigh:gap?Math.max(first.close,second.open):first.close
+      ...zoneBounds(first,second,type)
     });
   }
   return out;
@@ -82,8 +109,7 @@ function trackLevel(seed,candles){
 
   for(let i=seed.confirmationIndex+1;i<candles.length;i++){
     const candle=candles[i];
-    const resistance=side==='RESISTANCE';
-    const broken=resistance?candle.close>seed.level:candle.close<seed.level;
+    const broken=breakThroughZone(candle,side,seed);
 
     // A body close through the level is a break. Breakout takes priority over
     // rejection/touch and immediately flips the level back to Fresh.
@@ -100,7 +126,7 @@ function trackLevel(seed,candles){
       if(i+1<candles.length){
         const signal=candles[i+1];
         const direction=side==='SUPPORT'?'BULLISH':'BEARISH';
-        if(touch(signal,direction,seed.level)&&bodyBeyond(signal,direction,seed.level)){
+        if(candleTouchesZone(signal,direction,seed)&&bodyBeyondZone(signal,direction,seed)){
           const middle=candle;
           const valid=continuation(signal,middle,direction,seed.level);
           if(valid){
@@ -121,9 +147,9 @@ function trackLevel(seed,candles){
       continue;
     }
 
-    if(fresh&&touch(candle,side==='SUPPORT'?'BULLISH':'BEARISH',seed.level)){
+    if(fresh&&candleTouchesZone(candle,side==='SUPPORT'?'BULLISH':'BEARISH',seed)){
       const direction=side==='SUPPORT'?'BULLISH':'BEARISH';
-      const bodyHolds=bodyBeyond(candle,direction,seed.level);
+      const bodyHolds=bodyBeyondZone(candle,direction,seed);
       const previous=candles[i-1];
 
       // For the original A/V/GAP levels, confirmation is the exact
@@ -199,7 +225,11 @@ function objective(levels,direction,entry){
     ?levels.filter(x=>x.side==='RESISTANCE'&&x.level>entry)
     :levels.filter(x=>x.side==='SUPPORT'&&x.level<entry);
   return opposing
-    .sort((a,b)=>Math.abs(a.level-entry)-Math.abs(b.level-entry))
+    .filter(x=>x.fresh || x.type==='RBS' || x.type==='SBR')
+    .sort((a,b)=>{
+      const strength=(x)=>x.type==='RBS'||x.type==='SBR'?2:x.type==='A'||x.type==='V'?1:0;
+      return strength(b)-strength(a)||Math.abs(a.level-entry)-Math.abs(b.level-entry);
+    })
     .find(x=>x.level!==entry)||null;
 }
 
@@ -208,6 +238,8 @@ function gradeMSNR({level,event,rr,context,target}){
   score+=event?.freshBefore?25:0;
   score+=event?30:0;
   score+=levelStrength(event?.type?.replace('_CC','')||level.type)*20;
+  score+=level.flipCount>0?5:0;
+  score+=level.touches===0?5:0;
   score+=context.aligned>0?12:context.dominant==='NEUTRAL'?7:0;
   score+=target?8:0;
   score+=rr>=3?5:rr>=2?3:0;
@@ -234,17 +266,17 @@ export function evaluateMSNR({candles,layers,price}){
       continue;
     }
     const entry=price;
-    if(direction==='BULLISH'&&entry<=level.level){
+    if(direction==='BULLISH'&&entry<=level.zoneHigh){
       candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'Live price is no longer above the confirmed MSNR support level.'});
       continue;
     }
-    if(direction==='BEARISH'&&entry>=level.level){
+    if(direction==='BEARISH'&&entry>=level.zoneLow){
       candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'Live price is no longer below the confirmed MSNR resistance level.'});
       continue;
     }
     const invalidation=direction==='BULLISH'
-      ?Math.min(level.level,event.signalCandle.low)
-      :Math.max(level.level,event.signalCandle.high);
+      ?Math.min(level.zoneLow,event.signalCandle.low)
+      :Math.max(level.zoneHigh,event.signalCandle.high);
     const buffer=Math.max(a*.12,Math.abs(entry)*.00035);
     const stop=direction==='BULLISH'?invalidation-buffer:invalidation+buffer;
     const allLevels=layers.flatMap(layer=>
@@ -256,8 +288,8 @@ export function evaluateMSNR({candles,layers,price}){
       continue;
     }
     const reward=Math.abs(target.level-entry),risk=Math.abs(entry-stop),rr=risk>0?reward/risk:0;
-    const distanceFromLevel=Math.abs(entry-level.level);
-    const tooExtended=distanceFromLevel>Math.max(a*.75,Math.abs(entry)*.0025);
+    const distanceFromLevel=entry>level.zoneHigh?Math.abs(entry-level.zoneHigh):entry<level.zoneLow?Math.abs(level.zoneLow-entry):0;
+    const tooExtended=distanceFromLevel>Math.max(a*.5,Math.abs(entry)*.0015);
     if(tooExtended){
       candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'Confirmation candle closed too far from the MSNR level; entry is extended.'});
       continue;
