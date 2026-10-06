@@ -31,13 +31,6 @@ export default function DailySetupsPage(){
 
   const load=async(force=false,manual=false)=>{
     setError('');
-    if(!force&&!manual){
-      try{
-        const cached=JSON.parse(localStorage.getItem(DAY_KEY)||'null');
-        const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Lagos',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-        if(cached?.dayKey===today&&Array.isArray(cached?.setups)){setData(cached);setManualRemaining(Number(cached?.manualRemainingMs)||0);setLoading(false);return;}
-      }catch{}
-    }
     setLoading(true);
     try{
       const t=await token();
