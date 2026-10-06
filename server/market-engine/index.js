@@ -160,6 +160,7 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
     msnr:result.msnr||null,
     msnrLevels:result.levels||[],
     msnrConfirmations:result.confirmations||[],
+    smc:result.smc||null,
     candidates:result.candidates||[]
   };
 }
@@ -267,7 +268,7 @@ export default async function handler(req,res){
         marketRegime:best.structure?.state||null,
         strategyEvidence:best.evidence,
         strategyFailures:[],
-        strategyReason:'The complete MSNR entry contract passed.',
+        strategyReason:strategy==='SMC'?'The complete SMC liquidity-sweep → MSS → displacement → FVG entry contract passed.':'The complete MSNR entry contract passed.',
         structuralInvalidation:best.trade.invalidation,
         invalidationSource:best.trade.invalidationSource||null,
         tradeBreakdown:{
@@ -281,7 +282,9 @@ export default async function handler(req,res){
           entryReason:best.trade.entryReason||null,
           invalidationSource:best.trade.invalidationSource||null,
           msnr:best.msnr,
-          confirmations:best.msnrConfirmations
+          confirmations:best.msnrConfirmations,
+          smc:best.smc||null,
+          smc:best.smc||null
         },
         debug:{
           selectedTimeframe:best.tf,
@@ -291,6 +294,7 @@ export default async function handler(req,res){
             failures:x.failures,
             msnr:x.msnr,
             confirmations:x.msnrConfirmations,
+            smc:x.smc||null,
             candidates:x.candidates
           }))
         },
