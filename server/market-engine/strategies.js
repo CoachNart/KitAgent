@@ -34,6 +34,58 @@ export const STRATEGIES={
   CRT:{name:'CRT'}
 };
 
+export function resolveEntry({strategy,execution,direction,price,atrValue,structure:s,confirmation:conf}){
+  const levelByStrategy={
+    TOP_DOWN:null,
+    PULLBACK:execution.pullback?.level,
+    BREAKOUT:execution.retest?.level,
+    SMC:execution._smcEntry,
+    MSNR:execution.msnrLevel?.level,
+    PRICE_ACTION:execution.priceActionLevel?.level,
+    LIQUIDITY_REVERSAL:null,
+    CRT:execution.crt?.entryZone
+  };
+  let level=levelByStrategy[strategy];
+  if(strategy==='PULLBACK'&&execution.pullback){
+    const [z1,z2]=execution.pullback.retracementZone||[];
+    const lo=Math.min(z1??level,z2??level),hi=Math.max(z1??level,z2??level);
+    const leg=execution.pullback.impulse||0;
+    const fibs=direction==='BULLISH'
+      ? [hi,lo+leg*.5,lo].filter(v=>v<price).sort((a,b)=>b-a)
+      : [lo,hi-leg*.5,hi].filter(v=>v>price).sort((a,b)=>a-b);
+    level=fibs[0]??null;
+  }
+  const protectedLevel=direction==='BULLISH'
+    ? s.protectedLow?.price
+    : s.protectedHigh?.price;
+  const distance=Math.abs((Number.isFinite(level)?level:price)-price);
+  const limitDistance=Math.max(atrValue*1.25,price*.003);
+  const levelAhead=Number.isFinite(level)&&(direction==='BULLISH'?level<price:level>price);
+  const levelValid=Number.isFinite(level)&&(
+    direction==='BULLISH'?level>=(protectedLevel??-Infinity):level<=(protectedLevel??Infinity)
+  );
+  const limitEligible=['PULLBACK','SMC'].includes(strategy);
+  const candidateLimit=limitEligible&&levelAhead&&levelValid&&
+    distance>=Math.max(price*.0004,atrValue*.08)&&distance<=limitDistance?level:null;
+
+  const latestEvent=s.mss||s.choch||s.bos;
+  const latestEventFresh=!!latestEvent&&Number(latestEvent.age)<=1;
+  const triggerClose=execution.candles?.at(-1)?.close;
+  const triggerDistance=Number.isFinite(triggerClose)?Math.abs(price-triggerClose):Infinity;
+  const marketTrigger=!!conf?.confirmed||latestEventFresh||
+    (strategy==='BREAKOUT'&&!!execution.retest&&Number(execution.retest.age??99)<=1)||
+    (['MSNR','PRICE_ACTION'].includes(strategy)&&(execution.msnrReaction||execution.priceActionReaction))||
+    (strategy==='CRT'&&!!execution.crt?.reclaim&&Number(execution.crt.sweep?.age??99)<=1);
+  const marketNotExtended=triggerDistance<=Math.max(atrValue*.6,price*.0015);
+  const breakoutFresh=strategy==='BREAKOUT'
+    ?!!execution.retest&&Number(execution.retest.age??99)<=1:true;
+  const crtFresh=strategy==='CRT'
+    ?!!execution.crt?.sweep&&Number(execution.crt.sweep.age??99)<=2:true;
+  const marketAllowed=marketTrigger&&marketNotExtended&&breakoutFresh&&crtFresh;
+  if(candidateLimit!=null)return{orderType:'LIMIT',entry:candidateLimit,marketEntry:price};
+  if(marketAllowed)return{orderType:'MARKET',entry:price,marketEntry:price};
+  return{orderType:'NO_SETUP',entry:null,marketEntry:price};
+}
 export function evaluateStrategy({strategy,layers,execution,price}){
   const s=execution.structure,direction=directionFor(layers,execution,strategy),failures=[],evidence=[];
   if(!thesisBase(direction))return {direction:'NEUTRAL',failures:['Market structure is unclear.'],evidence};
@@ -113,59 +165,6 @@ export function evaluateStrategy({strategy,layers,execution,price}){
     return direction==='BULLISH' ? mid>=(execution.structure.protectedLow?.price??-Infinity) : mid<=(execution.structure.protectedHigh?.price??Infinity);
   });
   const smcEntry=smcPoi.length?Number(smcPoi[0].mid??((smcPoi[0].low+smcPoi[0].high)/2)):null;
-export function resolveEntry({strategy,execution,direction,price,atrValue,structure:s,confirmation:conf}){
-  const levelByStrategy={
-    TOP_DOWN:null,
-    PULLBACK:execution.pullback?.level,
-    BREAKOUT:execution.retest?.level,
-    SMC:execution._smcEntry,
-    MSNR:execution.msnrLevel?.level,
-    PRICE_ACTION:execution.priceActionLevel?.level,
-    LIQUIDITY_REVERSAL:null,
-    CRT:execution.crt?.entryZone
-  };
-  let level=levelByStrategy[strategy];
-  if(strategy==='PULLBACK'&&execution.pullback){
-    const [z1,z2]=execution.pullback.retracementZone||[];
-    const lo=Math.min(z1??level,z2??level),hi=Math.max(z1??level,z2??level);
-    const leg=execution.pullback.impulse||0;
-    const fibs=direction==='BULLISH'
-      ? [hi,lo+leg*.5,lo].filter(v=>v<price).sort((a,b)=>b-a)
-      : [lo,hi-leg*.5,hi].filter(v=>v>price).sort((a,b)=>a-b);
-    level=fibs[0]??null;
-  }
-  const protectedLevel=direction==='BULLISH'
-    ? s.protectedLow?.price
-    : s.protectedHigh?.price;
-  const distance=Math.abs((Number.isFinite(level)?level:price)-price);
-  const limitDistance=Math.max(atrValue*1.25,price*.003);
-  const levelAhead=Number.isFinite(level)&&(direction==='BULLISH'?level<price:level>price);
-  const levelValid=Number.isFinite(level)&&(
-    direction==='BULLISH'?level>=(protectedLevel??-Infinity):level<=(protectedLevel??Infinity)
-  );
-  const limitEligible=['PULLBACK','SMC'].includes(strategy);
-  const candidateLimit=limitEligible&&levelAhead&&levelValid&&
-    distance>=Math.max(price*.0004,atrValue*.08)&&distance<=limitDistance?level:null;
-
-  const latestEvent=s.mss||s.choch||s.bos;
-  const latestEventFresh=!!latestEvent&&Number(latestEvent.age)<=1;
-  const triggerClose=execution.candles?.at(-1)?.close;
-  const triggerDistance=Number.isFinite(triggerClose)?Math.abs(price-triggerClose):Infinity;
-  const marketTrigger=!!conf?.confirmed||latestEventFresh||
-    (strategy==='BREAKOUT'&&!!execution.retest&&Number(execution.retest.age??99)<=1)||
-    (['MSNR','PRICE_ACTION'].includes(strategy)&&(execution.msnrReaction||execution.priceActionReaction))||
-    (strategy==='CRT'&&!!execution.crt?.reclaim&&Number(execution.crt.sweep?.age??99)<=1);
-  const marketNotExtended=triggerDistance<=Math.max(atrValue*.6,price*.0015);
-  const breakoutFresh=strategy==='BREAKOUT'
-    ?!!execution.retest&&Number(execution.retest.age??99)<=1:true;
-  const crtFresh=strategy==='CRT'
-    ?!!execution.crt?.sweep&&Number(execution.crt.sweep.age??99)<=2:true;
-  const marketAllowed=marketTrigger&&marketNotExtended&&breakoutFresh&&crtFresh;
-  if(candidateLimit!=null)return{orderType:'LIMIT',entry:candidateLimit,marketEntry:price};
-  if(marketAllowed)return{orderType:'MARKET',entry:price,marketEntry:price};
-  return{orderType:'NO_SETUP',entry:null,marketEntry:price};
-}
-
   const entryPlan=resolveEntry({strategy,execution:{...execution,_smcEntry:smcEntry},direction,price,atrValue,structure:s,confirmation:conf});
   if(entryPlan.orderType==='NO_SETUP')return {direction,failures:['No actionable entry: the trigger is stale or price has moved away from the planned execution level.'],evidence};
   const orderType=entryPlan.orderType;
