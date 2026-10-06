@@ -27,7 +27,14 @@ export default function DailySetupsPage(){
   const [selected,setSelected]=useState(null);
   const [rescanning,setRescanning]=useState(false),[notice,setNotice]=useState(''),[manualRemaining,setManualRemaining]=useState(0);
 
-  const recordScannerSetups=async(next,tokenValue)=>{if(!Array.isArray(next?.setups)||!tokenValue)return;await Promise.allSettled(next.setups.map(async setup=>{const r=await fetch('/api/signals',{method:'POST',headers:{Authorization:'Bearer '+tokenValue,'Content-Type':'application/json'},body:JSON.stringify({market:'perpetual',symbol:setup.providerSymbol||String(setup.symbol||'').replace('/USDT','USDT'),timeframe:setup.timeframe,source:'daily-scanner',scannerSetupId:`${setup.generatedFor||next.dayKey}-${setup.id}`,setup:{tradeReady:true,bias:setup.bias,orderType:setup.orderType,confidence:setup.confidence,entry:setup.entry,limitEntry:setup.orderType==='LIMIT'?setup.entry:null,stopLoss:setup.stopLoss,takeProfit1:setup.takeProfit,takeProfit2:null,riskReward:`1:${setup.rr}`,price:setup.marketEntry}})}));};
+  const recordScannerSetups=async(next,tokenValue)=>{
+    if(!Array.isArray(next?.setups)||!tokenValue)return;
+    for(const setup of next.setups){
+      try{
+        await fetch('/api/signals',{method:'POST',headers:{Authorization:'Bearer '+tokenValue,'Content-Type':'application/json'},body:JSON.stringify({market:'perpetual',symbol:setup.providerSymbol||String(setup.symbol||'').replace('/USDT','USDT'),timeframe:setup.timeframe,source:'daily-scanner',scannerSetupId:`${setup.generatedFor||next.dayKey}-${setup.id}`,setup:{tradeReady:true,bias:setup.bias,orderType:setup.orderType,confidence:setup.confidence,entry:setup.entry,limitEntry:setup.orderType==='LIMIT'?setup.entry:null,stopLoss:setup.stopLoss,takeProfit1:setup.takeProfit,takeProfit2:null,riskReward:`1:${setup.rr}`,price:setup.marketEntry}})});
+      }catch{}
+    }
+  };
 
   const load=async(force=false,manual=false)=>{
     setError('');
