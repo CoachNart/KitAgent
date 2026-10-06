@@ -17,19 +17,19 @@ const bar=(i,o,h,l,c)=>({
 // A/V/GAP level construction is body/close based, never swing/wick based.
 const levelCandles=[
   bar(0,110,121,109,120),
-  bar(1,118,119,108,118), // A 120
-  bar(2,100,119,99,100),  // Bearish Gap 118
-  bar(3,102,103,99,102),  // V 100
-  bar(4,103,105,99,103)   // Bullish Gap 102
+  bar(1,119,120,108,118), // A 120 (green -> red)
+  bar(2,105,119,99,100),  // Bearish Gap 118 (red -> red)
+  bar(3,99,103,98,102),   // V 100 (red -> green)
+  bar(4,102,105,101,103)  // Bullish Gap 102 (green -> green)
 ];
 const levels=buildMSNRLevels(levelCandles);
 assert('MSNR exposes all six level types',MSNR_LEVEL_TYPES.join(',')==='A,V,BULLISH_GAP,BEARISH_GAP,SBR,RBS');
 assert('MSNR exposes all six confirmation types',MSNR_CONFIRMATION_TYPES.length===6);
-assert('A level uses first candle close',levels.some(x=>x.type==='A'&&x.level===120&&x.originIndex===0));
-assert('V level uses first candle close',levels.some(x=>x.type==='V'&&x.level===100&&x.originIndex===2));
-assert('Bearish gap is same-colour body pair',levels.some(x=>x.type==='BEARISH_GAP'&&x.level===118&&x.originIndex===1));
-assert('Bullish gap is same-colour body pair',levels.some(x=>x.type==='BULLISH_GAP'&&x.level===102&&x.originIndex===3));
-assert('Gap level retains a body-derived zone',()=>{const x=levels.find(x=>x.type==='BULLISH_GAP');return x&&x.zoneLow<=x.zoneHigh&&x.zoneLow!==undefined&&x.zoneHigh!==undefined});
+assert('A level uses first candle close',levels.some(x=>x.baseType==='A'&&x.level===120&&x.originIndex===0));
+assert('V level uses first candle close',levels.some(x=>x.baseType==='V'&&x.level===100&&x.originIndex===2));
+assert('Bearish gap is same-colour body pair',levels.some(x=>x.baseType==='BEARISH_GAP'&&x.level===118&&x.originIndex===1));
+assert('Bullish gap is same-colour body pair',levels.some(x=>x.baseType==='BULLISH_GAP'&&x.level===102&&x.originIndex===3));
+assert('Gap level retains a body-derived zone',()=>{const x=levels.find(x=>x.baseType==='BULLISH_GAP');return x&&x.zoneLow<=x.zoneHigh&&x.zoneLow!==undefined&&x.zoneHigh!==undefined});
 
 // Exact V CC: Red -> Green -> Green; signal wick touches level but full body stays above.
 const vCc=[
@@ -95,7 +95,11 @@ assert('MSNR requires current confirmation rather than old confirmation',()=>bui
 const layers=['4H','2H','1H','30m','15m'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
 const msnrResult=evaluateMSNR({candles:vCc,layers,price:103.5});
 assert('MSNR strategy returns a result object',!!msnrResult&&Array.isArray(msnrResult.failures));
-assert('MSNR does not use the generic execution resolver',()=>typeof evaluateStrategy({strategy:'MSNR',layers,execution:{candles:vCc},price:103.5}).trade!=='undefined');
+assert('MSNR does not use the generic execution resolver',()=>{
+  const direct=evaluateMSNR({candles:vCc,layers,price:103.5});
+  const routed=evaluateStrategy({strategy:'MSNR',layers,execution:{candles:vCc},price:103.5});
+  return routed.direction===direct.direction && routed.grade?.score===direct.grade?.score && routed.confirmations?.length===direct.confirmations?.length;
+});
 
 // Non-MSR strategies are intentionally disabled until their own contracts are rebuilt.
 for(const strategy of Object.keys(STRATEGIES).filter(x=>x!=='MSNR')){
