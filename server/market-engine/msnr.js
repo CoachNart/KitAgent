@@ -254,6 +254,22 @@ export function evaluateMSNR({candles,layers,price}){
   const events=latestMSNRConfirmations(candles);
   const failures=[];
   if(!events.length)failures.push('No fresh MSNR confirmation candle at a live key level.');
+  if(events.length&&Number.isFinite(price)){
+    const liveAtr=atr(candles,14)||Math.max(Math.abs(price)*.001,1e-9);
+    const allExtended=events.every(event=>{
+      const level=event.levelState;
+      const distance=price>level.zoneHigh?Math.abs(price-level.zoneHigh):price<level.zoneLow?Math.abs(level.zoneLow-price):0;
+      return distance>Math.max(liveAtr*.2,Math.abs(price)*.0035);
+    });
+    if(allExtended)return{
+      direction:'NEUTRAL',
+      failures:['Confirmation candle closed too far from the MSNR level; entry is extended.'],
+      evidence:[],
+      levels,
+      confirmations:events,
+      candidates:[]
+    };
+  }
 
   const candidates=[];
   for(const event of events){
