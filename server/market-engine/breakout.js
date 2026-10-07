@@ -1,5 +1,6 @@
 import {atr,bodyRatio,rangeAverage} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
+import {gradeSetup} from './grading.js';
 
 export const BREAKOUT_MODEL='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION';
 
@@ -153,9 +154,19 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const orderType=executionOrderType({direction,entry,price:Number(price),tolerance});
   if(!orderType){failures.push('Live price is no longer executable at the broken structural level.');return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm}]};}
+  const grade=gradeSetup({
+    strategy:'BREAKOUT',
+    context:{aligned:true,trend:true},
+    entry:{anchorQuality:1,executionQuality:1},
+    risk:{invalidationQuality:1,geometryQuality:1},
+    target:tgt,
+    confirmation:{quality:Math.min(1,.55+Math.min(1,br.atrMultiple/1.5)*.25+.2)},
+    freshness:{quality:1}
+  });
   return {
     direction,
     tradeReady:true,
+    grade,
     trade:{
       entry,
       marketEntry:Number(price),
@@ -172,6 +183,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
     },
     orderType,entry,stopLoss:stop,takeProfit1:tgt.price,rr,failures:[],
     evidence:[
+      ...grade.confidenceEvidence,
       {type:'HTF_ALIGNMENT',direction},
       {type:'BREAKOUT_LEVEL',...level},
       {type:'BREAKOUT',...br},
