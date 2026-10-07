@@ -254,6 +254,16 @@ export function evaluateMSNR({candles,layers,price}){
   const events=latestMSNRConfirmations(candles);
   const failures=[];
   if(!events.length)failures.push('No fresh MSNR confirmation candle at a live key level.');
+  const liveExecutionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
+  const conflictingConfirmation=events.find(event=>liveExecutionDirection!=='NEUTRAL'&&event.direction!==liveExecutionDirection);
+  if(conflictingConfirmation)return{
+    direction:'NEUTRAL',
+    failures:[`MSNR direction ${conflictingConfirmation.direction} conflicts with execution structure ${liveExecutionDirection}.`],
+    evidence:[],
+    levels,
+    confirmations:events,
+    candidates:[]
+  };
   if(events.length&&Number.isFinite(price)){
     const liveAtr=atr(candles,14)||Math.max(Math.abs(price)*.001,1e-9);
     const allExtended=events.every(event=>{
