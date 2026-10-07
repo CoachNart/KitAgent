@@ -247,6 +247,12 @@ assert('Structural target ranking is not an RR gate',()=>{
   return structuralTarget.rr===undefined;
 });
 
+// Target lookahead guard: a structural target must not use a swing formed after the setup event.
+const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
+lookaheadCandles[24]=bar(24,100,150,99,101);
+const lookaheadTarget=selectStructuralTarget(lookaheadCandles,'BULLISH',100,{asOf:15,asOfTime:lookaheadCandles[15].time,minDistance:1});
+assert('Target selection cannot use post-event structure',()=>!lookaheadTarget||lookaheadTarget.index<=15);
+
 // Structure model validation: protected swings must be external structure, not
 // the latest internal wick.
 const structured=structure(hierarchyCandles);
