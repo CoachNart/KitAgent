@@ -154,7 +154,7 @@ export default async function handler(req,res){
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
-    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase()));
+    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&s.engineVersion==='market-engine-v4');
     const unresolved=currentRaw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
     const priority=[...currentRaw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];
     const resolvable=new Set(priority.slice(0,24).map(s=>s.id));
