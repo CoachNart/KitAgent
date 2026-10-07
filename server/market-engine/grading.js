@@ -1,3 +1,4 @@
+import {atr} from './data.js';
 const VALID_GRADES=['A+','A','B','C','NO-TRADE'];
 
 export function noTrade(failures=[]){
