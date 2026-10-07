@@ -482,3 +482,176 @@
   .setup-v2-level small{white-space:normal;line-height:1.3}
   .strategy-trade-footer{gap:8px;flex-wrap:wrap}
 }
+
+
+/* Market Analysis setup card — final responsive text recovery.
+   Keep every value visible without changing the card's visual structure. */
+.setup-card-v2{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+.setup-v2-head{
+  min-width:0;
+  grid-template-columns:minmax(0,1fr) auto auto;
+}
+.setup-v2-symbol{
+  min-width:0;
+}
+.setup-v2-symbol span{
+  display:block;
+  min-width:0;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  overflow-wrap:break-word;
+  word-break:normal;
+  line-height:1.35;
+}
+.setup-v2-symbol h3{
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.setup-v2-confidence{
+  min-width:52px;
+}
+.setup-v2-confidence b,
+.setup-v2-confidence span{
+  display:block;
+  white-space:nowrap;
+}
+.strategy-trade-status{
+  min-width:0;
+  width:auto;
+  margin-left:16px !important;
+  margin-right:16px !important;
+  box-sizing:border-box;
+}
+.strategy-trade-status span,
+.strategy-trade-status b{
+  min-width:0;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  overflow-wrap:break-word;
+  word-break:normal;
+}
+.setup-v2-levels{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  min-width:0;
+}
+.v2-level{
+  min-width:0;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+.v2-level span{
+  display:block;
+  min-width:0;
+  white-space:normal;
+  overflow-wrap:break-word;
+  word-break:normal;
+}
+.v2-level b{
+  display:block;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:clamp(12px,1.6vw,16px);
+  line-height:1.2;
+}
+.v2-level small{
+  display:block;
+  min-width:0;
+  white-space:normal;
+  overflow-wrap:break-word;
+  word-break:normal;
+  line-height:1.35;
+}
+.strategy-trade-footer{
+  min-width:0;
+  flex-wrap:nowrap;
+}
+.strategy-trade-footer span{
+  min-width:0;
+  max-width:50%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+@media(max-width:600px){
+  .setup-card-v2{border-radius:14px}
+  .setup-v2-head{
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:9px;
+    padding:14px;
+  }
+  .setup-v2-symbol{grid-column:1;grid-row:1}
+  .setup-v2-bias{grid-column:1;grid-row:2;justify-self:start}
+  .setup-v2-confidence{
+    grid-column:2;
+    grid-row:1 / span 2;
+    align-self:center;
+    min-width:58px;
+    text-align:right;
+  }
+  .setup-v2-symbol span{
+    font-size:7px;
+    line-height:1.35;
+  }
+  .setup-v2-symbol h3{
+    font-size:20px;
+    line-height:1.1;
+    margin:4px 0 0;
+  }
+  .strategy-trade-status{
+    margin-left:12px !important;
+    margin-right:12px !important;
+    padding:8px 10px !important;
+    gap:8px !important;
+  }
+  .strategy-trade-status span{font-size:7px !important}
+  .strategy-trade-status b{
+    font-size:8px !important;
+    line-height:1.3 !important;
+  }
+  .setup-v2-levels{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+  .v2-level{
+    padding:10px 7px;
+  }
+  .v2-level span{
+    font-size:6px;
+    line-height:1.2;
+  }
+  .v2-level b{
+    font-size:clamp(10px,3.4vw,14px);
+    line-height:1.2;
+  }
+  .v2-level small{
+    font-size:6px;
+    line-height:1.3;
+  }
+  .strategy-trade-footer{
+    padding:9px 12px 11px !important;
+    gap:8px;
+  }
+  .strategy-trade-footer span{
+    font-size:7px !important;
+    max-width:50%;
+  }
+}
+@media(max-width:360px){
+  .setup-v2-head{padding:12px 10px}
+  .setup-v2-symbol h3{font-size:18px}
+  .setup-v2-confidence{min-width:52px}
+  .v2-level{padding:9px 5px}
+  .v2-level b{font-size:10px}
+  .v2-level small{font-size:5.5px}
+}
