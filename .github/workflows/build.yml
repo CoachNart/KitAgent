@@ -18,25 +18,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
-      - name: Repair product polish source
-        if: ${{ github.event_name == 'push' }}
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import subprocess
-          css = Path('src/mexcFutures.css')
-          s = css.read_text()
-          bad = '}display:flex;gap:6px;margin-top:8px}display:flex;gap:6px;margin-top:8px}display:flex;gap:6px;margin-top:10px}'
-          good = '}'
-          if bad in s:
-              s = s.replace(bad, good, 1)
-              css.write_text(s)
-          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
-          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
-          subprocess.run(['git','add','src/mexcFutures.css'],check=True)
-          if subprocess.run(['git','diff','--cached','--quiet']).returncode != 0:
-              subprocess.run(['git','commit','-m','fix: repair KitAgent trading share CSS'],check=True)
-              subprocess.run(['git','push','origin','HEAD:main'],check=True)
-          PY
       - run: npm install
       - run: NODE_OPTIONS=--max-old-space-size=4096 npm run build
