@@ -131,7 +131,7 @@ function AnalysisResult({result,savedSignal}){
   return <div className="live-result">
     <div className={'setup-card-v2 '+tone}>
       <div className="setup-v2-head">
-        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · EXECUTION {s.entryTimeframe||result.timeframe}</span><h3>{result.symbol.includes('/')?result.symbol:result.symbol.replace(/USDT$/,'/USDT')}</h3></div>
+        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · ENTRY {s.entryTimeframe||result.timeframe}</span><h3>{result.symbol.includes('/')?result.symbol:result.symbol.replace(/USDT$/,'/USDT')}</h3></div>
         <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
         <div className="setup-v2-confidence"><b>{hasTrade?s.confidence||0:0}%</b><span>CONFIDENCE</span></div>
       </div>
