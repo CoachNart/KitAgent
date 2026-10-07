@@ -75,7 +75,7 @@ function trade({c,bos,retestPoint,direction,price,targetSwing}){
     entryReason:'HTF structure aligned; execution produced a confirmed BOS, price retested the broken structural level and held.',
     invalidation:'Beyond the confirmed structural swing that invalidates the continuation thesis, with a volatility buffer.',
     invalidationSource:'execution_structural_swing',
-    targetSource:'external_confirmed_structural_swing',
+    targetSource:targetSwing.source||'external_confirmed_structural_swing',
     bosLevel:bos.level,bosIndex:bos.index,retestIndex:retestPoint.index,stopSwingIndex:stopSwing.index
   };
 }
