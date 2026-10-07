@@ -76,7 +76,7 @@ export async function fetchPrice(market,symbol){
   const mid=bid>0&&ask>0?(bid+ask)/2:last;
   if(!Number.isFinite(mid)||mid<=0)throw new Error('Bybit live price unavailable');
   return{
-    bid,ask,mid,
+    bid,ask,last,mid,
     time:new Date(Number(b.time||Date.now())).toISOString(),
     marketState:'open',
     stale:false,
@@ -250,7 +250,7 @@ export default async function handler(req,res){
     }
 
     const results=[];
-    for(const tf of tfs)results.push(await analyzeOne(market,symbol,strategy,tf,all,price.mid));
+    for(const tf of tfs)results.push(await analyzeOne(market,symbol,strategy,tf,all,price.last));
 
     const viable=results.filter(x=>
       ['A+','A'].includes(x.grade.grade)&&
