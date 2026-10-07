@@ -1,5 +1,6 @@
 import {atr} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
+import {gradeSetup} from './grading.js';
 
 export const TOP_DOWN_MODEL='HTF_ALIGNMENT_EXECUTION_BOS_RETEST';
 
@@ -82,27 +83,26 @@ function trade({c,bos,retestPoint,direction,price,targetSwing}){
 
 function scoreSetup({layers,bos,retestPoint,price,entry,target,candles}){
   const a=atr(candles,14)||0;
-  const ageBos=bos.age,ageRetest=retestPoint.age,distance=Math.abs(price-entry);
-  const nearTolerance=Math.max(a*.35,Math.abs(entry)*.0015);
-  let score=0;
-  const evidence=[];
-  score+=20;
-  evidence.push({type:'HTF_ALIGNMENT',direction:htfBias(layers),timeframes:layers.map(x=>x.tf),score:20});
-  if(ageBos<=3){score+=16;evidence.push({type:'FRESH_BOS',age:ageBos,score:16});}
-  else if(ageBos<=6){score+=9;evidence.push({type:'RECENT_BOS',age:ageBos,score:9});}
-  else evidence.push({type:'STALE_BOS',age:ageBos,score:0});
-  if(ageRetest<=2){score+=16;evidence.push({type:'FRESH_RETEST',age:ageRetest,score:16});}
-  else if(ageRetest<=4){score+=9;evidence.push({type:'RECENT_RETEST',age:ageRetest,score:9});}
-  else evidence.push({type:'STALE_RETEST',age:ageRetest,score:0});
-  if(distance<=nearTolerance){score+=14;evidence.push({type:'PRICE_AT_RETEST',distance,tolerance:nearTolerance,score:14});}
-  else evidence.push({type:'PRICE_AWAY_FROM_RETEST',distance,tolerance:nearTolerance,score:0});
-  score+=12;
-  evidence.push({type:'MEANINGFUL_STRUCTURAL_TARGET',target,score:12});
-  const execState=layers.at(-1)?.structure?.state||'';
-  if(execState.startsWith('TRENDING_')){score+=10;evidence.push({type:'TRENDING_EXECUTION_STATE',state:execState,score:10});}
-  return{score,evidence};
+  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+  const distance=Math.abs(price-entry);
+  return gradeSetup({
+    strategy:'TOP_DOWN',
+    context:{aligned:!!htfBias(layers),trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
+    entry:{anchorQuality:1,executionQuality:distance<=tolerance?1:.75},
+    risk:{invalidationQuality:1,geometryQuality:1},
+    target,
+    confirmation:{quality:Math.min(1,ageQuality(bos.age,2,5)*.55+ageQuality(retestPoint.age,1,4)*.45)},
+    freshness:{quality:Math.min(ageQuality(bos.age,2,5),ageQuality(retestPoint.age,1,4))}
+  });
 }
 
+function ageQuality(age,fresh,recent){
+  if(!Number.isFinite(age))return 0;
+  if(age<=fresh)return 1;
+  if(age<=recent)return .7;
+  if(age<=8)return .35;
+  return 0;
+}
 export function evaluateTopDown({candles,layers,price}){
   const c=candles||[];
   if(c.length<40)return{direction:'NEUTRAL',failures:['Insufficient execution candles for Top-Down.'],evidence:[]};
@@ -129,7 +129,7 @@ export function evaluateTopDown({candles,layers,price}){
     grade:{grade:scored.score>=88?'A+':'A',score:scored.score,hardFailures:[]},
     failures:[],
     trade:tradeResult,
-    evidence:[...scored.evidence,{type:'TARGET',price:targetSwing.price}],
+    evidence:[...scored.confidenceEvidence,{type:'TARGET',price:targetSwing.price}],
     topDown:{model:TOP_DOWN_MODEL,htfDirection:direction,executionBOS:bos,retest:rt,target:targetSwing.price,score:scored.score}
   };
 }
