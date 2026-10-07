@@ -5,12 +5,12 @@ import {MarketWatchlist, StrategySelector} from './MarketExtras.jsx';
 import './market-extras.css';
 export const TIMEFRAMES=['AUTO','15m','30m','1H','2H','4H'];
 const TIMEFRAME_GUIDE={
- 'AUTO':{title:'AUTO · best qualified timeframe',desc:'Evaluates 15m, 30m, 1H, 2H and 4H, then selects the strongest qualified strategy-specific entry timeframe.'},
- '15m':{title:'15m · entry timeframe',desc:'Uses 15m as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
- '30m':{title:'30m · entry timeframe',desc:'Uses 30m as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
- '1H':{title:'1H · entry timeframe',desc:'Uses 1H as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
- '2H':{title:'2H · entry timeframe',desc:'Uses 2H as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
- '4H':{title:'4H · entry timeframe',desc:'Uses 4H as the trigger layer while the strategy builds its required higher-timeframe context automatically.'}
+ 'AUTO':{title:'AUTO · best qualified execution',desc:'Evaluates every supported execution timeframe and selects the strongest strategy-specific setup that passes all rules.'},
+ '15m':{title:'15m · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 15m; higher-timeframe context is checked automatically.'},
+ '30m':{title:'30m · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 30m; higher-timeframe context is checked automatically.'},
+ '1H':{title:'1H · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 1H; higher-timeframe context is checked automatically.'},
+ '2H':{title:'2H · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 2H; higher-timeframe context is checked automatically.'},
+ '4H':{title:'4H · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 4H; the engine adds the required higher-timeframe context automatically.'}
 };
 const instrumentCache=new Map();
 const instrumentRequests=new Map();
@@ -19,9 +19,9 @@ function price(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number
 async function waitForAuthUser(timeoutMs=5000){if(auth?.currentUser)return auth.currentUser;return new Promise(resolve=>{let done=false;let unsubscribe=null;const finish=u=>{if(done)return;done=true;clearTimeout(timer);unsubscribe?.();resolve(u||null)};unsubscribe=auth?.onAuthStateChanged(finish)||null;const timer=setTimeout(()=>finish(auth?.currentUser||null),timeoutMs)})}
 async function authToken(forceRefresh=false){const user=await waitForAuthUser();if(!user)return '';return user.getIdToken(forceRefresh)}
 async function persistSignal(body){const user=await waitForAuthUser(2500),setup=body?.setup;if(!user||!setup?.tradeReady||!['MARKET','LIMIT'].includes(String(setup.orderType||'').toUpperCase())||!['LONG','SHORT'].includes(String(setup.bias||'').toUpperCase())||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,strategy:body.strategy||body.setup?.strategy||body.setup?.strategyName||'',setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;const result=await response.json();window.dispatchEvent(new CustomEvent('kitagent-signal-recorded',{detail:result.signal}));return result;}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
-export default function LiveMarketPage(){const market='perpetual';const [pair,setPair]=useState(''),[timeframe,setTimeframe]=useState('AUTO'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[sourceLoading,setSourceLoading]=useState(true),[error,setError]=useState(''),[result,setResult]=useState(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup:v4');return raw?JSON.parse(raw):null}catch{return null}}),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState([]),[pickerOpen,setPickerOpen]=useState(false);
+export default function LiveMarketPage(){const market='perpetual';const [pair,setPair]=useState(''),[timeframe,setTimeframe]=useState('AUTO'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[sourceLoading,setSourceLoading]=useState(true),[error,setError]=useState(''),[result,setResult]=useState(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup:v5');return raw?JSON.parse(raw):null}catch{return null}}),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState([]),[pickerOpen,setPickerOpen]=useState(false);
 
- useEffect(()=>{try{localStorage.removeItem('kitagent:last-market-setup:v3')}catch{}},[]);
+ useEffect(()=>{try{localStorage.removeItem('kitagent:last-market-setup:v3');localStorage.removeItem('kitagent:last-market-setup:v4')}catch{}},[]);
  useEffect(()=>{if(!TIMEFRAMES.includes(timeframe))setTimeframe('AUTO')},[timeframe]);
 
  useEffect(()=>{if(result?.market==='perpetual'&&result?.symbol){setPair(result.symbol.includes('/')?result.symbol:result.symbol.replace(/USDT$/,'/USDT'));setTimeframe(TIMEFRAMES.includes(result.timeframe)?result.timeframe:'AUTO');setStrategy(result.strategy||result.setup?.strategy||'TOP_DOWN')}},[]);
@@ -31,7 +31,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
  const filteredPairs=useMemo(()=>{const q=instrumentQuery.trim().toUpperCase();return q?instruments.filter(x=>`${x.symbol} ${x.name||''}`.toUpperCase().includes(q)):instruments},[instruments,instrumentQuery]);
  const customCryptoSymbol=useMemo(()=>{const raw=instrumentQuery.trim().toUpperCase().replace(/\s+/g,'');if(!raw)return '';const base=raw.replace(/\/USDT$/,'').replace(/USDT$/,'');if(!/^[A-Z0-9]+$/.test(base))return '';const candidate=`${base}/USDT`;return instruments.some(x=>x.symbol===candidate)?'':candidate},[instrumentQuery,instruments]);
 
- const analyze=async()=>{if(!pair)return;setLoading(true);setError('');try{const endpoint='/api/market';const token=await authToken();if(!token)throw new Error('Authentication is still initializing. Please retry.');const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session is still initializing. Please retry.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);try{localStorage.setItem('kitagent:last-market-setup:v3',JSON.stringify(body));}catch{}window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));persistSignal(body).then(saved=>{if(saved?.signal)setSavedSignal(saved.signal)});}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
+ const analyze=async()=>{if(!pair)return;setLoading(true);setError('');try{const endpoint='/api/market';const token=await authToken();if(!token)throw new Error('Authentication is still initializing. Please retry.');const r=await fetch(`${endpoint}?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbolFor(pair))}&timeframe=${encodeURIComponent(timeframe)}&strategy=${encodeURIComponent(strategy)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok){if(r.status===401)throw new Error('Your session is still initializing. Please retry.');if(r.status===403){window.dispatchEvent(new CustomEvent('kitagent-open-profile'));throw new Error(body.error||'Your trial or Premium access has expired')}throw new Error(body.error||`Market analysis failed (${r.status})`);}setResult(body);try{localStorage.setItem('kitagent:last-market-setup:v5',JSON.stringify(body));}catch{}window.dispatchEvent(new CustomEvent('kitagent-market-setup',{detail:body}));persistSignal(body).then(saved=>{if(saved?.signal)setSavedSignal(saved.signal)});}catch(e){setError(e.message||'Unable to read market data right now.')}finally{setLoading(false)}};
 
  return (
     <div className="live-market page-wrap">
@@ -81,7 +81,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
           </label>
 
           <label className="live-field timeframe">
-            <span>ENTRY TIMEFRAME</span>
+            <span>EXECUTION TIMEFRAME</span>
             <div>
               <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=><option key={x} value={x}>{x}</option>)}</select>
               <ChevronDown/>

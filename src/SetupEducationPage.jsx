@@ -2,7 +2,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,ArrowUpRight,CheckCircle2,CircleHelp,ShieldCheck,Target,Waypoints,Zap} from 'lucide-react';
 import {STRATEGY_LIBRARY} from './MarketExtras.jsx';
 
-const LIVE_KEY='kitagent:last-market-setup:v4';
+const LIVE_KEY='kitagent:last-market-setup:v5';
 function humanEvidence(value){
  if(value&&typeof value==='object'){
    const type=String(value.type||'').replaceAll('_',' ');
@@ -23,7 +23,7 @@ function humanEvidence(value){
    if(type==='DISPLACEMENT')return 'Meaningful displacement: '+Number(value.atrMultiple||0).toFixed(2)+'× ATR.';
    if(type==='FVG')return 'Fresh FVG: '+fmt(value.low)+'–'+fmt(value.high)+'.';
    if(type==='PREMIUM DISCOUNT')return 'FVG location validated in '+String(value.zone||'range').toLowerCase()+'.';
-   if(type==='CRT RANGE')return 'CRT reference range: '+fmt(value.low||value.high)+'–'+fmt(value.high||value.low)+'.';
+   if(type==='CRT RANGE')return 'CRT reference range: '+fmt(value.low)+'–'+fmt(value.high)+'.';
    if(type==='HTF SWEEP')return 'CRT higher-timeframe sweep/reclaim confirmed.';
    if(type==='LTF SWEEP')return 'CRT execution sweep/reclaim confirmed.';
    if(type==='TARGET')return 'Target validated at '+fmt(value.price||value.level)+'.';
@@ -48,13 +48,13 @@ export default function SetupEducationPage({onBack}){
    <button type='button' className='setup-guide-back' onClick={onBack}><ArrowLeft size={15}/> Market analysis</button>
    <div className='setup-guide-eyebrow'><Zap size={12}/> KITSETUPS SETUP ENGINE</div>
    <h1>Understand the setup<br/><span>before you trade it.</span></h1>
-   <p>Every setup is built from live market structure. This guide shows what the engine must prove, what invalidates the idea, and how the target is selected.</p>
+   <p>Each strategy has its own entry model. This guide shows the exact evidence the new engine must prove, what invalidates the setup, and how the target is selected.</p>
    <div className='setup-guide-flow'><span><b>01</b> Direction</span><i>→</i><span><b>02</b> Structure</span><i>→</i><span><b>03</b> Trigger</span><i>→</i><span><b>04</b> Protection</span><i>→</i><span><b>05</b> Target</span></div>
   </header>
   <section className='setup-guide-live'>
    <div className='setup-guide-section-head'><div><span className='setup-guide-kicker'>LIVE SETUP ANATOMY</span><h2>See the actual evidence behind a setup</h2><p>When a live analysis exists for the selected strategy, these values come from the same market read used to generate the setup.</p></div>{hasLive&&<span className='setup-live-badge'><i/> LIVE {live.symbol}</span>}</div>
    {hasLive ? <div className='setup-live-grid'>
-    <div className='setup-live-card'><span>BIAS</span><b className={direction==='LONG'?'is-long':'is-short'}>{direction}</b><small>{setup.entryTimeframe} entry · {setup.analysisTimeframes?.join(' → ')}</small></div>
+    <div className='setup-live-card'><span>BIAS</span><b className={direction==='LONG'?'is-long':'is-short'}>{direction}</b><small>{setup.entryTimeframe} execution · {setup.analysisTimeframes?.join(' → ')}</small></div>
     <div className='setup-live-card'><span>STRUCTURE EVENT</span><b>{event?.direction||'—'} {event?.level?'· '+fmt(event.level):''}</b><small>{event?.level?'Observed on the live structure read.':'No qualifying break event exposed by this analysis.'}</small></div>
     <div className='setup-live-card'><span>ENTRY</span><b>{fmt(setup.entry)}</b><small>{setup.orderType||'—'} · {setup.entryReason||'Engine-selected execution level'}</small></div>
     <div className='setup-live-card'><span>INVALIDATION</span><b>{fmt(setup.stopLoss)}</b><small>{setup.invalidationSource||'Validated structural invalidation'}</small></div>
