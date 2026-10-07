@@ -1,6 +1,4 @@
 import {atr} from './data.js';
-import {structure} from './structure.js';
-
 const RESISTANCE_TYPES=new Set(['A','BEARISH_GAP','SBR']);
 const SUPPORT_TYPES=new Set(['V','BULLISH_GAP','RBS']);
 
@@ -259,6 +257,18 @@ export function evaluateMSNR({candles,layers,price}){
     const level=event.levelState;
     const direction=event.direction;
     const context=currentContext(layers,direction);
+    const executionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
+    const opposingHigherTimeframe=layers.slice(0,-1)
+      .map(x=>x.structure?.direction||'NEUTRAL')
+      .find(x=>x!=='NEUTRAL'&&x!==direction);
+    if(executionDirection!=='NEUTRAL'&&executionDirection!==direction){
+      candidates.push({event,level,direction,context,entry:price,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:`MSNR direction ${direction} conflicts with execution structure ${executionDirection}.`});
+      continue;
+    }
+    if(opposingHigherTimeframe){
+      candidates.push({event,level,direction,context,entry:price,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:`MSNR direction ${direction} conflicts with higher-timeframe structure ${opposingHigherTimeframe}.`});
+      continue;
+    }
     const signalClose=event.signalCandle.close;
     const a=atr(candles,14)||Math.max(signalClose*.001,1e-9);
     const liveDrift=Math.abs(price-signalClose);
@@ -290,9 +300,14 @@ export function evaluateMSNR({candles,layers,price}){
     }
     const reward=Math.abs(target.level-entry),risk=Math.abs(entry-stop),rr=risk>0?reward/risk:0;
     const distanceFromLevel=entry>level.zoneHigh?Math.abs(entry-level.zoneHigh):entry<level.zoneLow?Math.abs(level.zoneLow-entry):0;
-    const tooExtended=distanceFromLevel>Math.max(a*.5,Math.abs(entry)*.0015);
+    const tooExtended=distanceFromLevel>Math.max(a*.2,Math.abs(entry)*.0035);
     if(tooExtended){
       candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'Confirmation candle closed too far from the MSNR level; entry is extended.'});
+      continue;
+    }
+    const stopTooWide=risk>Math.max(a*1.25,Math.abs(entry)*.015);
+    if(stopTooWide){
+      candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'MSNR invalidation is too far from the live entry; stop geometry is no longer efficient for the confirmed level.'});
       continue;
     }
     if(!(risk>0&&reward>0&&rr>=2)){
