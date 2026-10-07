@@ -20,13 +20,6 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   if(strategy==='PULLBACK')return evaluatePullback({candles:execution.candles,layers,price});
   if(strategy==='BREAKOUT')return evaluateBreakout({candles:execution.candles,layers,price});
   if(strategy==='CRT')return evaluateCRT({candles:execution.candles,layers,price});
-  if(strategy!=='MSNR'){
-    return {
-      direction:'NEUTRAL',
-      failures:[`${STRATEGIES[strategy]?.name||strategy} is intentionally disabled while the strategy engine is being rebuilt strategy-by-strategy.`],
-      evidence:[]
-    };
-  }
   return evaluateMSNR({candles:execution.candles,layers,price});
 }
 
