@@ -125,12 +125,12 @@ export function evaluatePullback({candles=[],layers=[],price}){
   }
   const grade=gradeSetup({
     strategy:'PULLBACK',
-    context:{aligned:true,trend:true},
+    context:{aligned:true,trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
     entry:{anchorQuality:1,executionQuality:near?1:.8},
     risk:{invalidationQuality:1,geometryQuality:1},
     target,
-    confirmation:{quality:1},
-    freshness:{quality:1}
+    confirmation:{quality:.9},
+    freshness:{quality:.85}
   });
   const trade={
     entry,marketEntry:live,stop,target:target.price,risk,reward,rr,orderType,
