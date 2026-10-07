@@ -101,9 +101,15 @@ export function evaluatePullback({candles=[],layers=[],price}){
   }
   const entry=confirm.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  // The executable stop invalidates the retracement structure, not the entire
+  // impulse origin. The impulse origin remains a thesis-level failure check;
+  // anchoring the stop to it can create unrelated multi-ATR risk.
+  const pullbackCandles=candles.slice(touch.index);
+  const pullbackLow=Math.min(...pullbackCandles.map(x=>x.low));
+  const pullbackHigh=Math.max(...pullbackCandles.map(x=>x.high));
   const stop=direction==='BULLISH'
-    ?Math.min(touch.candle.low,move.start.price)-a*.25
-    :Math.max(touch.candle.high,move.start.price)+a*.25;
+    ?Math.min(touch.candle.low,pullbackLow)-a*.25
+    :Math.max(touch.candle.high,pullbackHigh)+a*.25;
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){failures.push('Invalid structural risk.');return {direction,failures,evidence:[]};}
   const target=nextTarget(candles,direction,entry,move,confirm.index,layers);
