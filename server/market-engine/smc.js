@@ -1,5 +1,5 @@
 import {atr,bodyRatio} from './data.js';
-import {confirmedSwings} from './structure.js';
+import {confirmedSwings,selectStructuralTarget} from './structure.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
@@ -49,15 +49,9 @@ function freshFvg(c,fvg,asOf){
   return true;
 }
 function nextLiquidityTarget(c,direction,entry,sweepIndex){
-  const s=confirmedSwings(c,3),pools=direction==='BULLISH'?s.highs:s.lows;
   const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004);
-  const valid=pools
-    .filter(x=>x.index>sweepIndex)
-    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
-    .filter(x=>Math.abs(x.price-entry)>=minDistance)
-    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
-  return valid[0]||null;
+  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  return selectStructuralTarget(c,direction,entry,{minDistance})||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
