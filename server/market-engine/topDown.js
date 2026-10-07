@@ -37,12 +37,21 @@ function retest(c,bos,direction){
   }
   return null;
 }
-export function executionOrderType({direction,entry,price,tolerance}){\n  const gap=Math.abs(price-entry);\n  const near=gap<=tolerance;\n  if(direction==='BULLISH'){ if(price<entry&&!near)return null; return near?'MARKET':'LIMIT'; }\n  if(direction==='BEARISH'){ if(price>entry&&!near)return null; return near?'MARKET':'LIMIT'; }\n  return null;\n}\nfunction trade({c,bos,retestPoint,direction,price,targetSwing}){
+export function executionOrderType({direction,entry,price,tolerance}){
+  const gap=Math.abs(price-entry);
+  const near=gap<=tolerance;
+  if(direction==='BULLISH'){ if(price<entry&&!near)return null; return near?'MARKET':'LIMIT'; }
+  if(direction==='BEARISH'){ if(price>entry&&!near)return null; return near?'MARKET':'LIMIT'; }
+  return null;
+}
+function trade({c,bos,retestPoint,direction,price,targetSwing}){
   const a=atr(c,14)||Math.abs(price)*.001,buffer=Math.max(a*.2,Math.abs(price)*.0004);
   const stop=direction==='BULLISH'?retestPoint.low-buffer:retestPoint.high+buffer;
   const entry=retestPoint.price,risk=Math.abs(entry-stop),target=targetSwing.price,reward=Math.abs(target-entry),rr=reward/risk;
   if(!(risk>0&&reward>0&&rr>=2))return null;
-  const orderType=executionOrderType({direction,entry,price,tolerance:Math.max(a*.35,Math.abs(price)*.0015)});\n  if(!orderType)return null;\n  return{entry,marketEntry:price,stop,target,rr,orderType,
+  const orderType=executionOrderType({direction,entry,price,tolerance:Math.max(a*.35,Math.abs(price)*.0015)});
+  if(!orderType)return null;
+  return{entry,marketEntry:price,stop,target,rr,orderType,
     entryReason:'Higher-timeframe direction aligned with an execution-timeframe BOS; price retested and held the broken structure level.',
     invalidation:'Beyond the execution retest candle extreme with volatility buffer.',
     invalidationSource:'execution_retest_extreme',bosLevel:bos.level,bosIndex:bos.index,retestIndex:retestPoint.index};
