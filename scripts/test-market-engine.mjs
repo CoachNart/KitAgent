@@ -7,6 +7,7 @@ import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry} from '../server/market-engine/grading.js';
+import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -144,7 +145,7 @@ assert('SMC routes through its own evaluator',()=>{const routed=evaluateStrategy
 // Top-Down contract: aligned HTF direction -> execution BOS -> retest/hold -> structural target.
 const tdCandles=Array.from({length:50},(_,i)=>bar(i,100+i*.1,101+i*.1,99+i*.1,100.5+i*.1));
 assert('Top-Down uses a defined multi-timeframe entry model',TOP_DOWN_MODEL==='HTF_ALIGNMENT_EXECUTION_BOS_RETEST');
-const tdMismatch=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}}],price:105});
+const tdMismatch=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'15m',structure:{direction:'BULLISH'}}],price:105});
 assert('Top-Down rejects conflicting higher-timeframe directions',()=>tdMismatch.direction==='NEUTRAL'&&tdMismatch.failures.length>0);
 const tdNoBos=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Top-Down requires execution BOS before entry',()=>tdNoBos.direction==='BULLISH'&&tdNoBos.failures.some(x=>x.includes('BOS')));
@@ -277,7 +278,7 @@ assert('Confidence model labels score as structural quality, not win probability
 
 // Trade Geometry Contract: strategy structure may be valid, but publication is
 // blocked when the actual entry/stop/target expression is structurally poor.
-const geoCandles=Array.from({length:60},(_,i)=>bar(i,100,101.5,98.5,100.5));
+const geoCandles=Array.from({length:60},(_,i)=>bar(i,100,101.25,98.75,100.5));
 const goodGeometry=validateTradeGeometry({trade:{entry:100,stop:99,target:104},direction:'BULLISH',candles:geoCandles});
 const tightGeometry=validateTradeGeometry({trade:{entry:100,stop:99.9,target:103},direction:'BULLISH',candles:geoCandles});
 const poorReward=validateTradeGeometry({trade:{entry:100,stop:98,target:101},direction:'BULLISH',candles:geoCandles});
@@ -288,6 +289,18 @@ assert('Trade Geometry Contract does not gate on R:R when target distance is str
 assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('execution noise')));
 assert('Trade Geometry Contract rejects targets that are too close to the entry',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('too close')));
 assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
+
+
+// Scanner smoke: exercise the real Bybit-backed scanner path across all retained
+// strategies and execution timeframes. Public market-data endpoints require no auth.
+const scannerUniverse=await topSymbols();
+assert('Scanner discovers a live Bybit perpetual universe',()=>scannerUniverse.length===18&&scannerUniverse.every(x=>/USDT$/.test(x.symbol)&&x.turnover24h>0));
+const scannerCandles=await candlesFor('BTCUSDT');
+assert('Scanner loads every supported execution timeframe plus 1D context',()=>['15m','30m','1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
+const scannerSetups=await scanSymbol(scannerUniverse[0]);
+assert('Scanner completes the six-strategy five-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
+assert('Scanner never publishes invalid directional geometry',()=>scannerSetups.every(x=>(x.bias==='LONG'&&x.stopLoss<x.entry&&x.takeProfit>x.entry)||(x.bias==='SHORT'&&x.stopLoss>x.entry&&x.takeProfit<x.entry)));
+assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['15m','30m','1H','2H','4H'].includes(x.timeframe)));
 
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
