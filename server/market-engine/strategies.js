@@ -30,6 +30,3 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   return evaluateMSNR({candles:execution.candles,layers,price});
 }
 
-export function resolveEntry(){
-  throw new Error('resolveEntry is removed. Each strategy now owns its own entry model.');
-}
