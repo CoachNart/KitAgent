@@ -96,6 +96,15 @@ export function structure(c,asOf=c.length-1){
   const protectedHigh=bearishProtected||null;
 
   let direction=rawDirection;
+
+  // When the latest confirmed swing pair is transitional, use a recent
+  // structural break as the directional state instead of forcing the layer
+  // to NEUTRAL. This preserves BOS/CHOCH semantics while preventing a single
+  // unfinished HH/HL or LH/LL pair from starving every strategy of HTF bias.
+  if(direction==='NEUTRAL'&&last&&last.age<=8){
+    direction=last.direction;
+  }
+
   if(direction==='BULLISH'&&protectedLow&&price<protectedLow.price)direction='NEUTRAL';
   if(direction==='BEARISH'&&protectedHigh&&price>protectedHigh.price)direction='NEUTRAL';
 
