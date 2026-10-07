@@ -53,14 +53,17 @@ function confirmation(c,touch,direction){
 }
 
 function nextTarget(c,direction,entry,move,after){
-  // The impulse extreme is the first legitimate continuation objective even though
-  // it formed before the confirmation candle. Only use later structure if that level
-  // is already behind price.
-  if(direction==='BULLISH'&&move.end.price>entry)return move.end;
-  if(direction==='BEARISH'&&move.end.price<entry)return move.end;
-  const s=confirmedSwings(c,2);
-  const candidates=direction==='BULLISH'?s.highs.filter(x=>x.index>after&&x.price>entry):s.lows.filter(x=>x.index>after&&x.price<entry);
-  return candidates[0]||null;
+  const a=atr(c,14)||0;
+  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004);
+  if(direction==='BULLISH'&&move.end.price>entry&&Math.abs(move.end.price-entry)>=minDistance)return {...move.end,source:'IMPULSE_EXTREME'};
+  if(direction==='BEARISH'&&move.end.price<entry&&Math.abs(move.end.price-entry)>=minDistance)return {...move.end,source:'IMPULSE_EXTREME'};
+  const s=confirmedSwings(c,3);
+  const candidates=(direction==='BULLISH'?s.highs:s.lows)
+    .filter(x=>x.index>after)
+    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
+    .filter(x=>Math.abs(x.price-entry)>=minDistance)
+    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
+  return candidates[0]?{...candidates[0],source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
 }
 
 export function evaluatePullback({candles=[],layers=[],price}){
@@ -101,15 +104,5 @@ export function evaluatePullback({candles=[],layers=[],price}){
   const target=nextTarget(candles,direction,entry,move,confirm.index);
   if(!target){failures.push('No opposing structural continuation target.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm}]};}
   const reward=Math.abs(target.price-entry),rr=reward/risk;
-  if(!(rr>=2)){failures.push('Structural target does not provide at least 2R.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};}
-  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
-  const near=Math.abs(Number(price)-entry)<=tolerance;
-  const orderType=near?'MARKET':direction==='BULLISH'?(Number(price)>entry?'LIMIT':null):(Number(price)<entry?'LIMIT':null);
-  if(!orderType){failures.push('Live price has crossed the planned pullback entry; setup is stale and cannot be published as a waiting limit.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};}
-  return {
-    direction,tradeReady:true,orderType,entry,stopLoss:stop,takeProfit1:target.price,rr,
-    failures:[],
-    evidence:[{type:'HTF_ALIGNMENT',direction},{type:'IMPULSE',...move},{type:'RETRACEMENT_ZONE',...zone},{type:'PULLBACK_TOUCH',...touch},{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target}],
-    pullback:{model:PULLBACK_MODEL,direction,impulse:move,retracement:zone,touch,confirmation:confirm,target}
-  };
+  if(!(reward>0)){failures.push('Structural target is not beyond entry.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};};
 }
