@@ -70,9 +70,10 @@ export function validateTradeGeometry({trade,direction,candles=[]}={}){
   // A stop inside normal execution noise is not a structural invalidation.
   // Use ATR rather than a fixed percentage so the rule scales by instrument.
   if(a>0&&risk<a*.35)failures.push('Stop is inside normal execution noise; invalidation is too tight for the market volatility.');
-  // A target that cannot at least pay for the structural risk is not an
-  // executable continuation objective. This is deliberately 1R, not a 2R gate.
-  if(rr<1)failures.push('Structural objective does not cover the defined risk; trade geometry is inefficient.');
+  // Target distance is validated against market volatility, not against R:R.
+  // R:R remains an output/ranking metric; it must never be the structural gate.
+  if(a>0&&reward<Math.max(a,Math.abs(entry)*.0035))
+    failures.push('Structural target is too close to the entry for the current market volatility.');
   // Conversely, an excessively wide stop relative to current volatility usually
   // means the strategy anchored invalidation to an unrelated structure point.
   if(a>0&&risk>a*3)failures.push('Stop is excessively wide relative to execution volatility; invalidation is likely anchored to unrelated structure.');
