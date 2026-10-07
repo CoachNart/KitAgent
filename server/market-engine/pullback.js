@@ -60,7 +60,7 @@ function nextTarget(c,direction,entry,move,after,layers=[]){
     ?{price:move.end.price,index:move.end.index,source:'IMPULSE_EXTREME'}
     :null;
   if(native&&Math.abs(native.price-entry)>=minDistance)return native;
-  return selectStructuralTarget(c,direction,entry,{layers,minDistance});
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:after,asOfTime:c[after]?.time??null});
 }
 export function evaluatePullback({candles=[],layers=[],price}){
   const failures=[];
@@ -104,7 +104,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   // The executable stop invalidates the retracement structure, not the entire
   // impulse origin. The impulse origin remains a thesis-level failure check;
   // anchoring the stop to it can create unrelated multi-ATR risk.
-  const pullbackCandles=candles.slice(touch.index);
+  const pullbackCandles=candles.slice(touch.index,confirm.index+1);
   const pullbackLow=Math.min(...pullbackCandles.map(x=>x.low));
   const pullbackHigh=Math.max(...pullbackCandles.map(x=>x.high));
   const stop=direction==='BULLISH'
@@ -124,9 +124,11 @@ export function evaluatePullback({candles=[],layers=[],price}){
   }
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const near=Math.abs(live-entry)<=tolerance;
-  const orderType=near?'MARKET':direction==='BULLISH'?(live>entry?'LIMIT':null):(live<entry?'LIMIT':null);
+  const pendingDistance=Math.abs(live-entry);
+  const pendingMax=Math.max(a,Math.abs(entry)*.003);
+  const orderType=near?'MARKET':direction==='BULLISH'?(live>entry&&pendingDistance<=pendingMax?'LIMIT':null):(live<entry&&pendingDistance<=pendingMax?'LIMIT':null);
   if(!orderType){
-    failures.push('Live price has crossed the planned pullback entry; setup is stale and cannot be published as a waiting limit.');
+    failures.push('Live price is too far from the planned pullback entry; the continuation setup is stale and cannot be published as a waiting limit.');
     return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};
   }
   const grade=gradeSetup({
