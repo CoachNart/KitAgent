@@ -53,7 +53,7 @@ function freshFvg(c,fvg,asOf){
 function nextLiquidityTarget(c,direction,entry,sweepIndex,layers=[]){
   const a=atr(c,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
-  return selectStructuralTarget(c,direction,entry,{layers,minDistance})||null;
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:sweepIndex,asOfTime:c[sweepIndex]?.time??null})||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
@@ -63,7 +63,9 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   if(direction==='BEARISH'&&price>sweep.extreme)return null;
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const near=Math.abs(price-entry)<=tolerance;
-  const orderType=near?'MARKET':direction==='BULLISH'?(price>entry?'LIMIT':null):(price<entry?'LIMIT':null);
+  const pendingDistance=Math.abs(price-entry);
+  const pendingMax=Math.max(a,Math.abs(entry)*.003);
+  const orderType=near?'MARKET':direction==='BULLISH'?(price>entry&&pendingDistance<=pendingMax?'LIMIT':null):(price<entry&&pendingDistance<=pendingMax?'LIMIT':null);
   if(!orderType)return null;
   return{entry,marketEntry:price,stop,target,rr,orderType,entryReason:'Retrace into the unmitigated FVG created by the displacement that caused the MSS.',invalidation:'Beyond the liquidity-sweep extreme with volatility buffer.',invalidationSource:'liquidity_sweep_extreme',sweepLevel:sweep.level,sweepExtreme:sweep.extreme,mssLevel:mss.level,displacementIndex:displacement.index,fvg:{low:fvg.low,high:fvg.high,midpoint:fvg.midpoint,index:fvg.index}};
 }
