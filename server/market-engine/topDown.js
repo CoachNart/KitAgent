@@ -46,12 +46,12 @@ export function executionOrderType({direction,entry,price,tolerance}){
 }
 
 function structuralStop(c,retestPoint,direction){
-  const s=confirmedSwings(c,2);
+  const s=confirmedSwings(c,3);
   if(direction==='BULLISH'){
-    const lows=s.lows.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index);
+    const lows=s.lows.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index&&x.price<retestPoint.price);
     return lows.at(-1)||null;
   }
-  const highs=s.highs.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index);
+  const highs=s.highs.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index&&x.price>retestPoint.price);
   return highs.at(-1)||null;
 }
 
