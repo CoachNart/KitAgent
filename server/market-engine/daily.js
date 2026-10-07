@@ -25,11 +25,11 @@ async function recordScannerSignals(uid,setups){if(!Array.isArray(setups)||!setu
     if(!snap.exists)return{removed:false,reason:'NOT_FOUND'};
     const state=snap.data()||{},setups=Array.isArray(state.setups)?state.setups:[],next=setups.filter(x=>String(x?.id||'')!==id);
     const removed=next.length!==setups.length;
+    const signalRef=db.collection('users').doc(uid).collection('signals').doc(signalId);
+    const signalSnap=await tx.get(signalRef);
     if(removed){
       tx.set(ref,{...state,setups:next,generatedCount:next.length,updatedAt:new Date().toISOString()},{merge:false});
     }
-    const signalRef=db.collection('users').doc(uid).collection('signals').doc(signalId);
-    const signalSnap=await tx.get(signalRef);
     if(signalSnap.exists)tx.delete(signalRef);
     return{removed,deletedSignal:signalSnap.exists};
   });
