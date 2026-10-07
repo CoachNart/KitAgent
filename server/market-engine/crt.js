@@ -8,8 +8,10 @@ const dirs=new Set(['BULLISH','BEARISH']);
 
 function alignedHTFBias(layers=[]){
   const context=layers.slice(0,-1).map(x=>x?.structure?.direction).filter(x=>dirs.has(x));
-  if(!context.length||context.some(x=>x!==context[0]))return null;
-  return context[0];
+  if(!context.length)return null;
+  const bias=context[0];
+  if(context.some(x=>x!==bias))return null;
+  return bias;
 }
 
 function rangeAnchor(layers=[]){
