@@ -170,7 +170,8 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
       const points=direction==='BULLISH'?s.highs:s.lows;
       for(const x of points){
         add(x.price,k===4?'HTF_MAJOR_SWING':'HTF_EXTERNAL_SWING',x.index,layer.tf||'HTF',k===4?110:88,{
-          confirmationIndex:x.confirmationIndex
+          confirmationIndex:x.confirmationIndex,
+          time:x.time
         });
       }
     }
