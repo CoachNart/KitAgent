@@ -14,7 +14,34 @@ async function candlesFor(symbol){const [a,b,c,d,e,f]=await Promise.all([fetchTf
 function candidateScore(result){if(!result?.trade||!result?.grade)return-1;if(result.direction==='BULLISH'&&!(result.trade.stop<result.trade.entry&&result.trade.target>result.trade.entry))return-1;if(result.direction==='BEARISH'&&!(result.trade.stop>result.trade.entry&&result.trade.target<result.trade.entry))return-1;if(!['A+','A'].includes(result.grade.grade)||Number(result.grade.score)<72)return-1;const rr=Number(result.trade.rr)||0;return result.grade.score*100+Math.min(Math.max(rr,0),6)*8}
 function toSetup(market,strategy,result,price){const score=candidateScore(result);if(score<0)return null;const trade=result.trade,bias=result.direction==='BULLISH'?'LONG':'SHORT';return{id:market.symbol+'-'+strategy+'-'+result.tf,symbol:market.symbol.replace(/USDT$/,'/USDT'),providerSymbol:market.symbol,strategy:STRATEGIES[strategy]?.name||strategy,strategyKey:strategy,bias,timeframe:result.tf,grade:result.grade.grade,score:result.grade.score,confidence:result.grade.score,entry:trade.entry,orderType:trade.orderType||'MARKET',marketEntry:trade.marketEntry??price.last,entryReason:trade.entryReason||null,stopLoss:trade.stop,takeProfit:trade.target,rr:Number(trade.rr.toFixed(2)),regime:result.regime,evidence:result.evidence||[],strategyDetails:result[strategy==='TOP_DOWN'?'topDown':strategy==='PULLBACK'?'pullback':strategy==='BREAKOUT'?'breakoutRetest':strategy==='SMC'?'smc':strategy==='MSNR'?'msnr':'crt']||null,layers:result.layers||[],structureDirection:result.structure?.direction||result.direction,liquidity:result.liquidity?.recentSweep?.length||0,source:'Bybit linear perpetuals',rankScore:score}}
 async function scanSymbol(market){try{const price=await fetchPrice('perpetual',market.symbol),all=await candlesFor(market.symbol);if(!Object.entries(all).every(([tf,c])=>validateCandles(c,tf).valid))return[];const candidates=[];for(const [strategy] of Object.entries(STRATEGIES))for(const tf of EXECUTION_TIMEFRAMES)try{const result=await analyzeOne('perpetual',market.symbol,strategy,tf,all,price.last),setup=toSetup(market,strategy,result,price);if(setup)candidates.push(setup)}catch{}return candidates.sort((a,b)=>b.rankScore-a.rankScore)}catch{return[]}}
-async function scanTopQuality(excludeIds=[]){const markets=await topSymbols(),scanned=await Promise.all(markets.map(scanSymbol)),flat=scanned.flat().filter(x=>!excludeIds.includes(x.id)),bestBySymbol=new Map;for(const setup of flat){const old=bestBySymbol.get(setup.symbol);if(!old||setup.rankScore>old.rankScore)bestBySymbol.set(setup.symbol,setup)}return{generatedAt:new Date().toISOString(),scanUniverse:markets.length,setups:[...bestBySymbol.values()].sort((a,b)=>b.rankScore-a.rankScore).slice(0,SCAN_BATCH),source:'Bybit linear perpetuals'}}
+async function scanTopQuality(excludeIds=[]){const markets=await topSymbols(),scanned=await Promise.all(markets.map(scanSymbol)),flat=scanned.flat().filter(x=>!excludeIds.includes(x.id));
+  // Keep the strongest candidate for each symbol+strategy instead of collapsing
+  // the entire symbol to whichever strategy happens to score highest. Otherwise
+  // a strong Pullback candidate can hide valid SMC/CRT/Breakout/MSNR/Top-Down
+  // candidates on the same market before they ever reach the scanner UI.
+  const bestByStrategySymbol=new Map();
+  for(const setup of flat){
+    const key=setup.symbol+'|'+setup.strategyKey;
+    const old=bestByStrategySymbol.get(key);
+    if(!old||setup.rankScore>old.rankScore)bestByStrategySymbol.set(key,setup);
+  }
+  const pool=[...bestByStrategySymbol.values()];
+  const selected=[];
+  const usedStrategies=new Set();
+  // Prefer strategy diversity first, then use quality ranking to fill the batch.
+  for(const setup of pool.slice().sort((a,b)=>b.rankScore-a.rankScore)){
+    if(selected.length>=SCAN_BATCH)break;
+    if(usedStrategies.has(setup.strategyKey))continue;
+    selected.push(setup);usedStrategies.add(setup.strategyKey);
+  }
+  if(selected.length<SCAN_BATCH){
+    for(const setup of pool.slice().sort((a,b)=>b.rankScore-a.rankScore)){
+      if(selected.length>=SCAN_BATCH)break;
+      if(!selected.some(x=>x.id===setup.id))selected.push(setup);
+    }
+  }
+  return{generatedAt:new Date().toISOString(),scanUniverse:markets.length,setups:selected.sort((a,b)=>b.rankScore-a.rankScore),source:'Bybit linear perpetuals'}
+}
 async function recordScannerSignals(uid,setups){if(!Array.isArray(setups)||!setups.length)return;const db=getAdmin().firestore(),collection=db.collection('users').doc(uid).collection('signals'),now=new Date().toISOString();for(const setup of setups){const id=String(setup.id||'').replace(/[^A-Z0-9_-]/gi,'-').slice(0,140);if(!id)continue;const ref=collection.doc('scanner-'+id),existing=await ref.get();if(existing.exists)continue;const orderType=String(setup.orderType||'MARKET').toUpperCase();const direction=setup.bias;const signal={signalId:'SC-'+id,userId:uid,market:'perpetual',symbol:setup.providerSymbol||String(setup.symbol||'').replace('/',''),timeframe:setup.timeframe,strategy:String(setup.strategyKey||setup.strategy||'').toUpperCase(),engineVersion:ENGINE_VERSION,direction,orderType,confidence:Number.isFinite(Number(setup.confidence))?Number(setup.confidence):null,entry:Number(setup.entry),limitEntry:orderType==='LIMIT'?Number(setup.entry):null,stopLoss:Number(setup.stopLoss),takeProfit1:Number(setup.takeProfit),takeProfit2:null,riskReward:'1:'+Number(setup.rr||0).toFixed(2),currentPrice:Number(setup.marketEntry),status:orderType==='LIMIT'?'limit_pending':'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'quality-scanner',scannerSetupId:id,scannerGeneratedAt:now};await ref.set(signal)}}async function deleteScannerSetup(uid,setupId){
   const id=String(setupId||'').trim();
   if(!id)throw Object.assign(new Error('A scanner setup id is required.'),{code:'SCANNER_SETUP_ID_REQUIRED'});
