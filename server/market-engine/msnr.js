@@ -1,5 +1,6 @@
 import {gradeSetup} from './grading.js';
 import {atr} from './data.js';
+import {confirmedSwings} from './structure.js';
 const RESISTANCE_TYPES=new Set(['A','BEARISH_GAP','SBR']);
 const SUPPORT_TYPES=new Set(['V','BULLISH_GAP','RBS']);
 
@@ -316,9 +317,17 @@ export function evaluateMSNR({candles,layers,price}){
       candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'Live price is no longer below the confirmed MSNR resistance level.'});
       continue;
     }
-    const invalidation=direction==='BULLISH'
-      ?Math.min(level.zoneLow,event.signalCandle.low)
-      :Math.max(level.zoneHigh,event.signalCandle.high);
+    // Invalidate the MSNR thesis at the level plus a confirmed structural
+    // swing, not at a tiny confirmation-candle wick.
+    const external=confirmedSwings(candles,3);
+    const structuralInvalidation=direction==='BULLISH'
+      ?external.lows.filter(x=>x.confirmationIndex<=event.signalIndex&&x.price<=level.zoneLow).at(-1)
+      :external.highs.filter(x=>x.confirmationIndex<=event.signalIndex&&x.price>=level.zoneHigh).at(-1);
+    if(!structuralInvalidation){
+      candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'No confirmed external swing supports the MSNR invalidation zone.'});
+      continue;
+    }
+    const invalidation=structuralInvalidation.price;
     const buffer=Math.max(a*.12,Math.abs(entry)*.00035);
     const stop=direction==='BULLISH'?invalidation-buffer:invalidation+buffer;
     const allLevels=layers.flatMap(layer=>
@@ -360,8 +369,8 @@ export function evaluateMSNR({candles,layers,price}){
         entryReason:`${event.type} at fresh ${level.type} ${level.side} level; the confirmation candle closed with its full body on the ${direction==='BULLISH'?'support':'resistance'} side and live price remains executable.`,
         invalidation:invalidation,
         invalidationSource:direction==='BULLISH'
-          ?'MSNR level / confirmation-candle low'
-          :'MSNR level / confirmation-candle high'
+          ?'MSNR level / confirmed external swing low'
+          :'MSNR level / confirmed external swing high'
       }
     });
   }
