@@ -46,12 +46,12 @@ export function executionOrderType({direction,entry,price,tolerance}){
 }
 
 function structuralStop(c,retestPoint,direction){
-  const s=confirmedSwings(c,2);
+  const s=confirmedSwings(c,3);
   if(direction==='BULLISH'){
-    const lows=s.lows.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index);
+    const lows=s.lows.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index&&x.price<retestPoint.price);
     return lows.at(-1)||null;
   }
-  const highs=s.highs.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index);
+  const highs=s.highs.filter(x=>x.confirmationIndex<=retestPoint.index&&x.index<retestPoint.index&&x.price>retestPoint.price);
   return highs.at(-1)||null;
 }
 
@@ -75,7 +75,7 @@ function trade({c,bos,retestPoint,direction,price,targetSwing}){
     entryReason:'HTF structure aligned; execution produced a confirmed BOS, price retested the broken structural level and held.',
     invalidation:'Beyond the confirmed structural swing that invalidates the continuation thesis, with a volatility buffer.',
     invalidationSource:'execution_structural_swing',
-    targetSource:'external_confirmed_structural_swing',
+    targetSource:targetSwing.source||'external_confirmed_structural_swing',
     bosLevel:bos.level,bosIndex:bos.index,retestIndex:retestPoint.index,stopSwingIndex:stopSwing.index
   };
 }
