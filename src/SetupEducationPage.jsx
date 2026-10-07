@@ -54,7 +54,7 @@ export default function SetupEducationPage({onBack}){
   <section className='setup-guide-live'>
    <div className='setup-guide-section-head'><div><span className='setup-guide-kicker'>LIVE SETUP ANATOMY</span><h2>See the actual evidence behind a setup</h2><p>When a live analysis exists for the selected strategy, these values come from the same market read used to generate the setup.</p></div>{hasLive&&<span className='setup-live-badge'><i/> LIVE {live.symbol}</span>}</div>
    {hasLive ? <div className='setup-live-grid'>
-    <div className='setup-live-card'><span>BIAS</span><b className={direction==='LONG'?'is-long':'is-short'}>{direction}</b><small>{setup.entryTimeframe} execution · {setup.analysisTimeframes?.join(' → ')}</small></div>
+    <div className='setup-live-card'><span>BIAS</span><b className={direction==='LONG'?'is-long':'is-short'}>{direction}</b><small>{setup.entryTimeframe} entry · {setup.analysisTimeframes?.join(' → ')}</small></div>
     <div className='setup-live-card'><span>STRUCTURE EVENT</span><b>{event?.direction||'—'} {event?.level?'· '+fmt(event.level):''}</b><small>{event?.level?'Observed on the live structure read.':'No qualifying break event exposed by this analysis.'}</small></div>
     <div className='setup-live-card'><span>ENTRY</span><b>{fmt(setup.entry)}</b><small>{setup.orderType||'—'} · {setup.entryReason||'Engine-selected execution level'}</small></div>
     <div className='setup-live-card'><span>INVALIDATION</span><b>{fmt(setup.stopLoss)}</b><small>{setup.invalidationSource||'Validated structural invalidation'}</small></div>
