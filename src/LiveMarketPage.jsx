@@ -5,12 +5,12 @@ import {MarketWatchlist, StrategySelector} from './MarketExtras.jsx';
 import './market-extras.css';
 export const TIMEFRAMES=['AUTO','15m','30m','1H','2H','4H'];
 const TIMEFRAME_GUIDE={
- 'AUTO':{title:'AUTO execution horizon',desc:'Evaluates 15M, 30M, 1H, 2H and 4H for the cleanest valid execution structure. No timeframe is forced.'},
- '15m':{title:'15M opportunity horizon',desc:'Hunts intraday opportunities with the selected strategy. Higher context is handled automatically when that strategy needs it.'},
- '30m':{title:'30M opportunity horizon',desc:'Hunts more developed intraday opportunities. Strategy rules determine the supporting context and confirmation.'},
- '1H':{title:'1H opportunity horizon',desc:'Uses a broader intraday structure to find fewer, more developed opportunities.'},
- '2H':{title:'2H opportunity horizon',desc:'Uses a higher swing structure for larger setups while keeping the selected strategy in control.'},
- '4H':{title:'4H opportunity horizon',desc:'Looks for larger swing opportunities using higher-timeframe structure and the selected strategy rules.'}
+ 'AUTO':{title:'AUTO · best qualified timeframe',desc:'Evaluates 15m, 30m, 1H, 2H and 4H, then selects the strongest qualified strategy-specific entry timeframe.'},
+ '15m':{title:'15m · entry timeframe',desc:'Uses 15m as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
+ '30m':{title:'30m · entry timeframe',desc:'Uses 30m as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
+ '1H':{title:'1H · entry timeframe',desc:'Uses 1H as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
+ '2H':{title:'2H · entry timeframe',desc:'Uses 2H as the trigger layer while the strategy builds its required higher-timeframe context automatically.'},
+ '4H':{title:'4H · entry timeframe',desc:'Uses 4H as the trigger layer while the strategy builds its required higher-timeframe context automatically.'}
 };
 const instrumentCache=new Map();
 const instrumentRequests=new Map();
@@ -19,7 +19,7 @@ function price(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number
 async function waitForAuthUser(timeoutMs=5000){if(auth?.currentUser)return auth.currentUser;return new Promise(resolve=>{let done=false;let unsubscribe=null;const finish=u=>{if(done)return;done=true;clearTimeout(timer);unsubscribe?.();resolve(u||null)};unsubscribe=auth?.onAuthStateChanged(finish)||null;const timer=setTimeout(()=>finish(auth?.currentUser||null),timeoutMs)})}
 async function authToken(forceRefresh=false){const user=await waitForAuthUser();if(!user)return '';return user.getIdToken(forceRefresh)}
 async function persistSignal(body){const user=await waitForAuthUser(2500),setup=body?.setup;if(!user||!setup?.tradeReady||!['MARKET','LIMIT'].includes(String(setup.orderType||'').toUpperCase())||!['LONG','SHORT'].includes(String(setup.bias||'').toUpperCase())||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return null;try{const token=await user.getIdToken();const response=await fetch('/api/signals',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({market:body.market,symbol:body.symbol,timeframe:body.timeframe,strategy:body.strategy||body.setup?.strategy||body.setup?.strategyName||'',setup:body.setup,aligned:body.aligned,totalTimeframes:body.totalTimeframes,confluence:body.confluence})});if(!response.ok)return null;const result=await response.json();window.dispatchEvent(new CustomEvent('kitagent-signal-recorded',{detail:result.signal}));return result;}catch(error){console.warn('KitSetups signal history sync failed:',error);return null;}}
-export default function LiveMarketPage(){const market='perpetual';const [pair,setPair]=useState(''),[timeframe,setTimeframe]=useState('AUTO'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[sourceLoading,setSourceLoading]=useState(true),[error,setError]=useState(''),[result,setResult]=useState(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup:v3');return raw?JSON.parse(raw):null}catch{return null}}),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState([]),[pickerOpen,setPickerOpen]=useState(false);
+export default function LiveMarketPage(){const market='perpetual';const [pair,setPair]=useState(''),[timeframe,setTimeframe]=useState('AUTO'),[strategy,setStrategy]=useState('TOP_DOWN'),[loading,setLoading]=useState(false),[sourceLoading,setSourceLoading]=useState(true),[error,setError]=useState(''),[result,setResult]=useState(()=>{try{const raw=localStorage.getItem('kitagent:last-market-setup:v4');return raw?JSON.parse(raw):null}catch{return null}}),[savedSignal,setSavedSignal]=useState(null),[instrumentQuery,setInstrumentQuery]=useState(''),[instruments,setInstruments]=useState([]),[pickerOpen,setPickerOpen]=useState(false);
 
  useEffect(()=>{if(!TIMEFRAMES.includes(timeframe))setTimeframe('AUTO')},[timeframe]);
 
@@ -80,7 +80,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
           </label>
 
           <label className="live-field timeframe">
-            <span>EXECUTION TIMEFRAME</span>
+            <span>ENTRY TIMEFRAME</span>
             <div>
               <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=><option key={x} value={x}>{x}</option>)}</select>
               <ChevronDown/>
@@ -119,7 +119,8 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
     </div>
   );
 }
-function strategyWaitCopy(strategy){return ({TOP_DOWN:'Waiting for higher-timeframe structure and a confirmed execution condition.',PULLBACK:'Waiting for a fresh pullback into a qualified FVG or order block.',BREAKOUT:'Waiting for a decisive break, a retest of the broken level, and confirmed continuation.',SMC:'Waiting for a liquidity sweep, displacement and structure break at a valid point of interest.',MSNR:'Waiting for price to tap a fresh MSNR level and confirm the reaction on the lower timeframe.',PRICE_ACTION:'Waiting for a clean structural level with a confirmed rejection or engulfing candle.',LIQUIDITY_REVERSAL:'Waiting for a liquidity sweep, reclaim and displacement before reversal entry.',CRT:'Waiting for a completed candle range to be swept and reclaimed before targeting the opposite side.'}[strategy]||'No valid entry condition is present yet.');}
+const STRATEGY_WAIT_COPY={TOP_DOWN:'Waiting for aligned HTF direction, an execution BOS, and a retest-and-hold.',PULLBACK:'Waiting for a confirmed impulse, 38.2–61.8% retracement, and closed continuation break.',BREAKOUT:'Waiting for a multi-touch level, decisive breakout, retest hold, and continuation close.',SMC:'Waiting for a valid liquidity sweep, post-sweep MSS/displacement, and fresh FVG retracement.',MSNR:'Waiting for a fresh MSNR key level and its exact closed-candle confirmation sequence.',CRT:'Waiting for the completed CRT range to sweep/reclaim, then MSS/displacement and a valid retest.'};
+function strategyWaitCopy(strategy){return STRATEGY_WAIT_COPY[strategy]||'No valid strategy-specific entry condition is present yet.';}
 function AnalysisResult({result,savedSignal}){
   const s=result.setup||{};
   const hasTrade=Boolean(s.tradeReady&&['LONG','SHORT'].includes(String(s.bias||'').toUpperCase())&&['MARKET','LIMIT'].includes(String(s.orderType||'').toUpperCase())&&[s.entry,s.stopLoss,s.takeProfit1].every(v=>Number.isFinite(Number(v))));
@@ -237,17 +238,37 @@ function RiskCalculator({setup}){
 }
 function TradeBreakdown({setup,result}){
  const [open,setOpen]=useState(false);
- const b=setup?.tradeBreakdown,ctx=b?.marketContext||{},trade=b?.trade||{},dir=String(b?.direction||setup?.bias||'').toUpperCase();
- const fmt=v=>v==null||Number.isNaN(Number(v))?'—':price(v),event=ctx.latestBOS||ctx.latestCHoCH||ctx.latestMSS,eventName=ctx.latestBOS?'BOS':ctx.latestCHoCH?'CHoCH':ctx.latestMSS?'MSS':'STRUCTURE';
- const eventDirection=event?.direction==='BULLISH'?'bullish':event?.direction==='BEARISH'?'bearish':'directional';
- const whyDirection=dir==='LONG'?'The execution structure is bullish and the higher-timeframe chain supports the same directional thesis.':dir==='SHORT'?'The execution structure is bearish and the higher-timeframe chain supports the same directional thesis.':'No directional thesis is established.';
- const whyTrigger=event?eventName+' at '+fmt(event.level)+' confirms a '+eventDirection+' structural event on '+(setup.entryTimeframe||'the execution timeframe')+'.':'The setup passed its strategy-specific conditions without exposing a fabricated structural event.';
- const whyEntry=setup.orderType==='LIMIT'?'Live price is '+fmt(setup.marketEntry)+' and planned entry is '+fmt(trade.entry)+'. The engine waits for the structural retracement/retest instead of chasing price.':'The entry is the live market price because the qualified execution condition is actionable now.';
- const whyStop=setup.invalidationSource?'Invalidation comes from '+String(setup.invalidationSource).toLowerCase()+'. The stop is placed beyond that reference with the volatility buffer.':'The stop is derived from validated structural invalidation.';
- const whyTarget='Target '+fmt(trade.target)+' is the selected directional structural/liquidity target; it is published only after the risk/reward check passes.';
- const rows=[['MARKET READ',whyDirection],['KEY STRUCTURE',whyTrigger],['ENTRY LOGIC',whyEntry],['INVALIDATION',whyStop],['TARGET LOGIC',whyTarget]];
- return <section className={'trade-breakdown '+(open?'is-open':'')} aria-label="Trade breakdown"><button type="button" className="trade-breakdown-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><span><span className="tiny-label">LIVE THESIS</span><strong>Why this setup is valid</strong></span><span className="trade-breakdown-toggle-right"><small>{setup.entryTimeframe||'—'} · {setup.strategyName||result.strategy}</small><ChevronDown size={14}/></span></button>{open&&<div className="trade-breakdown-body"><div className="trade-breakdown-grid">{rows.map(([label,text],i)=><div key={label} className={i===1?'key-event':''}><b>{label}</b><p>{text}</p></div>)}</div><div className="trade-breakdown-levels"><div><span>KEY LEVEL</span><b>{fmt(event?.level)}</b><small>{event?eventName+' · '+eventDirection:'No confirmed break exposed'}</small></div><div><span>INVALIDATION</span><b>{fmt(setup.structuralInvalidation)}</b><small>{setup.invalidationSource||'Structural invalidation'}</small></div><div><span>TARGET</span><b>{fmt(trade.target)}</b><small>{setup.liquidityType||'Structural target'}</small></div><div><span>ORDER</span><b>{setup.orderType||'—'}</b><small>{setup.entryReason||'Strategy execution condition'}</small></div></div><small className="trade-breakdown-source">Verified from the same live Bybit candles and quote used to generate this setup · {(setup.analysisTimeframes||[]).join(' → ')||'multi-timeframe analysis'}.</small></div>}</section>
-}
-function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
+ const b=setup?.tradeBreakdown||{},d=setup?.strategyDetails||{},strategy=result?.strategy||setup?.strategy||'';
+ const fmt=v=>v==null||Number.isNaN(Number(v))?'—':price(v);
+ const dir=String(setup?.bias||'').toUpperCase();
+ const baseDirection=dir==='LONG'?'The higher-timeframe structure supports a bullish thesis.':dir==='SHORT'?'The higher-timeframe structure supports a bearish thesis.':'No directional thesis is currently executable.';
+ let rows=[],levels=[];
+ if(strategy==='TOP_DOWN'){
+   const bos=d.executionBOS,rt=d.retest,t=d.target;
+   rows=[['MARKET READ',baseDirection],['BOS','Closed execution BOS beyond '+fmt(bos?.level)+' on the '+(setup.entryTimeframe||'entry')+' timeframe.'],['RETEST','Price returned to '+fmt(bos?.level)+' and held it as the new structural side.'],['ENTRY',setup.orderType==='LIMIT'?'Planned entry waits at the qualified retest location.':'Entry is actionable at the qualified retest condition.'],['INVALIDATION','Stop protects the retest candle extreme with a volatility buffer.'],['TARGET','Target '+fmt(t?.price||d?.target)+' is the continuation structural objective and passed the 2R gate.']];
+   levels=[['BOS LEVEL',bos?.level,'Execution BOS'],['RETEST',rt?.price,'Retest close'],['TARGET',t?.price,'Structural continuation']];
+ } else if(strategy==='PULLBACK'){
+   const z=d.retracement,t=d.target;
+   rows=[['MARKET READ',baseDirection],['IMPULSE','A confirmed directional impulse runs from '+fmt(d.impulse?.start?.price)+' to '+fmt(d.impulse?.end?.price)+'.'],['RETRACEMENT','Price entered the 38.2–61.8% retracement zone: '+fmt(z?.low)+'–'+fmt(z?.high)+'.'],['CONFIRMATION','A closed continuation break confirmed the pullback ended without breaking the impulse origin.'],['INVALIDATION','Stop protects the pullback candle and impulse origin.'],['TARGET','The impulse extreme or later structure is used only when it remains beyond entry and provides at least 2R.']];
+   levels=[['IMPULSE END',d.impulse?.end?.price,'Continuation objective'],['RETRACE LOW',z?.low,'38.2–61.8% zone'],['RETRACE HIGH',z?.high,'38.2–61.8% zone'],['TARGET',t?.price,'Structural target']];
+ } else if(strategy==='BREAKOUT'){
+   const l=d.level,br=d.breakout,rt=d.retest,t=d.target;
+   rows=[['MARKET READ',baseDirection],['LEVEL','Multi-touch '+(dir==='LONG'?'resistance':'support')+' clustered at '+fmt(l?.level)+'.'],['BREAKOUT','Closed candle broke the level decisively with body/range confirmation'+(br?.atrMultiple?' ('+Number(br.atrMultiple).toFixed(2)+'× ATR).':'.')],['RETEST','The broken level held its new role; a close back through it would invalidate the setup.'],['CONTINUATION','A later closed candle confirmed continuation beyond the retest candle.'],['INVALIDATION','Stop protects the retest/level with a volatility buffer.'],['TARGET','Target '+fmt(t?.price)+' is the structural or range-projection objective and passed 2R.']];
+   levels=[['LEVEL',l?.level,'Multi-touch boundary'],['BREAKOUT',br?.candle?.close,'Decisive close'],['RETEST',rt?.candle?.close,'Role reversal'],['TARGET',t?.price,'Continuation objective']];
+ } else if(strategy==='SMC'){
+   const x=d;
+   rows=[['MARKET READ','HTF bias is '+(x?.htfBias||dir)+'.'],['LIQUIDITY SWEEP','Price swept the opposing liquidity pool at '+fmt(x?.sweep?.level)+' and reclaimed it.'],['MSS + DISPLACEMENT','Post-sweep MSS at '+fmt(x?.mss?.level)+' was produced by meaningful displacement.'],['FVG','Fresh '+(x?.fvg?.direction||'directional')+' FVG: '+fmt(x?.fvg?.low)+'–'+fmt(x?.fvg?.high)+', positioned in '+(x?.dealingRange?(x.fvg.midpoint<=x.dealingRange.equilibrium?'discount':'premium'):'the validated dealing range')+'.'],['ENTRY','Entry is the FVG midpoint '+fmt(x?.fvg?.midpoint)+'.'],['INVALIDATION','Stop sits beyond the sweep extreme with volatility buffer.'],['TARGET','Target '+fmt(x?.target)+' is the opposing liquidity objective and passed 2R.']];
+   levels=[['SWEEP',x?.sweep?.level,'Liquidity level'],['MSS',x?.mss?.level,'Structure shift'],['FVG MID',x?.fvg?.midpoint,'Entry'],['TARGET',x?.target,'Liquidity objective']];
+ } else if(strategy==='MSNR'){
+   const x=d,level=x?.level,ev=x?.confirmation,obj=x?.objective;
+   rows=[['KEY LEVEL',(level?.type||'MSNR')+' '+(level?.side||'LEVEL')+' at '+fmt(level?.price)+'.'],['FRESHNESS',level?.fresh?'Level was fresh before confirmation.':'Level was not fresh before confirmation.'],['CONFIRMATION',ev?.type?ev.type+' confirmed with the required closed-candle sequence and full-body hold.':'Exact MSNR confirmation passed.'],['ENTRY','Live price remained close enough to the confirmation candle to be executable.'],['INVALIDATION','Stop protects the MSNR level and confirmation-candle extreme with buffer.'],['TARGET',(obj?.type||'Opposing MSNR level')+' at '+fmt(obj?.price)+' is the next valid opposing objective and passed 2R.']];
+   levels=[['LEVEL',level?.price,level?.type],['CONFIRMATION',ev?.signalCandle?.close,'Closed confirmation'],['TARGET',obj?.price,obj?.type]];
+ } else if(strategy==='CRT'){
+   const x=d;
+   rows=[['REFERENCE RANGE','Completed '+(x?.anchor?.timeframe||'HTF')+' candle: '+fmt(x?.anchor?.low)+'–'+fmt(x?.anchor?.high)+'.'],['HTF SWEEP','The following higher-timeframe candle swept the '+(x?.sweep?.side||'boundary')+' side and closed back inside the range.'],['EXECUTION SWEEP','The entry timeframe confirmed the same boundary sweep/reclaim.'],['MSS + DISPLACEMENT','Lower-timeframe structure shifted at '+fmt(x?.mss?.level)+' with meaningful displacement.'],['RETEST','Price retested and held the MSS level before entry.'],['INVALIDATION','Stop protects the sweep extreme with a volatility buffer.'],['TARGET','The opposite CRT boundary or valid external structural target provides at least 2R.']];
+   levels=[['CRT HIGH',x?.anchor?.high,'Reference boundary'],['CRT LOW',x?.anchor?.low,'Reference boundary'],['MSS',x?.mss?.level,'Execution structure'],['TARGET',x?.target?.price,'CRT/external objective']];
+ } else rows=[['MARKET READ',baseDirection],['ENTRY',setup.entryReason||'Strategy-specific entry condition passed.'],['INVALIDATION',setup.invalidationSource||'Validated structural invalidation.'],['TARGET',fmt(setup.takeProfit1)+' is the validated objective.']];
+ return <section className={'trade-breakdown '+(open?'is-open':'')} aria-label="Trade breakdown"><button type="button" className="trade-breakdown-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><span><span className="tiny-label">STRATEGY BREAKDOWN</span><strong>Why this {setup?.strategyName||result?.strategy||'setup'} qualifies</strong></span><span className="trade-breakdown-toggle-right"><small>{setup.entryTimeframe||'—'} · {setup.riskReward||'—'}</small><ChevronDown size={14}/></span></button>{open&&<div className="trade-breakdown-body"><div className="trade-breakdown-grid">{rows.map(([label,text])=><div key={label}><b>{label}</b><p>{text}</p></div>)}</div><div className="trade-breakdown-levels">{levels.filter(x=>x[1]!=null).map(([label,value,detail])=><div key={label}><span>{label}</span><b>{fmt(value)}</b><small>{detail}</small></div>)}</div><small className="trade-breakdown-source">Strategy model: {setup?.strategyReason||'Current engine contract'} · source: live Bybit closed candles and quote · {((setup?.analysisTimeframes)||[]).join(' → ')||'strategy-defined context'}.</small></div>}</section>
+}function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
 function Breakdown({title,value,detail}){return <div className="breakdown-item"><span>{title}</span><b>{value}</b><small>{detail}</small></div>}
