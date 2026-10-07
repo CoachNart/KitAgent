@@ -182,9 +182,20 @@ export function evaluateCRT({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
 
-  const tgt=target(range,direction,candles,entry,mss.index);
+  const aTarget=atr(candles,14)||0;
+  const minTargetDistance=Math.max(aTarget*1.25,Math.abs(entry)*.004);
+  let tgt=target(range,direction,candles,entry,mss.index);
+  if(tgt&&Math.abs(tgt.price-entry)<minTargetDistance){
+    const s=confirmedSwings(candles,3);
+    const xs=(direction==='BULLISH'?s.highs:s.lows)
+      .filter(x=>x.index>mss.index)
+      .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
+      .filter(x=>Math.abs(x.price-entry)>=minTargetDistance)
+      .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
+    tgt=xs[0]?{price:xs[0].price,index:xs[0].index,source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
+  }
   if(!tgt){
-    failures.push('No opposing CRT or external structural target is available.');
+    failures.push('No meaningful opposing CRT or external structural target is available.');
     return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'MSS',...mss}]};
   }
 
