@@ -138,7 +138,6 @@ function AnalysisResult({result,savedSignal}){
       </>}
     </div>
     <RiskCalculator setup={s}/>
-    {hasTrade&&<button type="button" className="setup-guide-button" onClick={()=>window.dispatchEvent(new CustomEvent("kitsetups-open-breakdown"))}><span>Read about setup</span><ChevronDown size={13}/></button>}
     {hasTrade&&<TradeBreakdown setup={s} result={result}/>} 
   </div>
 }
