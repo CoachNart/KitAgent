@@ -11,8 +11,13 @@ function nextTarget(c,direction,afterIndex,entry,layers=[]){
 }
 function htfBias(layers){
   const dirs=(layers||[]).slice(0,-1).map(x=>x?.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
-  if(!dirs.length||dirs.some(x=>x!==dirs[0]))return null;
-  return dirs[0];
+  if(!dirs.length)return null;
+  // Neutral intermediate structure is not a directional conflict. The most
+  // senior confirmed directional layer sets the bias; a genuinely opposing
+  // confirmed layer still blocks the strategy.
+  const bias=dirs[0];
+  if(dirs.some(x=>x!==bias))return null;
+  return bias;
 }
 
 function executionBOS(c,direction){
