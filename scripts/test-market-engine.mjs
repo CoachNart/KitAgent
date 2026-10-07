@@ -168,9 +168,9 @@ crtExecution[21]=bar(21,100.5,105,100.2,104.5); // MSS displacement through 102
 crtExecution[22]=bar(22,104.5,105,101.2,102.5); // retest MSS level, closes back above
 const htfBar=(i,o,h,l,c)=>({time:Date.UTC(2026,0,1)+i*14400000,open:o,high:h,low:l,close:c,volume:1000});
 const crtHTF=[
-  htfBar(0,104,110,101,107),
-  htfBar(1,107,116,100,108),
-  htfBar(2,108,112,98,105)
+  htfBar(-1,103,108,100,106),
+  htfBar(0,107,116,100,108),
+  htfBar(1,108,112,98,105)
 ];
 const crtLayers=[
   {tf:'4H',candles:crtHTF,structure:{direction:'BULLISH'}},
