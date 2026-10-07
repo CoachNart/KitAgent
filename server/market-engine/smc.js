@@ -54,10 +54,10 @@ function freshFvg(c,fvg,asOf){
   for(let i=fvg.index+1;i<=asOf;i++){const x=c[i];if(fvg.direction==='BULLISH'&&x.low<=fvg.low)return false;if(fvg.direction==='BEARISH'&&x.high>=fvg.high)return false;}
   return true;
 }
-function nextLiquidityTarget(c,direction,entry,sweepIndex,layers=[]){
+function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
   const a=atr(c,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
-  return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:sweepIndex,asOfTime:c[sweepIndex]?.time??null})||null;
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null})||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
@@ -95,7 +95,7 @@ export function evaluateSMC({candles,layers,price}){
   const range=dealingRange(c,mss.index);
   if(!range||(direction==='BULLISH'?fvg.midpoint>range.equilibrium:fvg.midpoint<range.equilibrium)){failures.push(direction==='BULLISH'?'Bullish FVG is not in discount.':'Bearish FVG is not in premium.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
   if(!Number.isFinite(price)||price<=0){failures.push('Live price is unavailable.');return{direction,failures,evidence:[]};}
-  const target=nextLiquidityTarget(c,direction,fvg.midpoint,sweep.index,ordered);
+  const target=nextLiquidityTarget(c,direction,fvg.midpoint,fvg.index,ordered);
   if(!target||!Number.isFinite(target.price)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[]};}
   const trade=buildTrade({c,price,direction,sweep,mss,displacement,fvg,target:target.price});
   if(!trade){failures.push('FVG entry, structural invalidation, or meaningful liquidity objective is invalid.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
