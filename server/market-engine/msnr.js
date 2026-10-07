@@ -215,7 +215,7 @@ function levelStrength(type){
 }
 
 function currentContext(layers,direction){
-  const htf=layers.slice(0,-1).map(x=>x.structure?.direction).filter(Boolean);
+  const htf=layers.slice(0,-1).map(x=>x.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
   const aligned=htf.filter(x=>x===direction).length;
   const opposing=htf.filter(x=>x!==direction&&x!=='NEUTRAL').length;
   return {aligned,opposing,dominant:htf.find(x=>x!=='NEUTRAL')||'NEUTRAL'};
