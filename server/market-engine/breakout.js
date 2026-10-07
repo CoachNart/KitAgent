@@ -153,7 +153,23 @@ export function evaluateBreakout({candles=[],layers=[],price}){
 
   const orderType='MARKET';
   return {
-    direction,tradeReady:true,orderType,entry,stopLoss:stop,takeProfit1:tgt.price,rr,failures:[],
+    direction,
+    tradeReady:true,
+    trade:{
+      entry,
+      marketEntry:Number(price),
+      stop,
+      target:tgt.price,
+      risk,
+      reward,
+      rr,
+      orderType,
+      entryReason:'A multi-touch structural level broke decisively, held on retest, and confirmed continuation.',
+      invalidation:direction==='BULLISH'?rt.candle.low:rt.candle.high,
+      invalidationSource:'breakout_retest_structural_level',
+      targetSource:tgt.source||'EXTERNAL_STRUCTURAL_TARGET'
+    },
+    orderType,entry,stopLoss:stop,takeProfit1:tgt.price,rr,failures:[],
     evidence:[
       {type:'HTF_ALIGNMENT',direction},
       {type:'BREAKOUT_LEVEL',...level},
