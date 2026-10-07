@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Check, ChevronDown, Plus } from 'lucide-react';
+import { Bookmark, Check, ChevronDown, Plus, X, Trash2 } from 'lucide-react';
 
 
 export const STRATEGY_LIBRARY=[
@@ -51,8 +51,11 @@ export function MarketWatchlist({ symbol, onSelect }) {
   </button>
   <div className="watchlist-panel">
    <div className="watchlist-head">
-    <div className="watchlist-title"><span className="extras-kicker">SAVED PERPETUALS</span><strong>Quick access</strong><small>{items.length?'Tap a contract to open its live analysis.':'Save contracts here for one-tap access.'}</small></div>
-    <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={12}/>:<Plus size={12}/>} {saved?'Saved':`Save ${symbol||'contract'}`}</button>
+    <div className="watchlist-title"><span className="extras-kicker">SAVED</span><strong>Quick access</strong><small>{items.length?'Tap a pair to analyze.':'Save pairs for quick access.'}</small></div>
+    <div className="watchlist-actions">
+      {items.length>0&&<button type="button" className="watch-clear" onClick={()=>setItems([])} aria-label="Clear all saved pairs"><Trash2 size={11}/> Clear all</button>}
+      <button type="button" className={saved?'watch-current saved':'watch-current'} onClick={toggle}>{saved?<Check size={12}/>:<Plus size={12}/>} {saved?'Saved':`Save ${symbol||'pair'}`}</button>
+    </div>
    </div>
    {symbol&&<div className="watchlist-current-row"><span className="watch-current-label">CURRENT</span><b>{symbol}</b><em>PERPETUAL</em></div>}
    <div className="watchlist-items">
@@ -60,6 +63,7 @@ export function MarketWatchlist({ symbol, onSelect }) {
       <span className="watch-chip-main"><span className="watch-dot"/><strong>{item.symbol}</strong></span>
       <span className="watch-chip-market">PERP</span>
       {item.symbol===symbol&&<span className="watch-active-mark">ACTIVE</span>}
+      <span role="button" tabIndex={0} className="watch-chip-remove" onClick={e=>{e.stopPropagation();setItems(current=>current.filter(x=>x.symbol!==item.symbol))}} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setItems(current=>current.filter(x=>x.symbol!==item.symbol))}}} aria-label={`Remove ${item.symbol}`}><X/></span>
     </button>):<div className="watch-empty"><Bookmark size={13}/><span><b>No saved perpetuals</b><small>Add the current contract above.</small></span></div>}
    </div>
   </div>
