@@ -125,7 +125,7 @@ export function structure(c,asOf=c.length-1){
   };
 }
 
-export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0,nativeTargets=[]}={}){
+export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0,nativeTargets=[],asOf=null,asOfTime=null}={}){
   if(!Array.isArray(c)||!c.length||!Number.isFinite(entry)||!['BULLISH','BEARISH'].includes(direction))return [];
   const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
   const distanceFloor=Math.max(minDistance,a*1.5,Math.abs(entry)*.005);
@@ -134,6 +134,8 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 
   const add=(price,source,index=-1,tf='EXECUTION',strength=0,meta={})=>{
     if(!Number.isFinite(price))return;
+    if(asOf!==null&&Number.isFinite(index)&&index>=0&&index>asOf)return;
+    if(asOfTime!==null&&Number.isFinite(meta?.time)&&meta.time>asOfTime)return;
     const beyond=direction==='BULLISH'?price>entry:price<entry;
     if(!beyond||Math.abs(price-entry)<distanceFloor)return;
     candidates.push({price,source,index,tf,strength,...meta});
@@ -141,7 +143,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 
   // Strategy-native objectives outrank generic structure when they are valid.
   for(const x of nativeTargets||[]){
-    if(Number.isFinite(x?.price))add(x.price,x.source||'STRATEGY_NATIVE',x.index??-1,x.tf||'STRATEGY',120,{native:true});
+    if(Number.isFinite(x?.price))add(x.price,x.source||'STRATEGY_NATIVE',x.index??-1,x.tf||'STRATEGY',120,{native:true,time:x.time});
     else if(Number.isFinite(x))add(x,'STRATEGY_NATIVE',-1,'STRATEGY',120,{native:true});
   }
 
@@ -152,7 +154,8 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
     const points=direction==='BULLISH'?s.highs:s.lows;
     for(const x of points){
       add(x.price,k===4?'EXECUTION_MAJOR_SWING':'EXECUTION_EXTERNAL_SWING',x.index,'EXECUTION',k===4?95:78,{
-        confirmationIndex:x.confirmationIndex
+        confirmationIndex:x.confirmationIndex,
+        time:x.time
       });
     }
   }
