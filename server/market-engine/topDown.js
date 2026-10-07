@@ -122,11 +122,11 @@ export function evaluateTopDown({candles,layers,price}){
     return{direction,failures:['No meaningful continuation target is available beyond the retest.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
   const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
   if(!tradeResult)return{direction,failures:['Structural entry, invalidation, or meaningful target geometry is invalid.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt},{type:'TARGET',price:targetSwing.price}]};
-  const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing.price,candles:c});
+  const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,candles:c});
   if(scored.score<78)return{direction,grade:{grade:'NO-TRADE',score:scored.score,hardFailures:['Top-Down confluence is insufficient for execution.']},failures:['Top-Down confluence is insufficient for execution.'],evidence:scored.evidence};
   return{
     direction,
-    grade:{grade:scored.score>=88?'A+':'A',score:scored.score,hardFailures:[]},
+    grade:{grade:scored.grade,score:scored.score,hardFailures:[]},
     failures:[],
     trade:tradeResult,
     evidence:[...scored.confidenceEvidence,{type:'TARGET',price:targetSwing.price}],
