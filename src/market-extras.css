@@ -1221,3 +1221,200 @@
   .live-controls{border-radius:13px!important}
   .instrument-trigger,.timeframe>div,.strategy-selector .strategy-select-wrap select,.live-analyze{height:34px!important}
 }
+
+
+/* Market Analysis — page-level cleanup / calculator redesign */
+.live-market{
+  max-width:1180px!important;
+  margin:0 auto!important;
+}
+.live-market-head{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  min-height:34px!important;
+  margin-bottom:9px!important;
+}
+.live-market-head h2{
+  font-size:24px!important;
+  font-weight:820!important;
+  letter-spacing:-.045em!important;
+}
+.live-readonly{
+  height:25px!important;
+  padding:0 8px!important;
+  border:1px solid rgba(255,255,255,.06)!important;
+  border-radius:7px!important;
+  background:rgba(255,255,255,.018)!important;
+  color:#65747b!important;
+  font-size:6px!important;
+  letter-spacing:.12em!important;
+}
+.market-watchlist{
+  border-radius:11px!important;
+  margin-bottom:8px!important;
+  background:rgba(255,255,255,.018)!important;
+  box-shadow:none!important;
+}
+.live-market-card{
+  border:1px solid rgba(255,255,255,.06)!important;
+  border-radius:14px!important;
+  background:rgba(255,255,255,.012)!important;
+  box-shadow:0 18px 45px rgba(0,0,0,.12)!important;
+}
+.live-tabs{padding-left:2px!important}
+.live-tabs button{box-shadow:none!important}
+.live-controls{
+  border-radius:11px!important;
+  background:rgba(0,0,0,.12)!important;
+  box-shadow:none!important;
+}
+.live-empty,.live-loading{
+  min-height:118px!important;
+  margin:12px!important;
+  border-style:solid!important;
+  background:rgba(255,255,255,.009)!important;
+  gap:5px!important;
+}
+.live-empty>svg{width:20px!important;height:20px!important;opacity:.7}
+.live-empty b,.live-loading b{font-size:10px!important}
+.live-empty span,.live-loading small{font-size:7px!important;color:#56666d!important}
+
+/* Calculator: compact instrument-like layout, not a documentation card */
+.risk-calculator{
+  position:relative!important;
+  margin-top:10px!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:1px solid rgba(255,255,255,.065)!important;
+  border-radius:13px!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.026),rgba(255,255,255,.009))!important;
+  box-shadow:0 14px 35px rgba(0,0,0,.13)!important;
+}
+.risk-calc-head{
+  min-height:48px!important;
+  box-sizing:border-box!important;
+  padding:0 12px!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+}
+.risk-calc-head>div{
+  display:flex!important;
+  align-items:center!important;
+  gap:9px!important;
+}
+.risk-calc-head h3{
+  margin:0!important;
+  font-size:12px!important;
+  letter-spacing:-.02em!important;
+}
+.risk-live-note{
+  display:inline-flex!important;
+  align-items:center!important;
+  height:20px!important;
+  padding:0 7px!important;
+  border:1px solid rgba(114,221,255,.10)!important;
+  border-radius:6px!important;
+  color:#67848c!important;
+  background:rgba(114,221,255,.018)!important;
+  font-size:5.5px!important;
+  letter-spacing:.11em!important;
+  font-weight:850!important;
+}
+.risk-direction,.risk-direction-select{
+  height:25px!important;
+  box-sizing:border-box!important;
+  padding:0 8px!important;
+  border-radius:7px!important;
+  font-size:6px!important;
+}
+.risk-calc-grid{
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  gap:6px!important;
+  margin:0!important;
+  padding:10px 11px!important;
+}
+.risk-field{gap:4px!important}
+.risk-field>span{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  font-size:5.5px!important;
+  letter-spacing:.11em!important;
+}
+.risk-field>div{
+  height:35px!important;
+  box-sizing:border-box!important;
+  border-radius:8px!important;
+  background:rgba(0,0,0,.17)!important;
+  border-color:rgba(255,255,255,.055)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.018)!important;
+}
+.risk-field input{font-size:9px!important}
+.risk-calc-action{
+  margin:0!important;
+  padding:0 11px 10px!important;
+  align-items:center!important;
+}
+.risk-calc-action button{
+  height:32px!important;
+  min-width:92px!important;
+  padding:0 14px!important;
+  border-radius:8px!important;
+  font-size:6.5px!important;
+  letter-spacing:.1em!important;
+  box-shadow:0 7px 20px rgba(54,203,233,.10)!important;
+}
+.risk-results{
+  margin:0!important;
+  padding:0 11px 10px!important;
+  grid-template-columns:1.15fr repeat(5,1fr)!important;
+}
+.risk-results>div{
+  min-height:48px!important;
+  box-sizing:border-box!important;
+  padding:8px!important;
+  border-radius:8px!important;
+  background:rgba(0,0,0,.13)!important;
+}
+.risk-results span{font-size:5px!important}
+.risk-results b{margin-top:5px!important;font-size:9px!important}
+.risk-result-primary b{font-size:11px!important}
+.risk-disclaimer{
+  margin:0!important;
+  padding:0 11px 9px!important;
+  font-size:5.5px!important;
+  color:#4f6067!important;
+}
+
+/* Keep the strategy thesis available without competing with the setup */
+.trade-breakdown{
+  margin-top:8px!important;
+  border:1px solid rgba(255,255,255,.05)!important;
+  border-radius:10px!important;
+  background:rgba(255,255,255,.009)!important;
+}
+.trade-breakdown-toggle{
+  min-height:42px!important;
+  padding:0 11px!important;
+}
+.trade-breakdown-toggle strong{font-size:10px!important}
+.trade-breakdown-body{padding:0 11px 11px!important}
+.trade-breakdown-grid{margin-top:0!important}
+.trade-breakdown-grid>div{padding:8px!important}
+.trade-breakdown-grid p{font-size:8px!important}
+
+/* Mobile: calculator stays calculator-like rather than becoming a long form */
+@media(max-width:900px){
+  .risk-calc-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .risk-results{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:620px){
+  .live-market-head h2{font-size:21px!important}
+  .risk-calc-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .risk-calc-head{min-height:45px!important;padding:0 10px!important}
+  .risk-calc-grid{padding:9px 10px!important}
+  .risk-calc-action{padding:0 10px 9px!important}
+  .risk-results{grid-template-columns:1fr 1fr!important;padding:0 10px 9px!important}
+  .risk-result-primary{grid-column:1/-1!important}
+  .risk-disclaimer{padding:0 10px 8px!important}
+}
