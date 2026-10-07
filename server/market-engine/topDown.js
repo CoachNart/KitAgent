@@ -3,10 +3,10 @@ import {confirmedSwings,selectStructuralTarget} from './structure.js';
 
 export const TOP_DOWN_MODEL='HTF_ALIGNMENT_EXECUTION_BOS_RETEST';
 
-function nextTarget(c,direction,afterIndex,entry){
+function nextTarget(c,direction,afterIndex,entry,layers=[]){
   const a=atr(c,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
-  return selectStructuralTarget(c,direction,entry,{minDistance});
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance});
 }
 function htfBias(layers){
   const dirs=(layers||[]).map(x=>x?.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
@@ -117,7 +117,7 @@ export function evaluateTopDown({candles,layers,price}){
   const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
   if(rt.age>4)return{direction,failures:['The BOS retest is stale; a later price revisit is required.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
   if(distance>tolerance)return{direction,failures:['Live price is no longer at the confirmed BOS retest level.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
-  const targetSwing=nextTarget(c,direction,rt.index,entry);
+  const targetSwing=nextTarget(c,direction,rt.index,entry,layers);
   if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))
     return{direction,failures:['No meaningful continuation target is available beyond the retest.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
   const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
