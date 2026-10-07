@@ -8,7 +8,7 @@ const validDir=d=>d==='BULLISH'||d==='BEARISH';
 const last=a=>a?.at(-1)||null;
 
 function alignedDirection(layers=[]){
-  const dirs=layers.map(x=>x?.structure?.direction).filter(validDir);
+  const dirs=layers.slice(0,-1).map(x=>x?.structure?.direction).filter(validDir);
   if(!dirs.length||dirs.some(d=>d!==dirs[0]))return null;
   return dirs[0];
 }
