@@ -172,7 +172,6 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
     msnr:result.msnr||null,
     crt:result.crt||null,
     liquidity:execution.liquidity,
-    msnr:result.msnr||null,
     msnrLevels:result.levels||[],
     msnrConfirmations:result.confirmations||[],
     candidates:result.candidates||[]
