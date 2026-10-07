@@ -342,3 +342,58 @@
     min-height:52px !important;
   }
 }
+
+
+/* Final Market Analysis control polish: keep values inside their buttons and make field labels distinct. */
+.live-market .live-controls > .market-picker,
+.live-market .live-controls > .strategy-selector,
+.live-market .live-controls > .timeframe{
+  overflow:visible !important;
+}
+.live-market .live-controls > .market-picker > span{
+  color:#57dff7 !important;
+  text-shadow:0 0 14px rgba(87,223,247,.16);
+}
+.live-market .live-controls > .strategy-selector > span{
+  color:#bda4ff !important;
+  text-shadow:0 0 14px rgba(189,164,255,.13);
+}
+.live-market .live-controls > .timeframe > span{
+  color:#f2c46d !important;
+  text-shadow:0 0 14px rgba(242,196,109,.13);
+}
+.live-market .live-controls .instrument-picker,
+.live-market .live-controls .strategy-select-wrap,
+.live-market .live-controls .timeframe > div{
+  position:relative !important;
+  width:100% !important;
+  min-width:0 !important;
+  height:24px !important;
+  min-height:24px !important;
+}
+.live-market .live-controls .instrument-trigger{
+  position:relative !important;
+  z-index:3 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  line-height:1 !important;
+  overflow:hidden !important;
+}
+.live-market .live-controls .instrument-trigger b{
+  display:block !important;
+  min-width:0 !important;
+  line-height:24px !important;
+  position:relative !important;
+  z-index:4 !important;
+}
+.live-market .live-controls .instrument-menu{
+  z-index:100 !important;
+}
+.live-market .live-controls .live-field select,
+.live-market .live-controls .strategy-selector select{
+  position:relative !important;
+  z-index:3 !important;
+}
