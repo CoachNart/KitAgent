@@ -4,19 +4,20 @@ import './history-mobile-fix.css';
 import {Activity,BarChart3,ChevronRight,Clock3,RefreshCw,Search,Target,Trash2,TrendingDown,TrendingUp} from 'lucide-react';
 import {auth} from './firebase.js';
 
+const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
 function num(v){if(v==null||Number.isNaN(Number(v)))return '—';return Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)>=1000?2:Number(v)>=1?5:8});}
 function when(v){if(!v)return '—';const d=v?.toDate?v.toDate():new Date(v);if(Number.isNaN(d.getTime()))return '—';return d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
 function statusOf(s){if(s.status==='target_hit')return {label:'TARGET HIT',tone:'win',closed:true};if(s.status==='stop_hit')return {label:'STOP HIT',tone:'loss',closed:true};if(s.status==='missed_entry')return {label:'MISSED ENTRY',tone:'missed',closed:true};return {label:'LIVE',tone:'live',closed:false};}
 function isTrade(s){return ['MARKET','LIMIT'].includes(String(s.orderType||'').toUpperCase());}
-function isRecorded(s){return isTrade(s)&&['open','target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
+function isRecorded(s){return isTrade(s)&&ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&['open','target_hit','stop_hit'].includes(String(s.status||''));}
 function isClosed(s){return ['target_hit','stop_hit','missed_entry'].includes(String(s.status||''));}
 
 export default function SignalHistory({activity=[]}){
-  const [signals,setSignals]=useState(()=>{try{const v=JSON.parse(localStorage.getItem('kitsetups-signal-history-cache')||'[]');return Array.isArray(v)?v:[]}catch{return[]}});
+  const [signals,setSignals]=useState(()=>{try{const v=JSON.parse(localStorage.getItem('kitsetups-signal-history-cache-v4')||'[]');return Array.isArray(v)?v:[]}catch{return[]}});
   const [loading,setLoading]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('signals'),[query,setQuery]=useState(''),[clearOpen,setClearOpen]=useState(false),[clearText,setClearText]=useState(''),[clearing,setClearing]=useState(false),[deleteTarget,setDeleteTarget]=useState(null),[deleting,setDeleting]=useState(false);
-  const load=async(userOverride)=>{const user=userOverride||auth?.currentUser;if(!user)return;setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{headers:{Authorization:'Bearer '+token},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Signal history could not be loaded.');const next=Array.isArray(body.signals)?body.signals:[];setSignals(next);try{localStorage.setItem('kitsetups-signal-history-cache',JSON.stringify(next))}catch{}}catch(e){setError(e.message||'Signal history could not be loaded.')}};
+  const load=async(userOverride)=>{const user=userOverride||auth?.currentUser;if(!user)return;setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{headers:{Authorization:'Bearer '+token},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Signal history could not be loaded.');const next=Array.isArray(body.signals)?body.signals:[];setSignals(next);try{localStorage.setItem('kitsetups-signal-history-cache-v4',JSON.stringify(next))}catch{}}catch(e){setError(e.message||'Signal history could not be loaded.')}};
   const deleteSignal=async()=>{const user=auth?.currentUser;if(!user||!deleteTarget?.id)return;setDeleting(true);setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{method:'DELETE',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({signalId:deleteTarget.id})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Could not delete this setup.');setSignals(prev=>prev.filter(s=>(s.id||s.signalId)!==deleteTarget.id));setDeleteTarget(null)}catch(e){setError(e.message||'Could not delete this setup.')}finally{setDeleting(false)}};
-  const clearHistory=async()=>{const user=auth?.currentUser;if(!user||clearText.trim()!=='CLEAR')return;setClearing(true);setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{method:'DELETE',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({confirmation:'CLEAR'})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Could not clear signal history.');setSignals([]);try{localStorage.removeItem('kitsetups-signal-history-cache')}catch{}setClearText('');setClearOpen(false)}catch(e){setError(e.message||'Could not clear signal history.')}finally{setClearing(false)}};
+  const clearHistory=async()=>{const user=auth?.currentUser;if(!user||clearText.trim()!=='CLEAR')return;setClearing(true);setError('');try{const token=await user.getIdToken();const r=await fetch('/api/signals',{method:'DELETE',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({confirmation:'CLEAR'})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Could not clear signal history.');setSignals([]);try{localStorage.removeItem('kitsetups-signal-history-cache-v4')}catch{}setClearText('');setClearOpen(false)}catch(e){setError(e.message||'Could not clear signal history.')}finally{setClearing(false)}};
   useEffect(()=>{let unsubscribe=()=>{};if(auth?.onAuthStateChanged)unsubscribe=auth.onAuthStateChanged(user=>load(user));else load();const onSignal=()=>load();window.addEventListener('kitagent-signal-recorded',onSignal);return()=>{unsubscribe?.();window.removeEventListener('kitagent-signal-recorded',onSignal)}},[]);
   useEffect(()=>{const timer=setInterval(()=>load(),30000);return()=>clearInterval(timer)},[]);
   const tradeSignals=useMemo(()=>signals.filter(isRecorded),[signals]);
@@ -83,7 +84,7 @@ function SignalCard({signal:s,onDelete}) {
         <span>{String(s.market || '').toUpperCase()}</span>
         <i />
         <span>{s.timeframe || '—'}</span>
-        {s.strategy ? (
+        {ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase()) ? (
           <>
             <i />
             <span>{String(s.strategy).replace(/_/g, ' ')}</span>
