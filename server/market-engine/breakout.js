@@ -156,7 +156,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   if(!orderType){failures.push('Live price is no longer executable at the broken structural level.');return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm}]};}
   const grade=gradeSetup({
     strategy:'BREAKOUT',
-    context:{aligned:true,trend:true},
+    context:{aligned:true,trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
     entry:{anchorQuality:1,executionQuality:1},
     risk:{invalidationQuality:1,geometryQuality:1},
     target:tgt,
