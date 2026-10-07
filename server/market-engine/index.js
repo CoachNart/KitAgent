@@ -4,7 +4,7 @@ import {structure} from './structure.js';
 import {liquidityMap} from './liquidity.js';
 import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
-import {noTrade} from './grading.js';
+import {noTrade,validateTradeGeometry} from './grading.js';
 
 const BYBIT={'15m':'15','30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
 const CHAIN={
@@ -146,14 +146,24 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
     price
   });
 
-  const grade=result.grade||noTrade(result.failures||[]);
+  let grade=result.grade||noTrade(result.failures||[]);
+  let failures=[...(result.failures||[])];
+  if(result.trade){
+    const geometry=validateTradeGeometry({trade:result.trade,direction:result.direction,candles:execution.candles});
+    if(!geometry.valid){
+      failures.push(...geometry.failures);
+      grade=noTrade(geometry.failures);
+    }else if(grade?.confidenceEvidence){
+      grade={...grade,confidenceEvidence:[...grade.confidenceEvidence,{type:'TRADE_GEOMETRY',...geometry.metrics,interpretation:'structural risk/reward geometry; not a 2R gate'}]};
+    }
+  }
   return{
     tf,
     direction:result.direction,
     grade,
     trade:result.trade||null,
     evidence:result.evidence||[],
-    failures:result.failures||[],
+    failures,
     layers:layers.map(x=>({
       tf:x.tf,
       direction:x.structure.direction,
