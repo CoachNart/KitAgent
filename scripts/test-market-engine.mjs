@@ -4,6 +4,7 @@ import {structure} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,TOP_DOWN_MODEL} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
+import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -140,11 +141,16 @@ const pbNoImpulse=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure
 assert('Pullback requires a confirmed directional impulse before retracement',()=>pbNoImpulse.direction==='BULLISH'&&pbNoImpulse.failures.some(x=>x.includes('impulse')));
 assert('Pullback routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'PULLBACK',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed&&Array.isArray(routed.failures)&&routed.direction==='BULLISH';});
 
-// Non-MSR strategies are intentionally disabled until their own contracts are rebuilt.
-for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC','TOP_DOWN','PULLBACK'].includes(x))){
-  const result=evaluateStrategy({strategy,layers,execution:{candles:vCc},price:103.5});
-  assert(strategy+' is not using the old generic engine',()=>result.failures.some(x=>x.includes('intentionally disabled')));
-}
+// Breakout & Retest contract: defined level -> decisive close -> timely role-reversal retest -> continuation.
+assert('Breakout & Retest uses a defined breakout-retest model',BREAKOUT_MODEL==='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION');
+const brMismatch=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}}],price:105});
+assert('Breakout & Retest rejects conflicting higher-timeframe directions',()=>brMismatch.direction==='NEUTRAL'&&brMismatch.failures.some(x=>x.includes('aligned')));
+const brNoLevel=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
+assert('Breakout & Retest requires a defined multi-touch level',()=>brNoLevel.direction==='BULLISH'&&brNoLevel.failures.some(x=>x.includes('level')));
+assert('Breakout & Retest routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'BREAKOUT',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed&&Array.isArray(routed.failures)&&routed.direction==='BULLISH';});
+assert('Strategy registry contains only the six retained strategies',()=>Object.keys(STRATEGIES).sort().join(',')==='BREAKOUT,CRT,MSNR,PULLBACK,SMC,TOP_DOWN');
+const crt=evaluateStrategy({strategy:'CRT',layers,execution:{candles:vCc},price:103.5});
+assert('CRT remains isolated until its own contract is rebuilt',()=>crt.failures.some(x=>x.includes('intentionally disabled')));
 
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
