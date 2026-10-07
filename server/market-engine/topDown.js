@@ -10,7 +10,7 @@ function nextTarget(c,direction,afterIndex,entry,layers=[]){
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:afterIndex,asOfTime:c[afterIndex]?.time??null});
 }
 function htfBias(layers){
-  const dirs=(layers||[]).map(x=>x?.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
+  const dirs=(layers||[]).slice(0,-1).map(x=>x?.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
   if(!dirs.length||dirs.some(x=>x!==dirs[0]))return null;
   return dirs[0];
 }
