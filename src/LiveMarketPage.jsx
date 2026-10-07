@@ -87,8 +87,6 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
           </label>
 
           <StrategySelector value={strategy} onChange={setStrategy}/>
-          <button type="button" className="setup-guide-button" onClick={()=>window.dispatchEvent(new CustomEvent('kitsetups-open-setup-guide'))}> <span>Read setup breakdown</span> <ChevronDown size={13}/></button>
-
           <button type="button" className="live-analyze" onClick={analyze} disabled={loading||sourceLoading||!pair}>
             {loading?<><RefreshCw className="spin"/> Reading market</>:sourceLoading?<><RefreshCw className="spin"/> Loading source</>:<><BarChart3/> Analyze pair</>}
           </button>
@@ -96,18 +94,10 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
 
         {error&&<div className="live-error">{error}<button type="button" onClick={analyze}>Retry</button></div>}
         {!result&&!loading&&!error&&
-          <div className="live-empty">
-            <ScanSearch/>
-            <b>Ready to analyze {pair||'a supported market instrument'}</b>
-            <span>The selected strategy will be tested against fresh candles, top-down structure and its own entry, invalidation and target rules.</span>
-          </div>
+          <div className="live-empty"><ScanSearch/><b>Select a market and analyze</b><span>Live structure · execution · risk</span></div>
         }
         {loading&&
-          <div className="live-loading">
-            <span className="loading-orb"/>
-            <b>{TIMEFRAME_GUIDE[timeframe]?.title||'Reading market structure'}</b>
-            <small>{TIMEFRAME_GUIDE[timeframe]?.desc||'Building the top-down market read.'}</small>
-          </div>
+          <div className="live-loading"><span className="loading-orb"/><b>Reading market</b><small>{timeframe} · live structure</small></div>
         }
         {result&&
           <>
@@ -202,9 +192,7 @@ function RiskCalculator({setup}){
   return <section className={`risk-calculator ${direction==='LONG'?'risk-long':'risk-short'}`} aria-label="Risk calculator">
     <div className="risk-calc-head">
       <div>
-        <span className="risk-kicker">POSITION MANAGEMENT</span>
-        <h3>Risk calculator</h3>
-        <p>{validTrade?'Size this generated setup before entering the trade.':'Set up a position manually, or generate a qualified setup to auto-fill these prices.'}</p>
+        <h3>Position calculator</h3><span className="risk-live-note">{validTrade?'SETUP AUTO-FILLED':'MANUAL'}</span>
       </div>
       {validTrade ? <span className="risk-direction">{direction}</span> : <select className="risk-direction-select" aria-label="Direction" value={manualDirection} onChange={e=>{setManualDirection(e.target.value);setCalculation(null)}}><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select>}
     </div>
@@ -219,7 +207,7 @@ function RiskCalculator({setup}){
     </div>
 
     <div className="risk-calc-action">
-      <button type="button" onClick={calculate}>Calculate position</button>
+      <button type="button" onClick={calculate}>Calculate</button>
       {validation&&<span role="alert">{validation}</span>}
     </div>
 
@@ -232,7 +220,7 @@ function RiskCalculator({setup}){
       <div><span>LIQUIDATION DISTANCE</span><b>{calculation.liqDistance.toFixed(2)}%</b></div>
     </div>}
 
-    <p className="risk-disclaimer">Estimated liquidation uses a simplified isolated-margin formula. Actual liquidation varies by exchange maintenance margin, fees and position mode.</p>
+    <p className="risk-disclaimer">Estimated liquidation · isolated margin</p>
   </section>;
 }
 function TradeBreakdown({setup,result}){
