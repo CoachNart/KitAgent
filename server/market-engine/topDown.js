@@ -7,7 +7,7 @@ export const TOP_DOWN_MODEL='HTF_ALIGNMENT_EXECUTION_BOS_RETEST';
 function nextTarget(c,direction,afterIndex,entry,layers=[]){
   const a=atr(c,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
-  return selectStructuralTarget(c,direction,entry,{layers,minDistance});
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:afterIndex,asOfTime:c[afterIndex]?.time??null});
 }
 function htfBias(layers){
   const dirs=(layers||[]).map(x=>x?.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
