@@ -1,3 +1,4 @@
+import {gradeSetup} from './grading.js';
 import {atr} from './data.js';
 const RESISTANCE_TYPES=new Set(['A','BEARISH_GAP','SBR']);
 const SUPPORT_TYPES=new Set(['V','BULLISH_GAP','RBS']);
@@ -236,17 +237,18 @@ function objective(levels,direction,entry,minDistance=0){
     .sort((a,b)=>b.quality-a.quality||Math.abs(a.level-entry)-Math.abs(b.level-entry))
     .find(x=>x.level!==entry)||null;
 }
-function gradeMSNR({level,event,rr,context,target}){
-  let score=0;
-  score+=event?.freshBefore?25:0;
-  score+=event?30:0;
-  score+=levelStrength(event?.type?.replace('_CC','')||level.type)*20;
-  score+=level.flipCount>0?5:0;
-  score+=level.touches===0?5:0;
-  score+=context.aligned>0?12:context.dominant==='NEUTRAL'?7:0;
-  score+=target?8:0;
-  const grade=score>=92?'A+':score>=82?'A':score>=70?'B':score>=55?'C':'NO-TRADE';
-  return {grade,score};
+function gradeMSNR({level,event,context,target}){
+  const levelType=String(event?.type||'').replace('_CC','');
+  const strong=['RBS','SBR'].includes(levelType);
+  return gradeSetup({
+    strategy:'MSNR',
+    context:{aligned:context.aligned>0||context.dominant==='NEUTRAL',trend:context.dominant!=='NEUTRAL'},
+    entry:{anchorQuality:strong?1:.9,executionQuality:1},
+    risk:{invalidationQuality:1,geometryQuality:1},
+    target:{source:'MSNR_OPPOSING_LEVEL',quality:strong?.95:.82,pool:level?.flipCount>0?'REPEATED_STRUCTURE':undefined},
+    confirmation:{quality:event?.freshBefore?1:.65},
+    freshness:{quality:event?.freshBefore?1:.6}
+  });
 }
 
 export function evaluateMSNR({candles,layers,price}){
@@ -344,7 +346,7 @@ export function evaluateMSNR({candles,layers,price}){
       candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'The next opposing MSNR objective is not beyond the entry.'});
       continue;
     }
-    const g=gradeMSNR({level,event,rr,context,target});
+    const g=gradeMSNR({level,event,context,target});
     if(!['A+','A'].includes(g.grade)){
       candidates.push({event,level,direction,context,entry,stop,target,rr,grade:g,failure:'MSNR confluence is below the executable A-grade threshold.'});
       continue;

@@ -1,9 +1,11 @@
 import {atr,bodyRatio} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
+import {gradeSetup} from './grading.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
 export {fvgAt, meaningfulDisplacement, findSweeps};
+function ageQuality(age,fresh,recent){if(!Number.isFinite(age))return 0;if(age<=fresh)return 1;if(age<=recent)return .7;if(age<=16)return .35;return 0;}
 
 function fvgAt(c,i){
   if(i<2||!c[i-2]||!c[i-1]||!c[i])return null;
@@ -86,6 +88,14 @@ export function evaluateSMC({candles,layers,price}){
   if(!target||!Number.isFinite(target.price)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[]};}
   const trade=buildTrade({c,price,direction,sweep,mss,displacement,fvg,target:target.price});
   if(!trade){failures.push('FVG entry, structural invalidation, or meaningful liquidity objective is invalid.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
-  const score=88+(displacement.atrMultiple>=1.35?3:0)+(sweep.age<=6?3:0),grade=score>=92?'A+':'A';
-  return{direction,grade:{grade,score,hardFailures:[]},failures:[],trade,evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium}],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
+  const grade=gradeSetup({
+    strategy:'SMC',
+    context:{aligned:true,trend:true},
+    entry:{anchorQuality:1,executionQuality:1},
+    risk:{invalidationQuality:1,geometryQuality:1},
+    target,
+    confirmation:{quality:Math.min(1,.55+(displacement.atrMultiple>=1.35?.25:.1))},
+    freshness:{quality:Math.min(1,.45+ageQuality(sweep.age,4,10)*.35+Math.min(1,displacement.atrMultiple/1.5)*.2)}
+  });
+  return{direction,grade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium}],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }

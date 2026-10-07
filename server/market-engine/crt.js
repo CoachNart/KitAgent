@@ -1,5 +1,6 @@
 import {atr,bodyRatio,rangeAverage} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
+import {gradeSetup} from './grading.js';
 
 export const CRT_MODEL='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST';
 
@@ -115,15 +116,7 @@ function target(range,direction,c,entry,mssIndex,layers=[]){
   const selected=selectStructuralTarget(c,direction,entry,{layers,minDistance});
   return selected?{price:selected.price,index:selected.index,source:selected.source,quality:selected.quality,pool:selected.pool}:null;
 }
-function grade({bias,range,sweep,mss,rt,rr}){
-  let score=0;
-  score+=bias?30:0;
-  score+=range?15:0;
-  score+=sweep?25:0;
-  score+=mss?20:0;
-  score+=rt?5:0;
-  return {score,grade:score>=92?'A+':score>=82?'A':'NO-TRADE'};
-}
+function grade({range,sweep,mss,rt,tgt,live,entry,a}){const distance=Math.abs(live-entry);const tolerance=Math.max(a*.45,Math.abs(entry)*.0015);return gradeSetup({strategy:'CRT',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:distance<=tolerance?1:.82},risk:{invalidationQuality:1,geometryQuality:.95},target:tgt,confirmation:{quality:.92},freshness:{quality:.9}});}
 
 export function evaluateCRT({candles=[],layers=[],price}){
   const failures=[];
@@ -213,7 +206,7 @@ export function evaluateCRT({candles=[],layers=[],price}){
     ?live<=entry+a*.3?'MARKET':'LIMIT'
     :live>=entry-a*.3?'MARKET':'LIMIT';
 
-  const g=grade({bias:direction,range, sweep,mss,rt,rr});
+  const g=grade({range,sweep,mss,rt,tgt,live,entry,a});
   if(g.grade==='NO-TRADE'){
     failures.push('CRT confluence is below the executable A-grade threshold.');
     return {direction,failures,evidence:[],grade:g};
@@ -236,7 +229,7 @@ export function evaluateCRT({candles=[],layers=[],price}){
   return {
     direction,
     tradeReady:true,
-    grade:{...g,hardFailures:[]},
+    grade:g,
     trade,
     failures:[],
     evidence:[

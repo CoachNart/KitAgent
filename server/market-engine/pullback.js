@@ -1,5 +1,6 @@
 import {atr} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
+import {gradeSetup} from './grading.js';
 
 export const PULLBACK_MODEL='HTF_TREND_IMPULSE_RETRACE_CONTINUATION';
 
@@ -122,6 +123,15 @@ export function evaluatePullback({candles=[],layers=[],price}){
     failures.push('Live price has crossed the planned pullback entry; setup is stale and cannot be published as a waiting limit.');
     return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};
   }
+  const grade=gradeSetup({
+    strategy:'PULLBACK',
+    context:{aligned:true,trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
+    entry:{anchorQuality:1,executionQuality:near?1:.8},
+    risk:{invalidationQuality:1,geometryQuality:1},
+    target,
+    confirmation:{quality:.9},
+    freshness:{quality:.85}
+  });
   const trade={
     entry,marketEntry:live,stop,target:target.price,risk,reward,rr,orderType,
     entryReason:'HTF trend aligned with a confirmed impulse; price retraced into the value zone and the continuation break established the structural entry level.',
@@ -130,9 +140,9 @@ export function evaluatePullback({candles=[],layers=[],price}){
     targetSource:target.source||'STRUCTURAL_TARGET'
   };
   return {
-    direction,tradeReady:true,trade,orderType,entry,stopLoss:stop,takeProfit1:target.price,rr,
+    direction,tradeReady:true,trade,grade,orderType,entry,stopLoss:stop,takeProfit1:target.price,rr,
     failures:[],
-    evidence:[{type:'HTF_ALIGNMENT',direction},{type:'IMPULSE',...move},{type:'RETRACEMENT_ZONE',...zone},{type:'PULLBACK_TOUCH',...touch},{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target}],
+    evidence:[...grade.confidenceEvidence,{type:'HTF_ALIGNMENT',direction},{type:'IMPULSE',...move},{type:'RETRACEMENT_ZONE',...zone},{type:'PULLBACK_TOUCH',...touch},{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target}],
     pullback:{model:PULLBACK_MODEL,direction,impulse:move,retracement:zone,touch,confirmation:confirm,target}
   };
 }
