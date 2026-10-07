@@ -102,7 +102,10 @@ export function evaluatePullback({candles=[],layers=[],price}){
   if(!target){failures.push('No opposing structural continuation target.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm}]};}
   const reward=Math.abs(target.price-entry),rr=reward/risk;
   if(!(rr>=2)){failures.push('Structural target does not provide at least 2R.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};}
-  const orderType=direction==='BULLISH'?(entry<=zone.high?'LIMIT':'MARKET'):(entry>=zone.low?'LIMIT':'MARKET');
+  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+  const near=Math.abs(Number(price)-entry)<=tolerance;
+  const orderType=near?'MARKET':direction==='BULLISH'?(Number(price)>entry?'LIMIT':null):(Number(price)<entry?'LIMIT':null);
+  if(!orderType){failures.push('Live price has crossed the planned pullback entry; setup is stale and cannot be published as a waiting limit.');return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm},{type:'TARGET',...target,rr}]};}
   return {
     direction,tradeReady:true,orderType,entry,stopLoss:stop,takeProfit1:target.price,rr,
     failures:[],
