@@ -47,3 +47,6 @@ export default async function handler(req,res){try{const auth=await authenticate
       return json(res,200,{ok:true,...result});
     }
     return json(res,405,{ok:false,error:'Method not allowed'})}catch(e){const status=e?.code==='AUTH_REQUIRED'||e?.code==='AUTH_INVALID'?401:500;return json(res,status,{ok:false,error:e?.message||'Scanner request failed',code:e?.code||'SCANNER_ERROR'})}}
+
+
+export { topSymbols, candlesFor, scanSymbol };
