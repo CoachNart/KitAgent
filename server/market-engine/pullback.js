@@ -98,7 +98,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
     failures.push('Live price is unavailable.');
     return {direction,failures,evidence:[]};
   }
-  const entry=live;
+  const entry=confirm.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
   const stop=direction==='BULLISH'
     ?Math.min(touch.candle.low,move.start.price)-a*.25
@@ -124,7 +124,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   }
   const trade={
     entry,marketEntry:live,stop,target:target.price,risk,reward,rr,orderType,
-    entryReason:'HTF trend aligned with a confirmed impulse; price retraced into the value zone and closed a continuation break.',
+    entryReason:'HTF trend aligned with a confirmed impulse; price retraced into the value zone and the continuation break established the structural entry level.',
     invalidation:protectedInvalid,
     invalidationSource:'impulse_origin_structural_invalidation',
     targetSource:target.source||'STRUCTURAL_TARGET'
