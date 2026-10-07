@@ -2,6 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
 const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
+const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6']);
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -154,7 +155,7 @@ export default async function handler(req,res){
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
-    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&s.engineVersion==='market-engine-v5');
+    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&ENGINE_VERSIONS.has(String(s.engineVersion||'')));
     const unresolved=currentRaw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
     const priority=[...currentRaw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];
     const resolvable=new Set(priority.slice(0,24).map(s=>s.id));
