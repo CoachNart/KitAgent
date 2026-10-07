@@ -1657,3 +1657,82 @@
 .strategy-guide-button:hover svg{transform:translateY(2px)!important}
 @media(max-width:1100px){.live-controls{grid-template-columns:1fr 1fr!important}.strategy-guide-button,.live-analyze{width:100%!important}}
 @media(max-width:620px){.live-controls{grid-template-columns:1fr!important}.strategy-guide-button,.live-analyze{grid-column:auto!important}}
+
+
+/* Hard layout fix: strategy guide stays visible; pair menu stays anchored to PAIR */
+.live-controls{
+  grid-template-columns:minmax(180px,1.2fr) minmax(120px,.75fr) minmax(170px,1fr) minmax(145px,.8fr) minmax(105px,.7fr)!important;
+}
+.live-controls>.market-picker,
+.live-controls>.timeframe,
+.live-controls>.strategy-selector,
+.live-controls>.strategy-guide-button,
+.live-controls>.live-analyze{
+  min-width:0!important;
+  align-self:end!important;
+}
+.strategy-guide-button{
+  position:relative!important;
+  z-index:5!important;
+  width:100%!important;
+  height:40px!important;
+  min-height:40px!important;
+  margin:0!important;
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+.market-picker{
+  position:relative!important;
+  z-index:30!important;
+}
+.market-picker .instrument-picker{
+  position:relative!important;
+  z-index:31!important;
+}
+.market-picker .instrument-menu{
+  position:absolute!important;
+  z-index:9999!important;
+  top:calc(100% + 7px)!important;
+  left:0!important;
+  right:auto!important;
+  width:min(330px,calc(100vw - 32px))!important;
+  min-width:0!important;
+  max-width:calc(100vw - 32px)!important;
+  max-height:380px!important;
+  overflow:hidden!important;
+  transform:none!important;
+}
+.market-picker .instrument-results{
+  max-height:310px!important;
+  overflow-y:auto!important;
+}
+.market-picker .instrument-results>button{
+  min-height:40px!important;
+}
+@media(max-width:1100px){
+  .live-controls{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  }
+  .live-controls>.market-picker{grid-column:1}
+  .live-controls>.timeframe{grid-column:2}
+  .live-controls>.strategy-selector{grid-column:1}
+  .live-controls>.strategy-guide-button{grid-column:2}
+  .live-controls>.live-analyze{grid-column:1/-1}
+}
+@media(max-width:620px){
+  .live-controls{
+    grid-template-columns:1fr!important;
+  }
+  .live-controls>.market-picker,
+  .live-controls>.timeframe,
+  .live-controls>.strategy-selector,
+  .live-controls>.strategy-guide-button,
+  .live-controls>.live-analyze{
+    grid-column:1!important;
+  }
+  .market-picker .instrument-menu{
+    width:100%!important;
+    max-width:100%!important;
+  }
+}
