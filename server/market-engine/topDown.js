@@ -1,20 +1,13 @@
 import {atr} from './data.js';
-import {confirmedSwings} from './structure.js';
+import {confirmedSwings,selectStructuralTarget} from './structure.js';
 
 export const TOP_DOWN_MODEL='HTF_ALIGNMENT_EXECUTION_BOS_RETEST';
 
 function nextTarget(c,direction,afterIndex,entry){
-  const s=confirmedSwings(c,3);
   const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004);
-  const xs=(direction==='BULLISH'?s.highs:s.lows)
-    .filter(x=>x.confirmationIndex<=c.length-1&&x.index>afterIndex)
-    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
-    .filter(x=>Math.abs(x.price-entry)>=minDistance)
-    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
-  return xs[0]||null;
+  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  return selectStructuralTarget(c,direction,entry,{minDistance});
 }
-
 function htfBias(layers){
   const dirs=(layers||[]).map(x=>x?.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
   if(!dirs.length||dirs.some(x=>x!==dirs[0]))return null;
