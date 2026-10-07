@@ -1736,3 +1736,24 @@
     max-width:100%!important;
   }
 }
+
+.strategy-guide-button .strategy-guide-arrow{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:22px!important;
+  height:22px!important;
+  flex:0 0 22px!important;
+  border:1px solid rgba(114,221,255,.16)!important;
+  border-radius:6px!important;
+  color:#72e5f8!important;
+  font-size:12px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  background:rgba(114,221,255,.035)!important;
+}
+.strategy-guide-button:hover .strategy-guide-arrow{
+  border-color:rgba(114,221,255,.35)!important;
+  background:rgba(114,221,255,.09)!important;
+  transform:translate(1px,-1px)!important;
+}
