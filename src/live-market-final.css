@@ -75,3 +75,216 @@
 .live-controls .live-analyze:hover{background:#19caf3;transform:translateY(-1px)}
 @media(max-width:760px){.live-controls{gap:18px;margin-top:10px}.live-controls .live-field,.live-controls .strategy-selector{grid-template-columns:176px minmax(0,1fr);min-height:76px;border-radius:22px}.live-controls .live-field::after,.live-controls .strategy-selector::after{left:176px;top:20px;bottom:20px}.live-controls .live-field>span,.live-controls .strategy-selector>span{padding:0 27px;font-size:12px}.live-controls .instrument-trigger,.live-controls .live-field select,.live-controls .strategy-selector select{min-height:76px;font-size:16px;padding-left:22px;padding-right:52px}.live-controls .strategy-guide-button{min-height:76px;border-radius:22px}.live-controls .live-analyze{min-height:70px;height:70px;border-radius:20px;font-size:16px}}
 @media(max-width:430px){.live-controls{gap:14px}.live-controls .live-field,.live-controls .strategy-selector{grid-template-columns:150px minmax(0,1fr);min-height:70px;border-radius:19px}.live-controls .live-field::after,.live-controls .strategy-selector::after{left:150px;top:18px;bottom:18px}.live-controls .live-field>span,.live-controls .strategy-selector>span{padding:0 20px;font-size:10px}.live-controls .instrument-trigger,.live-controls .live-field select,.live-controls .strategy-selector select{min-height:70px;font-size:15px;padding-left:19px;padding-right:48px}.live-controls .instrument-trigger b{font-size:15px}.live-controls .strategy-guide-button{min-height:70px;border-radius:19px;padding-left:20px}.live-controls .strategy-guide-button small{font-size:10px}.live-controls .strategy-guide-button b{font-size:12px}.live-controls .strategy-guide-arrow{width:42px;height:42px;border-radius:13px;font-size:19px}.live-controls .live-analyze{min-height:64px;height:64px;border-radius:18px;font-size:14px}}
+
+
+/* 2026-10-07 Market Analysis control refresh: compact premium control row */
+.live-market .live-controls{
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) minmax(0,1.2fr) minmax(118px,.82fr) minmax(145px,1fr) minmax(150px,1.12fr);
+  gap:8px;
+  align-items:stretch;
+  margin-top:10px;
+}
+.live-market .live-controls > .live-field,
+.live-market .live-controls > .strategy-selector,
+.live-market .live-controls > .strategy-guide-button,
+.live-market .live-controls > .live-analyze{
+  min-width:0;
+  width:100%;
+  height:58px;
+  min-height:58px;
+  margin:0;
+  border-radius:12px;
+  box-sizing:border-box;
+}
+.live-market .live-controls > .live-field,
+.live-market .live-controls > .strategy-selector{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:stretch;
+  position:relative;
+  padding:7px 36px 7px 12px;
+  border:1px solid rgba(93,126,138,.22);
+  background:linear-gradient(145deg,rgba(15,23,28,.98),rgba(8,13,17,.98));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+  overflow:hidden;
+}
+.live-market .live-controls > .live-field::after,
+.live-market .live-controls > .strategy-selector::after{display:none}
+.live-market .live-controls > .live-field > span,
+.live-market .live-controls > .strategy-selector > span{
+  display:block;
+  height:auto;
+  margin:0 0 4px;
+  padding:0;
+  color:#60767f;
+  font-size:7px;
+  line-height:1;
+  letter-spacing:.13em;
+  font-weight:900;
+}
+.live-market .live-controls > .live-field > div,
+.live-market .live-controls > .strategy-selector .strategy-select-wrap{
+  position:relative;
+  height:auto;
+  min-height:0;
+  width:100%;
+}
+.live-market .live-controls .instrument-trigger,
+.live-market .live-controls .live-field select,
+.live-market .live-controls .strategy-selector select{
+  width:100%;
+  height:24px;
+  min-height:24px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:#e8f2f4;
+  padding:0 18px 0 0;
+  font-size:12px;
+  line-height:24px;
+  font-weight:850;
+  box-shadow:none;
+}
+.live-market .live-controls .instrument-trigger{display:flex;align-items:center;text-align:left}
+.live-market .live-controls .instrument-trigger b{
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+}
+.live-market .live-controls .instrument-trigger svg,
+.live-market .live-controls .live-field > div > svg,
+.live-market .live-controls .strategy-select-wrap > svg{
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  width:14px;
+  height:14px;
+  color:#607a84;
+}
+.live-market .live-controls .instrument-trigger svg.open{transform:translateY(-50%) rotate(180deg)}
+
+.live-market .live-controls > .strategy-guide-button{
+  padding:0 10px 0 12px;
+  border:1px solid rgba(82,169,195,.2);
+  background:linear-gradient(145deg,rgba(12,23,28,.98),rgba(7,14,18,.98));
+  color:#dcebed;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:7px;
+  text-align:left;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+}
+.live-market .live-controls .strategy-guide-button > span:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.live-market .live-controls .strategy-guide-button small{
+  color:#60767f;
+  font-size:7px;
+  line-height:1;
+  letter-spacing:.13em;
+  font-weight:900;
+}
+.live-market .live-controls .strategy-guide-button b{
+  color:#dcebed;
+  font-size:11px;
+  line-height:1.1;
+  font-weight:850;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.live-market .live-controls .strategy-guide-arrow{
+  width:27px;
+  height:27px;
+  flex:0 0 27px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(75,163,190,.22);
+  border-radius:8px;
+  color:#70cde9;
+  font-size:14px;
+}
+.live-market .live-controls > .live-analyze{
+  padding:0 12px;
+  border:1px solid rgba(84,220,244,.55);
+  background:linear-gradient(135deg,#19c9ee,#4bdef5);
+  color:#031014;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.07em;
+  box-shadow:0 5px 18px rgba(0,180,230,.12),inset 0 1px 0 rgba(255,255,255,.32);
+}
+.live-market .live-controls > .live-analyze svg{width:15px;height:15px}
+.live-market .live-controls > .live-analyze:hover{transform:translateY(-1px)}
+
+@media(min-width:761px){
+  .live-market .live-controls > .market-picker{grid-column:1;grid-row:1}
+  .live-market .live-controls > .strategy-selector{grid-column:2;grid-row:1}
+  .live-market .live-controls > .timeframe{grid-column:3;grid-row:1}
+  .live-market .live-controls > .strategy-guide-button{grid-column:4;grid-row:1}
+  .live-market .live-controls > .live-analyze{grid-column:5;grid-row:1}
+}
+@media(max-width:760px){
+  .live-market .live-controls{
+    grid-template-columns:minmax(0,1fr) minmax(108px,.72fr);
+    gap:7px;
+    margin-top:8px;
+  }
+  .live-market .live-controls > .market-picker{grid-column:1/-1;grid-row:1}
+  .live-market .live-controls > .strategy-selector{grid-column:1;grid-row:2}
+  .live-market .live-controls > .timeframe{grid-column:2;grid-row:2}
+  .live-market .live-controls > .strategy-guide-button{grid-column:1;grid-row:3}
+  .live-market .live-controls > .live-analyze{grid-column:2;grid-row:3}
+  .live-market .live-controls > .live-field,
+  .live-market .live-controls > .strategy-selector,
+  .live-market .live-controls > .strategy-guide-button,
+  .live-market .live-controls > .live-analyze{
+    height:54px;
+    min-height:54px;
+    border-radius:11px;
+  }
+  .live-market .live-controls > .live-field,
+  .live-market .live-controls > .strategy-selector{padding:6px 30px 6px 11px}
+  .live-market .live-controls > .live-field > span,
+  .live-market .live-controls > .strategy-selector > span{font-size:6px;margin-bottom:3px}
+  .live-market .live-controls .instrument-trigger,
+  .live-market .live-controls .live-field select,
+  .live-market .live-controls .strategy-selector select{
+    height:23px;
+    min-height:23px;
+    font-size:12px;
+    line-height:23px;
+  }
+  .live-market .live-controls .instrument-trigger b{font-size:12px}
+  .live-market .live-controls .instrument-trigger svg,
+  .live-market .live-controls .live-field > div > svg,
+  .live-market .live-controls .strategy-select-wrap > svg{width:13px;height:13px}
+  .live-market .live-controls > .strategy-guide-button{padding:0 8px 0 11px}
+  .live-market .live-controls .strategy-guide-button small{font-size:6px}
+  .live-market .live-controls .strategy-guide-button b{font-size:10px}
+  .live-market .live-controls .strategy-guide-arrow{width:25px;height:25px;flex-basis:25px;font-size:13px;border-radius:7px}
+  .live-market .live-controls > .live-analyze{font-size:9px;letter-spacing:.055em}
+}
+@media(max-width:390px){
+  .live-market .live-controls{grid-template-columns:minmax(0,1fr) minmax(100px,.68fr);gap:6px}
+  .live-market .live-controls > .live-field,
+  .live-market .live-controls > .strategy-selector,
+  .live-market .live-controls > .strategy-guide-button,
+  .live-market .live-controls > .live-analyze{height:52px;min-height:52px}
+  .live-market .live-controls > .live-field,
+  .live-market .live-controls > .strategy-selector{padding-left:10px;padding-right:27px}
+  .live-market .live-controls .instrument-trigger,
+  .live-market .live-controls .live-field select,
+  .live-market .live-controls .strategy-selector select,
+  .live-market .live-controls .instrument-trigger b{font-size:11px}
+  .live-market .live-controls .strategy-guide-button b{font-size:9px}
+  .live-market .live-controls > .live-analyze{font-size:8px}
+}
+
+/* Keep the open pair picker aligned to the compact control. */
+.live-market .instrument-menu{top:calc(100% + 5px);border-radius:11px}
+.live-market .instrument-search{height:34px;border-radius:8px}
+.live-market .instrument-results{max-height:220px}
