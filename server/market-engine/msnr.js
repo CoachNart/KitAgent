@@ -219,12 +219,12 @@ function currentContext(layers,direction){
   return {aligned,opposing,dominant:htf.find(x=>x!=='NEUTRAL')||'NEUTRAL'};
 }
 
-function objective(levels,direction,entry){
+function objective(levels,direction,entry,minDistance=0){
   const opposing=direction==='BULLISH'
     ?levels.filter(x=>x.side==='RESISTANCE'&&x.level>entry)
     :levels.filter(x=>x.side==='SUPPORT'&&x.level<entry);
   return opposing
-    .filter(x=>x.fresh || x.type==='RBS' || x.type==='SBR')
+    .filter(x=>(x.fresh || x.type==='RBS' || x.type==='SBR')&&Math.abs(x.level-entry)>=minDistance)
     .sort((a,b)=>{
       const strength=(x)=>x.type==='RBS'||x.type==='SBR'?2:x.type==='A'||x.type==='V'?1:0;
       return strength(b)-strength(a)||Math.abs(a.level-entry)-Math.abs(b.level-entry);
@@ -292,7 +292,8 @@ export function evaluateMSNR({candles,layers,price}){
     const allLevels=layers.flatMap(layer=>
       buildMSNRLevels(layer.candles).map(x=>({...x,tf:layer.tf}))
     );
-    const target=objective(allLevels,direction,entry);
+    const minTargetDistance=Math.max(a*1.25,Math.abs(entry)*.004);
+    const target=objective(allLevels,direction,entry,minTargetDistance);
     if(!target){
       candidates.push({event,level,direction,context,entry,stop,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'No opposing MSNR key level exists beyond the confirmed entry.'});
       continue;
