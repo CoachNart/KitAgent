@@ -2,15 +2,15 @@ import {evaluateMSNR} from './msnr.js';
 import {evaluateSMC} from './smc.js';
 import {evaluateTopDown} from './topDown.js';
 import {evaluatePullback} from './pullback.js';
+import {evaluateBreakout} from './breakout.js';
+import {evaluatePullback} from './pullback.js';
 
 export const STRATEGIES={
   TOP_DOWN:{name:'Top-Down',status:'READY'},
   PULLBACK:{name:'Pullback',status:'READY'},
-  BREAKOUT:{name:'Breakout & Retest',status:'NOT_BUILT'},
+  BREAKOUT:{name:'Breakout & Retest',status:'READY'},
   SMC:{name:'SMC',status:'READY'},
   MSNR:{name:'MSNR',status:'READY'},
-  PRICE_ACTION:{name:'Price Action',status:'NOT_BUILT'},
-  LIQUIDITY_REVERSAL:{name:'Liquidity Reversal',status:'NOT_BUILT'},
   CRT:{name:'CRT',status:'NOT_BUILT'}
 };
 
