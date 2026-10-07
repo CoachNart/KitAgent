@@ -56,4 +56,27 @@ export function gradeSetup({strategy,context={},entry={},risk={},target={},confi
   return {grade,score,hardFailures:[],confidenceEvidence:evidence};
 }
 
+export function validateTradeGeometry({trade,direction,candles=[]}={}){
+  const failures=[];
+  if(!trade||!['BULLISH','BEARISH'].includes(direction))return {valid:false,failures:['Missing directional trade geometry.']};
+  const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
+  if(![entry,stop,target].every(Number.isFinite))return {valid:false,failures:['Entry, stop, and target must be finite prices.']};
+  if(direction==='BULLISH'&&(stop>=entry||target<=entry))failures.push('Bullish geometry is directionally invalid.');
+  if(direction==='BEARISH'&&(stop<=entry||target>=entry))failures.push('Bearish geometry is directionally invalid.');
+  const risk=Math.abs(entry-stop),reward=Math.abs(target-entry);
+  const rr=risk>0?reward/risk:0;
+  const a=atr(candles,14)||0;
+  if(!(risk>0&&reward>0))failures.push('Trade must have positive structural risk and reward.');
+  // A stop inside normal execution noise is not a structural invalidation.
+  // Use ATR rather than a fixed percentage so the rule scales by instrument.
+  if(a>0&&risk<a*.35)failures.push('Stop is inside normal execution noise; invalidation is too tight for the market volatility.');
+  // A target that cannot at least pay for the structural risk is not an
+  // executable continuation objective. This is deliberately 1R, not a 2R gate.
+  if(rr<1)failures.push('Structural objective does not cover the defined risk; trade geometry is inefficient.');
+  // Conversely, an excessively wide stop relative to current volatility usually
+  // means the strategy anchored invalidation to an unrelated structure point.
+  if(a>0&&risk>a*3)failures.push('Stop is excessively wide relative to execution volatility; invalidation is likely anchored to unrelated structure.');
+  return {valid:failures.length===0,failures,metrics:{atr:a,risk,reward,rr}};
+}
+
 export {VALID_GRADES};
