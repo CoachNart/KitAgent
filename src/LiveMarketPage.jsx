@@ -87,6 +87,9 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
           </label>
 
           <StrategySelector value={strategy} onChange={setStrategy}/>
+          <button type="button" className="strategy-guide-button" onClick={()=>window.dispatchEvent(new CustomEvent('kitsetups-open-setup-guide'))} aria-label="Read about trading strategies">
+            <span><small>GUIDE</small><b>Strategy library</b></span><ChevronDown size={13}/>
+          </button>
           <button type="button" className="live-analyze" onClick={analyze} disabled={loading||sourceLoading||!pair}>
             {loading?<><RefreshCw className="spin"/> Reading market</>:sourceLoading?<><RefreshCw className="spin"/> Loading source</>:<><BarChart3/> Analyze pair</>}
           </button>
