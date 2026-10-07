@@ -291,17 +291,22 @@ assert('Trade Geometry Contract rejects targets that are too close to the entry'
 assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
 
 
-// Scanner smoke: exercise the real Bybit-backed scanner path across all retained
-// strategies and execution timeframes. Public market-data endpoints require no auth.
-const scannerUniverse=await topSymbols();
-assert('Scanner discovers a live Bybit perpetual universe',()=>scannerUniverse.length===18&&scannerUniverse.every(x=>/USDT$/.test(x.symbol)&&x.turnover24h>0));
-const scannerCandles=await candlesFor('BTCUSDT');
-assert('Scanner loads every supported execution timeframe plus 1D context',()=>['15m','30m','1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
-const scannerSetups=await scanSymbol(scannerUniverse[0]);
-assert('Scanner completes the six-strategy five-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
-assert('Scanner never publishes invalid directional geometry',()=>scannerSetups.every(x=>(x.bias==='LONG'&&x.stopLoss<x.entry&&x.takeProfit>x.entry)||(x.bias==='SHORT'&&x.stopLoss>x.entry&&x.takeProfit<x.entry)));
-assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['15m','30m','1H','2H','4H'].includes(x.timeframe)));
-
+// Scanner smoke: run the real scanner helpers against deterministic Bybit-shaped
+// public responses. This keeps CI independent of external API availability.
+const originalFetch=globalThis.fetch;
+const mockTicker=(symbol='')=>({retCode:0,result:{list:symbol?[{symbol,lastPrice:'100',bid1Price:'99.9',ask1Price:'100.1',turnover24h:'1000000',time:String(Date.now())}]:Array.from({length:18},(_,i)=>({symbol:`MOCK${i}USDT`,lastPrice:'100',turnover24h:String(1000000-i)}))}});
+const mockKlines=()=>({retCode:0,result:{list:Array.from({length:300},(_,i)=>{const t=Date.UTC(2025,0,1)+i*900000;const p=100+i*.01;return[String(t),String(p-.1),String(p+.5),String(p-.5),String(p+.1),'1000']}).reverse()}});
+globalThis.fetch=async input=>{const u=new URL(String(input));if(u.pathname.endsWith('/market/tickers'))return{ok:true,json:async()=>mockTicker(u.searchParams.get('symbol')||'')};if(u.pathname.endsWith('/market/kline'))return{ok:true,json:async()=>mockKlines()};throw new Error('Unexpected scanner test URL');};
+try{
+  const scannerUniverse=await topSymbols();
+  assert('Scanner discovers the configured perpetual universe',()=>scannerUniverse.length===18&&scannerUniverse.every(x=>/USDT$/.test(x.symbol)&&x.turnover24h>0));
+  const scannerCandles=await candlesFor('BTCUSDT');
+  assert('Scanner loads every supported execution timeframe plus 1D context',()=>['15m','30m','1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
+  const scannerSetups=await scanSymbol(scannerUniverse[0]);
+  assert('Scanner completes the six-strategy five-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
+  assert('Scanner never publishes invalid directional geometry',()=>scannerSetups.every(x=>(x.bias==='LONG'&&x.stopLoss<x.entry&&x.takeProfit>x.entry)||(x.bias==='SHORT'&&x.stopLoss>x.entry&&x.takeProfit<x.entry)));
+  assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['15m','30m','1H','2H','4H'].includes(x.timeframe)));
+}finally{globalThis.fetch=originalFetch;}
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
 if(failed.length)process.exit(1);
