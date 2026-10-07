@@ -1,0 +1,267 @@
+import {atr,bodyRatio,rangeAverage} from './data.js';
+import {confirmedSwings} from './structure.js';
+
+export const CRT_MODEL='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST';
+
+const dirs=new Set(['BULLISH','BEARISH']);
+
+function alignedHTFBias(layers=[]){
+  const context=layers.slice(0,-1).map(x=>x?.structure?.direction).filter(x=>dirs.has(x));
+  if(!context.length||context.some(x=>x!==context[0]))return null;
+  return context[0];
+}
+
+function rangeAnchor(layers=[]){
+  const htf=layers[0];
+  if(!htf||!Array.isArray(htf.candles)||htf.candles.length<3)return null;
+  const anchor=htf.candles.at(-2);
+  const following=htf.candles.at(-1);
+  if(!anchor||!following||!(anchor.high>anchor.low))return null;
+  return {
+    tf:htf.tf,
+    anchor,
+    following,
+    high:anchor.high,
+    low:anchor.low,
+    midpoint:(anchor.high+anchor.low)/2
+  };
+}
+
+function htfSweep(range,direction){
+  const x=range.following;
+  const lowSweep=x.low<range.low&&x.close>range.low&&x.close<range.high;
+  const highSweep=x.high>range.high&&x.close<range.high&&x.close>range.low;
+  if(direction==='BULLISH'&&!lowSweep)return null;
+  if(direction==='BEARISH'&&!highSweep)return null;
+  if((x.low<range.low&&x.high>range.high)||(!lowSweep&&!highSweep))return null;
+  return {
+    direction,
+    index:range.anchor.time,
+    candle:x,
+    side:direction==='BULLISH'?'LOW':'HIGH',
+    sweptLevel:direction==='BULLISH'?range.low:range.high,
+    extreme:direction==='BULLISH'?x.low:x.high,
+    closeInside:true
+  };
+}
+
+function executionSweep(c,range,direction){
+  const start=range.following.time;
+  const eligible=c.filter(x=>x.time>=start);
+  for(let i=0;i<eligible.length;i++){
+    const x=eligible[i];
+    const swept=direction==='BULLISH'
+      ?x.low<range.low&&x.close>range.low
+      :x.high>range.high&&x.close<range.high;
+    if(!swept)continue;
+    return {index:c.indexOf(x),candle:x,level:direction==='BULLISH'?range.low:range.high,
+      extreme:direction==='BULLISH'?x.low:x.high};
+  }
+  return null;
+}
+
+function mssAfterSweep(c,sweep,direction){
+  if(!sweep)return null;
+  const swings=confirmedSwings(c,1);
+  const points=direction==='BULLISH'?swings.highs:swings.lows;
+  const candidates=points.filter(x=>x.index>sweep.index&&x.confirmationIndex> sweep.index);
+  for(const sw of candidates){
+    for(let i=Math.max(sw.confirmationIndex+1,sweep.index+1);i<c.length;i++){
+      const x=c[i];
+      const broken=direction==='BULLISH'?x.close>sw.price:x.close<sw.price;
+      if(!broken)continue;
+      const r=x.high-x.low;
+      const a=atr(c.slice(0,i+1),14);
+      const avg=rangeAverage(c.slice(0,i+1),20);
+      if(!a||!avg||r<a||r<avg*1.1||bodyRatio(x)<.55)continue;
+      return {
+        index:i,
+        level:sw.price,
+        swingIndex:sw.index,
+        candle:x,
+        bodyRatio:bodyRatio(x),
+        range:r,
+        atrMultiple:r/a
+      };
+    }
+  }
+  return null;
+}
+
+function retest(c,mss,direction){
+  if(!mss)return null;
+  const max=Math.min(c.length-1,mss.index+8);
+  for(let i=mss.index+1;i<=max;i++){
+    const x=c[i];
+    const touched=direction==='BULLISH'
+      ?x.low<=mss.level&&x.high>=mss.level
+      :x.high>=mss.level&&x.low<=mss.level;
+    if(!touched)continue;
+    const held=direction==='BULLISH'?x.close>mss.level:x.close<mss.level;
+    if(!held)return {failed:true,index:i,candle:x};
+    return {index:i,candle:x,entry:x.close,held:true};
+  }
+  return null;
+}
+
+function target(range,direction,c,entry,mssIndex){
+  const primary=direction==='BULLISH'?range.high:range.low;
+  if(direction==='BULLISH'&&primary>entry)return{price:primary,source:'CRT_OPPOSITE_EXTREME'};
+  if(direction==='BEARISH'&&primary<entry)return{price:primary,source:'CRT_OPPOSITE_EXTREME'};
+
+  const s=confirmedSwings(c,2);
+  const xs=direction==='BULLISH'
+    ?s.highs.filter(x=>x.index>mssIndex&&x.price>entry).sort((a,b)=>a.index-b.index)
+    :s.lows.filter(x=>x.index>mssIndex&&x.price<entry).sort((a,b)=>a.index-b.index);
+  return xs[0]?{price:xs[0].price,index:xs[0].index,source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
+}
+
+function grade({bias,range,sweep,mss,rt,rr}){
+  let score=0;
+  score+=bias?30:0;
+  score+=range?15:0;
+  score+=sweep?25:0;
+  score+=mss?20:0;
+  score+=rt?5:0;
+  score+=rr>=3?5:rr>=2?3:0;
+  return {score,grade:score>=92?'A+':score>=82?'A':'NO-TRADE'};
+}
+
+export function evaluateCRT({candles=[],layers=[],price}){
+  const failures=[];
+  if(!Array.isArray(candles)||candles.length<40)
+    return {direction:'NEUTRAL',failures:['Insufficient execution candles for CRT.'],evidence:[]};
+  if(!Array.isArray(layers)||layers.length<2)
+    return {direction:'NEUTRAL',failures:['CRT requires a higher-timeframe range and a lower-timeframe execution layer.'],evidence:[]};
+
+  const direction=alignedHTFBias(layers);
+  if(!direction)
+    return {direction:'NEUTRAL',failures:['Higher-timeframe directions do not agree on a CRT delivery direction.'],evidence:[]};
+
+  const range=rangeAnchor(layers);
+  if(!range){
+    failures.push('No valid higher-timeframe CRT anchor candle.');
+    return {direction,failures,evidence:[]};
+  }
+
+  const htf=htfSweep(range,direction);
+  if(!htf){
+    failures.push('The next higher-timeframe candle did not sweep one CRT boundary and close back inside.');
+    return {direction,failures,evidence:[{type:'CRT_RANGE',...range}]};
+  }
+
+  const sweep=executionSweep(candles,range,direction);
+  if(!sweep){
+    failures.push('No lower-timeframe sweep/reclaim of the CRT boundary is confirmed.');
+    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf}]};
+  }
+
+  const mss=mssAfterSweep(candles,sweep,direction);
+  if(!mss){
+    failures.push('No meaningful lower-timeframe MSS/displacement followed the CRT sweep.');
+    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf},{type:'LTF_SWEEP',...sweep}]};
+  }
+
+  const rt=retest(candles,mss,direction);
+  if(!rt){
+    failures.push('CRT MSS confirmed but has not produced a valid retest entry.');
+    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf},{type:'LTF_SWEEP',...sweep},{type:'MSS',...mss}]};
+  }
+  if(rt.failed){
+    failures.push('CRT MSS retest closed back through the broken structure level.');
+    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf},{type:'LTF_SWEEP',...sweep},{type:'MSS',...mss},{type:'RETEST_FAILURE',...rt}]};
+  }
+
+  const entry=rt.entry;
+  const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const stop=direction==='BULLISH'
+    ?sweep.extreme-a*.25
+    :sweep.extreme+a*.25;
+  const risk=Math.abs(entry-stop);
+  if(!(risk>0)){
+    failures.push('CRT sweep invalidation produces non-positive risk.');
+    return {direction,failures,evidence:[]};
+  }
+
+  const tgt=target(range,direction,candles,entry,mss.index);
+  if(!tgt){
+    failures.push('No opposing CRT or external structural target is available.');
+    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'MSS',...mss}]};
+  }
+
+  const reward=Math.abs(tgt.price-entry);
+  const rr=reward/risk;
+  if(!(reward>0&&rr>=2)){
+    failures.push('CRT target does not provide at least 2R from the refined MSS retest.');
+    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf},{type:'LTF_SWEEP',...sweep},{type:'MSS',...mss},{type:'RETEST',...rt},{type:'TARGET',...tgt,rr}]};
+  }
+
+  const live=Number(price);
+  if(!Number.isFinite(live)||live<=0){
+    failures.push('Live price is unavailable.');
+    return {direction,failures,evidence:[]};
+  }
+  if(direction==='BULLISH'&&(live<=stop||live>=tgt.price)){
+    failures.push('Live price has invalidated or already passed the CRT objective.');
+    return {direction,failures,evidence:[]};
+  }
+  if(direction==='BEARISH'&&(live>=stop||live<=tgt.price)){
+    failures.push('Live price has invalidated or already passed the CRT objective.');
+    return {direction,failures,evidence:[]};
+  }
+  if(Math.abs(live-entry)>Math.max(a*1.5,Math.abs(live)*.003)){
+    failures.push('CRT retest entry is stale relative to the current market price.');
+    return {direction,failures,evidence:[]};
+  }
+
+  const orderType=direction==='BULLISH'
+    ?live<=entry+a*.3?'MARKET':'LIMIT'
+    :live>=entry-a*.3?'MARKET':'LIMIT';
+
+  const g=grade({bias:direction,range, sweep,mss,rt,rr});
+  if(g.grade==='NO-TRADE'){
+    failures.push('CRT confluence is below the executable A-grade threshold.');
+    return {direction,failures,evidence:[],grade:g};
+  }
+
+  const trade={
+    entry,
+    marketEntry:live,
+    stop,
+    target:tgt.price,
+    risk,
+    reward,
+    rr,
+    orderType,
+    entryReason:'HTF CRT range was swept and reclaimed; lower-timeframe MSS/displacement confirmed the reversal and price retested the broken structure level.',
+    invalidation:sweep.extreme,
+    invalidationSource:'CRT sweep extreme with ATR buffer'
+  };
+
+  return {
+    direction,
+    tradeReady:true,
+    grade:{...g,hardFailures:[]},
+    trade,
+    failures:[],
+    evidence:[
+      {type:'HTF_ALIGNMENT',direction,timeframes:layers.slice(0,-1).map(x=>x.tf)},
+      {type:'CRT_RANGE',...range},
+      {type:'HTF_SWEEP',...htf},
+      {type:'LTF_SWEEP',...sweep},
+      {type:'MSS',...mss},
+      {type:'RETEST',...rt},
+      {type:'TARGET',...tgt,rr}
+    ],
+    crt:{
+      model:CRT_MODEL,
+      direction,
+      anchor:{time:range.anchor.time,high:range.high,low:range.low,midpoint:range.midpoint,timeframe:range.tf},
+      sweep:htf,
+      executionSweep:sweep,
+      mss,
+      retest:rt,
+      target:tgt
+    }
+  };
+}
