@@ -45,7 +45,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
       <MarketWatchlist market={market} symbol={pair} onSelect={(next)=>setPair(next)}/>
 
       <section className="live-market-card">
-        <div className="live-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" className="active">PERPETUALS</button></div>
+        <div className="live-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" className="active market-mode"><span className="market-mode-dot"/><b>PERPETUALS</b><small>LIVE</small></button></div>
 
         <div className="live-controls">
           <label className="live-field market-picker">
@@ -134,6 +134,7 @@ function AnalysisResult({result,savedSignal}){
       </>}
     </div>
     <RiskCalculator setup={s}/>
+    {hasTrade&&<button type="button" className="setup-guide-button" onClick={()=>window.dispatchEvent(new CustomEvent("kitsetups-open-breakdown"))}><span>Read about setup</span><ChevronDown size={13}/></button>}
     {hasTrade&&<TradeBreakdown setup={s} result={result}/>} 
   </div>
 }
