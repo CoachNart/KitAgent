@@ -1,5 +1,5 @@
 import {atr,bodyRatio} from './data.js';
-import {confirmedSwings} from './structure.js';
+import {confirmedSwings,selectStructuralTarget} from './structure.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
@@ -48,16 +48,10 @@ function freshFvg(c,fvg,asOf){
   for(let i=fvg.index+1;i<=asOf;i++){const x=c[i];if(fvg.direction==='BULLISH'&&x.low<=fvg.low)return false;if(fvg.direction==='BEARISH'&&x.high>=fvg.high)return false;}
   return true;
 }
-function nextLiquidityTarget(c,direction,entry,sweepIndex){
-  const s=confirmedSwings(c,3),pools=direction==='BULLISH'?s.highs:s.lows;
+function nextLiquidityTarget(c,direction,entry,sweepIndex,layers=[]){
   const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004);
-  const valid=pools
-    .filter(x=>x.index>sweepIndex)
-    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
-    .filter(x=>Math.abs(x.price-entry)>=minDistance)
-    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
-  return valid[0]||null;
+  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance})||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
@@ -88,7 +82,7 @@ export function evaluateSMC({candles,layers,price}){
   const range=dealingRange(c,mss.index);
   if(!range||(direction==='BULLISH'?fvg.midpoint>range.equilibrium:fvg.midpoint<range.equilibrium)){failures.push(direction==='BULLISH'?'Bullish FVG is not in discount.':'Bearish FVG is not in premium.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
   if(!Number.isFinite(price)||price<=0){failures.push('Live price is unavailable.');return{direction,failures,evidence:[]};}
-  const target=nextLiquidityTarget(c,direction,fvg.midpoint,sweep.index);
+  const target=nextLiquidityTarget(c,direction,fvg.midpoint,sweep.index,ordered);
   if(!Number.isFinite(target)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[]};}
   const trade=buildTrade({c,price,direction,sweep,mss,displacement,fvg,target});
   if(!trade){failures.push('FVG entry, structural invalidation, or meaningful liquidity objective is invalid.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}

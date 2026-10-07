@@ -1,5 +1,5 @@
 import {atr} from './data.js';
-import {confirmedSwings} from './structure.js';
+import {confirmedSwings,selectStructuralTarget} from './structure.js';
 
 export const PULLBACK_MODEL='HTF_TREND_IMPULSE_RETRACE_CONTINUATION';
 
@@ -52,20 +52,15 @@ function confirmation(c,touch,direction){
   return null;
 }
 
-function nextTarget(c,direction,entry,move,after){
+function nextTarget(c,direction,entry,move,after,layers=[]){
   const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004);
-  if(direction==='BULLISH'&&move.end.price>entry&&Math.abs(move.end.price-entry)>=minDistance)return {...move.end,source:'IMPULSE_EXTREME'};
-  if(direction==='BEARISH'&&move.end.price<entry&&Math.abs(move.end.price-entry)>=minDistance)return {...move.end,source:'IMPULSE_EXTREME'};
-  const s=confirmedSwings(c,3);
-  const candidates=(direction==='BULLISH'?s.highs:s.lows)
-    .filter(x=>x.index>after)
-    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
-    .filter(x=>Math.abs(x.price-entry)>=minDistance)
-    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
-  return candidates[0]?{...candidates[0],source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
+  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  const native=(direction==='BULLISH'&&move.end.price>entry)||(direction==='BEARISH'&&move.end.price<entry)
+    ?{price:move.end.price,index:move.end.index,source:'IMPULSE_EXTREME'}
+    :null;
+  if(native&&Math.abs(native.price-entry)>=minDistance)return native;
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance});
 }
-
 export function evaluatePullback({candles=[],layers=[],price}){
   const failures=[];
   if(!Array.isArray(candles)||candles.length<40)return {direction:'NEUTRAL',failures:['Insufficient execution candles.'],evidence:[]};
@@ -110,7 +105,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
     :Math.max(touch.candle.high,move.start.price)+a*.25;
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){failures.push('Invalid structural risk.');return {direction,failures,evidence:[]};}
-  const target=nextTarget(candles,direction,entry,move,confirm.index);
+  const target=nextTarget(candles,direction,entry,move,confirm.index,layers);
   if(!target){
     failures.push('No meaningful structural continuation target is available.');
     return {direction,failures,evidence:[{type:'CONTINUATION_BREAK',...confirm}]};

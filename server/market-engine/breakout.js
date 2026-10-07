@@ -1,5 +1,5 @@
 import {atr,bodyRatio,rangeAverage} from './data.js';
-import {confirmedSwings} from './structure.js';
+import {confirmedSwings,selectStructuralTarget} from './structure.js';
 
 export const BREAKOUT_MODEL='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION';
 
@@ -80,18 +80,11 @@ function continuation(c,rt,direction){
   return null;
 }
 
-function target(c,direction,entry,after,rangeHeight){
-  const s=confirmedSwings(c,3);
+function target(c,direction,entry,after,rangeHeight,layers=[]){
   const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004,rangeHeight*.5);
-  const candidates=(direction==='BULLISH'?s.highs:s.lows)
-    .filter(x=>x.index>after)
-    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
-    .filter(x=>Math.abs(x.price-entry)>=minDistance)
-    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
-  return candidates[0]?{...candidates[0],source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
+  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005,rangeHeight*.75);
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance});
 }
-
 export function evaluateBreakout({candles=[],layers=[],price}){
   const failures=[];
   if(!Array.isArray(candles)||candles.length<40)return {direction:'NEUTRAL',failures:['Insufficient execution candles.'],evidence:[]};
@@ -146,7 +139,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const rangeHeight=Math.abs(level.level-rangeBoundary);
   if(!(rangeHeight>0)){failures.push('No measurable pre-break range.');return {direction,failures,evidence:[]};}
 
-  const tgt=target(candles,direction,entry,confirm.index,rangeHeight);
+  const tgt=target(candles,direction,entry,confirm.index,rangeHeight,layers);
   if(!tgt){failures.push('No meaningful continuation target.');return {direction,failures,evidence:[]};}
   const reward=Math.abs(tgt.price-entry),rr=reward/risk;
   if(!(reward>0)){failures.push('Continuation target is not beyond entry.');return {direction,failures,evidence:[{type:'BREAKOUT',...br},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm},{type:'TARGET',...tgt,rr}]};}
