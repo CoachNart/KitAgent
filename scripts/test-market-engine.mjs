@@ -5,6 +5,7 @@ import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,SMC_MODEL} from '../
 import {evaluateTopDown,TOP_DOWN_MODEL} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
+import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -149,8 +150,54 @@ const brNoLevel=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{
 assert('Breakout & Retest requires a defined multi-touch level',()=>brNoLevel.direction==='BULLISH'&&brNoLevel.failures.some(x=>x.includes('level')));
 assert('Breakout & Retest routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'BREAKOUT',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed&&Array.isArray(routed.failures)&&routed.direction==='BULLISH';});
 assert('Strategy registry contains only the six retained strategies',()=>Object.keys(STRATEGIES).sort().join(',')==='BREAKOUT,CRT,MSNR,PULLBACK,SMC,TOP_DOWN');
-const crt=evaluateStrategy({strategy:'CRT',layers,execution:{candles:vCc},price:103.5});
-assert('CRT remains isolated until its own contract is rebuilt',()=>crt.failures.some(x=>x.includes('intentionally disabled')));
+// CRT contract: HTF anchor range -> one-sided sweep/reclaim -> LTF MSS/displacement -> retest -> opposite range target.
+const crtBase=Array.from({length:50},(_,i)=>bar(i,102+i*.02,103+i*.02,101.8+i*.02,102.5+i*.02));
+const crtExecution=crtBase.map((x,i)=>i<16?x:{
+  ...x,
+  open:102,
+  high:103,
+  low:101,
+  close:102.2
+});
+crtExecution[16]=bar(16,104,105,98.5,101); // LTF sweep of CRT low
+crtExecution[17]=bar(17,101,102,99.5,100.5); // lower high candidate
+crtExecution[18]=bar(18,100.5,101,99.8,100);
+crtExecution[19]=bar(19,100,101.5,99.7,100.8);
+crtExecution[20]=bar(20,100.8,100.9,100,100.5);
+crtExecution[21]=bar(21,100.5,105,100.2,104.5); // MSS displacement through 102
+crtExecution[22]=bar(22,104.5,105,101.8,102.5); // retest MSS level, closes back above
+const htfBar=(i,o,h,l,c)=>({time:Date.UTC(2026,0,1)+i*14400000,open:o,high:h,low:l,close:c,volume:1000});
+const crtHTF=[
+  htfBar(0,104,110,101,107),
+  htfBar(1,107,116,100,108),
+  htfBar(2,108,112,98,105)
+];
+const crtLayers=[
+  {tf:'4H',candles:crtHTF,structure:{direction:'BULLISH'}},
+  {tf:'15m',candles:crtExecution,structure:{direction:'BULLISH'}}
+];
+assert('CRT exposes the intended entry model',CRT_MODEL==='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST');
+const crtValid=evaluateCRT({candles:crtExecution,layers:crtLayers,price:103});
+assert('CRT accepts a valid low-sweep/reclaim setup',()=>crtValid.direction==='BULLISH'&&crtValid.tradeReady===true);
+assert('CRT requires the HTF sweep to close back inside',()=>{
+  const bad=[...crtHTF.slice(0,2),htfBar(2,108,117,98,117.2)];
+  return evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:bad,structure:{direction:'BULLISH'}},{tf:'15m',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103}).failures.some(x=>x.includes('close back inside'));
+});
+assert('CRT rejects conflicting HTF bias',()=>{
+  const r=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:crtHTF,structure:{direction:'BEARISH'}},{tf:'2H',candles:crtExecution,structure:{direction:'BULLISH'}},{tf:'15m',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
+  return r.direction==='NEUTRAL'&&r.failures.some(x=>x.includes('agree'));
+});
+assert('CRT requires lower-timeframe MSS before entry',()=>{
+  const noMss=crtExecution.slice(0,21).map((x,i)=>i===21?x:x);
+  const r=evaluateCRT({candles:noMss,layers:crtLayers,price:103});
+  return r.failures.some(x=>x.includes('MSS'));
+});
+assert('CRT stop is beyond the sweep extreme',()=>crtValid.trade.stop<98.5);
+assert('CRT targets the opposite CRT extreme when it provides >=2R',()=>crtValid.trade.target===116&&crtValid.trade.rr>=2);
+assert('CRT routes through its own evaluator',()=>{
+  const routed=evaluateStrategy({strategy:'CRT',layers:crtLayers,execution:{candles:crtExecution},price:103});
+  return routed.tradeReady===true&&routed.crt?.model===CRT_MODEL;
+});
 
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
