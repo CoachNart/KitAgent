@@ -125,6 +125,76 @@ export function structure(c,asOf=c.length-1){
   };
 }
 
+export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0,nativeTargets=[]}={}){
+  if(!Array.isArray(c)||!c.length||!Number.isFinite(entry)||!['BULLISH','BEARISH'].includes(direction))return [];
+  const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const distanceFloor=Math.max(minDistance,a*1.5,Math.abs(entry)*.005);
+  const clusterTolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+  const candidates=[];
+
+  const add=(price,source,index=-1,tf='EXECUTION',strength=0,meta={})=>{
+    if(!Number.isFinite(price))return;
+    const beyond=direction==='BULLISH'?price>entry:price<entry;
+    if(!beyond||Math.abs(price-entry)<distanceFloor)return;
+    candidates.push({price,source,index,tf,strength,...meta});
+  };
+
+  // Strategy-native objectives outrank generic structure when they are valid.
+  for(const x of nativeTargets||[]){
+    if(Number.isFinite(x?.price))add(x.price,x.source||'STRATEGY_NATIVE',x.index??-1,x.tf||'STRATEGY',120,{native:true});
+    else if(Number.isFinite(x))add(x,'STRATEGY_NATIVE',-1,'STRATEGY',120,{native:true});
+  }
+
+  // Major external swings: k=4 is deliberately harder to form than the
+  // execution pivots and therefore represents a more meaningful structural objective.
+  for(const k of [4,3]){
+    const s=confirmedSwings(c,k);
+    const points=direction==='BULLISH'?s.highs:s.lows;
+    for(const x of points){
+      add(x.price,k===4?'EXECUTION_MAJOR_SWING':'EXECUTION_EXTERNAL_SWING',x.index,'EXECUTION',k===4?95:78,{
+        confirmationIndex:x.confirmationIndex
+      });
+    }
+  }
+
+  // Higher-timeframe external structure is preferred over an isolated
+  // execution wick when the same price objective is visible there.
+  for(const layer of layers||[]){
+    const lc=layer?.candles;
+    if(!Array.isArray(lc)||lc.length<20)continue;
+    for(const k of [4,3]){
+      const s=confirmedSwings(lc,k);
+      const points=direction==='BULLISH'?s.highs:s.lows;
+      for(const x of points){
+        add(x.price,k===4?'HTF_MAJOR_SWING':'HTF_EXTERNAL_SWING',x.index,layer.tf||'HTF',k===4?110:88,{
+          confirmationIndex:x.confirmationIndex
+        });
+      }
+    }
+  }
+
+  // Collapse repeated highs/lows into liquidity/structure pools. A level
+  // seen more than once is materially stronger than a single isolated pivot.
+  for(const candidate of candidates){
+    const peers=candidates.filter(x=>Math.abs(x.price-candidate.price)<=clusterTolerance);
+    candidate.clusterCount=peers.length;
+    candidate.pool=peers.length>=3?'LIQUIDITY_POOL':peers.length===2?'REPEATED_STRUCTURE':'SINGLE_STRUCTURE';
+    candidate.quality=candidate.strength
+      +(candidate.clusterCount>=3?24:candidate.clusterCount===2?14:0)
+      +(candidate.tf!=='EXECUTION'?8:0)
+      +(candidate.native?20:0);
+  }
+
+  return candidates
+    .filter(x=>x.quality>=90 || x.clusterCount>=2 || x.native)
+    .sort((a,b)=>b.quality-a.quality||Math.abs(a.price-entry)-Math.abs(b.price-entry))
+    .slice(0,12);
+}
+
+export function selectStructuralTarget(c,direction,entry,options={}){
+  return rankStructuralTargets(c,direction,entry,options)[0]||null;
+}
+
 export function displacement(c,direction,asOf=c.length-1){
   const a=atr(c.slice(0,asOf+1),14),avg=rangeAverage(c.slice(0,asOf+1),20);
   if(!a||!avg)return null;
