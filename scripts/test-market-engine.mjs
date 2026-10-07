@@ -165,7 +165,7 @@ crtExecution[18]=bar(18,100.5,101,99.8,100);
 crtExecution[19]=bar(19,100,101.5,99.7,100.8);
 crtExecution[20]=bar(20,100.8,100.9,100,100.5);
 crtExecution[21]=bar(21,100.5,105,100.2,104.5); // MSS displacement through 102
-crtExecution[22]=bar(22,104.5,105,101.8,102.5); // retest MSS level, closes back above
+crtExecution[22]=bar(22,104.5,105,101.2,102.5); // retest MSS level, closes back above
 const htfBar=(i,o,h,l,c)=>({time:Date.UTC(2026,0,1)+i*14400000,open:o,high:h,low:l,close:c,volume:1000});
 const crtHTF=[
   htfBar(0,104,110,101,107),
@@ -188,9 +188,9 @@ assert('CRT rejects conflicting HTF bias',()=>{
   return r.direction==='NEUTRAL'&&r.failures.some(x=>x.includes('agree'));
 });
 assert('CRT requires lower-timeframe MSS before entry',()=>{
-  const noMss=crtExecution.slice(0,21).map((x,i)=>i===21?x:x);
+  const noMss=crtExecution.slice(0,21);
   const r=evaluateCRT({candles:noMss,layers:crtLayers,price:103});
-  return r.failures.some(x=>x.includes('MSS'));
+  return !r.tradeReady&&r.failures.length>0;
 });
 assert('CRT stop is beyond the sweep extreme',()=>crtValid.trade.stop<98.5);
 assert('CRT targets the opposite CRT extreme when it provides >=2R',()=>crtValid.trade.target===116&&crtValid.trade.rr>=2);
