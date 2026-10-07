@@ -61,7 +61,11 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   if(!Number.isFinite(rr)||rr<2)return null;
   if(direction==='BULLISH'&&price<sweep.extreme)return null;
   if(direction==='BEARISH'&&price>sweep.extreme)return null;
-  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);\n  const near=Math.abs(price-entry)<=tolerance;\n  const orderType=near?'MARKET':direction==='BULLISH'?(price>entry?'LIMIT':null):(price<entry?'LIMIT':null);\n  if(!orderType)return null;\n  return{entry,marketEntry:price,stop,target,rr,orderType,entryReason:'Retrace into the unmitigated FVG created by the displacement that caused the MSS.',invalidation:'Beyond the liquidity-sweep extreme with volatility buffer.',invalidationSource:'liquidity_sweep_extreme',sweepLevel:sweep.level,sweepExtreme:sweep.extreme,mssLevel:mss.level,displacementIndex:displacement.index,fvg:{low:fvg.low,high:fvg.high,midpoint:fvg.midpoint,index:fvg.index}};
+  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+  const near=Math.abs(price-entry)<=tolerance;
+  const orderType=near?'MARKET':direction==='BULLISH'?(price>entry?'LIMIT':null):(price<entry?'LIMIT':null);
+  if(!orderType)return null;
+  return{entry,marketEntry:price,stop,target,rr,orderType,entryReason:'Retrace into the unmitigated FVG created by the displacement that caused the MSS.',invalidation:'Beyond the liquidity-sweep extreme with volatility buffer.',invalidationSource:'liquidity_sweep_extreme',sweepLevel:sweep.level,sweepExtreme:sweep.extreme,mssLevel:mss.level,displacementIndex:displacement.index,fvg:{low:fvg.low,high:fvg.high,midpoint:fvg.midpoint,index:fvg.index}};
 }
 export function evaluateSMC({candles,layers,price}){
   const c=candles||[],failures=[];
