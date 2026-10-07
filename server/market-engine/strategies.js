@@ -3,7 +3,6 @@ import {evaluateSMC} from './smc.js';
 import {evaluateTopDown} from './topDown.js';
 import {evaluatePullback} from './pullback.js';
 import {evaluateBreakout} from './breakout.js';
-import {evaluatePullback} from './pullback.js';
 
 export const STRATEGIES={
   TOP_DOWN:{name:'Top-Down',status:'READY'},
@@ -18,6 +17,7 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   if(strategy==='TOP_DOWN')return evaluateTopDown({candles:execution.candles,layers,price});
   if(strategy==='SMC')return evaluateSMC({candles:execution.candles,layers,price});
   if(strategy==='PULLBACK')return evaluatePullback({candles:execution.candles,layers,price});
+  if(strategy==='BREAKOUT')return evaluateBreakout({candles:execution.candles,layers,price});
   if(strategy!=='MSNR'){
     return {
       direction:'NEUTRAL',
