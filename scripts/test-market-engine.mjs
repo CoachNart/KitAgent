@@ -3,6 +3,7 @@ import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js
 import {structure} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,TOP_DOWN_MODEL} from '../server/market-engine/topDown.js';
+import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -131,8 +132,16 @@ const tdNoBos=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{dir
 assert('Top-Down requires execution BOS before entry',()=>tdNoBos.direction==='BULLISH'&&tdNoBos.failures.some(x=>x.includes('BOS')));
 assert('Top-Down routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'TOP_DOWN',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed.direction==='BULLISH'||routed.direction==='NEUTRAL';});
 
+// Pullback contract: aligned HTF trend -> confirmed impulse -> 38.2%-61.8% retracement -> closed continuation break.
+assert('Pullback uses a defined trend-retracement-continuation model',PULLBACK_MODEL==='HTF_TREND_IMPULSE_RETRACE_CONTINUATION');
+const pbConflict=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}}],price:105});
+assert('Pullback rejects conflicting higher-timeframe directions',()=>pbConflict.direction==='NEUTRAL'&&pbConflict.failures.some(x=>x.includes('aligned')));
+const pbNoImpulse=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
+assert('Pullback requires a confirmed directional impulse before retracement',()=>pbNoImpulse.direction==='BULLISH'&&pbNoImpulse.failures.some(x=>x.includes('impulse')));
+assert('Pullback routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'PULLBACK',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed&&Array.isArray(routed.failures)&&routed.direction==='BULLISH';});
+
 // Non-MSR strategies are intentionally disabled until their own contracts are rebuilt.
-for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC','TOP_DOWN'].includes(x))){
+for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC','TOP_DOWN','PULLBACK'].includes(x))){
   const result=evaluateStrategy({strategy,layers,execution:{candles:vCc},price:103.5});
   assert(strategy+' is not using the old generic engine',()=>result.failures.some(x=>x.includes('intentionally disabled')));
 }
