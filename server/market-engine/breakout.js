@@ -81,13 +81,15 @@ function continuation(c,rt,direction){
 }
 
 function target(c,direction,entry,after,rangeHeight){
-  const s=confirmedSwings(c,2);
-  const candidates=direction==='BULLISH'
-    ?s.highs.filter(x=>x.index>after&&x.price>entry).sort((a,b)=>a.index-b.index)
-    :s.lows.filter(x=>x.index>after&&x.price<entry).sort((a,b)=>a.index-b.index);
-  if(candidates[0])return {...candidates[0],source:'STRUCTURAL_TARGET'};
-  const projected=direction==='BULLISH'?entry+rangeHeight:entry-rangeHeight;
-  return Number.isFinite(projected)&&projected>0?{price:projected,index:after,source:'RANGE_PROJECTION'}:null;
+  const s=confirmedSwings(c,3);
+  const a=atr(c,14)||0;
+  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004,rangeHeight*.5);
+  const candidates=(direction==='BULLISH'?s.highs:s.lows)
+    .filter(x=>x.index>after)
+    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
+    .filter(x=>Math.abs(x.price-entry)>=minDistance)
+    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
+  return candidates[0]?{...candidates[0],source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
 }
 
 export function evaluateBreakout({candles=[],layers=[],price}){
@@ -147,10 +149,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const tgt=target(candles,direction,entry,confirm.index,rangeHeight);
   if(!tgt){failures.push('No meaningful continuation target.');return {direction,failures,evidence:[]};}
   const reward=Math.abs(tgt.price-entry),rr=reward/risk;
-  if(!(rr>=2)){
-    failures.push('Continuation target does not provide at least 2R.');
-    return {direction,failures,evidence:[{type:'BREAKOUT',...br},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm},{type:'TARGET',...tgt,rr}]};
-  }
+  if(!(reward>0)){failures.push('Continuation target is not beyond entry.');return {direction,failures,evidence:[{type:'BREAKOUT',...br},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm},{type:'TARGET',...tgt,rr}]};}
 
   const orderType='MARKET';
   return {
