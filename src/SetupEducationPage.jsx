@@ -2,8 +2,34 @@ import {useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,ArrowUpRight,CheckCircle2,CircleHelp,ShieldCheck,Target,Waypoints,Zap} from 'lucide-react';
 import {STRATEGY_LIBRARY} from './MarketExtras.jsx';
 
-const LIVE_KEY='kitagent:last-market-setup:v3';
-function humanEvidence(value){const s=String(value||'');return s.replace(/HTF (LONG|SHORT)/g,'Higher-timeframe direction: $1').replace(/Structure (LONG|SHORT)/g,'Middle structure: $1').replace(/Weekly (LONG|SHORT)/g,'Weekly direction: $1').replace(/Daily (LONG|SHORT)/g,'Daily direction: $1').replace('Structural invalidation stop.','Stop protected by a validated structural swing.').replace('POI invalidation stop.','Stop protected beyond the entry area.').replace('Sweep invalidation stop.','Stop protected beyond the sweep extreme.').replace('Confirmed structural impulse.','A recent directional impulse is confirmed.').replace('Measured retracement.','Price retraced into the planned area.').replace('Rejection/engulfing confirmed.','A qualifying rejection or engulfing candle is confirmed.').replace('Reclaim confirmed.','Price reclaimed the swept level.').replace('Range liquidity swept/reclaimed.','One side of the reference range was swept and reclaimed.').replace('Structural liquidity.','Meaningful structural liquidity is present.');}
+const LIVE_KEY='kitagent:last-market-setup:v4';
+function humanEvidence(value){
+ if(value&&typeof value==='object'){
+   const type=String(value.type||'').replaceAll('_',' ');
+   if(type==='HTF ALIGNMENT')return 'HTF direction aligned: '+(value.direction||'—')+'.';
+   if(type==='EXECUTION BOS')return 'Execution BOS: close beyond '+fmt(value.level)+'.';
+   if(type==='RETEST')return 'Retest held at '+fmt(value.price||value.level)+'.';
+   if(type==='IMPULSE')return 'Confirmed '+String(value.direction||'').toLowerCase()+' impulse.';
+   if(type==='RETRACEMENT ZONE')return 'Retracement zone: '+fmt(value.low)+'–'+fmt(value.high)+'.';
+   if(type==='PULLBACK TOUCH')return 'Price entered the measured retracement zone.';
+   if(type==='CONTINUATION BREAK')return 'Closed continuation break confirmed at '+fmt(value.level)+'.';
+   if(type==='BREAKOUT LEVEL')return 'Multi-touch breakout level: '+fmt(value.level)+'.';
+   if(type==='BREAKOUT')return 'Decisive closed breakout beyond '+fmt(value.level)+'.';
+   if(type==='RETEST HOLD')return 'Broken level held on retest.';
+   if(type==='CONTINUATION')return 'Closed continuation confirmed beyond the retest.';
+   if(type==='HTF BIAS')return 'HTF bias: '+value.direction+'.';
+   if(type==='LIQUIDITY SWEEP')return 'Liquidity sweep/reclaim at '+fmt(value.level)+'.';
+   if(type==='MSS')return 'MSS confirmed at '+fmt(value.level)+'.';
+   if(type==='DISPLACEMENT')return 'Meaningful displacement: '+Number(value.atrMultiple||0).toFixed(2)+'× ATR.';
+   if(type==='FVG')return 'Fresh FVG: '+fmt(value.low)+'–'+fmt(value.high)+'.';
+   if(type==='PREMIUM DISCOUNT')return 'FVG location validated in '+String(value.zone||'range').toLowerCase()+'.';
+   if(type==='CRT RANGE')return 'CRT reference range: '+fmt(value.low||value.high)+'–'+fmt(value.high||value.low)+'.';
+   if(type==='HTF SWEEP')return 'CRT higher-timeframe sweep/reclaim confirmed.';
+   if(type==='LTF SWEEP')return 'CRT execution sweep/reclaim confirmed.';
+   if(type==='TARGET')return 'Target validated at '+fmt(value.price||value.level)+'.';
+   return type?type.toLowerCase()+'.':'';
+ }
+ const s=String(value||'');return s.replace(/HTF (LONG|SHORT)/g,'Higher-timeframe direction: $1').replace(/Structure (LONG|SHORT)/g,'Middle structure: $1').replace(/Weekly (LONG|SHORT)/g,'Weekly direction: $1').replace('Structural invalidation stop.','Stop protected by a validated structural swing.').replace('POI invalidation stop.','Stop protected beyond the entry area.').replace('Sweep invalidation stop.','Stop protected beyond the sweep extreme.').replace('Confirmed structural impulse.','A recent directional impulse is confirmed.').replace('Measured retracement.','Price retraced into the planned area.').replace('Rejection/engulfing confirmed.','A qualifying rejection or engulfing candle is confirmed.').replace('Reclaim confirmed.','Price reclaimed the swept level.').replace('Range liquidity swept/reclaimed.','One side of the reference range was swept and reclaimed.').replace('Structural liquidity.','Meaningful structural liquidity is present.');}
 function fmt(v){if(v===null||v===undefined||!Number.isFinite(Number(v)))return '—';return Number(v).toLocaleString(undefined,{maximumFractionDigits:Number(v)>=1000?2:Number(v)>=1?5:8});}
 
 export default function SetupEducationPage({onBack}){
@@ -28,12 +54,13 @@ export default function SetupEducationPage({onBack}){
   <section className='setup-guide-live'>
    <div className='setup-guide-section-head'><div><span className='setup-guide-kicker'>LIVE SETUP ANATOMY</span><h2>See the actual evidence behind a setup</h2><p>When a live analysis exists for the selected strategy, these values come from the same market read used to generate the setup.</p></div>{hasLive&&<span className='setup-live-badge'><i/> LIVE {live.symbol}</span>}</div>
    {hasLive ? <div className='setup-live-grid'>
-    <div className='setup-live-card'><span>BIAS</span><b className={direction==='LONG'?'is-long':'is-short'}>{direction}</b><small>{setup.entryTimeframe} execution · {setup.analysisTimeframes?.join(' → ')}</small></div>
+    <div className='setup-live-card'><span>BIAS</span><b className={direction==='LONG'?'is-long':'is-short'}>{direction}</b><small>{setup.entryTimeframe} entry · {setup.analysisTimeframes?.join(' → ')}</small></div>
     <div className='setup-live-card'><span>STRUCTURE EVENT</span><b>{event?.direction||'—'} {event?.level?'· '+fmt(event.level):''}</b><small>{event?.level?'Observed on the live structure read.':'No qualifying break event exposed by this analysis.'}</small></div>
     <div className='setup-live-card'><span>ENTRY</span><b>{fmt(setup.entry)}</b><small>{setup.orderType||'—'} · {setup.entryReason||'Engine-selected execution level'}</small></div>
     <div className='setup-live-card'><span>INVALIDATION</span><b>{fmt(setup.stopLoss)}</b><small>{setup.invalidationSource||'Validated structural invalidation'}</small></div>
     <div className='setup-live-card'><span>TARGET</span><b>{fmt(setup.takeProfit1)}</b><small>{setup.riskReward||'—'} · structural/liquidity target</small></div>
-    <div className='setup-live-card setup-live-proof'><span>WHY IT PASSED</span><b>Strategy + structure + risk checks passed</b><small>{(setup.strategyEvidence||[]).map(humanEvidence).filter(Boolean).slice(0,3).join(' · ')||'No additional strategy evidence was returned.'}</small></div>
+    <div className='setup-live-card setup-live-proof'><span>WHY IT PASSED</span><b>{setup.strategyName||liveStrategy} contract passed</b><small>{setup.strategyReason||'Strategy-specific structure, entry, invalidation and target checks passed.'}</small></div>
+    <div className='setup-live-card setup-live-proof'><span>MODEL EVIDENCE</span><b>{(setup.strategyEvidence||[]).map(humanEvidence).filter(Boolean).slice(0,2).join(' · ')||'No additional strategy evidence was returned.'}</b><small>{setup.invalidationSource||'Validated strategy-specific invalidation'} · {setup.riskReward||'—'} risk/reward.</small></div>
    </div> : <div className='setup-guide-empty'><CircleHelp size={18}/><div><b>No live {item.name} analysis loaded</b><span>Run {item.name} in Market Analysis, then return here to see its actual levels and evidence.</span></div></div>}
   </section>
   <section className='setup-guide-library'>

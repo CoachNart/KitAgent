@@ -84,6 +84,15 @@ export async function fetchPrice(market,symbol){
   };
 }
 
+const STRATEGY_REASONS={
+  TOP_DOWN:'HTF alignment → execution BOS → retest & hold → structural continuation target.',
+  PULLBACK:'HTF trend → confirmed impulse → 38.2–61.8% retracement → continuation break → structural target.',
+  BREAKOUT:'Multi-touch level → decisive closed breakout → retest hold → continuation → structural/range target.',
+  SMC:'HTF bias → liquidity sweep/reclaim → MSS + displacement → fresh FVG → FVG retracement entry → opposing liquidity.',
+  MSNR:'Fresh MSNR key level → exact candle confirmation → live non-extended entry → opposing MSNR level.',
+  CRT:'Completed CRT range → one-sided sweep/reclaim → lower-timeframe sweep → MSS/displacement → retest → opposite range/external target.'
+};
+
 function plan(tf){
   if(tf==='AUTO')return EXECUTION_TIMEFRAMES;
   if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO');
@@ -156,11 +165,15 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
     structure:execution.structure,
     marketContext:marketContext(execution),
     regime:regime(execution.candles,execution.structure),
-    liquidity:execution.liquidity,
+    topDown:result.topDown||null,
+    pullback:result.pullback||null,
+    breakoutRetest:result.breakoutRetest||null,
+    smc:result.smc||null,
     msnr:result.msnr||null,
+    crt:result.crt||null,
+    liquidity:execution.liquidity,
     msnrLevels:result.levels||[],
     msnrConfirmations:result.confirmations||[],
-    smc:result.smc||null,
     candidates:result.candidates||[]
   };
 }
@@ -268,7 +281,8 @@ export default async function handler(req,res){
         marketRegime:best.structure?.state||null,
         strategyEvidence:best.evidence,
         strategyFailures:[],
-        strategyReason:strategy==='SMC'?'The complete SMC liquidity-sweep → MSS → displacement → FVG entry contract passed.':'The complete MSNR entry contract passed.',
+        strategyReason:STRATEGY_REASONS[strategy],
+        strategyDetails:best[strategy==='TOP_DOWN'?'topDown':strategy==='PULLBACK'?'pullback':strategy==='BREAKOUT'?'breakoutRetest':strategy==='SMC'?'smc':strategy==='MSNR'?'msnr':'crt']||null,
         structuralInvalidation:best.trade.invalidation,
         invalidationSource:best.trade.invalidationSource||null,
         tradeBreakdown:{
@@ -284,7 +298,10 @@ export default async function handler(req,res){
           msnr:best.msnr,
           confirmations:best.msnrConfirmations,
           smc:best.smc||null,
-          smc:best.smc||null
+          topDown:best.topDown||null,
+          pullback:best.pullback||null,
+          breakoutRetest:best.breakoutRetest||null,
+          crt:best.crt||null
         },
         debug:{
           selectedTimeframe:best.tf,
@@ -324,7 +341,7 @@ export default async function handler(req,res){
         analysisTimeframes:requested==='AUTO'?EXECUTION_TIMEFRAMES:CHAIN[requested],
         strategyEvidence:results.flatMap(x=>x.evidence).slice(0,8),
         strategyFailures:[...new Set(results.flatMap(x=>x.failures))].slice(0,12),
-        strategyReason:'No timeframe has a complete MSNR key-level + candle-body confirmation + objective + risk contract.',
+        strategyReason:`No ${STRATEGY_REASONS[strategy]||'strategy-specific entry contract'} has fully passed on the evaluated timeframe(s).`,
         debug:{
           selectedTimeframe:null,
           candidates:results.map(x=>({
