@@ -107,6 +107,18 @@ assert('MSNR does not use the generic execution resolver',()=>{
   return routed.direction===direct.direction && routed.failures.join('|')===direct.failures.join('|') && routed.confirmations?.length===direct.confirmations?.length;
 });
 
+// MSNR direction is subordinate to market structure: a bullish level cannot override a bearish execution structure.
+const msnrBearishExecutionLayers=[
+  {tf:'4H',candles:vCc,structure:{direction:'NEUTRAL'}},
+  {tf:'2H',candles:vCc,structure:{direction:'NEUTRAL'}},
+  {tf:'1H',candles:vCc,structure:{direction:'BEARISH'}}
+];
+const msnrConflict=evaluateMSNR({candles:vCc,layers:msnrBearishExecutionLayers,price:103.5});
+assert('MSNR rejects a bullish confirmation against bearish execution structure',()=>msnrConflict.direction==='NEUTRAL'&&msnrConflict.failures.some(x=>x.includes('conflicts with execution structure BEARISH')));
+
+// MSNR market entry must stay close to the confirmed key level; a large post-confirmation chase is not executable.
+assert('MSNR rejects an extended market entry away from the confirmed level',()=>msnrResult.direction==='NEUTRAL'&&msnrResult.failures.some(x=>x.includes('extended')));
+
 // SMC contract: liquidity sweep -> MSS/displacement -> FVG retracement. No arbitrary FVG is accepted.
 const smcCandles=Array.from({length:50},(_,i)=>{
   const base=100+i*.15;
