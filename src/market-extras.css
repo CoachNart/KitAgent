@@ -1631,3 +1631,29 @@
   .live-field{min-height:38px!important}
   .live-analyze{grid-column:auto!important;width:100%!important}
 }
+
+
+/* Strategy library control — restores internal strategy education navigation */
+.live-controls{grid-template-columns:minmax(175px,1.15fr) minmax(120px,.72fr) minmax(155px,1fr) minmax(135px,.82fr) auto!important}
+.strategy-guide-button{
+  height:40px!important;
+  min-width:135px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+  padding:0 10px!important;
+  border:1px solid rgba(114,221,255,.13)!important;
+  border-radius:8px!important;
+  background:linear-gradient(100deg,rgba(114,221,255,.055),rgba(255,255,255,.012))!important;
+  color:#a9c4c9!important;
+  cursor:pointer!important;
+}
+.strategy-guide-button span{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:2px!important}
+.strategy-guide-button small{font-size:5px!important;line-height:1!important;letter-spacing:.16em!important;color:#58727a!important;font-weight:900!important}
+.strategy-guide-button b{font-size:8px!important;line-height:1!important;letter-spacing:.03em!important;font-weight:850!important;color:#c9e0e4!important}
+.strategy-guide-button svg{width:12px!important;height:12px!important;color:#6d8a92!important;transition:transform .18s ease!important}
+.strategy-guide-button:hover{border-color:rgba(114,221,255,.3)!important;background:linear-gradient(100deg,rgba(114,221,255,.095),rgba(255,255,255,.025))!important;color:#e4f7f9!important;transform:translateY(-1px)!important}
+.strategy-guide-button:hover svg{transform:translateY(2px)!important}
+@media(max-width:1100px){.live-controls{grid-template-columns:1fr 1fr!important}.strategy-guide-button,.live-analyze{width:100%!important}}
+@media(max-width:620px){.live-controls{grid-template-columns:1fr!important}.strategy-guide-button,.live-analyze{grid-column:auto!important}}
