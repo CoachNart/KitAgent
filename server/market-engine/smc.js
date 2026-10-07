@@ -36,7 +36,11 @@ function findSweeps(c,direction){
   const s=confirmedSwings(c,2),pools=direction==='BULLISH'?s.lows:s.highs,out=[];
   for(const p of pools)for(let i=p.confirmationIndex;i<c.length;i++){
     const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price,reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
-    if(swept&&reclaimed)out.push({direction,index:i,level:p.price,extreme:direction==='BULLISH'?x.low:x.high,swingIndex:p.index,age:c.length-1-i});
+    if(swept&&reclaimed){
+      const extreme=direction==='BULLISH'?x.low:x.high;
+      const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.low>=extreme:z.high<=extreme);
+      if(stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i});
+    }
   }
   return out.sort((a,b)=>a.index-b.index);
 }
