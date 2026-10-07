@@ -209,39 +209,6 @@ function RiskCalculator({setup}){
     <p className="risk-disclaimer">Estimated liquidation · isolated margin</p>
   </section>;
 }
-function TradeBreakdown({setup,result}){
- const [open,setOpen]=useState(false);
- const b=setup?.tradeBreakdown||{},d=setup?.strategyDetails||{},strategy=result?.strategy||setup?.strategy||'';
- const fmt=v=>v==null||Number.isNaN(Number(v))?'—':price(v);
- const dir=String(setup?.bias||'').toUpperCase();
- const baseDirection=dir==='LONG'?'The higher-timeframe structure supports a bullish thesis.':dir==='SHORT'?'The higher-timeframe structure supports a bearish thesis.':'No directional thesis is currently executable.';
- let rows=[],levels=[];
- if(strategy==='TOP_DOWN'){
-   const bos=d.executionBOS,rt=d.retest,t=d.target;
-   rows=[['MARKET READ',baseDirection],['BOS','Closed execution BOS beyond '+fmt(bos?.level)+' on the '+(setup.entryTimeframe||'entry')+' timeframe.'],['RETEST','Price returned to '+fmt(bos?.level)+' and held it as the new structural side.'],['ENTRY',setup.orderType==='LIMIT'?'Planned entry waits at the qualified retest location.':'Entry is actionable at the qualified retest condition.'],['INVALIDATION','Stop protects the retest candle extreme with a volatility buffer.'],['TARGET','Target '+fmt(t?.price||d?.target)+' is the continuation structural objective and passed the 2R gate.']];
-   levels=[['BOS LEVEL',bos?.level,'Execution BOS'],['RETEST',rt?.price,'Retest close'],['TARGET',t?.price,'Structural continuation']];
- } else if(strategy==='PULLBACK'){
-   const z=d.retracement,t=d.target;
-   rows=[['MARKET READ',baseDirection],['IMPULSE','A confirmed directional impulse runs from '+fmt(d.impulse?.start?.price)+' to '+fmt(d.impulse?.end?.price)+'.'],['RETRACEMENT','Price entered the 38.2–61.8% retracement zone: '+fmt(z?.low)+'–'+fmt(z?.high)+'.'],['CONFIRMATION','A closed continuation break confirmed the pullback ended without breaking the impulse origin.'],['INVALIDATION','Stop protects the pullback candle and impulse origin.'],['TARGET','The impulse extreme or later structure is used only when it remains beyond entry and provides at least 2R.']];
-   levels=[['IMPULSE END',d.impulse?.end?.price,'Continuation objective'],['RETRACE LOW',z?.low,'38.2–61.8% zone'],['RETRACE HIGH',z?.high,'38.2–61.8% zone'],['TARGET',t?.price,'Structural target']];
- } else if(strategy==='BREAKOUT'){
-   const l=d.level,br=d.breakout,rt=d.retest,t=d.target;
-   rows=[['MARKET READ',baseDirection],['LEVEL','Multi-touch '+(dir==='LONG'?'resistance':'support')+' clustered at '+fmt(l?.level)+'.'],['BREAKOUT','Closed candle broke the level decisively with body/range confirmation'+(br?.atrMultiple?' ('+Number(br.atrMultiple).toFixed(2)+'× ATR).':'.')],['RETEST','The broken level held its new role; a close back through it would invalidate the setup.'],['CONTINUATION','A later closed candle confirmed continuation beyond the retest candle.'],['INVALIDATION','Stop protects the retest/level with a volatility buffer.'],['TARGET','Target '+fmt(t?.price)+' is the structural or range-projection objective and passed 2R.']];
-   levels=[['LEVEL',l?.level,'Multi-touch boundary'],['BREAKOUT',br?.candle?.close,'Decisive close'],['RETEST',rt?.candle?.close,'Role reversal'],['TARGET',t?.price,'Continuation objective']];
- } else if(strategy==='SMC'){
-   const x=d;
-   rows=[['MARKET READ','HTF bias is '+(x?.htfBias||dir)+'.'],['LIQUIDITY SWEEP','Price swept the opposing liquidity pool at '+fmt(x?.sweep?.level)+' and reclaimed it.'],['MSS + DISPLACEMENT','Post-sweep MSS at '+fmt(x?.mss?.level)+' was produced by meaningful displacement.'],['FVG','Fresh '+(x?.fvg?.direction||'directional')+' FVG: '+fmt(x?.fvg?.low)+'–'+fmt(x?.fvg?.high)+', positioned in '+(x?.dealingRange?(x.fvg.midpoint<=x.dealingRange.equilibrium?'discount':'premium'):'the validated dealing range')+'.'],['ENTRY','Entry is the FVG midpoint '+fmt(x?.fvg?.midpoint)+'.'],['INVALIDATION','Stop sits beyond the sweep extreme with volatility buffer.'],['TARGET','Target '+fmt(x?.target)+' is the opposing liquidity objective and passed 2R.']];
-   levels=[['SWEEP',x?.sweep?.level,'Liquidity level'],['MSS',x?.mss?.level,'Structure shift'],['FVG MID',x?.fvg?.midpoint,'Entry'],['TARGET',x?.target,'Liquidity objective']];
- } else if(strategy==='MSNR'){
-   const x=d,level=x?.level,ev=x?.confirmation,obj=x?.objective;
-   rows=[['KEY LEVEL',(level?.type||'MSNR')+' '+(level?.side||'LEVEL')+' at '+fmt(level?.price)+'.'],['FRESHNESS',level?.fresh?'Level was fresh before confirmation.':'Level was not fresh before confirmation.'],['CONFIRMATION',ev?.type?ev.type+' confirmed with the required closed-candle sequence and full-body hold.':'Exact MSNR confirmation passed.'],['ENTRY','Live price remained close enough to the confirmation candle to be executable.'],['INVALIDATION','Stop protects the MSNR level and confirmation-candle extreme with buffer.'],['TARGET',(obj?.type||'Opposing MSNR level')+' at '+fmt(obj?.price)+' is the next valid opposing objective and passed 2R.']];
-   levels=[['LEVEL',level?.price,level?.type],['CONFIRMATION',ev?.signalCandle?.close,'Closed confirmation'],['TARGET',obj?.price,obj?.type]];
- } else if(strategy==='CRT'){
-   const x=d;
-   rows=[['REFERENCE RANGE','Completed '+(x?.anchor?.timeframe||'HTF')+' candle: '+fmt(x?.anchor?.low)+'–'+fmt(x?.anchor?.high)+'.'],['HTF SWEEP','The following higher-timeframe candle swept the '+(x?.sweep?.side||'boundary')+' side and closed back inside the range.'],['EXECUTION SWEEP','The entry timeframe confirmed the same boundary sweep/reclaim.'],['MSS + DISPLACEMENT','Lower-timeframe structure shifted at '+fmt(x?.mss?.level)+' with meaningful displacement.'],['RETEST','Price retested and held the MSS level before entry.'],['INVALIDATION','Stop protects the sweep extreme with a volatility buffer.'],['TARGET','The opposite CRT boundary or valid external structural target provides at least 2R.']];
-   levels=[['CRT HIGH',x?.anchor?.high,'Reference boundary'],['CRT LOW',x?.anchor?.low,'Reference boundary'],['MSS',x?.mss?.level,'Execution structure'],['TARGET',x?.target?.price,'CRT/external objective']];
- } else rows=[['MARKET READ',baseDirection],['ENTRY',setup.entryReason||'Strategy-specific entry condition passed.'],['INVALIDATION',setup.invalidationSource||'Validated structural invalidation.'],['TARGET',fmt(setup.takeProfit1)+' is the validated objective.']];
- return <section className={'trade-breakdown '+(open?'is-open':'')} aria-label="Trade breakdown"><button type="button" className="trade-breakdown-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><span><span className="tiny-label">STRATEGY BREAKDOWN</span><strong>Why this {setup?.strategyName||result?.strategy||'setup'} qualifies</strong></span><span className="trade-breakdown-toggle-right"><small>{setup.entryTimeframe||'—'} · {setup.riskReward||'—'}</small><ChevronDown size={14}/></span></button>{open&&<div className="trade-breakdown-body"><div className="trade-breakdown-grid">{rows.map(([label,text])=><div key={label}><b>{label}</b><p>{text}</p></div>)}</div><div className="trade-breakdown-levels">{levels.filter(x=>x[1]!=null).map(([label,value,detail])=><div key={label}><span>{label}</span><b>{fmt(value)}</b><small>{detail}</small></div>)}</div><small className="trade-breakdown-source">Strategy model: {setup?.strategyReason||'Current engine contract'} · source: live Bybit closed candles and quote · {((setup?.analysisTimeframes)||[]).join(' → ')||'strategy-defined context'}.</small></div>}</section>
-}function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
+function TradeMetric({label,value,tone}){return <div className={`trade-metric ${tone||''}`}><span>{label}</span><b>{value}</b></div>}
 function Indicator({label,value,tone}){return <div className={tone||''}><span>{label}</span><b>{value}</b></div>}
 function Breakdown({title,value,detail}){return <div className="breakdown-item"><span>{title}</span><b>{value}</b><small>{detail}</small></div>}
