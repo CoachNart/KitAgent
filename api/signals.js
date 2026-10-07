@@ -1,6 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
+const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -145,18 +146,19 @@ export default async function handler(req,res){
     if(req.method==='POST'){
       const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),bias=clean(setup.bias,10).toUpperCase(),source=clean(body.source,40)||'live-market-analysis',scannerSetupId=clean(body.scannerSetupId,160);
       const orderType=clean(setup.orderType,20).toUpperCase();
-      if(market!=='perpetual'||!symbol||!timeframe||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
+      if(market!=='perpetual'||!symbol||!timeframe||!ACTIVE_STRATEGIES.has(strategy)||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
       const recordId=scannerSetupId?`scanner-${scannerSetupId.replace(/[^A-Z0-9_-]/gi,'-').slice(0,140)}`:null;
       const ref=recordId?collection.doc(recordId):collection.doc();
       if(recordId){const existing=await ref.get();if(existing.exists)return json(res,200,{ok:true,id:ref.id,existing:true,signal:{id:ref.id,...existing.data()}});}
-      const signal={signalId:recordId?`SC-${scannerSetupId}`:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source,scannerSetupId:scannerSetupId||null};
+      const signal={signalId:recordId?`SC-${scannerSetupId}`:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,strategy,engineVersion:'market-engine-v4',direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source,scannerSetupId:scannerSetupId||null};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
-    const unresolved=raw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
-    const priority=[...raw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];
+    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase()));
+    const unresolved=currentRaw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
+    const priority=[...currentRaw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];
     const resolvable=new Set(priority.slice(0,24).map(s=>s.id));
-    for(const original of raw){
+    for(const original of currentRaw){
       const resolved=resolvable.has(original.id)?await resolveStatus(original,null):original;
       const patch={};
       for(const key of ['status','result','pnlPercent','exitPrice','closedAt','activatedAt','missedAt','outcomeEvidence']){
