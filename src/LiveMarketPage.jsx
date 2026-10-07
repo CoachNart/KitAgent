@@ -117,29 +117,11 @@ function strategyWaitCopy(strategy){return STRATEGY_WAIT_COPY[strategy]||'No val
 function AnalysisResult({result,savedSignal}){
   const s=result.setup||{};
   const hasTrade=Boolean(s.tradeReady&&['LONG','SHORT'].includes(String(s.bias||'').toUpperCase())&&['MARKET','LIMIT'].includes(String(s.orderType||'').toUpperCase())&&[s.entry,s.stopLoss,s.takeProfit1].every(v=>Number.isFinite(Number(v))));
-  const long=hasTrade&&s.bias==='LONG',short=hasTrade&&s.bias==='SHORT',wait=!hasTrade,Icon=long?TrendingUp:short?TrendingDown:Clock;
+  const long=hasTrade&&String(s.bias).toUpperCase()==='LONG',short=hasTrade&&String(s.bias).toUpperCase()==='SHORT';
+  const direction=long?'LONG':short?'SHORT':'NO TRADE';
+  const Icon=long?TrendingUp:short?TrendingDown:Clock;
   const stopDistanceLabel=s.stopDistanceUnits!=null ? String(s.stopDistanceUnits)+' '+(s.priceUnitLabel==='pips'?'pips':'pts') : '—';
-  const direction=long?'LONG':short?'SHORT':'NO TRADE',tone=wait?'wait':(long?'long':'short');
-  return <div className="live-result">
-    <div className={'setup-card-v2 '+tone}>
-      <div className="setup-v2-head">
-        <div className="setup-v2-symbol"><span><b>STRATEGY</b> · {s.strategyName||result.strategy||'Top-Down'} · ENTRY {s.entryTimeframe||result.timeframe}</span><h3>{result.symbol.includes('/')?result.symbol:result.symbol.replace(/USDT$/,'/USDT')}</h3></div>
-        <div className="setup-v2-bias"><Icon size={15}/><b>{direction}</b></div>
-        <div className="setup-v2-confidence"><b>{hasTrade?s.confidence||0:0}%</b><span>CONFIDENCE</span></div>
-      </div>
-      {!hasTrade ? <div className="strategy-status-card"><span>NO TRADE</span><b>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</b></div> : <>
-        <div className="strategy-trade-status"><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'WAITING AT PLANNED LEVEL':'EXECUTION AVAILABLE NOW'}</b></div>
-        <div className="setup-v2-levels">
-          <div className="v2-level entry"><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'} <em className="order-type-inline">{s.orderType||'MARKET'}</em></span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div>
-          <div className="v2-level stop"><span>STOP</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div>
-          <div className="v2-level tp"><span>TP</span><b>{price(s.takeProfit1)}</b></div>
-        </div>
-        <div className="strategy-trade-footer"><span>RR {hasTrade?s.riskReward:'—'}</span><span>{s.liquidityType||'STRUCTURAL TARGET'}</span></div>
-      </>}
-    </div>
-    <RiskCalculator setup={s}/>
-    {hasTrade&&<TradeBreakdown setup={s} result={result}/>} 
-  </div>
+  return <div className="live-result"><article className={`market-setup-card ${long?'is-long':short?'is-short':'is-wait'}`} aria-label="Market setup result"><header className="market-setup-card-head"><div className="market-setup-context"><span>{s.strategyName||result.strategy||'Top-Down'} · {s.entryTimeframe||result.timeframe} EXECUTION</span><h3>{result.symbol.includes('/')?result.symbol:result.symbol.replace(/USDT$/,'/USDT')}</h3></div><div className="market-setup-direction"><Icon size={15}/><b>{direction}</b></div><div className="market-setup-confidence"><b>{hasTrade?s.confidence||0:0}%</b><span>CONFIDENCE</span></div></header>{!hasTrade?<section className="market-setup-wait"><b>NO TRADE</b><span>{strategyWaitCopy(result.strategy||'TOP_DOWN')}</span></section>:<><section className="market-setup-execution"><div><span>{s.orderType==='LIMIT'?'LIMIT ORDER':'MARKET ORDER'}</span><b>{s.orderType==='LIMIT'?'Waiting at planned level':'Execution available now'}</b></div>{s.orderType==='LIMIT'&&<strong>LIMIT</strong>}</section><section className="market-setup-levels" aria-label="Trade levels"><div><span>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</span><b>{price(s.entry)}</b>{s.orderType==='LIMIT'&&<small>Current {price(s.marketEntry)}</small>}</div><div><span>STOP LOSS</span><b>{price(s.stopLoss)}</b>{s.structuralInvalidation!=null&&<small>Invalidation {price(s.structuralInvalidation)} · {stopDistanceLabel} risk</small>}</div><div><span>TAKE PROFIT</span><b>{price(s.takeProfit1)}</b><small>{s.liquidityType||'Structural target'}</small></div></section><footer className="market-setup-footer"><div><span>RISK / REWARD</span><b>{s.riskReward||'—'}</b></div><div><span>ENTRY TYPE</span><b>{s.orderType||'—'}</b></div><div><span>STATUS</span><b>{s.orderType==='LIMIT'?'WAITING':'READY'}</b></div></footer></>}</article><RiskCalculator setup={s}/></div>
 }
 
 
