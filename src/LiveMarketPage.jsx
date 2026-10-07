@@ -3,6 +3,7 @@ import {BarChart3,ChevronDown,RefreshCw,ScanSearch,TrendingDown,TrendingUp,Clock
 import {auth} from './firebase.js';
 import {MarketWatchlist, StrategySelector} from './MarketExtras.jsx';
 import './market-extras.css';
+import './live-market-final.css';
 export const TIMEFRAMES=['AUTO','15m','30m','1H','2H','4H'];
 const TIMEFRAME_GUIDE={
  'AUTO':{title:'AUTO · best qualified execution',desc:'Evaluates every supported execution timeframe and selects the strongest strategy-specific setup that passes all rules.'},
