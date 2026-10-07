@@ -144,7 +144,7 @@ export default async function handler(req,res){
       if(count)await batch.commit();return json(res,200,{ok:true,deleted});
     }
     if(req.method==='POST'){
-      const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),bias=clean(setup.bias,10).toUpperCase(),source=clean(body.source,40)||'live-market-analysis',scannerSetupId=clean(body.scannerSetupId,160);
+      const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),strategy=clean(body.strategy||setup.strategy,30).toUpperCase().replace(/[-\s]/g,'_'),bias=clean(setup.bias,10).toUpperCase(),source=clean(body.source,40)||'live-market-analysis',scannerSetupId=clean(body.scannerSetupId,160);
       const orderType=clean(setup.orderType,20).toUpperCase();
       if(market!=='perpetual'||!symbol||!timeframe||!ACTIVE_STRATEGIES.has(strategy)||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
       const recordId=scannerSetupId?`scanner-${scannerSetupId.replace(/[^A-Z0-9_-]/gi,'-').slice(0,140)}`:null;
