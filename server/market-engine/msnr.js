@@ -223,15 +223,19 @@ function objective(levels,direction,entry,minDistance=0){
   const opposing=direction==='BULLISH'
     ?levels.filter(x=>x.side==='RESISTANCE'&&x.level>entry)
     :levels.filter(x=>x.side==='SUPPORT'&&x.level<entry);
-  return opposing
-    .filter(x=>(x.fresh || x.type==='RBS' || x.type==='SBR')&&Math.abs(x.level-entry)>=minDistance)
-    .sort((a,b)=>{
-      const strength=(x)=>x.type==='RBS'||x.type==='SBR'?2:x.type==='A'||x.type==='V'?1:0;
-      return strength(b)-strength(a)||Math.abs(a.level-entry)-Math.abs(b.level-entry);
-    })
+  const distanceFloor=Math.max(minDistance,Math.abs(entry)*.005);
+  const candidates=opposing
+    .filter(x=>(x.fresh||x.type==='RBS'||x.type==='SBR')&&Math.abs(x.level-entry)>=distanceFloor);
+  for(const x of candidates){
+    const peers=candidates.filter(y=>Math.abs(y.level-x.level)<=Math.max(distanceFloor*.35,Math.abs(entry)*.0015));
+    const strength=x.type==='RBS'||x.type==='SBR'?100:x.type==='A'||x.type==='V'?90:75;
+    x.clusterCount=peers.length;
+    x.quality=strength+(x.fresh?18:0)+(x.flipCount>0?12:0)+(peers.length>=3?24:peers.length===2?14:0)+(x.tf?8:0);
+  }
+  return candidates
+    .sort((a,b)=>b.quality-a.quality||Math.abs(a.level-entry)-Math.abs(b.level-entry))
     .find(x=>x.level!==entry)||null;
 }
-
 function gradeMSNR({level,event,rr,context,target}){
   let score=0;
   score+=event?.freshBefore?25:0;
@@ -292,7 +296,7 @@ export function evaluateMSNR({candles,layers,price}){
     const allLevels=layers.flatMap(layer=>
       buildMSNRLevels(layer.candles).map(x=>({...x,tf:layer.tf}))
     );
-    const minTargetDistance=Math.max(a*1.25,Math.abs(entry)*.004);
+    const minTargetDistance=Math.max(a*1.5,Math.abs(entry)*.005);
     const target=objective(allLevels,direction,entry,minTargetDistance);
     if(!target){
       candidates.push({event,level,direction,context,entry,stop,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'No opposing MSNR key level exists beyond the confirmed entry.'});
