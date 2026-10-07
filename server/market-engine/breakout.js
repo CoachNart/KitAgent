@@ -4,6 +4,12 @@ import {confirmedSwings,selectStructuralTarget} from './structure.js';
 export const BREAKOUT_MODEL='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION';
 
 const validDir=d=>d==='BULLISH'||d==='BEARISH';
+function executionOrderType({direction,entry,price,tolerance}){
+  const gap=Math.abs(price-entry),near=gap<=tolerance;
+  if(direction==='BULLISH')return price<entry&&!near?null:(near?'MARKET':'LIMIT');
+  if(direction==='BEARISH')return price>entry&&!near?null:(near?'MARKET':'LIMIT');
+  return null;
+}
 
 function alignedDirection(layers=[]){
   const dirs=layers.map(x=>x?.structure?.direction).filter(validDir);
