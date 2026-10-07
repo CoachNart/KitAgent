@@ -123,7 +123,6 @@ function grade({bias,range,sweep,mss,rt,rr}){
   score+=sweep?25:0;
   score+=mss?20:0;
   score+=rt?5:0;
-  score+=rr>=3?5:rr>=2?3:0;
   return {score,grade:score>=92?'A+':score>=82?'A':'NO-TRADE'};
 }
 
@@ -191,10 +190,7 @@ export function evaluateCRT({candles=[],layers=[],price}){
 
   const reward=Math.abs(tgt.price-entry);
   const rr=reward/risk;
-  if(!(reward>0&&rr>=2)){
-    failures.push('CRT target does not provide at least 2R from the refined MSS retest.');
-    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf},{type:'LTF_SWEEP',...sweep},{type:'MSS',...mss},{type:'RETEST',...rt},{type:'TARGET',...tgt,rr}]};
-  }
+  if(!(reward>0)){failures.push('CRT structural target is not beyond entry.');return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf},{type:'LTF_SWEEP',...sweep},{type:'MSS',...mss},{type:'RETEST',...rt},{type:'TARGET',...tgt,rr}]};}
 
   const live=Number(price);
   if(!Number.isFinite(live)||live<=0){
