@@ -241,7 +241,6 @@ function gradeMSNR({level,event,rr,context,target}){
   score+=level.touches===0?5:0;
   score+=context.aligned>0?12:context.dominant==='NEUTRAL'?7:0;
   score+=target?8:0;
-  score+=rr>=3?5:rr>=2?3:0;
   const grade=score>=92?'A+':score>=82?'A':score>=70?'B':score>=55?'C':'NO-TRADE';
   return {grade,score};
 }
@@ -310,8 +309,8 @@ export function evaluateMSNR({candles,layers,price}){
       candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'MSNR invalidation is too far from the live entry; stop geometry is no longer efficient for the confirmed level.'});
       continue;
     }
-    if(!(risk>0&&reward>0&&rr>=2)){
-      candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'The next opposing MSNR objective does not provide at least 2R.'});
+    if(!(risk>0&&reward>0)){
+      candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'The next opposing MSNR objective is not beyond the entry.'});
       continue;
     }
     const g=gradeMSNR({level,event,rr,context,target});
