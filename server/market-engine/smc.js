@@ -49,16 +49,20 @@ function freshFvg(c,fvg,asOf){
   return true;
 }
 function nextLiquidityTarget(c,direction,entry,sweepIndex){
-  const s=confirmedSwings(c,2),pools=direction==='BULLISH'?s.highs:s.lows;
-  const later=pools.filter(x=>x.index>sweepIndex).map(x=>x.price).filter(p=>direction==='BULLISH'?p>entry:p<entry).sort((a,b)=>direction==='BULLISH'?a-b:b-a);
-  if(later[0]!==undefined)return later[0];
-  const all=pools.map(x=>x.price).filter(p=>direction==='BULLISH'?p>entry:p<entry).sort((a,b)=>direction==='BULLISH'?a-b:b-a);
-  return all[0]??null;
+  const s=confirmedSwings(c,3),pools=direction==='BULLISH'?s.highs:s.lows;
+  const a=atr(c,14)||0;
+  const minDistance=Math.max(a*1.25,Math.abs(entry)*.004);
+  const valid=pools
+    .filter(x=>x.index>sweepIndex)
+    .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
+    .filter(x=>Math.abs(x.price-entry)>=minDistance)
+    .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
+  return valid[0]||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
   const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer,entry=fvg.midpoint,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
-  if(!Number.isFinite(rr)||rr<2)return null;
+  if(!Number.isFinite(rr)||rr<=0)return null;
   if(direction==='BULLISH'&&price<sweep.extreme)return null;
   if(direction==='BEARISH'&&price>sweep.extreme)return null;
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
@@ -87,7 +91,7 @@ export function evaluateSMC({candles,layers,price}){
   const target=nextLiquidityTarget(c,direction,fvg.midpoint,sweep.index);
   if(!Number.isFinite(target)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[]};}
   const trade=buildTrade({c,price,direction,sweep,mss,displacement,fvg,target});
-  if(!trade){failures.push('FVG entry does not provide at least 2R to the next liquidity objective.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
+  if(!trade){failures.push('FVG entry, structural invalidation, or meaningful liquidity objective is invalid.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
   const score=88+(displacement.atrMultiple>=1.35?3:0)+(sweep.age<=6?3:0),grade=score>=92?'A+':'A';
   return{direction,grade:{grade,score,hardFailures:[]},failures:[],trade,evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium}],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }
