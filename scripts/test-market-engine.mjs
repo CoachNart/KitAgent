@@ -160,7 +160,7 @@ assert('Top-Down routes through its own evaluator',()=>{const routed=evaluateStr
 
 // Pullback contract: aligned HTF trend -> confirmed impulse -> 38.2%-61.8% retracement -> closed continuation break.
 assert('Pullback uses a defined trend-retracement-continuation model',PULLBACK_MODEL==='HTF_TREND_IMPULSE_RETRACE_CONTINUATION');
-const pbConflict=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}}],price:105});
+const pbConflict=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'15m',structure:{direction:'BULLISH'}}],price:105});
 assert('Pullback rejects conflicting higher-timeframe directions',()=>pbConflict.direction==='NEUTRAL'&&pbConflict.failures.some(x=>x.includes('aligned')));
 const pbNoImpulse=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Pullback requires a confirmed directional impulse before retracement',()=>pbNoImpulse.direction==='BULLISH'&&pbNoImpulse.failures.some(x=>x.includes('impulse')));
@@ -168,7 +168,7 @@ assert('Pullback routes through its own evaluator',()=>{const routed=evaluateStr
 
 // Breakout & Retest contract: defined level -> decisive close -> timely role-reversal retest -> continuation.
 assert('Breakout & Retest uses a defined breakout-retest model',BREAKOUT_MODEL==='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION');
-const brMismatch=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}}],price:105});
+const brMismatch=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'15m',structure:{direction:'BULLISH'}}],price:105});
 assert('Breakout & Retest rejects conflicting higher-timeframe directions',()=>brMismatch.direction==='NEUTRAL'&&brMismatch.failures.some(x=>x.includes('aligned')));
 const brNoLevel=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Breakout & Retest requires a defined multi-touch level',()=>brNoLevel.direction==='BULLISH'&&brNoLevel.failures.some(x=>x.includes('level')));
@@ -283,7 +283,7 @@ const goodGeometry=validateTradeGeometry({trade:{entry:100,stop:99,target:104},d
 const tightGeometry=validateTradeGeometry({trade:{entry:100,stop:99.9,target:103},direction:'BULLISH',candles:geoCandles});
 const poorReward=validateTradeGeometry({trade:{entry:100,stop:98,target:101},direction:'BULLISH',candles:geoCandles});
 const subOneR=validateTradeGeometry({trade:{entry:100,stop:96,target:103.5},direction:'BULLISH',candles:geoCandles});
-const wideGeometry=validateTradeGeometry({trade:{entry:100,stop:94,target:105},direction:'BULLISH',candles:geoCandles});
+const wideGeometry=validateTradeGeometry({trade:{entry:100,stop:91,target:105},direction:'BULLISH',candles:geoCandles});
 assert('Trade Geometry Contract accepts structurally distant target geometry',goodGeometry.valid);
 assert('Trade Geometry Contract does not gate on R:R when target distance is structurally meaningful',()=>subOneR.valid&&subOneR.metrics.rr<1);
 assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('execution noise')));
