@@ -6,7 +6,7 @@ import {evaluateTopDown,TOP_DOWN_MODEL,executionOrderType} from '../server/marke
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
-import {gradeSetup} from '../server/market-engine/grading.js';
+import {gradeSetup,validateTradeGeometry} from '../server/market-engine/grading.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -265,6 +265,18 @@ assert('Confidence model returns bounded structural quality',()=>strongConfidenc
 assert('Confidence model separates strong and weak structural quality',()=>strongConfidence.score>weakConfidence.score);
 assert('Confidence model does not hardcode an 88% ceiling',()=>strongConfidence.score!==88||weakConfidence.score===88);
 assert('Confidence model labels score as structural quality, not win probability',()=>strongConfidence.confidenceEvidence.some(x=>x.type==='CONFIDENCE_MODEL'&&x.interpretation==='structural quality, not win probability'));
+
+// Trade Geometry Contract: strategy structure may be valid, but publication is
+// blocked when the actual entry/stop/target expression is structurally poor.
+const geoCandles=Array.from({length:60},(_,i)=>bar(i,100,101.5,98.5,100.5));
+const goodGeometry=validateTradeGeometry({trade:{entry:100,stop:99,target:102},direction:'BULLISH',candles:geoCandles});
+const tightGeometry=validateTradeGeometry({trade:{entry:100,stop:99.9,target:103},direction:'BULLISH',candles:geoCandles});
+const poorReward=validateTradeGeometry({trade:{entry:100,stop:98,target:101},direction:'BULLISH',candles:geoCandles});
+const wideGeometry=validateTradeGeometry({trade:{entry:100,stop:94,target:105},direction:'BULLISH',candles:geoCandles});
+assert('Trade Geometry Contract accepts structurally efficient risk/reward',goodGeometry.valid);
+assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('execution noise')));
+assert('Trade Geometry Contract rejects sub-1R objectives without restoring a 2R gate',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('does not cover')));
+assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
 
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
