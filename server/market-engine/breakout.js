@@ -14,8 +14,10 @@ function executionOrderType({direction,entry,price,tolerance}){
 
 function alignedDirection(layers=[]){
   const dirs=layers.slice(0,-1).map(x=>x?.structure?.direction).filter(validDir);
-  if(!dirs.length||dirs.some(d=>d!==dirs[0]))return null;
-  return dirs[0];
+  if(!dirs.length)return null;
+  const bias=dirs[0];
+  if(dirs.some(d=>d!==bias))return null;
+  return bias;
 }
 
 function levelCluster(c,direction){
