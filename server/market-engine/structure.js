@@ -134,7 +134,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 
   const add=(price,source,index=-1,tf='EXECUTION',strength=0,meta={})=>{
     if(!Number.isFinite(price))return;
-    if(asOf!==null&&Number.isFinite(index)&&index>=0&&index>asOf)return;
+    if(asOf!==null&&tf==='EXECUTION'&&Number.isFinite(index)&&index>=0&&index>asOf)return;
     if(asOfTime!==null&&Number.isFinite(meta?.time)&&meta.time>asOfTime)return;
     const beyond=direction==='BULLISH'?price>entry:price<entry;
     if(!beyond||Math.abs(price-entry)<distanceFloor)return;
