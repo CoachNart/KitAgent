@@ -141,7 +141,7 @@ assert('Pullback requires a confirmed directional impulse before retracement',()
 assert('Pullback routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'PULLBACK',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed&&Array.isArray(routed.failures)&&routed.direction==='BULLISH';});
 
 // Non-MSR strategies are intentionally disabled until their own contracts are rebuilt.
-for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC','TOP_DOWN'].includes(x))){
+for(const strategy of Object.keys(STRATEGIES).filter(x=>!['MSNR','SMC','TOP_DOWN','PULLBACK'].includes(x))){
   const result=evaluateStrategy({strategy,layers,execution:{candles:vCc},price:103.5});
   assert(strategy+' is not using the old generic engine',()=>result.failures.some(x=>x.includes('intentionally disabled')));
 }
