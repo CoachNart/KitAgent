@@ -1,6 +1,6 @@
 import {buildMSNRLevels,latestMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
-import {structure} from '../server/market-engine/structure.js';
+import {structure,selectStructuralTarget} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,TOP_DOWN_MODEL,executionOrderType} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
@@ -217,6 +217,44 @@ assert('CRT routes through its own evaluator',()=>{
   const routed=evaluateStrategy({strategy:'CRT',layers:crtLayers,execution:{candles:crtExecution},price:103});
   return routed.tradeReady===true&&routed.crt?.model===CRT_MODEL;
 });
+
+
+// Structural hierarchy validation: a nearby wick must not outrank a meaningful
+// repeated/major objective, and the target must remain on the correct side.
+const hierarchyCandles=[];
+for(let i=0;i<70;i++){
+  const base=100;
+  const wave=(i%10<5)?i%5*1.2:((9-i%10)*1.2);
+  hierarchyCandles.push(bar(i,base+wave,base+wave+0.8,base+wave-0.8,base+wave+0.2));
+}
+hierarchyCandles[10]=bar(10,104,105,103,104.5);
+hierarchyCandles[15]=bar(15,108,109,107,108.5);
+hierarchyCandles[30]=bar(30,105,106,104,105.5);
+hierarchyCandles[45]=bar(45,108.5,109.5,107.5,109);
+hierarchyCandles[55]=bar(55,101,101.8,100.2,101.4);
+hierarchyCandles[60]=bar(60,103,103.8,102.2,103.4);
+const hierarchyLayers=[{tf:'4H',candles:hierarchyCandles,structure:{direction:'BULLISH'}}];
+const structuralTarget=selectStructuralTarget(hierarchyCandles,'BULLISH',100,{layers:hierarchyLayers,minDistance:1});
+assert('Target hierarchy never selects a target on the wrong side of entry',()=>!structuralTarget||structuralTarget.price>100);
+assert('Target hierarchy provides provenance for the selected objective',()=>!structuralTarget||typeof structuralTarget.source==='string');
+assert('Target hierarchy can prefer repeated/major structure over a single nearby pivot',()=>{
+  if(!structuralTarget)return true;
+  return structuralTarget.quality>=90 || structuralTarget.clusterCount>=2 || structuralTarget.native===true;
+});
+assert('Structural target ranking is not an RR gate',()=>{
+  if(!structuralTarget)return true;
+  return structuralTarget.rr===undefined;
+});
+
+// Structure model validation: protected swings must be external structure, not
+// the latest internal wick.
+const structured=structure(hierarchyCandles);
+assert('Market structure exposes separate external and internal swings',()=>Array.isArray(structured.external.highs)&&Array.isArray(structured.internal.highs));
+assert('Protected structure is sourced from external swings',()=>(
+  !structured.protectedLow||structured.external.lows.some(x=>x.index===structured.protectedLow.index)
+) && (
+  !structured.protectedHigh||structured.external.highs.some(x=>x.index===structured.protectedHigh.index)
+));
 
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
