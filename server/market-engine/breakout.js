@@ -4,6 +4,12 @@ import {confirmedSwings,selectStructuralTarget} from './structure.js';
 export const BREAKOUT_MODEL='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION';
 
 const validDir=d=>d==='BULLISH'||d==='BEARISH';
+function executionOrderType({direction,entry,price,tolerance}){
+  const gap=Math.abs(price-entry),near=gap<=tolerance;
+  if(direction==='BULLISH')return price<entry&&!near?null:(near?'MARKET':'LIMIT');
+  if(direction==='BEARISH')return price>entry&&!near?null:(near?'MARKET':'LIMIT');
+  return null;
+}
 
 function alignedDirection(layers=[]){
   const dirs=layers.map(x=>x?.structure?.direction).filter(validDir);
@@ -123,7 +129,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
     return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'BREAKOUT',...br},{type:'RETEST_HOLD',...rt}]};
   }
 
-  const entry=Number.isFinite(Number(price))?Number(price):confirm.candle.close;
+  const entry=level.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
   const stop=direction==='BULLISH'
     ?Math.min(rt.candle.low,level.level)-a*.25
@@ -144,7 +150,9 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const reward=Math.abs(tgt.price-entry),rr=reward/risk;
   if(!(reward>0)){failures.push('Continuation target is not beyond entry.');return {direction,failures,evidence:[{type:'BREAKOUT',...br},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm},{type:'TARGET',...tgt,rr}]};}
 
-  const orderType='MARKET';
+  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+  const orderType=executionOrderType({direction,entry,price:Number(price),tolerance});
+  if(!orderType){failures.push('Live price is no longer executable at the broken structural level.');return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm}]};}
   return {
     direction,
     tradeReady:true,
@@ -157,7 +165,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
       reward,
       rr,
       orderType,
-      entryReason:'A multi-touch structural level broke decisively, held on retest, and confirmed continuation.',
+      entryReason:'A multi-touch structural level broke decisively, held on retest, and the continuation confirmed the broken level as the structural entry.',
       invalidation:direction==='BULLISH'?rt.candle.low:rt.candle.high,
       invalidationSource:'breakout_retest_structural_level',
       targetSource:tgt.source||'EXTERNAL_STRUCTURAL_TARGET'
