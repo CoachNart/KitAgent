@@ -269,13 +269,15 @@ assert('Confidence model labels score as structural quality, not win probability
 // Trade Geometry Contract: strategy structure may be valid, but publication is
 // blocked when the actual entry/stop/target expression is structurally poor.
 const geoCandles=Array.from({length:60},(_,i)=>bar(i,100,101.5,98.5,100.5));
-const goodGeometry=validateTradeGeometry({trade:{entry:100,stop:99,target:102},direction:'BULLISH',candles:geoCandles});
+const goodGeometry=validateTradeGeometry({trade:{entry:100,stop:99,target:104},direction:'BULLISH',candles:geoCandles});
 const tightGeometry=validateTradeGeometry({trade:{entry:100,stop:99.9,target:103},direction:'BULLISH',candles:geoCandles});
 const poorReward=validateTradeGeometry({trade:{entry:100,stop:98,target:101},direction:'BULLISH',candles:geoCandles});
+const subOneR=validateTradeGeometry({trade:{entry:100,stop:96,target:103.5},direction:'BULLISH',candles:geoCandles});
 const wideGeometry=validateTradeGeometry({trade:{entry:100,stop:94,target:105},direction:'BULLISH',candles:geoCandles});
-assert('Trade Geometry Contract accepts structurally efficient risk/reward',goodGeometry.valid);
+assert('Trade Geometry Contract accepts structurally distant target geometry',goodGeometry.valid);
+assert('Trade Geometry Contract does not gate on R:R when target distance is structurally meaningful',()=>subOneR.valid&&subOneR.metrics.rr<1);
 assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('execution noise')));
-assert('Trade Geometry Contract rejects sub-1R objectives without restoring a 2R gate',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('does not cover')));
+assert('Trade Geometry Contract rejects targets that are too close to the entry',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('too close')));
 assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
 
 const failed=tests.filter(x=>!x.ok);
