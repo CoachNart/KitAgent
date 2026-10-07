@@ -90,7 +90,7 @@ function continuation(c,rt,direction){
 function target(c,direction,entry,after,rangeHeight,layers=[]){
   const a=atr(c,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005,rangeHeight*.75);
-  return selectStructuralTarget(c,direction,entry,{layers,minDistance});
+  return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:after,asOfTime:c[after]?.time??null});
 }
 export function evaluateBreakout({candles=[],layers=[],price}){
   const failures=[];
