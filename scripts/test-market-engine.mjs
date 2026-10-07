@@ -6,6 +6,7 @@ import {evaluateTopDown,TOP_DOWN_MODEL,executionOrderType} from '../server/marke
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
+import {gradeSetup} from '../server/market-engine/grading.js';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -255,6 +256,15 @@ assert('Protected structure is sourced from external swings',()=>(
 ) && (
   !structured.protectedHigh||structured.external.highs.some(x=>x.index===structured.protectedHigh.index)
 ));
+
+// Confidence audit: score structural quality only after the strategy contract passes.
+const strongConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'HTF_MAJOR_SWING',quality:1},confirmation:{quality:1},freshness:{quality:1}});
+const weakConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:false},entry:{anchorQuality:.8,executionQuality:.75},risk:{invalidationQuality:.8,geometryQuality:.8},target:{source:'EXECUTION_EXTERNAL_SWING',quality:.55},confirmation:{quality:.55},freshness:{quality:.35}});
+assert('Confidence model never treats R:R as an input',()=>!strongConfidence.confidenceEvidence.some(x=>String(x.type).includes('RR')));
+assert('Confidence model returns bounded structural quality',()=>strongConfidence.score>=0&&strongConfidence.score<=100&&weakConfidence.score>=0&&weakConfidence.score<=100);
+assert('Confidence model separates strong and weak structural quality',()=>strongConfidence.score>weakConfidence.score);
+assert('Confidence model does not hardcode an 88% ceiling',()=>strongConfidence.score!==88||weakConfidence.score===88);
+assert('Confidence model labels score as structural quality, not win probability',()=>strongConfidence.confidenceEvidence.some(x=>x.type==='CONFIDENCE_MODEL'&&x.interpretation==='structural quality, not win probability'));
 
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
