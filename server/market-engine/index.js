@@ -6,13 +6,13 @@ import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
 import {noTrade} from './grading.js';
 
-const BYBIT={'15m':'15','30m':'30','1H':'60','2H':'120','4H':'240'};
+const BYBIT={'15m':'15','30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
 const CHAIN={
   '15m':['4H','2H','1H','30m','15m'],
   '30m':['4H','2H','1H','30m'],
   '1H':['4H','2H','1H'],
   '2H':['4H','2H'],
-  '4H':['4H']
+  '4H':['1D','4H']
 };
 
 function json(res,status,p){
