@@ -37,9 +37,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
     <div className="live-market page-wrap">
       <div className="live-market-head">
         <div>
-          <span className="tiny-label">INTELLIGENCE LAYER</span>
           <h2>Market analysis</h2>
-          <p>Live market data, multi-timeframe structure and a strategy-specific setup engine.</p>
         </div>
         <span className="live-readonly"><ScanSearch size={13}/> READ ONLY</span>
       </div>
@@ -47,11 +45,11 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
       <MarketWatchlist market={market} symbol={pair} onSelect={(next)=>setPair(next)}/>
 
       <section className="live-market-card">
-        <div className="live-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" className="active">CRYPTO PERPETUALS</button></div>
+        <div className="live-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" className="active">PERPETUALS</button></div>
 
         <div className="live-controls">
           <label className="live-field market-picker">
-            <span>PERPETUAL</span>
+            <span>PAIR</span>
             <div className="instrument-picker">
               <button type="button" className="instrument-trigger" onClick={()=>setPickerOpen(v=>!v)} aria-expanded={pickerOpen}>
                 <b>{pair||'Select pair'}</b><ChevronDown className={pickerOpen?'open':''}/>
@@ -81,7 +79,7 @@ export default function LiveMarketPage(){const market='perpetual';const [pair,se
           </label>
 
           <label className="live-field timeframe">
-            <span>EXECUTION TIMEFRAME</span>
+            <span>EXECUTION</span>
             <div>
               <select value={timeframe} onChange={e=>setTimeframe(e.target.value)}>{TIMEFRAMES.map(x=><option key={x} value={x}>{x}</option>)}</select>
               <ChevronDown/>
