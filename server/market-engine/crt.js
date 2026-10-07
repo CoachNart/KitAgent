@@ -1,5 +1,5 @@
 import {atr,bodyRatio,rangeAverage} from './data.js';
-import {confirmedSwings} from './structure.js';
+import {confirmedSwings,selectStructuralTarget} from './structure.js';
 
 export const CRT_MODEL='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST';
 
@@ -104,18 +104,17 @@ function retest(c,mss,direction){
   return null;
 }
 
-function target(range,direction,c,entry,mssIndex){
+function target(range,direction,c,entry,mssIndex,layers=[]){
   const primary=direction==='BULLISH'?range.high:range.low;
-  if(direction==='BULLISH'&&primary>entry)return{price:primary,source:'CRT_OPPOSITE_EXTREME'};
-  if(direction==='BEARISH'&&primary<entry)return{price:primary,source:'CRT_OPPOSITE_EXTREME'};
-
-  const s=confirmedSwings(c,2);
-  const xs=direction==='BULLISH'
-    ?s.highs.filter(x=>x.index>mssIndex&&x.price>entry).sort((a,b)=>a.index-b.index)
-    :s.lows.filter(x=>x.index>mssIndex&&x.price<entry).sort((a,b)=>a.index-b.index);
-  return xs[0]?{price:xs[0].price,index:xs[0].index,source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
+  const a=atr(c,14)||0;
+  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  if((direction==='BULLISH'&&primary>entry)||(direction==='BEARISH'&&primary<entry)){
+    if(Math.abs(primary-entry)>=minDistance)
+      return{price:primary,source:'CRT_OPPOSITE_EXTREME',index:-1};
+  }
+  const selected=selectStructuralTarget(c,direction,entry,{layers,minDistance});
+  return selected?{price:selected.price,index:selected.index,source:selected.source,quality:selected.quality,pool:selected.pool}:null;
 }
-
 function grade({bias,range,sweep,mss,rt,rr}){
   let score=0;
   score+=bias?30:0;
@@ -182,18 +181,7 @@ export function evaluateCRT({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
 
-  const aTarget=atr(candles,14)||0;
-  const minTargetDistance=Math.max(aTarget*1.25,Math.abs(entry)*.004);
-  let tgt=target(range,direction,candles,entry,mss.index);
-  if(tgt&&Math.abs(tgt.price-entry)<minTargetDistance){
-    const s=confirmedSwings(candles,3);
-    const xs=(direction==='BULLISH'?s.highs:s.lows)
-      .filter(x=>x.index>mss.index)
-      .filter(x=>direction==='BULLISH'?x.price>entry:x.price<entry)
-      .filter(x=>Math.abs(x.price-entry)>=minTargetDistance)
-      .sort((a,b)=>direction==='BULLISH'?a.price-b.price:b.price-a.price);
-    tgt=xs[0]?{price:xs[0].price,index:xs[0].index,source:'EXTERNAL_STRUCTURAL_TARGET'}:null;
-  }
+  const tgt=target(range,direction,candles,entry,mss.index,layers);
   if(!tgt){
     failures.push('No meaningful opposing CRT or external structural target is available.');
     return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'MSS',...mss}]};
