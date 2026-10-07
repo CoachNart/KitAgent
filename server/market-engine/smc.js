@@ -78,6 +78,11 @@ export function evaluateSMC({candles,layers,price}){
   if(c.length<40)return{direction:'NEUTRAL',failures:['Insufficient execution candles for SMC.'],evidence:[]};
   const ordered=(layers||[]).filter(Boolean),htf=ordered[0]?.structure,htfDirection=htf?.direction||'NEUTRAL';
   if(!['BULLISH','BEARISH'].includes(htfDirection)){failures.push('Higher-timeframe structure is not directional.');return{direction:'NEUTRAL',failures,evidence:[]};}
+  const contextDirections=ordered.slice(0,-1).map(x=>x?.structure?.direction).filter(x=>x==='BULLISH'||x==='BEARISH');
+  if(contextDirections.some(x=>x!==htfDirection)){
+    failures.push('Higher-timeframe structure conflicts with the primary SMC bias.');
+    return{direction:'NEUTRAL',failures,evidence:[]};
+  }
   const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=16);
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[]};}
   const sweep=sweeps.at(-1),mss=swingBreakAfter(c,sweep.index,c.length-1,direction);
