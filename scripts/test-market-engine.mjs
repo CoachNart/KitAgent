@@ -169,6 +169,7 @@ const brNoLevel=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{
 assert('Breakout & Retest requires a defined multi-touch level',()=>brNoLevel.direction==='BULLISH'&&brNoLevel.failures.some(x=>x.includes('level')));
 assert('Breakout & Retest routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'BREAKOUT',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed&&Array.isArray(routed.failures)&&routed.direction==='BULLISH';});
 assert('Strategy registry contains only the six retained strategies',()=>Object.keys(STRATEGIES).sort().join(',')==='BREAKOUT,CRT,MSNR,PULLBACK,SMC,TOP_DOWN');
+assert('2R gate is absent from the market-engine regression suite',()=>!s.includes('>=2R')&&!s.includes('at least 2R'));
 // CRT contract: HTF anchor range -> one-sided sweep/reclaim -> LTF MSS/displacement -> retest -> opposite range target.
 const crtBase=Array.from({length:50},(_,i)=>bar(i,102+i*.02,103+i*.02,101.8+i*.02,102.5+i*.02));
 const crtExecution=crtBase.map((x,i)=>i<16?x:{
@@ -212,7 +213,7 @@ assert('CRT requires lower-timeframe MSS before entry',()=>{
   return !r.tradeReady&&r.failures.length>0;
 });
 assert('CRT stop is beyond the sweep extreme',()=>crtValid.trade.stop<98.5);
-assert('CRT targets the opposite CRT extreme when it provides >=2R',()=>crtValid.trade.target===116&&crtValid.trade.rr>=2);
+assert('CRT targets the meaningful opposite CRT extreme without an RR gate',()=>crtValid.trade.target===116&&crtValid.trade.rr>0);
 assert('CRT routes through its own evaluator',()=>{
   const routed=evaluateStrategy({strategy:'CRT',layers:crtLayers,execution:{candles:crtExecution},price:103});
   return routed.tradeReady===true&&routed.crt?.model===CRT_MODEL;
