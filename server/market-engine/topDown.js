@@ -87,7 +87,7 @@ function trade({c,bos,retestPoint,direction,price,targetSwing}){
   };
 }
 
-function scoreSetup({layers,bos,retestPoint,price,entry,target,candles}){
+function scoreSetup({layers,bos,retestPoint,price,entry,target,rr,candles}){
   const a=atr(candles,14)||0;
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const distance=Math.abs(price-entry);
@@ -96,7 +96,7 @@ function scoreSetup({layers,bos,retestPoint,price,entry,target,candles}){
     context:{aligned:!!htfBias(layers),trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
     entry:{anchorQuality:1,executionQuality:distance<=tolerance?1:.75},
     risk:{invalidationQuality:1,geometryQuality:1},
-    target,
+    target:{...target,rr},
     confirmation:{quality:Math.min(1,ageQuality(bos.age,2,5)*.55+ageQuality(retestPoint.age,1,4)*.45)},
     freshness:{quality:Math.min(ageQuality(bos.age,2,5),ageQuality(retestPoint.age,1,4))}
   });
@@ -128,7 +128,7 @@ export function evaluateTopDown({candles,layers,price}){
     if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))continue;
     const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
     if(!tradeResult)continue;
-    const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,candles:c});
+    const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,rr:tradeResult.rr,candles:c});
     selected={bos,rt,entry,targetSwing,tradeResult,scored};
     break;
   }
