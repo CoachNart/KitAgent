@@ -138,8 +138,9 @@ assert('SMC liquidity sweep detector only accepts sweep plus reclaim',()=>findSw
 const smcConflict=evaluateSMC({candles:smcCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'15m',structure:{direction:'BULLISH'}}],price:108.9});
 assert('SMC rejects conflicting higher-timeframe bias',()=>smcConflict.direction==='NEUTRAL'&&smcConflict.failures.some(x=>x.includes('conflicts')));
 
-const smcNoSweep=evaluateSMC({candles:smcCandles,layers:smcLayers,price:108.9});
-assert('SMC refuses a setup when the required sequence is incomplete',()=>Array.isArray(smcNoSweep.failures)&&smcNoSweep.direction==='BULLISH');
+const smcIncompleteCandles=smcCandles.map((x,i)=>i===42?bar(42,106.3,107.1,105.0,106.0):x);
+const smcNoSweep=evaluateSMC({candles:smcIncompleteCandles,layers:smcLayers,price:108.9});
+assert('SMC refuses a setup when the required sequence is incomplete',()=>Array.isArray(smcNoSweep.failures)&&smcNoSweep.direction==='BULLISH'&&!smcNoSweep.trade);
 assert('SMC routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'SMC',layers:smcLayers,execution:{candles:smcCandles},price:108.9});return routed&&routed.smc?.model==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG'||routed.failures?.length>0;});
 
 // Top-Down contract: aligned HTF direction -> execution BOS -> retest/hold -> structural target.
