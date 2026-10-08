@@ -84,15 +84,28 @@ export function evaluateSMC({candles,layers,price}){
   }
   const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=16);
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[]};}
-  const sweep=sweeps.at(-1),mss=swingBreakAfter(c,sweep.index,c.length-1,direction);
-  if(!mss){failures.push('Liquidity was swept, but no post-sweep market-structure shift was confirmed.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep}]};}
-  if(mss.index-sweep.index>10){failures.push('Market-structure shift occurred too late after the liquidity sweep.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep}]};}
-  const displacement=meaningfulDisplacement(c,mss.index,direction);
-  if(!displacement){failures.push('MSS was not produced by meaningful displacement.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss}]};}
-  const fvg=fvgAt(c,mss.index+1)?.direction===direction?fvgAt(c,mss.index+1):fvgAt(c,mss.index)?.direction===direction?fvgAt(c,mss.index):null;
-  if(!fvg||fvg.createdBy!==mss.index||!freshFvg(c,fvg,c.length-1)){failures.push('The MSS displacement did not leave a fresh FVG for retracement.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement}]};}
-  const range=dealingRange(c,mss.index);
-  if(!range||(direction==='BULLISH'?fvg.midpoint>range.equilibrium:fvg.midpoint<range.equilibrium)){failures.push(direction==='BULLISH'?'Bullish FVG is not in discount.':'Bearish FVG is not in premium.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
+
+  let selected=null;
+  for(const sweepCandidate of sweeps.slice().reverse()){
+    const mssCandidate=swingBreakAfter(c,sweepCandidate.index,c.length-1,direction);
+    if(!mssCandidate||mssCandidate.index-sweepCandidate.index>10)continue;
+    const displacementCandidate=meaningfulDisplacement(c,mssCandidate.index,direction);
+    if(!displacementCandidate)continue;
+    const fvgCandidate=fvgAt(c,mssCandidate.index+1)?.direction===direction
+      ?fvgAt(c,mssCandidate.index+1)
+      :fvgAt(c,mssCandidate.index)?.direction===direction?fvgAt(c,mssCandidate.index):null;
+    if(!fvgCandidate||fvgCandidate.createdBy!==mssCandidate.index||!freshFvg(c,fvgCandidate,c.length-1))continue;
+    const rangeCandidate=dealingRange(c,mssCandidate.index);
+    if(!rangeCandidate||(direction==='BULLISH'?fvgCandidate.midpoint>rangeCandidate.equilibrium:fvgCandidate.midpoint<rangeCandidate.equilibrium))continue;
+    selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:rangeCandidate};
+    break;
+  }
+  if(!selected){
+    failures.push('No recent liquidity sweep completed the full MSS, displacement, and fresh FVG sequence.');
+    return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP_CANDIDATES',count:sweeps.length}]};
+  }
+
+  const {sweep,mss,displacement,fvg,range}=selected;
   if(!Number.isFinite(price)||price<=0){failures.push('Live price is unavailable.');return{direction,failures,evidence:[]};}
   const target=nextLiquidityTarget(c,direction,fvg.midpoint,fvg.index,ordered);
   if(!target||!Number.isFinite(target.price)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[]};}
