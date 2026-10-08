@@ -220,7 +220,7 @@ assert('CRT requires lower-timeframe MSS before entry',()=>{
   return !r.tradeReady&&r.failures.length>0;
 });
 assert('CRT stop is beyond the sweep extreme',()=>crtValid.trade.stop<98.5);
-assert('CRT targets the meaningful opposite CRT extreme without an RR gate',()=>crtValid.trade.target===116&&crtValid.trade.rr>0);
+assert('CRT targets the meaningful opposite CRT extreme and clears the 2R floor',()=>crtValid.trade.target===116&&crtValid.trade.rr>=2);
 assert('CRT routes through its own evaluator',()=>{
   const routed=evaluateStrategy({strategy:'CRT',layers:crtLayers,execution:{candles:crtExecution},price:103});
   return routed.tradeReady===true&&routed.crt?.model===CRT_MODEL;
@@ -285,10 +285,12 @@ const geoCandles=Array.from({length:60},(_,i)=>bar(i,100,101.25,98.75,100.5));
 const goodGeometry=validateTradeGeometry({trade:{entry:100,stop:99,target:104},direction:'BULLISH',candles:geoCandles});
 const tightGeometry=validateTradeGeometry({trade:{entry:100,stop:99.9,target:103},direction:'BULLISH',candles:geoCandles});
 const poorReward=validateTradeGeometry({trade:{entry:100,stop:98,target:101},direction:'BULLISH',candles:geoCandles});
-const subOneR=validateTradeGeometry({trade:{entry:100,stop:96,target:103.5},direction:'BULLISH',candles:geoCandles});
+const exactlyTwoR=validateTradeGeometry({trade:{entry:100,stop:98,target:104},direction:'BULLISH',candles:geoCandles});
+const subTwoR=validateTradeGeometry({trade:{entry:100,stop:96,target:103.5},direction:'BULLISH',candles:geoCandles});
 const wideGeometry=validateTradeGeometry({trade:{entry:100,stop:91,target:105},direction:'BULLISH',candles:geoCandles});
 assert('Trade Geometry Contract accepts structurally distant target geometry',goodGeometry.valid);
-assert('Trade Geometry Contract does not gate on R:R when target distance is structurally meaningful',()=>subOneR.valid&&subOneR.metrics.rr<1);
+assert('Trade Geometry Contract accepts exactly 2R',()=>exactlyTwoR.valid&&exactlyTwoR.metrics.rr===2);
+assert('Trade Geometry Contract rejects anything below 2R',()=>!subTwoR.valid&&subTwoR.failures.some(x=>x.includes('Minimum executable R:R')));
 assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('execution noise')));
 assert('Trade Geometry Contract rejects targets that are too close to the entry',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('too close')));
 assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
