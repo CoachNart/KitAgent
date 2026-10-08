@@ -40,8 +40,8 @@ function opportunityQuality(target={}){
 }
 
 // Confidence is a structural quality score, not a statistical win probability.
-// A-D (setup, entry, risk, target) are prerequisites. Only E-quality/confluence
-// differentiates a setup after those contracts pass. R:R is deliberately absent.
+// Trade economics are part of the delivery decision: a setup must have a
+// meaningful structural objective and at least 1.8R before it can be graded.
 export function gradeSetup({strategy,context={},entry={},risk={},target={},confirmation={},freshness={}}={}){
   const contextScore=15*clamp(context.aligned?1:0)*(context.trend?1:.72);
   const entryScore=25*(clamp(entry.anchorQuality)*.65+clamp(entry.executionQuality)*.35);
