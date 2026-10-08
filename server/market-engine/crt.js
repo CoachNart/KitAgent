@@ -128,7 +128,7 @@ function target(range,direction,c,entry,mssIndex,layers=[]){
   const selected=selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:mssIndex,asOfTime:c[mssIndex]?.time??null});
   return selected?{price:selected.price,index:selected.index,source:selected.source,quality:selected.quality,pool:selected.pool}:null;
 }
-function grade({range,sweep,mss,rt,tgt,live,entry,a}){const distance=Math.abs(live-entry);const tolerance=Math.max(a*.45,Math.abs(entry)*.0015);return gradeSetup({strategy:'CRT',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:distance<=tolerance?1:.82},risk:{invalidationQuality:1,geometryQuality:.95},target:tgt,confirmation:{quality:.92},freshness:{quality:.9}});}
+function grade({range,sweep,mss,rt,tgt,live,entry,a,rr}){const distance=Math.abs(live-entry);const tolerance=Math.max(a*.45,Math.abs(entry)*.0015);return gradeSetup({strategy:'CRT',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:distance<=tolerance?1:.82},risk:{invalidationQuality:1,geometryQuality:.95},target:{...tgt,rr},confirmation:{quality:.92},freshness:{quality:.9}});}
 
 export function evaluateCRT({candles=[],layers=[],price}){
   const failures=[];
@@ -209,7 +209,7 @@ export function evaluateCRT({candles=[],layers=[],price}){
     ?live<=entry+a*.3?'MARKET':'LIMIT'
     :live>=entry-a*.3?'MARKET':'LIMIT';
 
-  const g=grade({range,sweep,mss,rt,tgt,live,entry,a});
+  const g=grade({range,sweep,mss,rt,tgt,live,entry,a,rr});
   if(g.grade==='NO-TRADE'){
     failures.push('CRT confluence is below the executable A-grade threshold.');
     return {direction,failures,evidence:[],grade:g};
