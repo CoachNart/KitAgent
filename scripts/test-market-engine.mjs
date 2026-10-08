@@ -219,6 +219,11 @@ assert('CRT requires lower-timeframe MSS before entry',()=>{
   const r=evaluateCRT({candles:noMss,layers:crtLayers,price:103});
   return !r.tradeReady&&r.failures.length>0;
 });
+assert('CRT rejects a trivial lower-timeframe boundary poke as a sweep',()=>{
+  const noisy=crtExecution.map((x,i)=>i===16?bar(16,100.1,100.4,99.9,100.2):x);
+  const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
+  return !r.tradeReady&&r.failures.some(x=>x.includes('No recent completed CRT range'));
+});
 assert('CRT stop is beyond the sweep extreme',()=>crtValid.trade.stop<98.5);
 assert('CRT targets the meaningful opposite CRT extreme and clears the 2R floor',()=>crtValid.trade.target===116&&crtValid.trade.rr>=2);
 assert('CRT routes through its own evaluator',()=>{
