@@ -1,4 +1,4 @@
-import {atr} from './data.js';
+import {atr,bodyRatio} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
 import {gradeSetup} from './grading.js';
 
@@ -39,7 +39,11 @@ function retest(c,bos,direction){
     const x=c[i];
     const touched=direction==='BULLISH'?x.low<=bos.level:x.high>=bos.level;
     const held=direction==='BULLISH'?x.close>bos.level:x.close<bos.level;
-    if(touched&&held)points.push({index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i});
+    if(touched&&held&&bodyRatio(x)>=.35&&(
+      direction==='BULLISH'
+        ? x.close>=x.low+(x.high-x.low)*.6
+        : x.close<=x.high-(x.high-x.low)*.6
+    ))points.push({index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i,bodyRatio:bodyRatio(x)});
   }
   return points.at(-1)||null;
 }
