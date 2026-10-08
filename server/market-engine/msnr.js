@@ -314,12 +314,15 @@ export function evaluateMSNR({candles,layers,price}){
       candidates.push({event,level,direction,context,entry:price,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'MSNR confirmation is stale: live price moved too far from the confirmation close.'});
       continue;
     }
-    const entry=price;
-    if(direction==='BULLISH'&&entry<=level.zoneHigh){
+    // Entry is anchored to the actual confirmed MSNR zone. The live quote is
+    // used only to decide whether that zone is still executable, never to invent
+    // an entry somewhere away from the level.
+    const entry=direction==='BULLISH'?level.zoneHigh:level.zoneLow;
+    if(direction==='BULLISH'&&price<=level.zoneHigh){
       candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'Live price is no longer above the confirmed MSNR support level.'});
       continue;
     }
-    if(direction==='BEARISH'&&entry>=level.zoneLow){
+    if(direction==='BEARISH'&&price>=level.zoneLow){
       candidates.push({event,level,direction,context,entry,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'Live price is no longer below the confirmed MSNR resistance level.'});
       continue;
     }
@@ -370,7 +373,9 @@ export function evaluateMSNR({candles,layers,price}){
       event,level,direction,context,entry,stop,target,rr,grade:g,
       trade:{
         entry,stop,target:target.level,risk,reward,rr,
-        orderType:'MARKET',
+        orderType:direction==='BULLISH'?(price-entry<=Math.max(a*.35,Math.abs(entry)*.0015)?'MARKET':'LIMIT'):(entry-price<=Math.max(a*.35,Math.abs(entry)*.0015)?'MARKET':'LIMIT'),
+        entryZone:{low:level.zoneLow,high:level.zoneHigh,source:'MSNR_CONFIRMED_LEVEL'},
+        invalidationPrice:invalidation,
         marketEntry:price,
         entryReason:`${event.type} at fresh ${level.type} ${level.side} level; the confirmation candle closed with its full body on the ${direction==='BULLISH'?'support':'resistance'} side and live price remains executable.`,
         invalidation:invalidation,
