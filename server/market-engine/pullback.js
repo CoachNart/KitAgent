@@ -166,7 +166,9 @@ export function evaluatePullback({candles=[],layers=[],price}){
     freshness:{quality:.85}
   });
   const trade={
-    entry,marketEntry:live,stop,target:target.price,risk,reward,rr,orderType,\n    entryZone:{low:confirm.level-a*.35,high:confirm.level+a*.35,source:'CONTINUATION_BREAK_LEVEL'},\n    invalidationPrice:direction==='BULLISH'?Math.min(touch.candle.low,pullbackLow):Math.max(touch.candle.high,pullbackHigh),
+    entry,marketEntry:live,stop,target:target.price,risk,reward,rr,orderType,
+    entryZone:{low:confirm.level-a*.35,high:confirm.level+a*.35,source:'CONTINUATION_BREAK_LEVEL'},
+    invalidationPrice:direction==='BULLISH'?Math.min(touch.candle.low,pullbackLow):Math.max(touch.candle.high,pullbackHigh),
     entryReason:'HTF trend aligned with a recent confirmed impulse; price retraced into the value zone and a decisive closed candle broke the post-touch pullback range.',
     invalidation:protectedInvalid,
     invalidationSource:'impulse_origin_structural_invalidation',
