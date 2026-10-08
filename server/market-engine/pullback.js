@@ -1,4 +1,4 @@
-import {atr} from './data.js';
+import {atr,bodyRatio} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
 import {gradeSetup} from './grading.js';
 
@@ -6,6 +6,13 @@ export const PULLBACK_MODEL='HTF_TREND_IMPULSE_RETRACE_CONTINUATION';
 
 const validDir=d=>d==='BULLISH'||d==='BEARISH';
 const last=a=>a?.at(-1)||null;
+
+// A pullback is a continuation pattern, not a generic retracement anywhere
+// inside an old trend. Keep the structural sequence recent enough to remain
+// one coherent setup.
+const MAX_IMPULSE_AGE=32;
+const MAX_RETRACEMENT_BARS=20;
+const MIN_IMPULSE_ATR=1.25;
 
 function alignedDirection(layers=[]){
   const dirs=layers.slice(0,-1).map(x=>x?.structure?.direction).filter(validDir);
@@ -17,14 +24,21 @@ function alignedDirection(layers=[]){
 
 function impulse(c,direction){
   const s=confirmedSwings(c,2);
+  const a=atr(c,14)||0;
   if(direction==='BULLISH'){
     const h=last(s.highs),prevL=s.lows.filter(x=>x.index<h?.index).at(-1);
     if(!h||!prevL)return null;
-    return {direction,start:prevL,end:h,move:h.price-prevL.price};
+    const move=h.price-prevL.price;
+    const age=c.length-1-h.confirmationIndex;
+    if(!(move>0)||age>MAX_IMPULSE_AGE||(a>0&&move<a*MIN_IMPULSE_ATR))return null;
+    return {direction,start:prevL,end:h,move,age};
   }
   const l=last(s.lows),prevH=s.highs.filter(x=>x.index<l?.index).at(-1);
   if(!l||!prevH)return null;
-  return {direction,start:prevH,end:l,move:prevH.price-l.price};
+  const move=prevH.price-l.price;
+  const age=c.length-1-l.confirmationIndex;
+  if(!(move>0)||age>MAX_IMPULSE_AGE||(a>0&&move<a*MIN_IMPULSE_ATR))return null;
+  return {direction,start:prevH,end:l,move,age};
 }
 
 function retracementZone(move,direction){
@@ -35,23 +49,32 @@ function retracementZone(move,direction){
 }
 
 function pullbackTouches(c,zone,from){
-  for(let i=Math.max(from+1,0);i<c.length;i++){
+  const touches=[];
+  const end=Math.min(c.length-2,from+MAX_RETRACEMENT_BARS);
+  for(let i=Math.max(from+1,0);i<=end;i++){
     const x=c[i];
-    if(x.low<=zone.high&&x.high>=zone.low)return {index:i,candle:x};
+    if(x.low<=zone.high&&x.high>=zone.low)touches.push({index:i,candle:x});
   }
-  return null;
+  // Prefer the most recent valid touch. This prevents an early touch from
+  // remaining active while the market spends many candles forming a different
+  // structure before the eventual continuation break.
+  return touches.reverse();
 }
 
 function confirmation(c,touch,direction){
-  if(!touch)return null;
+  if(!touch||touch.index>=c.length-2)return null;
   const x=c.at(-1);
-  if(!x||touch.index>=c.length-1||x.time<=touch.candle.time)return null;
+  if(!x||x.time<=touch.candle.time)return null;
   const prior=c.slice(touch.index+1,c.length-1);
-  if(!prior.length)return null;
+  if(prior.length<2||prior.length>MAX_RETRACEMENT_BARS)return null;
   const pullHigh=Math.max(...prior.map(k=>k.high));
   const pullLow=Math.min(...prior.map(k=>k.low));
-  if(direction==='BULLISH'&&x.close>pullHigh)return {index:c.length-1,type:'CONTINUATION_BREAK',level:pullHigh,candle:x};
-  if(direction==='BEARISH'&&x.close<pullLow)return {index:c.length-1,type:'CONTINUATION_BREAK',level:pullLow,candle:x};
+  const r=x.high-x.low;
+  if(!(r>0)||bodyRatio(x)<.5)return null;
+  if(direction==='BULLISH'&&x.close>pullHigh&&x.close>=x.high-r*.25)
+    return {index:c.length-1,type:'CONTINUATION_BREAK',level:pullHigh,candle:x};
+  if(direction==='BEARISH'&&x.close<pullLow&&x.close<=x.low+r*.25)
+    return {index:c.length-1,type:'CONTINUATION_BREAK',level:pullLow,candle:x};
   return null;
 }
 
@@ -64,6 +87,7 @@ function nextTarget(c,direction,entry,move,after,layers=[]){
   if(native&&Math.abs(native.price-entry)>=minDistance)return native;
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:after,asOfTime:c[after]?.time??null});
 }
+
 export function evaluatePullback({candles=[],layers=[],price}){
   const failures=[];
   if(!Array.isArray(candles)||candles.length<40)return {direction:'NEUTRAL',failures:['Insufficient execution candles.'],evidence:[]};
@@ -74,13 +98,18 @@ export function evaluatePullback({candles=[],layers=[],price}){
   }
   const move=impulse(candles,direction);
   if(!move||!(move.move>0)){
-    failures.push('No confirmed directional impulse with a protected swing.');
+    failures.push('No recent confirmed directional impulse with sufficient displacement.');
     return {direction,failures,evidence:[]};
   }
   const zone=retracementZone(move,direction);
-  const touch=pullbackTouches(candles,zone,move.end.index);
+  const touches=pullbackTouches(candles,zone,move.end.index);
+  let touch=null,confirm=null;
+  for(const candidate of touches){
+    const cfm=confirmation(candles,candidate,direction);
+    if(cfm){touch=candidate;confirm=cfm;break;}
+  }
   if(!touch){
-    failures.push('Price has not retraced into the 38.2%-61.8% value zone.');
+    failures.push('No recent 38.2%-61.8% retracement followed by a closed continuation break.');
     return {direction,failures,evidence:[{type:'IMPULSE',...move},{type:'RETRACEMENT_ZONE',...zone}]};
   }
   const protectedInvalid=move.start.price;
@@ -91,11 +120,6 @@ export function evaluatePullback({candles=[],layers=[],price}){
     failures.push('Pullback broke the impulse origin; continuation thesis is invalid.');
     return {direction,failures,evidence:[{type:'IMPULSE',...move},{type:'RETRACEMENT_ZONE',...zone},{type:'PULLBACK_TOUCH',...touch}]};
   }
-  const confirm=confirmation(candles,touch,direction);
-  if(!confirm){
-    failures.push('No closed continuation break after the pullback.');
-    return {direction,failures,evidence:[{type:'IMPULSE',...move},{type:'RETRACEMENT_ZONE',...zone},{type:'PULLBACK_TOUCH',...touch}]};
-  }
   const live=Number(price);
   if(!Number.isFinite(live)||live<=0){
     failures.push('Live price is unavailable.');
@@ -103,9 +127,8 @@ export function evaluatePullback({candles=[],layers=[],price}){
   }
   const entry=confirm.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
-  // The executable stop invalidates the retracement structure, not the entire
-  // impulse origin. The impulse origin remains a thesis-level failure check;
-  // anchoring the stop to it can create unrelated multi-ATR risk.
+  // Invalidation belongs beyond the actual retracement extreme. The impulse
+  // origin remains a thesis-level invalidation check, not the executable stop.
   const pullbackCandles=candles.slice(touch.index,confirm.index+1);
   const pullbackLow=Math.min(...pullbackCandles.map(x=>x.low));
   const pullbackHigh=Math.max(...pullbackCandles.map(x=>x.high));
@@ -144,7 +167,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   });
   const trade={
     entry,marketEntry:live,stop,target:target.price,risk,reward,rr,orderType,
-    entryReason:'HTF trend aligned with a confirmed impulse; price retraced into the value zone and the continuation break established the structural entry level.',
+    entryReason:'HTF trend aligned with a recent confirmed impulse; price retraced into the value zone and a decisive closed candle broke the post-touch pullback range.',
     invalidation:protectedInvalid,
     invalidationSource:'impulse_origin_structural_invalidation',
     targetSource:target.source||'STRUCTURAL_TARGET'
