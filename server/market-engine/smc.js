@@ -116,7 +116,7 @@ export function evaluateSMC({candles,layers,price}){
     context:{aligned:true,trend:true},
     entry:{anchorQuality:1,executionQuality:1},
     risk:{invalidationQuality:1,geometryQuality:1},
-    target,
+    target:{...target,rr:trade.rr},
     confirmation:{quality:Math.min(1,.55+(displacement.atrMultiple>=1.35?.25:.1))},
     freshness:{quality:Math.min(1,.45+ageQuality(sweep.age,4,10)*.35+Math.min(1,displacement.atrMultiple/1.5)*.2)}
   });
