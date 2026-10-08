@@ -1,5 +1,6 @@
 import {atr} from './data.js';
 const VALID_GRADES=['A+','A','B','C','NO-TRADE'];
+export const MIN_TRADE_RR=2;
 
 export function noTrade(failures=[]){
   return {
@@ -71,8 +72,10 @@ export function validateTradeGeometry({trade,direction,candles=[]}={}){
   // A stop inside normal execution noise is not a structural invalidation.
   // Use ATR rather than a fixed percentage so the rule scales by instrument.
   if(a>0&&risk<a*.35)failures.push('Stop is inside normal execution noise; invalidation is too tight for the market volatility.');
-  // Target distance is validated against market volatility, not against R:R.
-  // R:R remains an output/ranking metric; it must never be the structural gate.
+  // Every executable trade must offer at least 2R. A setup below this floor is
+  // not an acceptable risk/reward proposition, regardless of confidence grade.
+  if(!(rr>=MIN_TRADE_RR))failures.push(`Minimum executable R:R is 1:${MIN_TRADE_RR.toFixed(0)}; calculated R:R is 1:${rr.toFixed(2)}.`);
+  // Target distance is still validated against market volatility as a second structural check.
   if(a>0&&reward<Math.max(a,Math.abs(entry)*.0035))
     failures.push('Structural target is too close to the entry for the current market volatility.');
   // Conversely, an excessively wide stop relative to current volatility usually
