@@ -271,8 +271,8 @@ assert('Protected structure is sourced from external swings',()=>(
 ));
 
 // Confidence audit: score structural quality only after the strategy contract passes.
-const strongConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'HTF_MAJOR_SWING',quality:1},confirmation:{quality:1},freshness:{quality:1}});
-const weakConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:false},entry:{anchorQuality:.8,executionQuality:.75},risk:{invalidationQuality:.8,geometryQuality:.8},target:{source:'EXECUTION_EXTERNAL_SWING',quality:.55},confirmation:{quality:.55},freshness:{quality:.35}});
+const strongConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'HTF_MAJOR_SWING',quality:1,rr:2.5},confirmation:{quality:1},freshness:{quality:1}});
+const weakConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:false},entry:{anchorQuality:.8,executionQuality:.75},risk:{invalidationQuality:.8,geometryQuality:.8},target:{source:'EXECUTION_EXTERNAL_SWING',quality:.55,rr:1.9},confirmation:{quality:.55},freshness:{quality:.35}});
 assert('Confidence model never treats R:R as an input',()=>!strongConfidence.confidenceEvidence.some(x=>String(x.type).includes('RR')));
 assert('Confidence model returns bounded structural quality',()=>strongConfidence.score>=0&&strongConfidence.score<=100&&weakConfidence.score>=0&&weakConfidence.score<=100);
 assert('Confidence model separates strong and weak structural quality',()=>strongConfidence.score>weakConfidence.score);
@@ -314,6 +314,44 @@ try{
   assert('Scanner never publishes invalid directional geometry',()=>scannerSetups.every(x=>(x.bias==='LONG'&&x.stopLoss<x.entry&&x.takeProfit>x.entry)||(x.bias==='SHORT'&&x.stopLoss>x.entry&&x.takeProfit<x.entry)));
   assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['15m','30m','1H','2H','4H'].includes(x.timeframe)));
 }finally{globalThis.fetch=originalFetch;}
+// Structural trade audit: every retained strategy must publish an execution zone and
+// a numeric invalidation anchor so an SL cannot be generated from an arbitrary distance.
+assert('Trade Geometry Contract requires structural entry and invalidation metadata',()=>{
+  const long=validateTradeGeometry({
+    trade:{
+      entry:100,stop:98,target:105,
+      entryZone:{low:99.5,high:100.5},
+      invalidationPrice:98.5,
+      invalidationSource:'STRUCTURAL_SWING'
+    },
+    direction:'BULLISH',
+    candles:geoCandles
+  });
+  const randomStop=validateTradeGeometry({
+    trade:{
+      entry:100,stop:98.4,target:105,
+      entryZone:{low:99.5,high:100.5},
+      invalidationPrice:99,
+      invalidationSource:'STRUCTURAL_SWING'
+    },
+    direction:'BULLISH',
+    candles:geoCandles
+  });
+  const badEntry=validateTradeGeometry({
+    trade:{
+      entry:102,stop:98,target:108,
+      entryZone:{low:99.5,high:100.5},
+      invalidationPrice:98.5,
+      invalidationSource:'STRUCTURAL_SWING'
+    },
+    direction:'BULLISH',
+    candles:geoCandles
+  });
+  return long.valid &&
+    !randomStop.valid&&randomStop.failures.some(x=>x.includes('beyond the actual structural invalidation')) &&
+    !badEntry.valid&&badEntry.failures.some(x=>x.includes('outside the strategy-defined execution zone'));
+});
+
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
 if(failed.length)process.exit(1);
