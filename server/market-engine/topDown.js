@@ -78,7 +78,9 @@ function trade({c,bos,retestPoint,direction,price,targetSwing}){
   const orderType=executionOrderType({direction,entry,price,tolerance});
   if(!orderType)return null;
   return{
-    entry,marketEntry:price,stop,target:targetSwing.price,risk,reward,rr,orderType,\n    entryZone:{low:entry-tolerance,high:entry+tolerance,source:'BOS_RETEST_LEVEL'},\n    invalidationPrice:stopSwing.price,
+    entry,marketEntry:price,stop,target:targetSwing.price,risk,reward,rr,orderType,
+    entryZone:{low:entry-tolerance,high:entry+tolerance,source:'BOS_RETEST_LEVEL'},
+    invalidationPrice:stopSwing.price,
     entryReason:'HTF structure aligned; execution produced a confirmed BOS, price retested the broken structural level and held.',
     invalidation:'Beyond the confirmed structural swing that invalidates the continuation thesis, with a volatility buffer.',
     invalidationSource:'execution_structural_swing',
