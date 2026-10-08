@@ -172,6 +172,8 @@ export function evaluateBreakout({candles=[],layers=[],price}){
       entry,
       marketEntry:Number(price),
       stop,
+      entryZone:{low:level.level-rt.zone,high:level.level+rt.zone,source:'BREAKOUT_RETEST_LEVEL'},
+      invalidationPrice:direction==='BULLISH'?rt.candle.low:rt.candle.high,
       target:tgt.price,
       risk,
       reward,
