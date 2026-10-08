@@ -329,7 +329,7 @@ assert('Trade Geometry Contract requires structural entry and invalidation metad
   });
   const randomStop=validateTradeGeometry({
     trade:{
-      entry:100,stop:98.4,target:105,
+      entry:100,stop:99.2,target:105,
       entryZone:{low:99.5,high:100.5},
       invalidationPrice:99,
       invalidationSource:'STRUCTURAL_SWING'
