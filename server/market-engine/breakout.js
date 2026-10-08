@@ -42,7 +42,8 @@ function levelCluster(c,direction){
 
 function breakout(c,level,direction){
   const a=atr(c,14),avg=rangeAverage(c,20);
-  if(!a||!avg)return null;
+  if(!a||!avg)return [];
+  const events=[];
   for(let i=c.length-1;i>=Math.max(1,c.length-12);i--){
     const x=c[i],r=x.high-x.low;
     const body=bodyRatio(x);
@@ -53,9 +54,9 @@ function breakout(c,level,direction){
       const av=volumeAvg.reduce((s,v)=>s+v,0)/volumeAvg.length;
       if(!(x.volume>=av*1.1))continue;
     }
-    return {index:i,candle:x,level,bodyRatio:body,range:r,atrMultiple:r/a};
+    events.push({index:i,candle:x,level,bodyRatio:body,range:r,atrMultiple:r/a});
   }
-  return null;
+  return events;
 }
 
 function retest(c,br,direction){
@@ -110,28 +111,26 @@ export function evaluateBreakout({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
 
-  const br=breakout(candles,level.level,direction);
-  if(!br){
+  const breakoutCandidates=breakout(candles,level.level,direction);
+  if(!breakoutCandidates.length){
     failures.push('No decisive closed breakout beyond the defined level.');
     return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level}]};
   }
 
-  const rt=retest(candles,br,direction);
-  if(!rt){
-    failures.push('Breakout has not produced a timely retest.');
-    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'BREAKOUT',...br}]};
+  let selected=null;
+  for(const br of breakoutCandidates){
+    const rt=retest(candles,br,direction);
+    if(!rt||rt.failed)continue;
+    const confirm=continuation(candles,rt,direction);
+    if(!confirm)continue;
+    selected={br,rt,confirm};
+    break;
   }
-  if(rt.failed){
-    failures.push('Retest closed back through the broken level; breakout invalidated.');
-    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'BREAKOUT',...br},{type:'RETEST_FAILURE',...rt}]};
+  if(!selected){
+    failures.push('No recent breakout produced a complete retest-and-continuation sequence.');
+    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'BREAKOUT_CANDIDATES',count:breakoutCandidates.length}]};
   }
-
-  const confirm=continuation(candles,rt,direction);
-  if(!confirm){
-    failures.push('Retest held but has no closed continuation confirmation.');
-    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'BREAKOUT',...br},{type:'RETEST_HOLD',...rt}]};
-  }
-
+  const {br,rt,confirm}=selected;
   const entry=level.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
   const stop=direction==='BULLISH'
