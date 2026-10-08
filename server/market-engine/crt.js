@@ -14,20 +14,30 @@ function alignedHTFBias(layers=[]){
   return bias;
 }
 
-function rangeAnchor(layers=[]){
+function rangeAnchor(layers=[],direction,candles=[]){
   const htf=layers[0];
   if(!htf||!Array.isArray(htf.candles)||htf.candles.length<3)return null;
-  const anchor=htf.candles.at(-2);
-  const following=htf.candles.at(-1);
-  if(!anchor||!following||!(anchor.high>anchor.low))return null;
-  return {
-    tf:htf.tf,
-    anchor,
-    following,
-    high:anchor.high,
-    low:anchor.low,
-    midpoint:(anchor.high+anchor.low)/2
-  };
+  const lastPair=htf.candles.length-2;
+  const firstPair=Math.max(0,lastPair-7);
+  for(let i=lastPair;i>=firstPair;i--){
+    const anchor=htf.candles[i],following=htf.candles[i+1];
+    if(!anchor||!following||!(anchor.high>anchor.low))continue;
+    const range={
+      tf:htf.tf,
+      anchor,
+      following,
+      high:anchor.high,
+      low:anchor.low,
+      midpoint:(anchor.high+anchor.low)/2
+    };
+    const htfSweepResult=htfSweep(range,direction);
+    if(!htfSweepResult)continue;
+    const executionSweepResult=executionSweep(candles,range,direction);
+    if(!executionSweepResult)continue;
+    if(candles.length-1-executionSweepResult.index>48)continue;
+    return {...range,htfSweep:htfSweepResult,executionSweep:executionSweepResult};
+  }
+  return null;
 }
 
 function htfSweep(range,direction){
@@ -131,23 +141,14 @@ export function evaluateCRT({candles=[],layers=[],price}){
   if(!direction)
     return {direction:'NEUTRAL',failures:['Higher-timeframe directions do not agree on a CRT delivery direction.'],evidence:[]};
 
-  const range=rangeAnchor(layers);
+  const range=rangeAnchor(layers,direction,candles);
   if(!range){
-    failures.push('No valid higher-timeframe CRT anchor candle.');
+    failures.push('No recent completed CRT range has a valid higher-timeframe sweep/reclaim and lower-timeframe sweep.');
     return {direction,failures,evidence:[]};
   }
 
-  const htf=htfSweep(range,direction);
-  if(!htf){
-    failures.push('The next higher-timeframe candle did not sweep one CRT boundary and close back inside.');
-    return {direction,failures,evidence:[{type:'CRT_RANGE',...range}]};
-  }
-
-  const sweep=executionSweep(candles,range,direction);
-  if(!sweep){
-    failures.push('No lower-timeframe sweep/reclaim of the CRT boundary is confirmed.');
-    return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf}]};
-  }
+  const htf=range.htfSweep;
+  const sweep=range.executionSweep;
 
   const mss=mssAfterSweep(candles,sweep,direction);
   if(!mss){
