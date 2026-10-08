@@ -199,13 +199,18 @@ export function buildMSNRLevels(candles){
   return makeBaseLevels(candles).map(level=>trackLevel(level,candles));
 }
 
-export function latestMSNRConfirmations(candles){
+export function recentMSNRConfirmations(candles,maxAge=2){
   const levels=buildMSNRLevels(candles);
   const lastIndex=candles.length-1;
+  const floor=Math.max(0,lastIndex-Math.max(0,maxAge));
   return levels
     .flatMap(level=>level.confirmations.map(event=>({...event,levelState:level})))
-    .filter(event=>event.signalIndex===lastIndex)
-    .sort((a,b)=>b.levelState.originIndex-a.levelState.originIndex);
+    .filter(event=>event.signalIndex>=floor&&event.signalIndex<=lastIndex)
+    .sort((a,b)=>b.signalIndex-a.signalIndex||b.levelState.originIndex-a.levelState.originIndex);
+}
+
+export function latestMSNRConfirmations(candles){
+  return recentMSNRConfirmations(candles,0);
 }
 
 function levelStrength(type){
@@ -254,7 +259,7 @@ function gradeMSNR({level,event,context,target}){
 
 export function evaluateMSNR({candles,layers,price}){
   const levels=buildMSNRLevels(candles);
-  const events=latestMSNRConfirmations(candles);
+  const events=recentMSNRConfirmations(candles,2);
   const failures=[];
   if(!events.length)failures.push('No fresh MSNR confirmation candle at a live key level.');
   const liveExecutionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
@@ -304,7 +309,8 @@ export function evaluateMSNR({candles,layers,price}){
     const signalClose=event.signalCandle.close;
     const a=atr(candles,14)||Math.max(signalClose*.001,1e-9);
     const liveDrift=Math.abs(price-signalClose);
-    if(liveDrift>Math.max(a*.25,Math.abs(price)*.001)){
+    const confirmationAge=Math.max(0,candles.length-1-event.signalIndex);
+    if(liveDrift>Math.max(a*(.25+.12*confirmationAge),Math.abs(price)*.0015)){
       candidates.push({event,level,direction,context,entry:price,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'MSNR confirmation is stale: live price moved too far from the confirmation close.'});
       continue;
     }
