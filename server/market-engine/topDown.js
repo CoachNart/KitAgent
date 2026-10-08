@@ -23,13 +23,14 @@ function htfBias(layers){
 function executionBOS(c,direction){
   const s=confirmedSwings(c,1);
   const swings=direction==='BULLISH'?s.highs:s.lows;
+  const events=[];
   for(const sw of swings.slice().reverse()){
     for(let i=c.length-1;i>sw.confirmationIndex;i--){
-      if(direction==='BULLISH'&&c[i].close>sw.price)return{index:i,level:sw.price,swingIndex:sw.index,age:c.length-1-i};
-      if(direction==='BEARISH'&&c[i].close<sw.price)return{index:i,level:sw.price,swingIndex:sw.index,age:c.length-1-i};
+      if(direction==='BULLISH'&&c[i].close>sw.price){events.push({index:i,level:sw.price,swingIndex:sw.index,age:c.length-1-i});break;}
+      if(direction==='BEARISH'&&c[i].close<sw.price){events.push({index:i,level:sw.price,swingIndex:sw.index,age:c.length-1-i});break;}
     }
   }
-  return null;
+  return events.sort((a,b)=>a.index-b.index);
 }
 
 function retest(c,bos,direction){
@@ -113,21 +114,28 @@ export function evaluateTopDown({candles,layers,price}){
   if(c.length<40)return{direction:'NEUTRAL',failures:['Insufficient execution candles for Top-Down.'],evidence:[]};
   const direction=htfBias(layers);
   if(!direction)return{direction:'NEUTRAL',failures:['Higher-timeframe layers do not agree on a directional bias.'],evidence:[]};
-  const bos=executionBOS(c,direction);
-  if(!bos)return{direction,failures:['Execution timeframe has not confirmed a BOS in the higher-timeframe direction.'],evidence:[{type:'HTF_ALIGNMENT',direction}]};
-  const rt=retest(c,bos,direction);
-  if(!rt)return{direction,failures:['Execution BOS has not produced a valid retest-and-hold.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos}]};
+  const bosCandidates=executionBOS(c,direction);
+  if(!bosCandidates.length)return{direction,failures:['Execution timeframe has not confirmed a BOS in the higher-timeframe direction.'],evidence:[{type:'HTF_ALIGNMENT',direction}]};
   const a=atr(c,14);
   if(!Number.isFinite(price)||price<=0||!a)return{direction,failures:['Live price or execution volatility is unavailable.'],evidence:[]};
-  const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
-  if(rt.age>4)return{direction,failures:['The BOS retest is stale; a later price revisit is required.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
-  if(distance>tolerance)return{direction,failures:['Live price is no longer at the confirmed BOS retest level.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
-  const targetSwing=nextTarget(c,direction,rt.index,entry,layers);
-  if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))
-    return{direction,failures:['No meaningful continuation target is available beyond the retest.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt}]};
-  const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
-  if(!tradeResult)return{direction,failures:['Structural entry, invalidation, or meaningful target geometry is invalid.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS',...bos},{type:'RETEST',...rt},{type:'TARGET',price:targetSwing.price}]};
-  const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,candles:c});
+  let selected=null;
+  for(const bos of bosCandidates.slice().reverse()){
+    const rt=retest(c,bos,direction);
+    if(!rt||rt.failed||rt.age>4)continue;
+    const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
+    if(distance>tolerance)continue;
+    const targetSwing=nextTarget(c,direction,rt.index,entry,layers);
+    if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))continue;
+    const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
+    if(!tradeResult)continue;
+    const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,candles:c});
+    selected={bos,rt,entry,targetSwing,tradeResult,scored};
+    break;
+  }
+  if(!selected){
+    return{direction,failures:['No recent execution BOS produced a complete retest, executable entry, and meaningful structural target.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS_CANDIDATES',count:bosCandidates.length}]};
+  }
+  const {bos,rt,entry,targetSwing,tradeResult,scored}=selected;
   if(scored.score<78)return{direction,grade:{grade:'NO-TRADE',score:scored.score,hardFailures:['Top-Down confluence is insufficient for execution.']},failures:['Top-Down confluence is insufficient for execution.'],evidence:scored.evidence};
   return{
     direction,
