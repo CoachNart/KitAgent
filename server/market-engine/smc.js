@@ -5,6 +5,20 @@ import {gradeSetup} from './grading.js';
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
 export {fvgAt, meaningfulDisplacement, findSweeps};
+const MIN_SWEEP_PENETRATION_ATR=.15;
+const MIN_SWEEP_RECLAIM_ATR=.10;
+const MIN_SWEEP_RANGE_ATR=.60;
+const MIN_FVG_SIZE_ATR=.10;
+
+function sweepQuality(c,x,direction,level){
+  const a=atr(c,14);
+  const r=x?.high-x?.low;
+  if(!x||!a||!Number.isFinite(r)||r<=0)return null;
+  const penetration=direction==='BULLISH'?level-x.low:x.high-level;
+  const reclaim=direction==='BULLISH'?x.close-level:level-x.close;
+  if(penetration<a*MIN_SWEEP_PENETRATION_ATR||reclaim<a*MIN_SWEEP_RECLAIM_ATR||r<a*MIN_SWEEP_RANGE_ATR)return null;
+  return {penetration,penetrationATR:penetration/a,reclaimDepth:reclaim,reclaimDepthATR:reclaim/a,range:r,rangeATR:r/a};
+}
 function ageQuality(age,fresh,recent){if(!Number.isFinite(age))return 0;if(age<=fresh)return 1;if(age<=recent)return .7;if(age<=16)return .35;return 0;}
 
 function fvgAt(c,i){
@@ -37,9 +51,11 @@ function findSweeps(c,direction){
   for(const p of pools)for(let i=p.confirmationIndex;i<c.length;i++){
     const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price,reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
     if(swept&&reclaimed){
+      const quality=sweepQuality(c,x,direction,p.price);
+      if(!quality)continue;
       const extreme=direction==='BULLISH'?x.low:x.high;
       const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
-      if(stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i});
+      if(stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i,quality});
     }
   }
   return out.sort((a,b)=>a.index-b.index);
@@ -106,6 +122,8 @@ export function evaluateSMC({candles,layers,price}){
       ?fvgAt(c,mssCandidate.index+1)
       :fvgAt(c,mssCandidate.index)?.direction===direction?fvgAt(c,mssCandidate.index):null;
     if(!fvgCandidate||fvgCandidate.createdBy!==mssCandidate.index||!freshFvg(c,fvgCandidate,c.length-1))continue;
+    const fvgAtr=atr(c.slice(0,fvgCandidate.index+1),14);
+    if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
     const rangeCandidate=dealingRange(c,mssCandidate.index);
     if(!rangeCandidate||(direction==='BULLISH'?fvgCandidate.midpoint>rangeCandidate.equilibrium:fvgCandidate.midpoint<rangeCandidate.equilibrium))continue;
     selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:rangeCandidate};
@@ -128,7 +146,7 @@ export function evaluateSMC({candles,layers,price}){
     entry:{anchorQuality:1,executionQuality:1},
     risk:{invalidationQuality:1,geometryQuality:1},
     target:{...target,rr:trade.rr},
-    confirmation:{quality:Math.min(1,.55+(displacement.atrMultiple>=1.35?.25:.1))},
+    confirmation:{quality:Math.min(1,.5+(sweep.quality?.penetrationATR>=.35?.15:.08)+(displacement.atrMultiple>=1.35?.27:.12))},
     freshness:{quality:Math.min(1,.45+ageQuality(sweep.age,4,10)*.35+Math.min(1,displacement.atrMultiple/1.5)*.2)}
   });
   return{direction,grade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium}],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
