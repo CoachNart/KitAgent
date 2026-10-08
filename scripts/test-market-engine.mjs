@@ -222,6 +222,16 @@ assert('CRT requires lower-timeframe MSS before entry',()=>{
 assert('CRT rejects a trivial lower-timeframe boundary poke as a sweep',()=>{
   const noisy=crtExecution.map((x,i)=>i===16?bar(16,100.1,100.4,99.9,100.2):x);
   const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
+assert('CRT rejects a wick-only retest candle',()=>{
+  const noisy=crtExecution.map((x,i)=>i===22?bar(22,102.6,103,102.5,102.7):x);
+  const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
+  return !r.tradeReady;
+});
+assert('SMC market entries require a closed FVG interaction candle',()=>{
+  const source=`server/market-engine/smc.js`;
+  return source.includes('A MARKET entry requires a closed candle')&&source.includes('marketCandleQuality');
+});
+
   return !r.tradeReady&&r.failures.some(x=>x.includes('No recent completed CRT range'));
 });
 assert('CRT stop is beyond the sweep extreme',()=>crtValid.trade.stop<98.5);
