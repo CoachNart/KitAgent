@@ -61,7 +61,11 @@ function htfSweep(range,direction){
 function executionSweep(c,range,direction){
   const start=range.following.time;
   const eligible=c.filter(x=>x.time>=start);
-  for(let i=0;i<eligible.length;i++){
+  // A CRT range can produce more than one execution-timeframe sweep after the
+  // HTF reclaim. The first sweep may be stale while a later sweep is the one
+  // that actually precedes the current MSS/reversal sequence. Select the most
+  // recent confirmed sweep rather than letting an old sweep block the range.
+  for(let i=eligible.length-1;i>=0;i--){
     const x=eligible[i];
     const swept=direction==='BULLISH'
       ?x.low<range.low&&x.close>range.low
