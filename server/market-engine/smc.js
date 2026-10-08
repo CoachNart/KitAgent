@@ -94,6 +94,15 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   const near=Math.abs(price-entry)<=tolerance;
   const pendingDistance=Math.abs(price-entry);
   const pendingMax=Math.max(a,Math.abs(entry)*.003);
+  const last=c.at(-1);
+  const lastRange=last?.high-last?.low;
+  const fvgTouched=!!last&&last.low<=fvg.high&&last.high>=fvg.low;
+  const fvgHeld=direction==='BULLISH'?last?.close>fvg.midpoint:last?.close<fvg.midpoint;
+  const marketCandleQuality=!!last&&lastRange>0&&fvgTouched&&bodyRatio(last)>=.35&&fvgHeld;
+  // A MARKET entry requires a closed candle to actually interact with and
+  // hold the FVG. Without that, proximity to the midpoint is only a pending
+  // limit opportunity, not confirmation to enter immediately.
+  if(near&&!marketCandleQuality)return null;
   const orderType=near?'MARKET':direction==='BULLISH'?(price>entry&&pendingDistance<=pendingMax?'LIMIT':null):(price<entry&&pendingDistance<=pendingMax?'LIMIT':null);
   if(!orderType)return null;
   return{entry,marketEntry:price,stop,target,rr,orderType,
