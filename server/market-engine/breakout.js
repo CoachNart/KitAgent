@@ -81,8 +81,15 @@ function retest(c,br,direction){
       : x.high>=br.level-zone && x.low<=br.level+zone;
     if(!touched)continue;
     const held=direction==='BULLISH'?x.close>br.level:x.close<br.level;
+    const r=x.high-x.low;
+    const quality=r>0&&bodyRatio(x)>=.35&&(
+      direction==='BULLISH'
+        ? x.close>=x.low+r*.6
+        : x.close<=x.high-r*.6
+    );
     if(!held)return {failed:true,index:i,candle:x};
-    return {index:i,candle:x,zone,held:true};
+    if(!quality)continue;
+    return {index:i,candle:x,zone,held:true,bodyRatio:bodyRatio(x)};
   }
   return null;
 }
@@ -92,8 +99,14 @@ function continuation(c,rt,direction){
   for(let i=rt.index+1;i<c.length;i++){
     const x=c[i];
     const holds=direction==='BULLISH'?x.close>rt.candle.high:x.close<rt.candle.low;
-    if(holds){
-      return {index:i,candle:x,type:'RETEST_CONTINUATION',level:direction==='BULLISH'?rt.candle.high:rt.candle.low};
+    const r=x.high-x.low;
+    const quality=r>0&&bodyRatio(x)>=.45&&(
+      direction==='BULLISH'
+        ? x.close>=x.low+r*.7
+        : x.close<=x.high-r*.7
+    );
+    if(holds&&quality){
+      return {index:i,candle:x,type:'RETEST_CONTINUATION',level:direction==='BULLISH'?rt.candle.high:rt.candle.low,bodyRatio:bodyRatio(x)};
     }
     const failed=direction==='BULLISH'?x.close<=rt.candle.low:x.close>=rt.candle.high;
     if(failed)return null;
