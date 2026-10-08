@@ -51,7 +51,16 @@ function dealingRange(c,asOf){
 }
 function freshFvg(c,fvg,asOf){
   if(!fvg)return false;
-  for(let i=fvg.index+1;i<=asOf;i++){const x=c[i];if(fvg.direction==='BULLISH'&&x.low<=fvg.low)return false;if(fvg.direction==='BEARISH'&&x.high>=fvg.high)return false;}
+  // A valid FVG entry is expected to be the first controlled return into the
+  // gap. Treating any wick into the gap as "mitigated" made the entry contract
+  // self-contradictory: the strategy required a fresh FVG and then required
+  // price to enter that same FVG. The gap is invalidated only when price closes
+  // through its far boundary.
+  for(let i=fvg.index+1;i<=asOf;i++){
+    const x=c[i];
+    if(fvg.direction==='BULLISH'&&x.close<=fvg.low)return false;
+    if(fvg.direction==='BEARISH'&&x.close>=fvg.high)return false;
+  }
   return true;
 }
 function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
