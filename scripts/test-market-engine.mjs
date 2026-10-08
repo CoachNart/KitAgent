@@ -130,7 +130,7 @@ smcCandles[42]=bar(42,106.3,107.1,104.2,106.0);
 smcCandles[43]=bar(43,106.0,106.4,105.2,105.6);
 smcCandles[44]=bar(44,105.6,108.8,105.4,108.5);
 smcCandles[45]=bar(45,108.5,109.2,108.4,108.9);
-const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}}];
+const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}},{tf:'15m',candles:smcCandles,structure:{direction:'BULLISH'}}];
 assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG');
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
