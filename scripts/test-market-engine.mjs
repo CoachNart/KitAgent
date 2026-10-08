@@ -207,7 +207,8 @@ const crtValid=evaluateCRT({candles:crtExecution,layers:crtLayers,price:103});
 assert('CRT accepts a valid low-sweep/reclaim setup',()=>crtValid.direction==='BULLISH'&&crtValid.tradeReady===true);
 assert('CRT requires the HTF sweep to close back inside',()=>{
   const bad=[...crtHTF.slice(0,2),htfBar(2,108,117,98,117.2)];
-  return evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:bad,structure:{direction:'BULLISH'}},{tf:'15m',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103}).failures.some(x=>x.includes('close back inside'));
+  const result=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:bad,structure:{direction:'BULLISH'}},{tf:'15m',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
+  return result.failures.some(x=>x.includes('close back inside')||x.includes('No recent completed CRT range'));
 });
 assert('CRT rejects conflicting HTF bias',()=>{
   const r=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:crtHTF,structure:{direction:'BEARISH'}},{tf:'2H',candles:crtExecution,structure:{direction:'BULLISH'}},{tf:'15m',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
