@@ -145,8 +145,11 @@ function retest(c,mss,direction){
       :x.high>=mss.level&&x.low<=mss.level;
     if(!touched)continue;
     const held=direction==='BULLISH'?x.close>mss.level:x.close<mss.level;
+    const r=x.high-x.low;
+    const quality=r>0&&bodyRatio(x)>=.35;
     if(!held)return {failed:true,index:i,candle:x};
-    return {index:i,candle:x,entry:x.close,held:true};
+    if(!quality)continue;
+    return {index:i,candle:x,entry:x.close,held:true,bodyRatio:bodyRatio(x)};
   }
   return null;
 }
