@@ -16,6 +16,28 @@ function json(res,status,body){res.statusCode=status;res.setHeader('Content-Type
 function clean(value,max=500){return String(value??'').slice(0,max);}
 function toMs(v){if(!v)return NaN; if(typeof v==='number')return v; if(v?.toDate)return v.toDate().getTime(); const n=Date.parse(v); return Number.isFinite(n)?n:NaN;}
 function numberOrNull(value){const n=Number(value);return Number.isFinite(n)?n:null;}
+function setupFingerprint(s){
+  const n=v=>{const x=Number(v);return Number.isFinite(x)?x.toFixed(10):''};
+  return [
+    String(s?.market||'').toLowerCase(),
+    String(s?.symbol||'').replace(/[^A-Z0-9]/gi,'').toUpperCase(),
+    String(s?.strategy||'').toUpperCase(),
+    String(s?.direction||'').toUpperCase(),
+    n(s?.entry),
+    n(s?.limitEntry),
+    n(s?.stopLoss),
+    n(s?.takeProfit1)
+  ].join('|');
+}
+function dedupeSignals(signals){
+  const seen=new Set(),out=[];
+  for(const signal of signals){
+    const key=setupFingerprint(signal);
+    if(!key||seen.has(key))continue;
+    seen.add(key);out.push(signal);
+  }
+  return out;
+}
 
 export async function marketKlines(signal) {
   try {
@@ -151,15 +173,28 @@ export default async function handler(req,res){
       const recordId=scannerSetupId?`scanner-${scannerSetupId.replace(/[^A-Z0-9_-]/gi,'-').slice(0,140)}`:null;
       const ref=recordId?collection.doc(recordId):collection.doc();
       if(recordId){const existing=await ref.get();if(existing.exists)return json(res,200,{ok:true,id:ref.id,existing:true,signal:{id:ref.id,...existing.data()}});}
+      else {
+        const recent=await collection.orderBy('generatedAt','desc').limit(100).get();
+        const fingerprint=setupFingerprint({
+          market,symbol,strategy,direction:bias,entry:setup.entry,limitEntry:setup.limitEntry,
+          stopLoss:setup.stopLoss,takeProfit1:setup.takeProfit1
+        });
+        const duplicate=recent.docs.map(doc=>doc.data()).find(s=>setupFingerprint(s)===fingerprint);
+        if(duplicate){
+          const duplicateDoc=recent.docs.find(doc=>setupFingerprint(doc.data())===fingerprint);
+          return json(res,200,{ok:true,id:duplicateDoc?.id||null,existing:true,duplicate:true,signal:{id:duplicateDoc?.id||null,...duplicate}});
+        }
+      }
       const signal={signalId:recordId?`SC-${scannerSetupId}`:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,strategy,engineVersion:'market-engine-v5',direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),limitEntry:numberOrNull(setup.limitEntry),stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),currentPrice:numberOrNull(setup.price),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source,scannerSetupId:scannerSetupId||null};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
     const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&ENGINE_VERSIONS.has(String(s.engineVersion||'')));
-    const unresolved=currentRaw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
-    const priority=[...currentRaw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];
+    const dedupedRaw=dedupeSignals(currentRaw);
+    const unresolved=dedupedRaw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
+    const priority=[...dedupedRaw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];
     const resolvable=new Set(priority.slice(0,24).map(s=>s.id));
-    for(const original of currentRaw){
+    for(const original of dedupedRaw){
       const resolved=resolvable.has(original.id)?await resolveStatus(original,null):original;
       const patch={};
       for(const key of ['status','result','pnlPercent','exitPrice','closedAt','activatedAt','missedAt','outcomeEvidence']){
