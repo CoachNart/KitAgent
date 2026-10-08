@@ -82,11 +82,7 @@ function retest(c,br,direction){
     if(!touched)continue;
     const held=direction==='BULLISH'?x.close>br.level:x.close<br.level;
     const r=x.high-x.low;
-    const quality=r>0&&bodyRatio(x)>=.35&&(
-      direction==='BULLISH'
-        ? x.close>=x.low+r*.6
-        : x.close<=x.high-r*.6
-    );
+    const quality=r>0&&bodyRatio(x)>=.35;
     if(!held)return {failed:true,index:i,candle:x};
     if(!quality)continue;
     return {index:i,candle:x,zone,held:true,bodyRatio:bodyRatio(x)};
