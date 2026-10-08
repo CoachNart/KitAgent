@@ -166,7 +166,10 @@ export function evaluateCRT({candles=[],layers=[],price}){
     return {direction,failures,evidence:[{type:'CRT_RANGE',...range},{type:'HTF_SWEEP',...htf},{type:'LTF_SWEEP',...sweep},{type:'MSS',...mss},{type:'RETEST_FAILURE',...rt}]};
   }
 
-  const entry=rt.entry;
+  // The executable entry is the broken MSS level being retested, not an arbitrary
+  // close inside the retest candle. The retest proves that this level is being
+  // defended; the level itself is the price that defines the trade zone.
+  const entry=mss.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
   const stop=direction==='BULLISH'
     ?sweep.extreme-a*.25
@@ -219,6 +222,8 @@ export function evaluateCRT({candles=[],layers=[],price}){
     entry,
     marketEntry:live,
     stop,
+    entryZone:{low:entry-a*.35,high:entry+a*.35,source:'CRT_MSS_RETEST_LEVEL'},
+    invalidationPrice:sweep.extreme,
     target:tgt.price,
     risk,
     reward,
