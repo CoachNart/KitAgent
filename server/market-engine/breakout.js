@@ -160,7 +160,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
     context:{aligned:true,trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
     entry:{anchorQuality:1,executionQuality:1},
     risk:{invalidationQuality:1,geometryQuality:1},
-    target:tgt,
+    target:{...tgt,rr},
     confirmation:{quality:Math.min(1,.55+Math.min(1,br.atrMultiple/1.5)*.25+.2)},
     freshness:{quality:1}
   });
