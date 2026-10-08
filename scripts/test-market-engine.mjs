@@ -97,7 +97,8 @@ const wickLevel=buildMSNRLevels(wickOnly).find(x=>x.originIndex===0&&x.level===1
 assert('Wick through does not create RBS',wickLevel?.type==='A');
 assert('Wick touch makes a fresh level unfresh',wickLevel?.fresh===false);
 assert('Wick rejection consumes freshness',wickLevel?.fresh===false);
-assert('MSNR requires current confirmation rather than old confirmation',()=>latestMSNRConfirmations([...vCc,bar(4,103,104,102,103.2)]).every(x=>x.signalIndex!==3));
+assert('MSNR keeps the public latest-confirmation helper exact',()=>latestMSNRConfirmations([...vCc,bar(4,103,104,102,103.2)]).every(x=>x.signalIndex===4));
+assert('MSNR accepts a confirmation from the recent execution window',()=>recentMSNRConfirmations([...vCc,bar(4,103,104,102,103.2)],2).every(x=>x.signalIndex>=3));
 
 // A full-body confirmation must be the current closed candle, never an open candle.
 const layers=['4H','2H','1H','30m','15m'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
