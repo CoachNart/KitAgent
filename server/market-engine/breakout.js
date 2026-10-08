@@ -26,16 +26,27 @@ function levelCluster(c,direction){
   if(points.length<2)return null;
   const a=atr(c,14);
   if(!a)return null;
-  const recent=points.slice(-8);
-  const latest=recent.at(-1);
+  const recent=points.slice(-10);
   const tolerance=a*.35;
-  const cluster=recent.filter(x=>Math.abs(x.price-latest.price)<=tolerance);
-  if(cluster.length<2)return null;
-  const level=cluster.reduce((sum,x)=>sum+x.price,0)/cluster.length;
+  // Do not anchor the search to the newest swing: the newest swing is often
+  // the breakout itself and therefore cannot be the repeated level. Search
+  // the recent confirmed swings for the strongest genuine multi-touch cluster.
+  const clusters=[];
+  for(const seed of recent){
+    const cluster=recent.filter(x=>Math.abs(x.price-seed.price)<=tolerance);
+    if(cluster.length<2)continue;
+    const level=cluster.reduce((sum,x)=>sum+x.price,0)/cluster.length;
+    const newest=Math.max(...cluster.map(x=>x.confirmationIndex));
+    const oldest=Math.min(...cluster.map(x=>x.confirmationIndex));
+    clusters.push({level,cluster,newest,oldest});
+  }
+  const best=clusters
+    .sort((x,y)=>y.cluster.length-x.cluster.length||y.newest-x.newest||y.oldest-x.oldest)[0];
+  if(!best)return null;
   return {
     direction,
-    level,
-    touches:cluster.map(x=>({index:x.index,price:x.price,confirmationIndex:x.confirmationIndex})),
+    level:best.level,
+    touches:best.cluster.map(x=>({index:x.index,price:x.price,confirmationIndex:x.confirmationIndex})),
     tolerance
   };
 }
