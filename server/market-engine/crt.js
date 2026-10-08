@@ -5,6 +5,9 @@ import {gradeSetup} from './grading.js';
 export const CRT_MODEL='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST';
 
 const dirs=new Set(['BULLISH','BEARISH']);
+const MIN_SWEEP_PENETRATION_ATR=.15;
+const MIN_RECLAIM_DEPTH_ATR=.10;
+const MIN_SWEEP_RANGE_ATR=.60;
 
 function alignedHTFBias(layers=[]){
   const context=layers.slice(0,-1).map(x=>x?.structure?.direction).filter(x=>dirs.has(x));
@@ -30,7 +33,7 @@ function rangeAnchor(layers=[],direction,candles=[]){
       low:anchor.low,
       midpoint:(anchor.high+anchor.low)/2
     };
-    const htfSweepResult=htfSweep(range,direction);
+    const htfSweepResult=htfSweep(range,direction,htf.candles);
     if(!htfSweepResult)continue;
     const executionSweepResult=executionSweep(candles,range,direction);
     if(!executionSweepResult)continue;
@@ -40,13 +43,37 @@ function rangeAnchor(layers=[],direction,candles=[]){
   return null;
 }
 
-function htfSweep(range,direction){
+function sweepQuality(x,level,farBoundary,direction,history){
+  const a=atr(history,14);
+  const candleRange=x.high-x.low;
+  if(!a||!Number.isFinite(candleRange)||candleRange<=0)return null;
+  const penetration=direction==='BULLISH'?level-x.low:x.high-level;
+  const reclaimDepth=direction==='BULLISH'?x.close-level:level-x.close;
+  if(penetration<a*MIN_SWEEP_PENETRATION_ATR)return null;
+  if(reclaimDepth<a*MIN_RECLAIM_DEPTH_ATR)return null;
+  if(candleRange<a*MIN_SWEEP_RANGE_ATR)return null;
+  if(direction==='BULLISH'&&x.close>=farBoundary)return null;
+  if(direction==='BEARISH'&&x.close<=farBoundary)return null;
+  return {
+    penetration,
+    penetrationATR:penetration/a,
+    reclaimDepth,
+    reclaimDepthATR:reclaimDepth/a,
+    range:candleRange,
+    rangeATR:candleRange/a
+  };
+}
+
+function htfSweep(range,direction,history){
   const x=range.following;
   const lowSweep=x.low<range.low&&x.close>range.low&&x.close<range.high;
   const highSweep=x.high>range.high&&x.close<range.high&&x.close>range.low;
   if(direction==='BULLISH'&&!lowSweep)return null;
   if(direction==='BEARISH'&&!highSweep)return null;
   if((x.low<range.low&&x.high>range.high)||(!lowSweep&&!highSweep))return null;
+  const quality=sweepQuality(x,direction==='BULLISH'?range.low:range.high,
+    direction==='BULLISH'?range.high:range.low,direction,history);
+  if(!quality)return null;
   return {
     direction,
     index:range.anchor.time,
@@ -54,25 +81,28 @@ function htfSweep(range,direction){
     side:direction==='BULLISH'?'LOW':'HIGH',
     sweptLevel:direction==='BULLISH'?range.low:range.high,
     extreme:direction==='BULLISH'?x.low:x.high,
-    closeInside:true
+    closeInside:true,
+    quality
   };
 }
 
 function executionSweep(c,range,direction){
   const start=range.following.time;
   const eligible=c.filter(x=>x.time>=start);
-  // A CRT range can produce more than one execution-timeframe sweep after the
-  // HTF reclaim. The first sweep may be stale while a later sweep is the one
-  // that actually precedes the current MSS/reversal sequence. Select the most
-  // recent confirmed sweep rather than letting an old sweep block the range.
+  // Select the most recent sweep that is itself meaningful. A wick merely one
+  // tick beyond the CRT boundary is not enough; it must show measurable
+  // penetration, reclaim depth, and a non-trivial candle range relative to ATR.
   for(let i=eligible.length-1;i>=0;i--){
     const x=eligible[i];
     const swept=direction==='BULLISH'
       ?x.low<range.low&&x.close>range.low
       :x.high>range.high&&x.close<range.high;
     if(!swept)continue;
+    const quality=sweepQuality(x,direction==='BULLISH'?range.low:range.high,
+      direction==='BULLISH'?range.high:range.low,direction,c);
+    if(!quality)continue;
     return {index:c.indexOf(x),candle:x,level:direction==='BULLISH'?range.low:range.high,
-      extreme:direction==='BULLISH'?x.low:x.high};
+      extreme:direction==='BULLISH'?x.low:x.high,quality};
   }
   return null;
 }
