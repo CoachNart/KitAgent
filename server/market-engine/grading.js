@@ -79,6 +79,29 @@ export function validateTradeGeometry({trade,direction,candles=[]}={}){
   const risk=Math.abs(entry-stop),reward=Math.abs(target-entry);
   const rr=risk>0?reward/risk:0;
   const a=atr(candles,14)||0;
+  const zone=trade.entryZone;
+  if(zone){
+    const low=Number(zone.low),high=Number(zone.high);
+    if(!(Number.isFinite(low)&&Number.isFinite(high)&&low<=high))
+      failures.push('Entry zone is malformed; the setup has no valid execution area.');
+    else{
+      const zoneTolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+      if(entry<low-zoneTolerance||entry>high+zoneTolerance)
+        failures.push('Entry is outside the strategy-defined execution zone; the planned entry is not at the structural setup area.');
+    }
+  }
+  const invalidationPrice=Number(trade.invalidationPrice);
+  if(Number.isFinite(invalidationPrice)){
+    if(direction==='BULLISH'){
+      if(!(invalidationPrice<entry&&stop<invalidationPrice))
+        failures.push('Bullish stop is not beyond the actual structural invalidation level.');
+    }else if(direction==='BEARISH'){
+      if(!(invalidationPrice>entry&&stop>invalidationPrice))
+        failures.push('Bearish stop is not beyond the actual structural invalidation level.');
+    }
+  }else if(trade.invalidationSource){
+    failures.push('Trade declares an invalidation source but no numeric invalidation price.');
+  }
   if(!(risk>0&&reward>0))failures.push('Trade must have positive structural risk and reward.');
   // A stop inside normal execution noise is not a structural invalidation.
   // Use ATR rather than a fixed percentage so the rule scales by instrument.
