@@ -38,7 +38,7 @@ function findSweeps(c,direction){
     const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price,reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
     if(swept&&reclaimed){
       const extreme=direction==='BULLISH'?x.low:x.high;
-      const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.low>=extreme:z.high<=extreme);
+      const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
       if(stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i});
     }
   }
