@@ -99,29 +99,37 @@ export function validateTradeGeometry({trade,direction,candles=[]}={}){
     }
   }
   const invalidationPrice=Number(trade.invalidationPrice);
-  if(Number.isFinite(invalidationPrice)){
-    if(direction==='BULLISH'){
-      if(!(invalidationPrice<entry&&stop<invalidationPrice))
-        failures.push('Bullish stop is not beyond the actual structural invalidation level.');
-    }else if(direction==='BEARISH'){
-      if(!(invalidationPrice>entry&&stop>invalidationPrice))
-        failures.push('Bearish stop is not beyond the actual structural invalidation level.');
-    }
-  }else if(trade.invalidationSource){
-    failures.push('Trade declares an invalidation source but no numeric invalidation price.');
+  if(!Number.isFinite(invalidationPrice)){
+    failures.push('Trade has no numeric structural invalidation anchor; arbitrary stop placement is not publishable.');
+  }else if(direction==='BULLISH'){
+    if(!(invalidationPrice<entry&&stop<invalidationPrice))
+      failures.push('Bullish stop is not beyond the actual structural invalidation level.');
+    else if(a>0&&invalidationPrice-stop<Math.max(a*.08,Math.abs(entry)*.00015))
+      failures.push('Bullish stop buffer beyond structural invalidation is too small for execution noise.');
+  }else{
+    if(!(invalidationPrice>entry&&stop>invalidationPrice))
+      failures.push('Bearish stop is not beyond the actual structural invalidation level.');
+    else if(a>0&&stop-invalidationPrice<Math.max(a*.08,Math.abs(entry)*.00015))
+      failures.push('Bearish stop buffer beyond structural invalidation is too small for execution noise.');
   }
+  if(!String(trade.invalidationSource||'').trim())
+    failures.push('Trade has no named structural invalidation source.');
   if(!(risk>0&&reward>0))failures.push('Trade must have positive structural risk and reward.');
-  // A stop inside normal execution noise is not a structural invalidation.
-  // Use ATR rather than a fixed percentage so the rule scales by instrument.
-  if(a>0&&risk<a*.35)failures.push('Stop is inside normal execution noise; invalidation is too tight for the market volatility.');
-  // R:R is reported for the trader to evaluate; it is not a fixed publication
-  // threshold. Geometry remains responsible for structural validity.
-  // Target distance is still validated against market volatility as a second structural check.
+  // Structural stops must clear ordinary candle noise by a meaningful margin.
+  // This prevents tiny retest-candle stops from manufacturing enormous R:R.
+  if(a>0&&risk<Math.max(a*.45,Math.abs(entry)*.001))
+    failures.push('Stop is too tight relative to ATR/price; the structural invalidation is not safely executable.');
   if(a>0&&reward<Math.max(a,Math.abs(entry)*.0035))
     failures.push('Structural target is too close to the entry for the current market volatility.');
-  // Conversely, an excessively wide stop relative to current volatility usually
-  // means the strategy anchored invalidation to an unrelated structure point.
-  if(a>0&&risk>a*3)failures.push('Stop is excessively wide relative to execution volatility; invalidation is likely anchored to unrelated structure.');
+  if(a>0&&risk>a*3)
+    failures.push('Stop is excessively wide relative to execution volatility; invalidation is likely anchored to unrelated structure.');
+  // A target many ATRs away or a very high R multiple usually signals a
+  // mismatched stop/target pair, not a realistic nearby structural objective.
+  // Reject rather than publish an impressive but misleading headline R:R.
+  if(a>0&&reward>a*12)
+    failures.push('Target is too far from entry for this execution timeframe; select the nearest valid structural objective or return NO-TRADE.');
+  if(rr>10)
+    failures.push('R:R exceeds 10R; stop/target geometry is likely mismatched and must be rebuilt or rejected.');
   return {valid:failures.length===0,failures,metrics:{atr:a,risk,reward,rr}};
 }
 
