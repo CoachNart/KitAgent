@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
-import {evaluateTopDown,TOP_DOWN_MODEL,executionOrderType} from '../server/market-engine/topDown.js';
+import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
@@ -159,6 +159,20 @@ assert('Top-Down uses live price to classify execution order',()=>{
     executionOrderType({direction:'BEARISH',entry:11.577,price:12,tolerance:.01})===null;
 });
 assert('Top-Down routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'TOP_DOWN',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed.direction==='BULLISH'||routed.direction==='NEUTRAL';});
+
+// Top-Down scoring regression: direction is explicit input, never an undeclared global.
+const topDownScoreCandles=Array.from({length:60},(_,i)=>bar(i,100,101.25,98.75,100.5));
+const topDownScore=scoreSetup({
+  layers:[
+    {tf:'4H',structure:{direction:'BULLISH'}},
+    {tf:'2H',structure:{direction:'BULLISH'}},
+    {tf:'15m',structure:{direction:'BULLISH'}}
+  ],
+  bos:{age:0},retestPoint:{age:0},price:100,entry:100,
+  target:{source:'HTF_MAJOR_SWING',quality:95},rr:3,
+  candles:topDownScoreCandles,direction:'BULLISH'
+});
+assert('Top-Down score calculation receives directional context without runtime ReferenceError',()=>Number.isFinite(topDownScore.score)&&topDownScore.score>0);
 
 // Pullback contract: aligned HTF trend -> confirmed impulse -> 38.2%-61.8% retracement -> closed continuation break.
 assert('Pullback uses a defined trend-retracement-continuation model',PULLBACK_MODEL==='HTF_TREND_IMPULSE_RETRACE_CONTINUATION');
