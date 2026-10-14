@@ -62,7 +62,7 @@ export function executableTrade(trade,direction,livePrice){
   const normalized={...trade};
   if(String(trade.orderType||'').toUpperCase()!=='MARKET')return normalized;
   const plannedEntry=Number(trade.entry);
-  const entry=Number(trade.marketEntry??livePrice);
+  const entry=Number(livePrice??trade.marketEntry??trade.currentPrice);
   const stop=Number(trade.stop),target=Number(trade.target);
   if(![plannedEntry,entry,stop,target].every(Number.isFinite))return normalized;
   const risk=Math.abs(entry-stop),reward=Math.abs(target-entry);
@@ -70,6 +70,7 @@ export function executableTrade(trade,direction,livePrice){
     ...normalized,
     plannedEntry,
     entry,
+    marketEntry:entry,
     risk,
     reward,
     rr:risk>0?reward/risk:0,
