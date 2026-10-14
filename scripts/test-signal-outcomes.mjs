@@ -43,6 +43,15 @@ try{
     verified.status==='stop_hit'&&verified.result==='loss'&&verified.closedAt!=null&&verified.outcomeEvidence?.event==='STOP_TOUCH');
 
   globalThis.fetch=mockKlines([
+    row(minute-4*60000,100,101,99,100.5),
+    row(minute-3*60000,100.5,100.8,97.5,98)
+  ]);
+  const legacyLimit={...baseSignal,limitEntry:null};
+  const legacyOutcome=await resolveStatus(legacyLimit,98);
+  assert('Legacy LIMIT records fall back to their recorded entry instead of treating null as price zero',
+    legacyOutcome.status==='stop_hit'&&legacyOutcome.result==='loss');
+
+  globalThis.fetch=mockKlines([
     row(minute-4*60000,101,101.5,100.4,100.8),
     row(minute-3*60000,100.8,101,100.6,100.7)
   ]);
