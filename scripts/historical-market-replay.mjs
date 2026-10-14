@@ -5,7 +5,7 @@ import {STRATEGIES} from '../server/market-engine/strategies.js';
 const DURATIONS={'15m':15*60_000,'30m':30*60_000,'1H':60*60_000,'2H':2*60*60_000,'4H':4*60*60_000,'1D':24*60*60_000};
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
-const bars=Math.max(5,Math.min(80,Number(args.bars)||20));
+const bars=Math.max(5,Math.min(240,Number(args.bars)||20));
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
 const strategies=Object.keys(STRATEGIES);
