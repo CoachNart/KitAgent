@@ -36,7 +36,7 @@ async function scanSymbol(market,diagnostics=null){
       for(const tf of EXECUTION_TIMEFRAMES){
         const key=strategy+' | '+tf,stat=scanStat(diagnostics,key);
         try{
-          const result=await analyzeOne('perpetual',market.symbol,strategy,tf,all,price.last);
+          const result=await analyzeOne('perpetual',market.symbol,strategy,tf,all,price.last,price);
           if(diagnostics)diagnostics.evaluations++;
           if(stat)stat.evaluated++;
           if(result.trade&&stat)stat.tradeCandidates++;
