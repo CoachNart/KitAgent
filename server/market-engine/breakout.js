@@ -153,9 +153,16 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const {br,rt,confirm}=selected;
   const entry=level.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  // Use the full retest-to-continuation structure as invalidation. A single
+  // retest candle can be unusually small and is not a robust noise boundary.
+  const retestSequence=candles.slice(rt.index,confirm.index+1);
+  const retestLow=Math.min(...retestSequence.map(x=>x.low));
+  const retestHigh=Math.max(...retestSequence.map(x=>x.high));
+  const stopBuffer=Math.max(a*.5,Math.abs(entry)*.0005);
+  const invalidationPrice=direction==='BULLISH'?retestLow:retestHigh;
   const stop=direction==='BULLISH'
-    ?Math.min(rt.candle.low,level.level)-a*.25
-    :Math.max(rt.candle.high,level.level)+a*.25;
+    ?invalidationPrice-stopBuffer
+    :invalidationPrice+stopBuffer;
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){failures.push('Invalid structural risk.');return {direction,failures,evidence:[]};}
 
@@ -193,14 +200,14 @@ export function evaluateBreakout({candles=[],layers=[],price}){
       marketEntry:Number(price),
       stop,
       entryZone:{low:level.level-rt.zone,high:level.level+rt.zone,source:'BREAKOUT_RETEST_LEVEL'},
-      invalidationPrice:direction==='BULLISH'?rt.candle.low:rt.candle.high,
+      invalidationPrice,
       target:tgt.price,
       risk,
       reward,
       rr,
       orderType,
       entryReason:'A multi-touch structural level broke decisively, held on retest, and the continuation confirmed the broken level as the structural entry.',
-      invalidation:direction==='BULLISH'?rt.candle.low:rt.candle.high,
+      invalidation:invalidationPrice,
       invalidationSource:'breakout_retest_structural_level',
       targetSource:tgt.source||'EXTERNAL_STRUCTURAL_TARGET'
     },
