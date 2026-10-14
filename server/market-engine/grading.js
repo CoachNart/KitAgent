@@ -30,28 +30,16 @@ function targetQuality(target={}){
   return clamp(q);
 }
 
-function opportunityQuality(target={}){
-  const rr=Number(target.rr);
-  if(!Number.isFinite(rr)||rr<1.8)return 0;
-  if(rr<2.0)return .55;
-  if(rr<2.5)return .78;
-  if(rr<3.0)return .9;
-  return 1;
-}
-
-// Confidence is a structural quality score, not a statistical win probability.
-// Trade economics are part of the delivery decision: a setup must have a
-// meaningful structural objective and at least 1.8R before it can be graded.
+// Quality scores describe the strength of structural evidence, not a
+// statistical win probability. R:R is reported separately and is not a fixed
+// publication gate; targets must still be structurally meaningful and valid.
 export function gradeSetup({strategy,context={},entry={},risk={},target={},confirmation={},freshness={}}={}){
   const contextScore=15*clamp(context.aligned?1:0)*(context.trend?1:.72);
   const entryScore=25*(clamp(entry.anchorQuality)*.65+clamp(entry.executionQuality)*.35);
   const riskScore=20*(clamp(risk.invalidationQuality)*.7+clamp(risk.geometryQuality)*.3);
-  const targetScore=15*targetQuality(target)+5*opportunityQuality(target);
+  const targetScore=20*targetQuality(target);
   const confirmationScore=10*clamp(confirmation.quality);
   const freshnessScore=10*clamp(freshness.quality ?? ageQuality(freshness.age,freshness.fresh,freshness.recent));
-  const opportunity=opportunityQuality(target);
-  const economicFailure=opportunity===0?'Trade opportunity is not worth delivering: the structural objective does not provide at least 1.8R from the proposed entry and invalidation.':null;
-  if(economicFailure)return {grade:'NO-TRADE',score:0,hardFailures:[economicFailure],confidenceEvidence:[]};
   let score=contextScore+entryScore+riskScore+targetScore+confirmationScore+freshnessScore;
   // Keep scores honest: a completed contract starts at the mid/high 70s;
   // 90+ requires strong structural evidence across independent dimensions.
@@ -106,8 +94,8 @@ export function validateTradeGeometry({trade,direction,candles=[]}={}){
   // A stop inside normal execution noise is not a structural invalidation.
   // Use ATR rather than a fixed percentage so the rule scales by instrument.
   if(a>0&&risk<a*.35)failures.push('Stop is inside normal execution noise; invalidation is too tight for the market volatility.');
-  // R:R is evaluated as part of opportunity quality before a setup can receive
-  // an executable grade. Geometry remains responsible only for structural validity.
+  // R:R is reported for the trader to evaluate; it is not a fixed publication
+  // threshold. Geometry remains responsible for structural validity.
   // Target distance is still validated against market volatility as a second structural check.
   if(a>0&&reward<Math.max(a,Math.abs(entry)*.0035))
     failures.push('Structural target is too close to the entry for the current market volatility.');
