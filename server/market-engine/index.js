@@ -45,24 +45,32 @@ export async function bybitCandles(symbol,tf){
 }
 
 export async function bybitInstruments(){
-  const u=new URL('https://api.bybit.com/v5/market/instruments-info');
-  u.searchParams.set('category','linear');
-  u.searchParams.set('status','Trading');
-  u.searchParams.set('limit','1000');
-  const r=await fetch(u);
-  if(!r.ok)throw new Error('Bybit instruments unavailable');
-  const b=await r.json();
-  if(b.retCode!==0)throw new Error(b.retMsg||'Bybit instruments unavailable');
-  return (b.result?.list||[])
-    .filter(x=>x.status==='Trading'&&x.quoteCoin==='USDT')
-    .map(x=>({
-      symbol:x.symbol.replace(/USDT$/,'/USDT'),
-      name:x.baseCoin?`${x.baseCoin} / USDT Perpetual`:x.symbol,
-      type:'CRYPTO_PERPETUAL',
-      providerSymbol:x.symbol,
-      baseCoin:x.baseCoin,
-      quoteCoin:x.quoteCoin
-    }));
+  let lastError='Bybit instruments unavailable';
+  for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+    try{
+      const u=new URL('/v5/market/instruments-info',host);
+      u.searchParams.set('category','linear');
+      u.searchParams.set('status','Trading');
+      u.searchParams.set('limit','1000');
+      const r=await fetch(u);
+      if(!r.ok){lastError='Bybit instruments HTTP '+r.status+' '+r.statusText+' ('+host+')';continue;}
+      const b=await r.json();
+      if(b.retCode!==0){lastError='Bybit instruments retCode '+b.retCode+': '+(b.retMsg||'unknown provider error');continue;}
+      const instruments=(b.result?.list||[])
+        .filter(x=>x.status==='Trading'&&x.quoteCoin==='USDT')
+        .map(x=>({
+          symbol:x.symbol.replace(/USDT$/,'/USDT'),
+          name:x.baseCoin?`${x.baseCoin} / USDT Perpetual`:x.symbol,
+          type:'CRYPTO_PERPETUAL',
+          providerSymbol:x.symbol,
+          baseCoin:x.baseCoin,
+          quoteCoin:x.quoteCoin
+        }));
+      if(instruments.length)return instruments;
+      lastError='Bybit instruments response contained no tradable USDT perpetuals ('+host+')';
+    }catch(error){lastError='Bybit instruments request failed ('+host+'): '+(error?.message||error);}
+  }
+  throw new Error(lastError);
 }
 
 export async function fetchTf(market,symbol,tf){
@@ -73,23 +81,29 @@ export async function fetchTf(market,symbol,tf){
 export async function fetchPrice(market,symbol){
   if(market!=='perpetual')throw new Error('KitSetups supports Crypto Perpetuals only');
   const clean=symbol.replace(/[^A-Z0-9]/gi,'');
-  const u=new URL('https://api.bybit.com/v5/market/tickers');
-  u.searchParams.set('category','linear');
-  u.searchParams.set('symbol',clean);
-  const r=await fetch(u);
-  if(!r.ok)throw new Error('Bybit live price unavailable');
-  const b=await r.json(),x=b?.result?.list?.[0];
-  if(b?.retCode!==0||!x)throw new Error(b?.retMsg||'Bybit live price unavailable');
-  const bid=+x.bid1Price,ask=+x.ask1Price,last=+x.lastPrice;
-  const mid=bid>0&&ask>0?(bid+ask)/2:last;
-  if(!Number.isFinite(mid)||mid<=0)throw new Error('Bybit live price unavailable');
-  return{
-    bid,ask,last,mid,
-    time:new Date(Number(b.time||Date.now())).toISOString(),
-    marketState:'open',
-    stale:false,
-    spread:Math.max(0,ask-bid)
-  };
+  let lastError='Bybit live price unavailable';
+  for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+    try{
+      const u=new URL('/v5/market/tickers',host);
+      u.searchParams.set('category','linear');
+      u.searchParams.set('symbol',clean);
+      const r=await fetch(u);
+      if(!r.ok){lastError='Bybit live price HTTP '+r.status+' '+r.statusText+' ('+host+')';continue;}
+      const b=await r.json(),x=b?.result?.list?.[0];
+      if(b?.retCode!==0||!x){lastError='Bybit live price retCode '+(b?.retCode??'missing')+': '+(b?.retMsg||'ticker missing');continue;}
+      const bid=+x.bid1Price,ask=+x.ask1Price,last=+x.lastPrice;
+      const mid=bid>0&&ask>0?(bid+ask)/2:last;
+      if(!Number.isFinite(mid)||mid<=0){lastError='Bybit returned an invalid live quote ('+host+')';continue;}
+      return{
+        bid,ask,last,mid,
+        time:new Date(Number(b.time||Date.now())).toISOString(),
+        marketState:'open',
+        stale:false,
+        spread:Number.isFinite(ask-bid)?Math.max(0,ask-bid):null
+      };
+    }catch(error){lastError='Bybit live price request failed ('+host+'): '+(error?.message||error);}
+  }
+  throw new Error(lastError);
 }
 
 const STRATEGY_REASONS={
