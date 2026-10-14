@@ -22,7 +22,7 @@ jobs:
       - name: Signal outcome regression suite
         run: npm run test:signal-outcomes
       - name: Historical market replay (public futures candles)
-        run: npm run test:market-engine-replay -- --symbols=BTCUSDT,ETHUSDT,SOLUSDT --bars=200 --round-trip-cost-bps=10
+        run: npm run test:market-engine-replay -- --symbols=BTCUSDT,ETHUSDT,SOLUSDT --bars=240 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         continue-on-error: true
         run: npm run test:market-engine-live
