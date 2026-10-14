@@ -17,11 +17,12 @@ export function StrategySelector({value,onChange}){
    <span>STRATEGY</span>
    <div className="strategy-select-wrap">
      <select value={value} onChange={e=>onChange(e.target.value)} aria-label="Select setup strategy">
+       <option value="AUTO">Auto · all strategies</option>
        {STRATEGY_LIBRARY.map(x=><option key={x.key} value={x.key}>{x.name}</option>)}
      </select>
      <ChevronDown size={15}/>
    </div>
-   <small className="strategy-selector-note">Choose the ruleset used for this analysis.</small>
+   <small className="strategy-selector-note">{value==='AUTO'?'Evaluates all six strategies across the selected timeframe(s) and returns the strongest valid setup.':'Choose the ruleset used for this analysis.'}</small>
  </label>
 }
 
