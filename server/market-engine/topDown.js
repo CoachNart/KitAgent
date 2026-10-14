@@ -95,7 +95,7 @@ function scoreSetup({layers,bos,retestPoint,price,entry,target,rr,candles}){
   const distance=Math.abs(price-entry);
   return gradeSetup({
     strategy:'TOP_DOWN',
-    context:{aligned:!!htfBias(layers),trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
+    context:{aligned:!!htfBias(layers),trend:layers.at(-1)?.structure?.direction===direction},
     entry:{anchorQuality:1,executionQuality:distance<=tolerance?1:.75},
     risk:{invalidationQuality:1,geometryQuality:1},
     target:{...target,rr},
