@@ -30,9 +30,9 @@ export async function bybitCandles(symbol,tf){
   u.searchParams.set('interval',BYBIT[tf]);
   u.searchParams.set('limit','300');
   const r=await fetch(u);
-  if(!r.ok)throw new Error('Bybit candles unavailable');
+  if(!r.ok)throw new Error('Bybit candles HTTP '+r.status+' '+r.statusText);
   const b=await r.json();
-  if(b.retCode!==0)throw new Error(b.retMsg||'Bybit candles unavailable');
+  if(b.retCode!==0)throw new Error('Bybit candles retCode '+b.retCode+': '+(b.retMsg||'unknown provider error'));
   return normalizeRows(b.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
 }
 
