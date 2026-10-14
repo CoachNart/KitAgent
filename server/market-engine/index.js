@@ -275,6 +275,7 @@ export default async function handler(req,res){
         directionBias:best.direction,
         bias:best.direction==='BULLISH'?'LONG':'SHORT',
         entry:roundPrice(best.trade.entry),
+        plannedEntry:best.trade.plannedEntry!=null?roundPrice(best.trade.plannedEntry):null,
         stopLoss:roundPrice(best.trade.stop),
         takeProfit1:roundPrice(best.trade.target),
         takeProfit2:null,
