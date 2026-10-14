@@ -1,4 +1,4 @@
-import {closedCandles,EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
+import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {STRATEGIES} from '../server/market-engine/strategies.js';
 
