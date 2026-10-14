@@ -98,6 +98,10 @@ export async function currentPrice(signal) {
  */
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
+  // A limit order whose first entry-touching 1m candle also touches TP or SL
+  // cannot be proven filled-before-exit from OHLC alone. Keep it out of the
+  // verified trade record instead of guessing the intrabar path.
+  if(signal.status==='activation_ambiguous'&&signal.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE')return signal;
   const market=String(signal.market||'').toLowerCase();
   if(market!=='perpetual')return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   const candles=await marketKlines(signal); if(!candles.length)return {...signal,currentPrice:price};
@@ -119,9 +123,13 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
       if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
-        // A 1m OHLC candle cannot establish whether entry, TP or SL happened first.
-        // Activate only after the entry-touching candle has completed so we never
-        // manufacture an outcome from an ambiguous entry/exit sequence.
+        const targetTouched=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
+        if(invalidated||targetTouched){
+          return {...signal,currentPrice:price,status:'activation_ambiguous',result:null,pnlPercent:null,exitPrice:null,closedAt:null,
+            outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_AND_EXIT_SAME_CANDLE',candleTime:new Date(candle.time).toISOString(),note:'OHLC cannot prove the order of entry, stop, and target touches; excluded from verified outcomes.'}};
+        }
+        // Activate only after an entry-touching candle with no TP/SL touch has
+        // completed. Later candles can then be evaluated without guessing.
         active=true;activatedAt=candle.time+60000;break;
       }
     }
