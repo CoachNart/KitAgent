@@ -13,6 +13,7 @@
     "android:open": "npm run build && npx cap open android",
     "test:integrations": "node scripts/integration-smoke.mjs",
     "test:market-engine": "node scripts/test-market-engine.mjs",
+    "test:signal-outcomes": "node scripts/test-signal-outcomes.mjs",
     "test:market-engine-live": "node scripts/live-market-engine-diagnostic.mjs"
   },
   "dependencies": {
