@@ -161,7 +161,7 @@ export function selectMinimumRRStructuralTarget({trade,direction,candles=[],laye
   };
 }
 
-export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
+export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quote=null){
   const order=CHAIN[tf];
   const layers=order.map(x=>({
     tf:x,
@@ -198,7 +198,8 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
 
   let grade=result.grade||noTrade(result.failures||[]);
   let failures=[...(result.failures||[])];
-  let trade=executableTrade(result.trade,result.direction,price);
+  const executablePrice=result.direction==='BULLISH'&&Number(quote?.ask)>0?Number(quote.ask):result.direction==='BEARISH'&&Number(quote?.bid)>0?Number(quote.bid):price;
+  let trade=executableTrade(result.trade,result.direction,executablePrice);
   if(trade){
     let geometry=validateTradeGeometry({trade,direction:result.direction,candles:execution.candles});
     if(!geometry.valid&&geometry.failures.some(x=>x.includes('below the 3R minimum'))){
@@ -315,7 +316,7 @@ export default async function handler(req,res){
     }
 
     const results=[];
-    for(const tf of tfs)results.push(await analyzeOne(market,symbol,strategy,tf,all,price.last));
+    for(const tf of tfs)results.push(await analyzeOne(market,symbol,strategy,tf,all,price.last,price));
 
     const viable=results.filter(x=>
       ['A+','A'].includes(x.grade.grade)&&
