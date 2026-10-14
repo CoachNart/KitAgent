@@ -369,7 +369,8 @@ export default async function handler(req,res){
         strategyFailures:[],
         strategyReason:STRATEGY_REASONS[selectedStrategy],
         strategyDetails:best[selectedStrategy==='TOP_DOWN'?'topDown':selectedStrategy==='PULLBACK'?'pullback':selectedStrategy==='BREAKOUT'?'breakoutRetest':selectedStrategy==='SMC'?'smc':selectedStrategy==='MSNR'?'msnr':'crt']||null,
-        structuralInvalidation:best.trade.invalidation,
+        structuralInvalidation:best.trade.invalidationPrice,
+        thesisInvalidation:best.trade.invalidation??null,
         invalidationSource:best.trade.invalidationSource||null,
         tradeBreakdown:{
           direction:best.direction==='BULLISH'?'LONG':'SHORT',
