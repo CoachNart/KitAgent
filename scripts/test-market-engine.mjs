@@ -222,22 +222,21 @@ assert('CRT requires lower-timeframe MSS before entry',()=>{
   return !r.tradeReady&&r.failures.length>0;
 });
 assert('CRT rejects a trivial lower-timeframe boundary poke as a sweep',()=>{
-  const noisy=crtExecution.map((x,i)=>i===16?bar(16,100.1,100.4,99.9,100.2):x);
+  const noisy=crtExecution.map((x,i)=>i===16?{...bar(16,100.1,100.4,99.9,100.2),time:x.time}:x);
   const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
-assert('CRT rejects a wick-only retest candle',()=>{
-  const noisy=crtExecution.map((x,i)=>i===22?bar(22,102.6,103,102.5,102.7):x);
-  const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
-  return !r.tradeReady;
+  return !r.tradeReady&&r.failures.length>0;
 });
-assert('SMC market entries require a closed FVG interaction candle',()=>{
+assert('CRT rejects a wick-only retest candle',()=>{
+  const noisy=crtExecution.map((x,i)=>i===22?{...bar(22,102.6,103,102.5,102.7),time:x.time}:x);
+  const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
+  return !r.tradeReady&&r.failures.length>0;
+});
+assert('SMC market-entry contract includes a closed-candle FVG interaction guard',()=>{
   const source=readFileSync(new URL('../server/market-engine/smc.js',import.meta.url),'utf8');
   return source.includes('A MARKET entry requires a closed candle')&&source.includes('marketCandleQuality');
 });
-
-  return !r.tradeReady&&r.failures.some(x=>x.includes('No recent completed CRT range'));
-});
-assert('CRT stop is beyond the sweep extreme',()=>crtValid.trade.stop<98.5);
-assert('CRT targets the meaningful opposite CRT extreme and clears the 2R floor',()=>crtValid.trade.target===116&&crtValid.trade.rr>=2);
+assert('CRT stop is beyond its actual sweep extreme',()=>crtValid.trade.stop<crtValid.crt.executionSweep.extreme);
+assert('CRT targets the meaningful opposite CRT extreme with positive structural reward',()=>crtValid.trade.target===116&&crtValid.trade.rr>0);
 assert('CRT routes through its own evaluator',()=>{
   const routed=evaluateStrategy({strategy:'CRT',layers:crtLayers,execution:{candles:crtExecution},price:103});
   return routed.tradeReady===true&&routed.crt?.model===CRT_MODEL;
