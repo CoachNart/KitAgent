@@ -324,10 +324,10 @@ const wideGeometry=validateTradeGeometry({trade:geometryTrade(91,105,91.5),direc
 const extremeRr=validateTradeGeometry({trade:geometryTrade(98.7,150,99),direction:'BULLISH',candles:geoCandles});
 const missingInvalidation=validateTradeGeometry({trade:{entry:100,stop:98.7,target:104},direction:'BULLISH',candles:geoCandles});
 assert('Trade Geometry Contract accepts a coherent structural entry/stop/target',goodGeometry.valid);
-assert('Trade Geometry Contract does not impose an arbitrary minimum R:R by itself',()=>subTwoR.valid&&subTwoR.metrics.rr<1.8);
+assert('Trade Geometry Contract rejects structurally valid setups below 3R instead of publishing them',()=>!subTwoR.valid&&subTwoR.metrics.rr<3&&subTwoR.failures.some(x=>x.includes('below the 3R minimum')));
 const weakGrade=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'MAJOR_SWING',quality:95,rr:1.79},confirmation:{quality:1},freshness:{quality:1}});
 const strongGrade=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'MAJOR_SWING',quality:95,rr:2.4},confirmation:{quality:1},freshness:{quality:1}});
-assert('R:R does not act as a fixed minimum publication gate',()=>weakGrade.grade!=='NO-TRADE'&&strongGrade.grade!=='NO-TRADE');
+assert('Structural quality score is separate from the 3R execution eligibility gate',()=>weakGrade.grade!=='NO-TRADE'&&strongGrade.grade!=='NO-TRADE');
 assert('R:R does not inflate structural quality scores',()=>weakGrade.score===strongGrade.score);
 assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('too tight')||x.includes('buffer')));
 assert('Trade Geometry Contract rejects targets that are too close to the entry',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('too close')));
@@ -359,7 +359,7 @@ try{
 assert('Trade Geometry Contract requires structural entry and invalidation metadata',()=>{
   const long=validateTradeGeometry({
     trade:{
-      entry:100,stop:98,target:105,
+      entry:100,stop:98,target:106,
       entryZone:{low:99.5,high:100.5},
       invalidationPrice:98.5,
       invalidationSource:'STRUCTURAL_SWING'
