@@ -31,8 +31,8 @@ function targetQuality(target={}){
 }
 
 // Quality scores describe the strength of structural evidence, not a
-// statistical win probability. R:R is reported separately and is not a fixed
-// publication gate; targets must still be structurally meaningful and valid.
+// statistical win probability. R:R is reported separately; publication requires
+// at least 3R plus structurally meaningful, executable entry/stop/target geometry.
 export function gradeSetup({strategy,context={},entry={},risk={},target={},confirmation={},freshness={}}={}){
   const contextScore=15*clamp(context.aligned?1:0)*(context.trend?1:.72);
   const entryScore=25*(clamp(entry.anchorQuality)*.65+clamp(entry.executionQuality)*.35);
