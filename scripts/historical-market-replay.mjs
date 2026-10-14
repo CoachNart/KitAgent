@@ -1,4 +1,3 @@
-import {fetchTf} from '../server/market-engine/index.js';
 import {closedCandles,EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {STRATEGIES} from '../server/market-engine/strategies.js';
@@ -59,14 +58,29 @@ function fingerprint(t,direction){
   return [direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
 }
 
+async function fetchReplayCandles(symbol,tf){
+  // Research-only historical feed. The production/live engine remains Bybit-only.
+  const intervals={'15m':'15m','30m':'30m','1H':'1h','2H':'2h','4H':'4h','1D':'1d'};
+  const url=new URL('https://fapi.binance.com/fapi/v1/klines');
+  url.searchParams.set('symbol',symbol);
+  url.searchParams.set('interval',intervals[tf]);
+  url.searchParams.set('limit','300');
+  const response=await fetch(url);
+  if(!response.ok)throw new Error('Binance Futures historical candles HTTP '+response.status+' '+response.statusText);
+  const rows=await response.json();
+  if(!Array.isArray(rows)||!rows.length)throw new Error('Binance Futures returned no candles');
+  return rows.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]);
+}
+
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
+console.log('Research candle source: Binance USD-M Futures public klines (offline replay only; live engine remains Bybit-only).');
 console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',bars,'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
   let history;
   try{
     const tfs=[...EXECUTION_TIMEFRAMES,'1D'];
-    const rows=await Promise.all(tfs.map(async tf=>[tf,closedCandles(await fetchTf('perpetual',symbol,tf),tf)]));
+    const rows=await Promise.all(tfs.map(async tf=>[tf,closedCandles(normalizeRows(await fetchReplayCandles(symbol,tf)),tf)]));
     history=Object.fromEntries(rows);
     loadedSymbols++;
   }catch(error){
