@@ -144,16 +144,27 @@ const rows=[...stats.values()].map(s=>{
 console.table(rows);
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
+const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
+const totalWins=rows.reduce((n,x)=>n+x.wins,0);
+const totalLosses=rows.reduce((n,x)=>n+x.losses,0);
+const totalNetR=rows.reduce((n,x)=>n+(x.avgNetR??0)*x.resolved,0);
+const averageNetR=totalResolved?totalNetR/totalResolved:null;
 console.log('\nSUMMARY',JSON.stringify({
   symbols,requestedTimeframes:requested,barsPerTimeframe:bars,roundTripCostBps,
   evaluated:rows.reduce((n,x)=>n+x.evaluated,0),
   candidates:rows.reduce((n,x)=>n+x.candidates,0),
-  resolved:rows.reduce((n,x)=>n+x.resolved,0),
-  wins:rows.reduce((n,x)=>n+x.wins,0),
-  losses:rows.reduce((n,x)=>n+x.losses,0),
-  note:'Exploratory sample only. Gross/net estimates exclude funding, partial fills, spread-specific bid/ask fills, and exchange-specific fee tiers; use out-of-sample windows and larger samples before drawing conclusions.'
+  resolved:totalResolved,wins:totalWins,losses:totalLosses,
+  winRatePct:totalResolved?+(100*totalWins/totalResolved).toFixed(2):null,
+  averageNetR:averageNetR===null?null:+averageNetR.toFixed(3),
+  note:'Exploratory historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and exchange-specific fee tiers.'
 },null,2));
 if(loadedSymbols===0){
   console.error('REPLAY FAILED: no historical candle data was loaded; refusing to report an empty replay as a successful test.');
+  process.exitCode=1;
+}else if(totalResolved<30){
+  console.error('REPLAY NOT VALIDATED: fewer than 30 unambiguous resolved trades; insufficient evidence to call the engine ready.');
+  process.exitCode=1;
+}else if(averageNetR<=0){
+  console.error('REPLAY FAILED: net expectancy after the configured round-trip cost is not positive; do not treat the current setup engine as ready.');
   process.exitCode=1;
 }
