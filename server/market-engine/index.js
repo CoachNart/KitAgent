@@ -24,16 +24,24 @@ function json(res,status,p){
 
 export async function bybitCandles(symbol,tf){
   const clean=symbol.replace(/[^A-Z0-9]/gi,'');
-  const u=new URL('https://api.bybit.com/v5/market/kline');
-  u.searchParams.set('category','linear');
-  u.searchParams.set('symbol',clean);
-  u.searchParams.set('interval',BYBIT[tf]);
-  u.searchParams.set('limit','300');
-  const r=await fetch(u);
-  if(!r.ok)throw new Error('Bybit candles HTTP '+r.status+' '+r.statusText);
-  const b=await r.json();
-  if(b.retCode!==0)throw new Error('Bybit candles retCode '+b.retCode+': '+(b.retMsg||'unknown provider error'));
-  return normalizeRows(b.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
+  let lastError='Bybit candles unavailable';
+  for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+    try{
+      const u=new URL('/v5/market/kline',host);
+      u.searchParams.set('category','linear');
+      u.searchParams.set('symbol',clean);
+      u.searchParams.set('interval',BYBIT[tf]);
+      u.searchParams.set('limit','300');
+      const r=await fetch(u);
+      if(!r.ok){lastError='Bybit candles HTTP '+r.status+' '+r.statusText+' ('+host+')';continue;}
+      const b=await r.json();
+      if(b.retCode!==0){lastError='Bybit candles retCode '+b.retCode+': '+(b.retMsg||'unknown provider error');continue;}
+      return normalizeRows(b.result.list.slice().reverse().map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
+    }catch(error){
+      lastError='Bybit candles request failed ('+host+'): '+(error?.message||error);
+    }
+  }
+  throw new Error(lastError);
 }
 
 export async function bybitInstruments(){
