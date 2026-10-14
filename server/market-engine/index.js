@@ -148,12 +148,13 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
 
   let grade=result.grade||noTrade(result.failures||[]);
   let failures=[...(result.failures||[])];
-  const trade=executableTrade(result.trade,result.direction,price);
+  let trade=executableTrade(result.trade,result.direction,price);
   if(trade){
     const geometry=validateTradeGeometry({trade,direction:result.direction,candles:execution.candles});
     if(!geometry.valid){
       failures.push(...geometry.failures);
       grade=noTrade(geometry.failures);
+      trade=null;
     }else if(grade?.confidenceEvidence){
       grade={...grade,confidenceEvidence:[...grade.confidenceEvidence,{type:'TRADE_GEOMETRY',...geometry.metrics,interpretation:'validated at executable entry; R:R is not a fixed publication gate'}]};
     }
