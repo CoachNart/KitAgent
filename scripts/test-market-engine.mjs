@@ -309,23 +309,31 @@ assert('Market orders use the live executable quote as entry and preserve the pl
 assert('Market-order R:R is recomputed from executable entry',()=>marketExecution.risk===3&&marketExecution.reward===3&&marketExecution.rr===1);
 assert('Limit-order entry remains at its planned limit price',()=>limitExecution.entry===100&&limitExecution.plannedEntry===undefined);
 
-// Trade Geometry Contract: strategy structure may be valid, but publication is
-// blocked when the actual entry/stop/target expression is structurally poor.
+// Trade Geometry Contract: entry, stop, target and invalidation must describe
+// one coherent setup. Extreme R:R is rejected instead of being celebrated.
 const geoCandles=Array.from({length:60},(_,i)=>bar(i,100,101.25,98.75,100.5));
-const goodGeometry=validateTradeGeometry({trade:{entry:100,stop:99,target:104},direction:'BULLISH',candles:geoCandles});
-const tightGeometry=validateTradeGeometry({trade:{entry:100,stop:99.9,target:103},direction:'BULLISH',candles:geoCandles});
-const poorReward=validateTradeGeometry({trade:{entry:100,stop:98,target:101},direction:'BULLISH',candles:geoCandles});
-const subTwoR=validateTradeGeometry({trade:{entry:100,stop:96,target:103.5},direction:'BULLISH',candles:geoCandles});
-const wideGeometry=validateTradeGeometry({trade:{entry:100,stop:91,target:105},direction:'BULLISH',candles:geoCandles});
-assert('Trade Geometry Contract accepts structurally distant target geometry',goodGeometry.valid);
-assert('Trade Geometry Contract does not decide trade worthiness from R:R alone',()=>subTwoR.valid&&subTwoR.metrics.rr<1.8);
+const geometryTrade=(stop,target,invalidationPrice,extra={})=>({
+  entry:100,stop,target,invalidationPrice,invalidationSource:'STRUCTURAL_SWING',
+  entryZone:{low:99.5,high:100.5},...extra
+});
+const goodGeometry=validateTradeGeometry({trade:geometryTrade(98.7,104,99),direction:'BULLISH',candles:geoCandles});
+const tightGeometry=validateTradeGeometry({trade:geometryTrade(99.9,103,99.95),direction:'BULLISH',candles:geoCandles});
+const poorReward=validateTradeGeometry({trade:geometryTrade(98.7,101,99),direction:'BULLISH',candles:geoCandles});
+const subTwoR=validateTradeGeometry({trade:geometryTrade(96,103.5,96.5),direction:'BULLISH',candles:geoCandles});
+const wideGeometry=validateTradeGeometry({trade:geometryTrade(91,105,91.5),direction:'BULLISH',candles:geoCandles});
+const extremeRr=validateTradeGeometry({trade:geometryTrade(98.7,150,99),direction:'BULLISH',candles:geoCandles});
+const missingInvalidation=validateTradeGeometry({trade:{entry:100,stop:98.7,target:104},direction:'BULLISH',candles:geoCandles});
+assert('Trade Geometry Contract accepts a coherent structural entry/stop/target',goodGeometry.valid);
+assert('Trade Geometry Contract does not impose an arbitrary minimum R:R by itself',()=>subTwoR.valid&&subTwoR.metrics.rr<1.8);
 const weakGrade=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'MAJOR_SWING',quality:95,rr:1.79},confirmation:{quality:1},freshness:{quality:1}});
 const strongGrade=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'MAJOR_SWING',quality:95,rr:2.4},confirmation:{quality:1},freshness:{quality:1}});
-assert('R:R does not act as a fixed publication gate',()=>weakGrade.grade!=='NO-TRADE'&&strongGrade.grade!=='NO-TRADE');
+assert('R:R does not act as a fixed minimum publication gate',()=>weakGrade.grade!=='NO-TRADE'&&strongGrade.grade!=='NO-TRADE');
 assert('R:R does not inflate structural quality scores',()=>weakGrade.score===strongGrade.score);
-assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('execution noise')));
+assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('too tight')||x.includes('buffer')));
 assert('Trade Geometry Contract rejects targets that are too close to the entry',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('too close')));
 assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
+assert('Trade Geometry Contract rejects implausible 40R geometry',()=>!extremeRr.valid&&extremeRr.failures.some(x=>x.includes('exceeds 10R')||x.includes('too far')));
+assert('Trade Geometry Contract rejects trades with no numeric invalidation anchor',()=>!missingInvalidation.valid&&missingInvalidation.failures.some(x=>x.includes('no numeric structural invalidation')));
 
 
 // Scanner smoke: run the real scanner helpers against deterministic Bybit-shaped
