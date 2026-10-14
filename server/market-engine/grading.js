@@ -117,6 +117,11 @@ export function validateTradeGeometry({trade,direction,candles=[]}={}){
   if(!String(trade.invalidationSource||'').trim())
     failures.push('Trade has no named structural invalidation source.');
   if(!(risk>0&&reward>0))failures.push('Trade must have positive structural risk and reward.');
+  // KitSetups publication contract: never publish a setup below 3R. This is
+  // a hard eligibility filter, not permission to move the stop or invent a
+  // distant target. If genuine structure cannot offer 3R, return NO-TRADE.
+  if(risk>0&&reward>0&&rr<3)
+    failures.push('Projected R:R is below the 3R minimum; do not publish or distort structural levels to force a trade.');
   // Structural stops must clear ordinary candle noise by a meaningful margin.
   // This prevents tiny retest-candle stops from manufacturing enormous R:R.
   if(a>0&&risk<Math.max(a*.45,Math.abs(entry)*.001))
