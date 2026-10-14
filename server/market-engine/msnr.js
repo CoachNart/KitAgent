@@ -248,7 +248,7 @@ function gradeMSNR({level,event,context,target,rr}){
   const strong=['RBS','SBR'].includes(levelType);
   return gradeSetup({
     strategy:'MSNR',
-    context:{aligned:context.aligned>0||context.dominant==='NEUTRAL',trend:context.dominant!=='NEUTRAL'},
+    context:{aligned:context.aligned>0,trend:context.aligned>=2&&context.dominant!=='NEUTRAL'},
     entry:{anchorQuality:strong?1:.9,executionQuality:1},
     risk:{invalidationQuality:1,geometryQuality:1},
     target:{source:'MSNR_OPPOSING_LEVEL',quality:strong?.95:.82,rr,pool:level?.flipCount>0?'REPEATED_STRUCTURE':undefined},
