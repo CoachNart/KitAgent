@@ -164,7 +164,7 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
       grade=noTrade(geometry.failures);
       trade=null;
     }else if(grade?.confidenceEvidence){
-      grade={...grade,confidenceEvidence:[...grade.confidenceEvidence,{type:'TRADE_GEOMETRY',...geometry.metrics,interpretation:'validated at executable entry; R:R is not a fixed publication gate'}]};
+      grade={...grade,confidenceEvidence:[...grade.confidenceEvidence,{type:'TRADE_GEOMETRY',...geometry.metrics,interpretation:'validated at executable entry; minimum 3R required for publication'}]};
     }
   }
   return{
