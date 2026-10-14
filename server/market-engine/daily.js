@@ -13,22 +13,69 @@ async function topSymbols(){const u=new URL('https://api.bybit.com/v5/market/tic
 async function candlesFor(symbol){const [a,b,c,d,e,f]=await Promise.all([fetchTf('perpetual',symbol,'15m'),fetchTf('perpetual',symbol,'30m'),fetchTf('perpetual',symbol,'1H'),fetchTf('perpetual',symbol,'2H'),fetchTf('perpetual',symbol,'4H'),fetchTf('perpetual',symbol,'1D')]);return{'15m':closedCandles(a,'15m'),'30m':closedCandles(b,'30m'),'1H':closedCandles(c,'1H'),'2H':closedCandles(d,'2H'),'4H':closedCandles(e,'4H'),'1D':closedCandles(f,'1D')}}
 function candidateScore(result){if(!result?.trade||!result?.grade)return-1;if(result.direction==='BULLISH'&&!(result.trade.stop<result.trade.entry&&result.trade.target>result.trade.entry))return-1;if(result.direction==='BEARISH'&&!(result.trade.stop>result.trade.entry&&result.trade.target<result.trade.entry))return-1;if(!['A+','A'].includes(result.grade.grade)||Number(result.grade.score)<72)return-1;const rr=Number(result.trade.rr)||0;return result.grade.score*100+Math.min(Math.max(rr,0),6)*8}
 function toSetup(market,strategy,result,price){const score=candidateScore(result);if(score<0)return null;const trade=result.trade,bias=result.direction==='BULLISH'?'LONG':'SHORT';return{id:market.symbol+'-'+strategy+'-'+result.tf,symbol:market.symbol.replace(/USDT$/,'/USDT'),providerSymbol:market.symbol,strategy:STRATEGIES[strategy]?.name||strategy,strategyKey:strategy,bias,timeframe:result.tf,grade:result.grade.grade,score:result.grade.score,confidence:result.grade.score,entry:trade.entry,orderType:trade.orderType||'MARKET',marketEntry:trade.marketEntry??price.last,entryReason:trade.entryReason||null,stopLoss:trade.stop,takeProfit:trade.target,rr:Number(trade.rr.toFixed(2)),regime:result.regime,evidence:result.evidence||[],strategyDetails:result[strategy==='TOP_DOWN'?'topDown':strategy==='PULLBACK'?'pullback':strategy==='BREAKOUT'?'breakoutRetest':strategy==='SMC'?'smc':strategy==='MSNR'?'msnr':'crt']||null,layers:result.layers||[],structureDirection:result.structure?.direction||result.direction,liquidity:result.liquidity?.recentSweep?.length||0,source:'Bybit linear perpetuals',rankScore:score}}
-async function scanSymbol(market){try{const price=await fetchPrice('perpetual',market.symbol),all=await candlesFor(market.symbol);if(!Object.entries(all).every(([tf,c])=>validateCandles(c,tf).valid))return[];const candidates=[];for(const [strategy] of Object.entries(STRATEGIES))for(const tf of EXECUTION_TIMEFRAMES)try{const result=await analyzeOne('perpetual',market.symbol,strategy,tf,all,price.last),setup=toSetup(market,strategy,result,price);if(setup)candidates.push(setup)}catch{}return candidates.sort((a,b)=>b.rankScore-a.rankScore)}catch{return[]}}
-async function scanTopQuality(excludeIds=[]){const markets=await topSymbols(),scanned=await Promise.all(markets.map(scanSymbol)),flat=scanned.flat().filter(x=>!excludeIds.includes(x.id));
-  // Keep the strongest candidate for each symbol+strategy instead of collapsing
-  // the entire symbol to whichever strategy happens to score highest. Otherwise
-  // a strong Pullback candidate can hide valid SMC/CRT/Breakout/MSNR/Top-Down
-  // candidates on the same market before they ever reach the scanner UI.
+function recordRejection(diagnostics,key,reason){
+  if(!diagnostics)return;
+  const clean=String(reason||'No executable setup passed strategy contract').trim().slice(0,220);
+  const fullKey=key+' | '+clean;
+  diagnostics.rejectionReasons[fullKey]=(diagnostics.rejectionReasons[fullKey]||0)+1;
+}
+function scanStat(diagnostics,key){
+  if(!diagnostics)return null;
+  if(!diagnostics.strategyTimeframes[key])diagnostics.strategyTimeframes[key]={evaluated:0,tradeCandidates:0,eligibleCandidates:0,exceptions:0};
+  return diagnostics.strategyTimeframes[key];
+}
+async function scanSymbol(market,diagnostics=null){
+  try{
+    const price=await fetchPrice('perpetual',market.symbol),all=await candlesFor(market.symbol);
+    if(!Object.entries(all).every(([tf,c])=>validateCandles(c,tf).valid)){
+      if(diagnostics){diagnostics.marketDataFailures++;recordRejection(diagnostics,market.symbol,'Invalid or insufficient candle data');}
+      return[];
+    }
+    const candidates=[];
+    for(const [strategy] of Object.entries(STRATEGIES)){
+      for(const tf of EXECUTION_TIMEFRAMES){
+        const key=strategy+' | '+tf,stat=scanStat(diagnostics,key);
+        try{
+          const result=await analyzeOne('perpetual',market.symbol,strategy,tf,all,price.last);
+          if(diagnostics)diagnostics.evaluations++;
+          if(stat)stat.evaluated++;
+          if(result.trade&&stat)stat.tradeCandidates++;
+          const setup=toSetup(market,strategy,result,price);
+          if(setup){
+            candidates.push(setup);
+            if(stat)stat.eligibleCandidates++;
+          }else{
+            const reasons=result.failures?.length?result.failures:
+              result.grade?.hardFailures?.length?result.grade.hardFailures:
+              result.trade?[('Grade/quality gate: '+(result.grade?.grade||'ungraded'))]:
+              ['No executable trade contract passed'];
+            for(const reason of reasons.slice(0,3))recordRejection(diagnostics,key,reason);
+          }
+        }catch(error){
+          if(stat)stat.exceptions++;
+          if(diagnostics)diagnostics.exceptions++;
+          recordRejection(diagnostics,key,'EXCEPTION: '+(error?.message||error));
+        }
+      }
+    }
+    return candidates.sort((a,b)=>b.rankScore-a.rankScore);
+  }catch(error){
+    if(diagnostics){diagnostics.marketDataFailures++;recordRejection(diagnostics,market.symbol,'MARKET DATA: '+(error?.message||error));}
+    return[];
+  }
+}
+async function scanTopQuality(excludeIds=[]){
+  const diagnostics={evaluations:0,tradeCandidates:0,marketDataFailures:0,exceptions:0,strategyTimeframes:{},rejectionReasons:{}};
+  const markets=await topSymbols(),scanned=await Promise.all(markets.map(market=>scanSymbol(market,diagnostics))),flat=scanned.flat().filter(x=>!excludeIds.includes(x.id));
+  // Preserve the strongest candidate per symbol and strategy so one strategy
+  // cannot hide other independently valid opportunities on the same market.
   const bestByStrategySymbol=new Map();
   for(const setup of flat){
-    const key=setup.symbol+'|'+setup.strategyKey;
-    const old=bestByStrategySymbol.get(key);
+    const key=setup.symbol+'|'+setup.strategyKey,old=bestByStrategySymbol.get(key);
     if(!old||setup.rankScore>old.rankScore)bestByStrategySymbol.set(key,setup);
   }
   const pool=[...bestByStrategySymbol.values()];
-  const selected=[];
-  const usedStrategies=new Set();
-  // Prefer strategy diversity first, then use quality ranking to fill the batch.
+  const selected=[],usedStrategies=new Set();
   for(const setup of pool.slice().sort((a,b)=>b.rankScore-a.rankScore)){
     if(selected.length>=SCAN_BATCH)break;
     if(usedStrategies.has(setup.strategyKey))continue;
@@ -40,7 +87,15 @@ async function scanTopQuality(excludeIds=[]){const markets=await topSymbols(),sc
       if(!selected.some(x=>x.id===setup.id))selected.push(setup);
     }
   }
-  return{generatedAt:new Date().toISOString(),scanUniverse:markets.length,setups:selected.sort((a,b)=>b.rankScore-a.rankScore),source:'Bybit linear perpetuals'}
+  diagnostics.tradeCandidates=Object.values(diagnostics.strategyTimeframes).reduce((n,x)=>n+x.tradeCandidates,0);
+  diagnostics.eligibleCandidates=flat.length;
+  diagnostics.topRejections=Object.entries(diagnostics.rejectionReasons)
+    .sort((a,b)=>b[1]-a[1]).slice(0,15).map(([reason,count])=>({reason,count}));
+  diagnostics.byStrategyTimeframe=Object.entries(diagnostics.strategyTimeframes)
+    .map(([key,value])=>({key,...value})).sort((a,b)=>b.tradeCandidates-a.tradeCandidates||b.evaluated-a.evaluated);
+  delete diagnostics.rejectionReasons;
+  delete diagnostics.strategyTimeframes;
+  return{generatedAt:new Date().toISOString(),scanUniverse:markets.length,setups:selected.sort((a,b)=>b.rankScore-a.rankScore),source:'Bybit linear perpetuals',diagnostics};
 }
 async function recordScannerSignals(uid,setups){if(!Array.isArray(setups)||!setups.length)return;const db=getAdmin().firestore(),collection=db.collection('users').doc(uid).collection('signals'),now=new Date().toISOString();for(const setup of setups){const id=String(setup.id||'').replace(/[^A-Z0-9_-]/gi,'-').slice(0,140);if(!id)continue;const ref=collection.doc('scanner-'+id),existing=await ref.get();if(existing.exists)continue;const orderType=String(setup.orderType||'MARKET').toUpperCase();const direction=setup.bias;const signal={signalId:'SC-'+id,userId:uid,market:'perpetual',symbol:setup.providerSymbol||String(setup.symbol||'').replace('/',''),timeframe:setup.timeframe,strategy:String(setup.strategyKey||setup.strategy||'').toUpperCase(),engineVersion:ENGINE_VERSION,direction,orderType,confidence:Number.isFinite(Number(setup.confidence))?Number(setup.confidence):null,entry:Number(setup.entry),limitEntry:orderType==='LIMIT'?Number(setup.entry):null,stopLoss:Number(setup.stopLoss),takeProfit1:Number(setup.takeProfit),takeProfit2:null,riskReward:'1:'+Number(setup.rr||0).toFixed(2),currentPrice:Number(setup.marketEntry),status:orderType==='LIMIT'?'limit_pending':'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source:'quality-scanner',scannerSetupId:id,scannerGeneratedAt:now};await ref.set(signal)}}async function deleteScannerSetup(uid,setupId){
   const id=String(setupId||'').trim();
@@ -61,11 +116,11 @@ async function recordScannerSignals(uid,setups){if(!Array.isArray(setups)||!setu
     return{removed,deletedSignal:signalSnap.exists};
   });
 }
-function emptyState(now=Date.now()){return{engineVersion:ENGINE_VERSION,windowStartedAt:new Date(now).toISOString(),resetAt:new Date(now+SCAN_WINDOW_MS).toISOString(),generatedCount:0,scanCount:0,setups:[],scanState:'idle',lastScanAt:null,scanUniverse:0,source:'Bybit linear perpetuals'}}
-function publicState(state,now=Date.now()){const resetAt=toMs(state.resetAt),count=Number(state.generatedCount)||0;return{ok:true,setups:Array.isArray(state.setups)?state.setups:[],generatedCount:count,maxGenerated:MAX_GENERATED,scanBatch:SCAN_BATCH,scanCount:Number(state.scanCount)||0,remainingSlots:Math.max(0,MAX_GENERATED-count),resetAt:state.resetAt||new Date(now+SCAN_WINDOW_MS).toISOString(),windowStartedAt:state.windowStartedAt||null,remainingMs:Math.max(0,resetAt-now),scanUniverse:Number(state.scanUniverse)||0,source:state.source||'Bybit linear perpetuals',status:count>=MAX_GENERATED?'LIMIT_REACHED':'READY'}}
+function emptyState(now=Date.now()){return{engineVersion:ENGINE_VERSION,windowStartedAt:new Date(now).toISOString(),resetAt:new Date(now+SCAN_WINDOW_MS).toISOString(),generatedCount:0,scanCount:0,setups:[],scanState:'idle',lastScanAt:null,scanUniverse:0,scanDiagnostics:null,source:'Bybit linear perpetuals'}}
+function publicState(state,now=Date.now()){const resetAt=toMs(state.resetAt),count=Number(state.generatedCount)||0;return{ok:true,setups:Array.isArray(state.setups)?state.setups:[],generatedCount:count,maxGenerated:MAX_GENERATED,scanBatch:SCAN_BATCH,scanCount:Number(state.scanCount)||0,remainingSlots:Math.max(0,MAX_GENERATED-count),resetAt:state.resetAt||new Date(now+SCAN_WINDOW_MS).toISOString(),windowStartedAt:state.windowStartedAt||null,remainingMs:Math.max(0,resetAt-now),scanUniverse:Number(state.scanUniverse)||0,scanDiagnostics:state.scanDiagnostics||null,source:state.source||'Bybit linear perpetuals',status:count>=MAX_GENERATED?'LIMIT_REACHED':'READY'}}
 async function readState(uid){const ref=getAdmin().firestore().collection('users').doc(uid).collection('scanner').doc(SCAN_DOC),snap=await ref.get();if(!snap.exists)return publicState(emptyState());const state=snap.data()||{},resetAt=toMs(state.resetAt);if(state.engineVersion!==ENGINE_VERSION){const fresh=emptyState();await ref.set(fresh);return publicState(fresh)}if(resetAt&&Date.now()>=resetAt){const fresh=emptyState();await ref.set(fresh);return publicState(fresh)}return publicState(state)}
 async function reserveScan(uid){const db=getAdmin().firestore(),ref=db.collection('users').doc(uid).collection('scanner').doc(SCAN_DOC),now=Date.now();return db.runTransaction(async tx=>{const snap=await tx.get(ref);let state=snap.exists?snap.data()||{}:emptyState(now);if(state.engineVersion!==ENGINE_VERSION||!toMs(state.resetAt)||now>=toMs(state.resetAt))state=emptyState(now);const count=Number(state.generatedCount)||0;if(count>=MAX_GENERATED)return{allowed:false,code:'SCAN_LIMIT_REACHED',state};if(state.scanState==='running'&&now-toMs(state.scanStartedAt)<15*60*1000)return{allowed:false,code:'SCAN_IN_PROGRESS',state};state={...state,scanState:'running',scanStartedAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString()};tx.set(ref,state,{merge:false});return{allowed:true,state,ref}})}
-async function runUserScan(uid){const reservation=await reserveScan(uid);if(!reservation.allowed){if(reservation.code==='SCAN_LIMIT_REACHED')return{...publicState(reservation.state),code:reservation.code,error:'You have generated the maximum 10 scanner setups for this 24-hour window.'};return{...publicState(reservation.state),code:reservation.code,error:'A scanner run is already in progress. Please wait for it to finish.'}}const db=getAdmin().firestore(),ref=reservation.ref;try{const existing=Array.isArray(reservation.state.setups)?reservation.state.setups:[],remaining=MAX_GENERATED-existing.length,result=await scanTopQuality(existing.map(x=>x.id)),additions=result.setups.slice(0,Math.min(SCAN_BATCH,remaining));await recordScannerSignals(uid,additions);const combined=[...existing,...additions].slice(0,MAX_GENERATED),now=Date.now(),next={...reservation.state,setups:combined,generatedCount:combined.length,scanCount:(Number(reservation.state.scanCount)||0)+1,lastScanAt:new Date(now).toISOString(),scanState:'idle',scanUniverse:result.scanUniverse,source:result.source,updatedAt:new Date(now).toISOString()};await ref.set(next,{merge:false});return{...publicState(next,now),generatedNow:additions.length,notice:additions.length?'Scanner added '+additions.length+' top-quality setup'+(additions.length===1?'':'s')+'.':'No new setup cleared the quality threshold on this scan. No inferior trade was added.'}}catch(error){await ref.set({...reservation.state,scanState:'idle',lastError:String(error?.message||error),lastErrorAt:new Date().toISOString(),updatedAt:new Date().toISOString()},{merge:false});throw error}}
+async function runUserScan(uid){const reservation=await reserveScan(uid);if(!reservation.allowed){if(reservation.code==='SCAN_LIMIT_REACHED')return{...publicState(reservation.state),code:reservation.code,error:'You have generated the maximum 10 scanner setups for this 24-hour window.'};return{...publicState(reservation.state),code:reservation.code,error:'A scanner run is already in progress. Please wait for it to finish.'}}const db=getAdmin().firestore(),ref=reservation.ref;try{const existing=Array.isArray(reservation.state.setups)?reservation.state.setups:[],remaining=MAX_GENERATED-existing.length,result=await scanTopQuality(existing.map(x=>x.id)),additions=result.setups.slice(0,Math.min(SCAN_BATCH,remaining));await recordScannerSignals(uid,additions);const combined=[...existing,...additions].slice(0,MAX_GENERATED),now=Date.now(),next={...reservation.state,setups:combined,generatedCount:combined.length,scanCount:(Number(reservation.state.scanCount)||0)+1,lastScanAt:new Date(now).toISOString(),scanState:'idle',scanUniverse:result.scanUniverse,scanDiagnostics:result.diagnostics,source:result.source,updatedAt:new Date(now).toISOString()};await ref.set(next,{merge:false});return{...publicState(next,now),generatedNow:additions.length,notice:additions.length?'Scanner added '+additions.length+' top-quality setup'+(additions.length===1?'':'s')+'.':'No new setup cleared the quality threshold on this scan. No inferior trade was added.'}}catch(error){await ref.set({...reservation.state,scanState:'idle',lastError:String(error?.message||error),lastErrorAt:new Date().toISOString(),updatedAt:new Date().toISOString()},{merge:false});throw error}}
 export default async function handler(req,res){try{const auth=await authenticate(req);if(req.method==='GET')return json(res,200,await readState(auth.uid));
     if(req.method==='POST')return json(res,200,await runUserScan(auth.uid));
     if(req.method==='DELETE'){
