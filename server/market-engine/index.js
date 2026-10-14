@@ -432,6 +432,7 @@ export default async function handler(req,res){
         debug:{
           selectedTimeframe:null,
           candidates:results.map(x=>({
+            strategy:x.strategyKey,
             timeframe:x.tf,
             grade:x.grade,
             failures:x.failures,
