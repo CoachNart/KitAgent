@@ -42,6 +42,15 @@ try{
   assert('A clean entry candle followed by a later stop candle resolves as a loss',
     verified.status==='stop_hit'&&verified.result==='loss'&&verified.closedAt!=null&&verified.outcomeEvidence?.event==='STOP_TOUCH');
 
+  globalThis.fetch=mockKlines([
+    row(minute-4*60000,101,101.5,100.4,100.8),
+    row(minute-3*60000,100.8,101,100.6,100.7)
+  ]);
+  const marketSignal={...baseSignal,orderType:'MARKET',status:'watching',entry:100,marketEntry:101,currentPrice:101,stopLoss:100.5,takeProfit1:103};
+  const marketOutcome=await resolveStatus(marketSignal,100.7);
+  assert('Market-order P&L is measured from executable market entry, not planned structural level',
+    marketOutcome.status==='stop_hit'&&Number(marketOutcome.pnlPercent)<0);
+
   const alreadyAmbiguous={...baseSignal,status:'activation_ambiguous',outcomeEvidence:{event:'ENTRY_AND_EXIT_SAME_CANDLE'}};
   const unchanged=await resolveStatus(alreadyAmbiguous,97.5);
   assert('Previously ambiguous limit activation remains excluded from verified outcomes',
