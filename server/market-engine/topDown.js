@@ -89,7 +89,7 @@ function trade({c,bos,retestPoint,direction,price,targetSwing}){
   };
 }
 
-function scoreSetup({layers,bos,retestPoint,price,entry,target,rr,candles,direction}){
+export function scoreSetup({layers,bos,retestPoint,price,entry,target,rr,candles,direction}){
   const a=atr(candles,14)||0;
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const distance=Math.abs(price-entry);
