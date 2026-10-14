@@ -24,7 +24,9 @@ jobs:
       - name: Historical market replay (public futures candles)
         run: npm run test:market-engine-replay -- --bars=240 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
+        if: always()
         continue-on-error: true
         run: npm run test:market-engine-live
       - name: Production build
+        if: always()
         run: npm run build
