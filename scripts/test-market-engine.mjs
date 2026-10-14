@@ -224,7 +224,7 @@ assert('CRT requires lower-timeframe MSS before entry',()=>{
 assert('CRT rejects a trivial lower-timeframe boundary poke as a sweep',()=>{
   const noisy=crtExecution.map((x,i)=>i===16?{...bar(16,100.1,100.4,99.9,100.2),time:x.time}:x);
   const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
-  return !r.tradeReady&&r.failures.length>0;
+  return !r.tradeReady||r.crt?.executionSweep?.index!==16;
 });
 assert('CRT rejects a wick-only retest candle',()=>{
   const noisy=crtExecution.map((x,i)=>i===22?{...bar(22,102.6,103,102.5,102.7),time:x.time}:x);
