@@ -8,6 +8,7 @@ import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry} from '../server/market-engine/grading.js';
 import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
+import {readFileSync} from 'node:fs';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -193,11 +194,12 @@ crtExecution[20]=bar(20,100.8,100.9,100,100.5);
 crtExecution[21]=bar(21,100.5,105,100.2,104.5); // MSS displacement through 102
 crtExecution[22]=bar(22,104.5,105,101.2,102.5); // retest MSS level, closes back above
 const htfBar=(i,o,h,l,c)=>({time:Date.UTC(2026,0,1)+i*14400000,open:o,high:h,low:l,close:c,volume:1000});
-const crtHTF=[
-  htfBar(-1,103,108,100,106),
-  htfBar(0,107,116,100,108),
-  htfBar(1,108,112,98,105)
-];
+// Keep enough higher-timeframe history for ATR-based sweep validation. The
+// anchor and sweep pair are the latest two closed HTF candles.
+const crtHTF=Array.from({length:20},(_,i)=>htfBar(i,103,108,100,106));
+crtHTF[18]=htfBar(18,107,116,100,108);
+crtHTF[19]=htfBar(19,108,112,98,105);
+crtExecution.forEach((x,i)=>{x.time=crtHTF[19].time+i*900000;});
 const crtLayers=[
   {tf:'4H',candles:crtHTF,structure:{direction:'BULLISH'}},
   {tf:'15m',candles:crtExecution,structure:{direction:'BULLISH'}}
@@ -228,7 +230,7 @@ assert('CRT rejects a wick-only retest candle',()=>{
   return !r.tradeReady;
 });
 assert('SMC market entries require a closed FVG interaction candle',()=>{
-  const source=`server/market-engine/smc.js`;
+  const source=readFileSync(new URL('../server/market-engine/smc.js',import.meta.url),'utf8');
   return source.includes('A MARKET entry requires a closed candle')&&source.includes('marketCandleQuality');
 });
 
