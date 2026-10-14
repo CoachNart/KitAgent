@@ -132,9 +132,12 @@ export function evaluatePullback({candles=[],layers=[],price}){
   const pullbackCandles=candles.slice(touch.index,confirm.index+1);
   const pullbackLow=Math.min(...pullbackCandles.map(x=>x.low));
   const pullbackHigh=Math.max(...pullbackCandles.map(x=>x.high));
+  // Buffer the stop beyond the full retracement structure, not just the
+  // touch candle. A quarter ATR is too vulnerable to routine execution noise.
+  const stopBuffer=Math.max(a*.5,Math.abs(entry)*.0005);
   const stop=direction==='BULLISH'
-    ?Math.min(touch.candle.low,pullbackLow)-a*.25
-    :Math.max(touch.candle.high,pullbackHigh)+a*.25;
+    ?pullbackLow-stopBuffer
+    :pullbackHigh+stopBuffer;
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){failures.push('Invalid structural risk.');return {direction,failures,evidence:[]};}
   const target=nextTarget(candles,direction,entry,move,confirm.index,layers);
@@ -168,7 +171,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   const trade={
     entry,marketEntry:live,stop,target:target.price,risk,reward,rr,orderType,
     entryZone:{low:confirm.level-a*.35,high:confirm.level+a*.35,source:'CONTINUATION_BREAK_LEVEL'},
-    invalidationPrice:direction==='BULLISH'?Math.min(touch.candle.low,pullbackLow):Math.max(touch.candle.high,pullbackHigh),
+    invalidationPrice:direction==='BULLISH'?pullbackLow:pullbackHigh,
     entryReason:'HTF trend aligned with a recent confirmed impulse; price retraced into the value zone and a decisive closed candle broke the post-touch pullback range.',
     invalidation:protectedInvalid,
     invalidationSource:'impulse_origin_structural_invalidation',
