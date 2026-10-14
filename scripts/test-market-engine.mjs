@@ -1,14 +1,13 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget} from '../server/market-engine/structure.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,TOP_DOWN_MODEL,executionOrderType} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,executableTrade} from '../server/market-engine/grading.js';
 import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
-import {readFileSync} from 'node:fs';
 
 const tests=[];
 const assert=(name,okOrFn,detail='')=>{
@@ -231,9 +230,16 @@ assert('CRT rejects a wick-only retest candle',()=>{
   const r=evaluateCRT({candles:noisy,layers:crtLayers,price:103});
   return !r.tradeReady&&r.failures.length>0;
 });
-assert('SMC market-entry contract includes a closed-candle FVG interaction guard',()=>{
-  const source=readFileSync(new URL('../server/market-engine/smc.js',import.meta.url),'utf8');
-  return source.includes('A MARKET entry requires a closed candle')&&source.includes('marketCandleQuality');
+assert('SMC rejects a market entry when the last closed candle has not interacted with the FVG',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
+  const trade=buildTrade({c,price:100.2,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104});
+  return trade===null;
+});
+assert('SMC permits a market entry after a closed candle touches and holds the FVG',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
+  c[39]=bar(39,100,101,99.5,100.8);
+  const trade=buildTrade({c,price:100.2,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104});
+  return trade?.orderType==='MARKET'&&trade.entry===100;
 });
 assert('CRT stop is beyond its actual sweep extreme',()=>crtValid.trade.stop<crtValid.crt.executionSweep.extreme);
 assert('CRT targets the meaningful opposite CRT extreme with positive structural reward',()=>crtValid.trade.target===116&&crtValid.trade.rr>0);
