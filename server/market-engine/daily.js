@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
-import { authenticate } from '../access.js';
+import { authenticate, requireActiveAccess } from '../access.js';
 import { closedCandles, validateCandles, EXECUTION_TIMEFRAMES } from './data.js';
 import { STRATEGIES } from './strategies.js';
 import { analyzeOne, fetchPrice, fetchTf } from './index.js';
@@ -121,14 +121,14 @@ function publicState(state,now=Date.now()){const resetAt=toMs(state.resetAt),cou
 async function readState(uid){const ref=getAdmin().firestore().collection('users').doc(uid).collection('scanner').doc(SCAN_DOC),snap=await ref.get();if(!snap.exists)return publicState(emptyState());const state=snap.data()||{},resetAt=toMs(state.resetAt);if(state.engineVersion!==ENGINE_VERSION){const fresh=emptyState();await ref.set(fresh);return publicState(fresh)}if(resetAt&&Date.now()>=resetAt){const fresh=emptyState();await ref.set(fresh);return publicState(fresh)}return publicState(state)}
 async function reserveScan(uid){const db=getAdmin().firestore(),ref=db.collection('users').doc(uid).collection('scanner').doc(SCAN_DOC),now=Date.now();return db.runTransaction(async tx=>{const snap=await tx.get(ref);let state=snap.exists?snap.data()||{}:emptyState(now);if(state.engineVersion!==ENGINE_VERSION||!toMs(state.resetAt)||now>=toMs(state.resetAt))state=emptyState(now);const count=Number(state.generatedCount)||0;if(count>=MAX_GENERATED)return{allowed:false,code:'SCAN_LIMIT_REACHED',state};if(state.scanState==='running'&&now-toMs(state.scanStartedAt)<15*60*1000)return{allowed:false,code:'SCAN_IN_PROGRESS',state};state={...state,scanState:'running',scanStartedAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString()};tx.set(ref,state,{merge:false});return{allowed:true,state,ref}})}
 async function runUserScan(uid){const reservation=await reserveScan(uid);if(!reservation.allowed){if(reservation.code==='SCAN_LIMIT_REACHED')return{...publicState(reservation.state),code:reservation.code,error:'You have generated the maximum 10 scanner setups for this 24-hour window.'};return{...publicState(reservation.state),code:reservation.code,error:'A scanner run is already in progress. Please wait for it to finish.'}}const db=getAdmin().firestore(),ref=reservation.ref;try{const existing=Array.isArray(reservation.state.setups)?reservation.state.setups:[],remaining=MAX_GENERATED-existing.length,result=await scanTopQuality(existing.map(x=>x.id)),additions=result.setups.slice(0,Math.min(SCAN_BATCH,remaining));await recordScannerSignals(uid,additions);const combined=[...existing,...additions].slice(0,MAX_GENERATED),now=Date.now(),next={...reservation.state,setups:combined,generatedCount:combined.length,scanCount:(Number(reservation.state.scanCount)||0)+1,lastScanAt:new Date(now).toISOString(),scanState:'idle',scanUniverse:result.scanUniverse,scanDiagnostics:result.diagnostics,source:result.source,updatedAt:new Date(now).toISOString()};await ref.set(next,{merge:false});return{...publicState(next,now),generatedNow:additions.length,notice:additions.length?'Scanner added '+additions.length+' top-quality setup'+(additions.length===1?'':'s')+'.':'No new setup cleared the quality threshold on this scan. No inferior trade was added.'}}catch(error){await ref.set({...reservation.state,scanState:'idle',lastError:String(error?.message||error),lastErrorAt:new Date().toISOString(),updatedAt:new Date().toISOString()},{merge:false});throw error}}
-export default async function handler(req,res){try{const auth=await authenticate(req);if(req.method==='GET')return json(res,200,await readState(auth.uid));
+export default async function handler(req,res){try{const auth=await authenticate(req);await requireActiveAccess(auth.uid);if(req.method==='GET')return json(res,200,await readState(auth.uid));
     if(req.method==='POST')return json(res,200,await runUserScan(auth.uid));
     if(req.method==='DELETE'){
       const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
       const result=await deleteScannerSetup(auth.uid,body.setupId||body.id);
       return json(res,200,{ok:true,...result});
     }
-    return json(res,405,{ok:false,error:'Method not allowed'})}catch(e){const status=e?.code==='AUTH_REQUIRED'||e?.code==='AUTH_INVALID'?401:500;return json(res,status,{ok:false,error:e?.message||'Scanner request failed',code:e?.code||'SCANNER_ERROR'})}}
+    return json(res,405,{ok:false,error:'Method not allowed'})}catch(e){const status=e?.code==='AUTH_REQUIRED'||e?.code==='AUTH_INVALID'?401:e?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:e?.message||'Scanner request failed',code:e?.code||'SCANNER_ERROR'})}}
 
 
 export { topSymbols, candlesFor, scanSymbol };
