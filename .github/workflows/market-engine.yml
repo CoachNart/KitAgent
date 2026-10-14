@@ -18,6 +18,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Market engine regression suite
         run: npm run test:market-engine
+      - name: Signal outcome regression suite
+        run: npm run test:signal-outcomes
       - name: Live strategy rejection matrix
         continue-on-error: true
         run: npm run test:market-engine-live
