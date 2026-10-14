@@ -13,6 +13,7 @@ const strategies=Object.keys(STRATEGIES);
 const stats=new Map();
 const failures=new Map();
 const allResults=[];
+let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
 function bucket(strategy,tf){
   const key=keyOf(strategy,tf);
@@ -67,6 +68,7 @@ for(const symbol of symbols){
     const tfs=[...EXECUTION_TIMEFRAMES,'1D'];
     const rows=await Promise.all(tfs.map(async tf=>[tf,closedCandles(await fetchTf('perpetual',symbol,tf),tf)]));
     history=Object.fromEntries(rows);
+    loadedSymbols++;
   }catch(error){
     console.error('DATA ERROR',symbol,error?.message||error);
     continue;
@@ -137,3 +139,7 @@ console.log('\nSUMMARY',JSON.stringify({
   losses:rows.reduce((n,x)=>n+x.losses,0),
   note:'Exploratory sample only. Gross/net estimates exclude funding, partial fills, spread-specific bid/ask fills, and exchange-specific fee tiers; use out-of-sample windows and larger samples before drawing conclusions.'
 },null,2));
+if(loadedSymbols===0){
+  console.error('REPLAY FAILED: no historical candle data was loaded; refusing to report an empty replay as a successful test.');
+  process.exitCode=1;
+}
