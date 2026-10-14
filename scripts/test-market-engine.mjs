@@ -306,8 +306,8 @@ assert('Trade Geometry Contract accepts structurally distant target geometry',go
 assert('Trade Geometry Contract does not decide trade worthiness from R:R alone',()=>subTwoR.valid&&subTwoR.metrics.rr<1.8);
 const weakGrade=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'MAJOR_SWING',quality:95,rr:1.79},confirmation:{quality:1},freshness:{quality:1}});
 const strongGrade=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'MAJOR_SWING',quality:95,rr:2.4},confirmation:{quality:1},freshness:{quality:1}});
-assert('Trade worthiness rejects sub-1.8R opportunities',()=>weakGrade.grade==='NO-TRADE');
-assert('Trade worthiness permits structurally strong 2.4R opportunities',()=>strongGrade.grade!=='NO-TRADE');
+assert('R:R does not act as a fixed publication gate',()=>weakGrade.grade!=='NO-TRADE'&&strongGrade.grade!=='NO-TRADE');
+assert('R:R does not inflate structural quality scores',()=>weakGrade.score===strongGrade.score);
 assert('Trade Geometry Contract rejects stops inside normal volatility',()=>!tightGeometry.valid&&tightGeometry.failures.some(x=>x.includes('execution noise')));
 assert('Trade Geometry Contract rejects targets that are too close to the entry',()=>!poorReward.valid&&poorReward.failures.some(x=>x.includes('too close')));
 assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
