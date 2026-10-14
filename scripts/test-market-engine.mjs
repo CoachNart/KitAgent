@@ -7,6 +7,7 @@ import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,executableTrade} from '../server/market-engine/grading.js';
+import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
 
 const tests=[];
@@ -281,6 +282,15 @@ const hierarchyLayers=[{tf:'4H',candles:hierarchyCandles,structure:{direction:'B
 const structuralTarget=selectStructuralTarget(hierarchyCandles,'BULLISH',100,{layers:hierarchyLayers,minDistance:1});
 assert('Target hierarchy never selects a target on the wrong side of entry',()=>!structuralTarget||structuralTarget.price>100);
 assert('Target hierarchy provides provenance for the selected objective',()=>!structuralTarget||typeof structuralTarget.source==='string');
+const fartherStructuralTarget=selectMinimumRRStructuralTarget({
+  trade:{entry:100,stop:98,target:102},
+  direction:'BULLISH',
+  candles:hierarchyCandles,
+  layers:hierarchyLayers,
+  minimumRR:3
+});
+assert('3R recovery selects a real farther structural objective rather than fabricating a price',()=>!!fartherStructuralTarget&&fartherStructuralTarget.target>100&&fartherStructuralTarget.rr>=3&&typeof fartherStructuralTarget.targetSource==='string');
+
 assert('Target hierarchy can prefer repeated/major structure over a single nearby pivot',()=>{
   if(!structuralTarget)return true;
   return structuralTarget.quality>=90 || structuralTarget.clusterCount>=2 || structuralTarget.native===true;
