@@ -147,7 +147,7 @@ console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([r
 const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
 const totalWins=rows.reduce((n,x)=>n+x.wins,0);
 const totalLosses=rows.reduce((n,x)=>n+x.losses,0);
-const totalNetR=rows.reduce((n,x)=>n+(x.avgNetR??0)*x.resolved,0);
+const totalNetR=[...stats.values()].reduce((n,x)=>n+x.netR,0);
 const averageNetR=totalResolved?totalNetR/totalResolved:null;
 console.log('\nSUMMARY',JSON.stringify({
   symbols,requestedTimeframes:requested,barsPerTimeframe:bars,roundTripCostBps,
