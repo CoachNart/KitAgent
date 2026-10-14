@@ -57,6 +57,26 @@ export function gradeSetup({strategy,context={},entry={},risk={},target={},confi
   return {grade,score,hardFailures:[],confidenceEvidence:evidence};
 }
 
+export function executableTrade(trade,direction,livePrice){
+  if(!trade||typeof trade!=='object')return null;
+  const normalized={...trade};
+  if(String(trade.orderType||'').toUpperCase()!=='MARKET')return normalized;
+  const plannedEntry=Number(trade.entry);
+  const entry=Number(trade.marketEntry??livePrice);
+  const stop=Number(trade.stop),target=Number(trade.target);
+  if(![plannedEntry,entry,stop,target].every(Number.isFinite))return normalized;
+  const risk=Math.abs(entry-stop),reward=Math.abs(target-entry);
+  return {
+    ...normalized,
+    plannedEntry,
+    entry,
+    risk,
+    reward,
+    rr:risk>0?reward/risk:0,
+    executionPriceSource:'market_quote_at_signal_time'
+  };
+}
+
 export function validateTradeGeometry({trade,direction,candles=[]}={}){
   const failures=[];
   if(!trade||!['BULLISH','BEARISH'].includes(direction))return {valid:false,failures:['Missing directional trade geometry.']};
