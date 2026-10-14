@@ -1,6 +1,6 @@
 import {authenticate,requireActiveAccess} from '../access.js';
 import {normalizeRows,closedCandles,validateCandles,EXECUTION_TIMEFRAMES,roundPrice} from './data.js';
-import {structure} from './structure.js';
+import {structure,selectStructuralTarget} from './structure.js';
 import {liquidityMap} from './liquidity.js';
 import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
@@ -133,6 +133,34 @@ function marketContext(layer){
   };
 }
 
+export function selectMinimumRRStructuralTarget({trade,direction,candles=[],layers=[],minimumRR=3}={}){
+  if(!trade||!Array.isArray(candles)||!candles.length||!['BULLISH','BEARISH'].includes(direction))return null;
+  const entry=Number(trade.entry),stop=Number(trade.stop);
+  const risk=Math.abs(entry-stop);
+  if(![entry,stop].every(Number.isFinite)||!(risk>0))return null;
+  // Look only for a real, confirmed structural objective at or beyond the
+  // minimum reward distance. Never stretch a target numerically: the selected
+  // price must already exist as an eligible execution/HTF swing or liquidity pool.
+  const target=selectStructuralTarget(candles,direction,entry,{
+    layers,
+    minDistance:risk*minimumRR,
+    asOf:candles.length-1,
+    asOfTime:candles.at(-1)?.time??null
+  });
+  if(!target)return null;
+  const reward=Math.abs(target.price-entry),rr=reward/risk;
+  if(!(reward>0&&rr>=minimumRR))return null;
+  return {
+    ...trade,
+    target:target.price,
+    reward,
+    risk,
+    rr,
+    targetSource:target.source||'STRUCTURAL_TARGET',
+    targetSelection:{price:target.price,source:target.source,quality:target.quality,pool:target.pool,minimumRR}
+  };
+}
+
 export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
   const order=CHAIN[tf];
   const layers=order.map(x=>({
@@ -172,13 +200,26 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price){
   let failures=[...(result.failures||[])];
   let trade=executableTrade(result.trade,result.direction,price);
   if(trade){
-    const geometry=validateTradeGeometry({trade,direction:result.direction,candles:execution.candles});
+    let geometry=validateTradeGeometry({trade,direction:result.direction,candles:execution.candles});
+    if(!geometry.valid&&geometry.failures.some(x=>x.includes('below the 3R minimum'))){
+      const structuralAlternative=selectMinimumRRStructuralTarget({
+        trade,direction:result.direction,candles:execution.candles,layers,minimumRR:3
+      });
+      if(structuralAlternative){
+        const alternateGeometry=validateTradeGeometry({trade:structuralAlternative,direction:result.direction,candles:execution.candles});
+        if(alternateGeometry.valid){
+          trade=structuralAlternative;
+          geometry=alternateGeometry;
+          failures.push('Target selected from a farther confirmed structural objective to satisfy the 3R minimum; nearer structure remains a potential obstacle.');
+        }
+      }
+    }
     if(!geometry.valid){
       failures.push(...geometry.failures);
       grade=noTrade(geometry.failures);
       trade=null;
     }else if(grade?.confidenceEvidence){
-      grade={...grade,confidenceEvidence:[...grade.confidenceEvidence,{type:'TRADE_GEOMETRY',...geometry.metrics,interpretation:'validated at executable entry; minimum 3R required for publication'}]};
+      grade={...grade,confidenceEvidence:[...grade.confidenceEvidence,{type:'TRADE_GEOMETRY',...geometry.metrics,interpretation:'validated at executable entry; minimum 3R required for publication',targetSelection:trade.targetSelection||null}]};
     }
   }
   return{
