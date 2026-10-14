@@ -88,7 +88,9 @@ export function validateTradeGeometry({trade,direction,candles=[]}={}){
   const rr=risk>0?reward/risk:0;
   const a=atr(candles,14)||0;
   const zone=trade.entryZone;
-  if(zone){
+  if(!zone){
+    failures.push('Trade has no explicit structural entry zone; an unanchored entry is not publishable.');
+  }else{
     const low=Number(zone.low),high=Number(zone.high);
     if(!(Number.isFinite(low)&&Number.isFinite(high)&&low<=high))
       failures.push('Entry zone is malformed; the setup has no valid execution area.');
