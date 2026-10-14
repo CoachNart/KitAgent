@@ -89,7 +89,7 @@ function trade({c,bos,retestPoint,direction,price,targetSwing}){
   };
 }
 
-function scoreSetup({layers,bos,retestPoint,price,entry,target,rr,candles}){
+function scoreSetup({layers,bos,retestPoint,price,entry,target,rr,candles,direction}){
   const a=atr(candles,14)||0;
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const distance=Math.abs(price-entry);
@@ -130,7 +130,7 @@ export function evaluateTopDown({candles,layers,price}){
     if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))continue;
     const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
     if(!tradeResult)continue;
-    const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,rr:tradeResult.rr,candles:c});
+    const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,rr:tradeResult.rr,candles:c,direction});
     selected={bos,rt,entry,targetSwing,tradeResult,scored};
     break;
   }
