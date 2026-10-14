@@ -334,6 +334,8 @@ assert('Trade Geometry Contract rejects targets that are too close to the entry'
 assert('Trade Geometry Contract rejects unrelated excessively wide invalidation',()=>!wideGeometry.valid&&wideGeometry.failures.some(x=>x.includes('excessively wide')));
 assert('Trade Geometry Contract rejects implausible 40R geometry',()=>!extremeRr.valid&&extremeRr.failures.some(x=>x.includes('exceeds 10R')||x.includes('too far')));
 assert('Trade Geometry Contract rejects trades with no numeric invalidation anchor',()=>!missingInvalidation.valid&&missingInvalidation.failures.some(x=>x.includes('no numeric structural invalidation')));
+const nearestTarget=selectStructuralTarget(geoCandles,'BULLISH',100,{nativeTargets:[{price:110,source:'CRT_OPPOSITE_RANGE',native:true},{price:140,source:'DISTANT_NATIVE_OBJECTIVE',native:true}]});
+assert('Structural target selection rejects distant objectives when a nearer valid native target exists',()=>nearestTarget?.price===110);
 
 
 // Scanner smoke: run the real scanner helpers against deterministic Bybit-shaped
