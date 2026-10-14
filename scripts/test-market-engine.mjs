@@ -6,7 +6,7 @@ import {evaluateTopDown,TOP_DOWN_MODEL,executionOrderType} from '../server/marke
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
-import {gradeSetup,validateTradeGeometry} from '../server/market-engine/grading.js';
+import {gradeSetup,validateTradeGeometry,executableTrade} from '../server/market-engine/grading.js';
 import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
 import {readFileSync} from 'node:fs';
 
@@ -294,6 +294,14 @@ assert('Confidence model returns bounded structural quality',()=>strongConfidenc
 assert('Confidence model separates strong and weak structural quality',()=>strongConfidence.score>weakConfidence.score);
 assert('Confidence model does not hardcode an 88% ceiling',()=>strongConfidence.score!==88||weakConfidence.score===88);
 assert('Confidence model labels score as structural quality, not win probability',()=>strongConfidence.confidenceEvidence.some(x=>x.type==='CONFIDENCE_MODEL'&&x.interpretation==='structural quality, not win probability'));
+
+// Executable market-order pricing: the quoted execution price, not the planned
+// structural level, must drive the displayed entry and realized R multiple.
+const marketExecution=executableTrade({entry:100,marketEntry:101,stop:98,target:104,orderType:'MARKET'},'BULLISH',99.8);
+const limitExecution=executableTrade({entry:100,marketEntry:101,stop:98,target:104,orderType:'LIMIT'},'BULLISH',99.8);
+assert('Market orders use the live executable quote as entry and preserve the planned level',()=>marketExecution.entry===101&&marketExecution.plannedEntry===100&&marketExecution.executionPriceSource==='market_quote_at_signal_time');
+assert('Market-order R:R is recomputed from executable entry',()=>marketExecution.risk===3&&marketExecution.reward===3&&marketExecution.rr===1);
+assert('Limit-order entry remains at its planned limit price',()=>limitExecution.entry===100&&limitExecution.plannedEntry===undefined);
 
 // Trade Geometry Contract: strategy structure may be valid, but publication is
 // blocked when the actual entry/stop/target expression is structurally poor.
