@@ -65,7 +65,7 @@ async function fetchReplayCandles(symbol,tf){
   url.searchParams.set('instId',symbol.replace(/USDT$/,'-USDT-SWAP'));
   url.searchParams.set('bar',intervals[tf]);
   url.searchParams.set('limit','300');
-  const response=await fetch(url);
+  const response=await fetch(url,{signal:AbortSignal.timeout(12000)});
   if(!response.ok)throw new Error('OKX perpetual historical candles HTTP '+response.status+' '+response.statusText);
   const payload=await response.json();
   if(payload.code!=='0'||!Array.isArray(payload.data)||!payload.data.length)throw new Error('OKX historical candles error: '+(payload.msg||payload.code||'no candles'));
