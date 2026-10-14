@@ -6,7 +6,6 @@ import { db } from './firebase.js';
 const TRIAL_MS=3*24*60*60*1000;
 export default function AccessGate({user,children}){
  const [profile,setProfile]=useState(null),[loaded,setLoaded]=useState(false),[now,setNow]=useState(Date.now());
- const premiumHint=(()=>{try{return localStorage.getItem('kitsetups:premium-active')==='1'}catch{return false}})();
  useEffect(()=>{if(!db||!user?.uid){setLoaded(true);return undefined}return onSnapshot(doc(db,'users',user.uid),{includeMetadataChanges:true},s=>{setProfile(s.exists()?s.data():null);if(!s.metadata.fromCache)setLoaded(true)},()=>setLoaded(true))},[user?.uid]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[]);
  if(!loaded||!profile)return children;
@@ -24,7 +23,6 @@ export default function AccessGate({user,children}){
  const subscriptionStatus=String(profile.subscription?.status||'').toLowerCase();
  const premiumActive=(plan==='premium'||subscriptionStatus==='active'||subscriptionStatus==='current'||profile.premium===true)&&(!subscriptionEnd||subscriptionEnd>now);
  if(premiumActive){try{localStorage.setItem('kitsetups:premium-active','1')}catch{}return children}
- if(premiumHint)return children;
  const premiumExpired=(plan==='premium'||subscriptionStatus==='active'||subscriptionStatus==='current'||profile.premium===true)&&subscriptionEnd>0&&subscriptionEnd<=now;
  const trialActive=plan!=='premium'&&trialEnd>now;
  if(trialActive)return children;
