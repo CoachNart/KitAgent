@@ -96,7 +96,7 @@ function SignalCard({signal:s,onDelete}) {
         {s.confidence != null ? (
           <>
             <i />
-            <span>{s.confidence}% CONFIDENCE</span>
+            <span>QUALITY SCORE {s.confidence}/100</span>
           </>
         ) : null}
       </div>
