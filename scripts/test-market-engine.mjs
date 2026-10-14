@@ -327,10 +327,10 @@ assert('Confidence model labels score as structural quality, not win probability
 
 // Executable market-order pricing: the quoted execution price, not the planned
 // structural level, must drive the displayed entry and realized R multiple.
-const marketExecution=executableTrade({entry:100,marketEntry:101,stop:98,target:104,orderType:'MARKET'},'BULLISH',99.8);
+const marketExecution=executableTrade({entry:100,marketEntry:101,stop:98,target:104,orderType:'MARKET'},'BULLISH',101.5);
 const limitExecution=executableTrade({entry:100,marketEntry:101,stop:98,target:104,orderType:'LIMIT'},'BULLISH',99.8);
-assert('Market orders use the live executable quote as entry and preserve the planned level',()=>marketExecution.entry===101&&marketExecution.plannedEntry===100&&marketExecution.executionPriceSource==='market_quote_at_signal_time');
-assert('Market-order R:R is recomputed from executable entry',()=>marketExecution.risk===3&&marketExecution.reward===3&&marketExecution.rr===1);
+assert('Market orders use the live executable quote as entry and preserve the planned level',()=>marketExecution.entry===101.5&&marketExecution.marketEntry===101.5&&marketExecution.plannedEntry===100&&marketExecution.executionPriceSource==='market_quote_at_signal_time');
+assert('Market-order R:R is recomputed from executable entry',()=>marketExecution.risk===3.5&&marketExecution.reward===2.5&&Math.abs(marketExecution.rr-(2.5/3.5))<1e-9);
 assert('Limit-order entry remains at its planned limit price',()=>limitExecution.entry===100&&limitExecution.plannedEntry===undefined);
 
 // Trade Geometry Contract: entry, stop, target and invalidation must describe
