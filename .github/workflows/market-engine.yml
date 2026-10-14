@@ -9,6 +9,7 @@ on:
 jobs:
   market-engine:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +21,8 @@ jobs:
         run: npm run test:market-engine
       - name: Signal outcome regression suite
         run: npm run test:signal-outcomes
+      - name: Historical market replay (Bybit public candles)
+        run: npm run test:market-engine-replay -- --symbols=BTCUSDT,ETHUSDT,SOLUSDT --bars=12 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         continue-on-error: true
         run: npm run test:market-engine-live
