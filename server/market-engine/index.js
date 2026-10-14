@@ -344,6 +344,8 @@ export default async function handler(req,res){
         stopLoss:roundPrice(best.trade.stop),
         takeProfit1:roundPrice(best.trade.target),
         takeProfit2:null,
+        targetSource:best.trade.targetSource||null,
+        targetSelection:best.trade.targetSelection||null,
         riskReward:'1:'+best.trade.rr.toFixed(2),
         riskRewardValue:+best.trade.rr.toFixed(2),
         orderType:best.trade.orderType||'MARKET',
