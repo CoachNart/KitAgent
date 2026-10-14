@@ -158,7 +158,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   }
   const grade=gradeSetup({
     strategy:'PULLBACK',
-    context:{aligned:true,trend:layers.at(-1)?.structure?.state?.startsWith('TRENDING_')},
+    context:{aligned:true,trend:layers.at(-1)?.structure?.direction===direction},
     entry:{anchorQuality:1,executionQuality:near?1:.8},
     risk:{invalidationQuality:1,geometryQuality:1},
     target:{...target,rr},
