@@ -205,7 +205,23 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 }
 
 export function selectStructuralTarget(c,direction,entry,options={}){
-  return rankStructuralTargets(c,direction,entry,options)[0]||null;
+  const candidates=rankStructuralTargets(c,direction,entry,options);
+  if(!candidates.length)return null;
+  const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  // Do not choose a distant high-scoring HTF pool merely because its quality
+  // number outranks a nearer executable objective. Targets beyond this range
+  // are not valid execution-timeframe take-profits.
+  const maxDistance=Math.max(a*12,Math.abs(entry)*.05);
+  const plausible=candidates.filter(x=>Math.abs(x.price-entry)<=maxDistance);
+  if(!plausible.length)return null;
+  // Preserve strategy-native objectives when they are realistically reachable;
+  // otherwise choose the nearest meaningful structural objective. Quality only
+  // breaks ties between similarly distant levels, not at the expense of target
+  // realism or a coherent stop/target pair.
+  const native=plausible.filter(x=>x.native)
+    .sort((x,y)=>Math.abs(x.price-entry)-Math.abs(y.price-entry)||y.quality-x.quality)[0];
+  if(native)return native;
+  return plausible.sort((x,y)=>Math.abs(x.price-entry)-Math.abs(y.price-entry)||y.quality-x.quality)[0]||null;
 }
 
 export function displacement(c,direction,asOf=c.length-1){
