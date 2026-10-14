@@ -4,7 +4,7 @@ import {gradeSetup} from './grading.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
-export {fvgAt, meaningfulDisplacement, findSweeps};
+export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
