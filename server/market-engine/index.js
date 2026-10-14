@@ -298,7 +298,7 @@ export default async function handler(req,res){
     const requested=String(req.query.timeframe||'AUTO');
 
     if(market!=='perpetual')return json(res,400,{ok:false,error:'KitSetups supports Crypto Perpetuals only'});
-    if(!STRATEGIES[strategy])return json(res,400,{ok:false,error:'Unsupported strategy'});
+    if(strategy!=='AUTO'&&!STRATEGIES[strategy])return json(res,400,{ok:false,error:'Unsupported strategy'});
     if(!symbol)return json(res,400,{ok:false,error:'Missing symbol'});
     if(requested!=='AUTO'&&!EXECUTION_TIMEFRAMES.includes(requested))
       return json(res,400,{ok:false,error:'Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO'});
@@ -316,7 +316,13 @@ export default async function handler(req,res){
     }
 
     const results=[];
-    for(const tf of tfs)results.push(await analyzeOne(market,symbol,strategy,tf,all,price.last,price));
+    const strategies=strategy==='AUTO'?Object.keys(STRATEGIES):[strategy];
+    for(const strategyKey of strategies){
+      for(const tf of tfs){
+        const evaluated=await analyzeOne(market,symbol,strategyKey,tf,all,price.last,price);
+        results.push({...evaluated,strategyKey});
+      }
+    }
 
     const viable=results.filter(x=>
       ['A+','A'].includes(x.grade.grade)&&
@@ -330,13 +336,14 @@ export default async function handler(req,res){
 
     viable.sort((a,b)=>b.grade.score-a.grade.score||b.trade.rr-a.trade.rr);
     const best=viable[0]||null;
+    const selectedStrategy=best?.strategyKey||(strategy==='AUTO'?'AUTO':strategy);
 
     const setup=best
       ?{
         tradeReady:true,
         setupStatus:'TRADE READY',
-        strategy,
-        strategyName:STRATEGIES[strategy].name,
+        strategy:selectedStrategy,
+        strategyName:STRATEGIES[selectedStrategy].name,
         directionBias:best.direction,
         bias:best.direction==='BULLISH'?'LONG':'SHORT',
         entry:roundPrice(best.trade.entry),
@@ -360,8 +367,8 @@ export default async function handler(req,res){
         marketRegime:best.structure?.state||null,
         strategyEvidence:best.evidence,
         strategyFailures:[],
-        strategyReason:STRATEGY_REASONS[strategy],
-        strategyDetails:best[strategy==='TOP_DOWN'?'topDown':strategy==='PULLBACK'?'pullback':strategy==='BREAKOUT'?'breakoutRetest':strategy==='SMC'?'smc':strategy==='MSNR'?'msnr':'crt']||null,
+        strategyReason:STRATEGY_REASONS[selectedStrategy],
+        strategyDetails:best[selectedStrategy==='TOP_DOWN'?'topDown':selectedStrategy==='PULLBACK'?'pullback':selectedStrategy==='BREAKOUT'?'breakoutRetest':selectedStrategy==='SMC'?'smc':selectedStrategy==='MSNR'?'msnr':'crt']||null,
         structuralInvalidation:best.trade.invalidation,
         invalidationSource:best.trade.invalidationSource||null,
         tradeBreakdown:{
@@ -385,6 +392,7 @@ export default async function handler(req,res){
         debug:{
           selectedTimeframe:best.tf,
           candidates:results.map(x=>({
+            strategy:x.strategyKey,
             timeframe:x.tf,
             grade:x.grade,
             failures:x.failures,
@@ -404,7 +412,7 @@ export default async function handler(req,res){
         tradeReady:false,
         setupStatus:'NO TRADE',
         strategy,
-        strategyName:STRATEGIES[strategy].name,
+        strategyName:strategy==='AUTO'?'Auto · all strategies':STRATEGIES[strategy].name,
         directionBias:'WAIT',
         bias:'WAIT',
         entry:null,
@@ -420,7 +428,7 @@ export default async function handler(req,res){
         analysisTimeframes:requested==='AUTO'?EXECUTION_TIMEFRAMES:CHAIN[requested],
         strategyEvidence:results.flatMap(x=>x.evidence).slice(0,8),
         strategyFailures:[...new Set(results.flatMap(x=>x.failures))].slice(0,12),
-        strategyReason:`No ${STRATEGY_REASONS[strategy]||'strategy-specific entry contract'} has fully passed on the evaluated timeframe(s).`,
+        strategyReason:strategy==='AUTO'?'No strategy passed the full entry, structure, and trade-geometry checks on the evaluated timeframe(s).':`No ${STRATEGY_REASONS[strategy]||'strategy-specific entry contract'} has fully passed on the evaluated timeframe(s).`,
         debug:{
           selectedTimeframe:null,
           candidates:results.map(x=>({
@@ -440,10 +448,11 @@ export default async function handler(req,res){
       symbol,
       timeframe:requested,
       strategy,
-      strategyInfo:STRATEGIES[strategy],
+      strategyInfo:strategy==='AUTO'?{name:'Auto · all strategies',status:'READY',strategies:Object.keys(STRATEGIES)}:STRATEGIES[strategy],
       setup,
       quote:price,
       executionCandidates:results.map(x=>({
+        strategy:x.strategyKey,
         timeframe:x.tf,
         grade:x.grade.grade,
         score:x.grade.score,
