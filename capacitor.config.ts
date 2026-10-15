@@ -9,7 +9,8 @@ const config: CapacitorConfig = {
   },
   server: {
     androidScheme: 'https',
-    url: 'https://kitsetups.xyz'
+    url: 'https://kitsetups.xyz',
+    errorPath: 'offline.html'
   }
 };
 
