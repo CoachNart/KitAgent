@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07090c">
+  <title>Connection issue · KitSetups</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#07090c;color:#edf4f6}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:28px 22px calc(28px + env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 22%,rgba(0,199,254,.11),transparent 47%),#07090c}
+    main{width:min(100%,390px);text-align:center}
+    .mark{width:62px;height:62px;margin:0 auto 26px;border:1px solid rgba(0,199,254,.24);border-radius:19px;display:grid;place-items:center;background:linear-gradient(145deg,rgba(0,199,254,.14),rgba(0,199,254,.025));box-shadow:0 0 42px rgba(0,199,254,.07)}
+    .mark svg{width:29px;height:29px;color:#00c7fe}
+    .eyebrow{margin:0 0 12px;color:#00c7fe;font-size:10px;font-weight:750;letter-spacing:.2em;text-transform:uppercase}
+    h1{margin:0;font-size:clamp(25px,7vw,32px);font-weight:750;letter-spacing:-.045em;line-height:1.15}
+    .copy{max-width:310px;margin:15px auto 0;color:#91a0a8;font-size:14px;line-height:1.7}
+    .notice{display:flex;align-items:center;gap:10px;text-align:left;margin:26px 0 20px;padding:13px 14px;border:1px solid #202a30;border-radius:12px;background:rgba(14,19,23,.8);color:#aab7bd;font-size:12px;line-height:1.5}
+    .dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#f2b85b;box-shadow:0 0 12px rgba(242,184,91,.35)}
+    button{width:100%;min-height:49px;border:0;border-radius:12px;background:#00c7fe;color:#031116;font:750 14px inherit;font-size:14px;font-weight:750;cursor:pointer;transition:transform .15s,opacity .15s}
+    button:active{transform:scale(.985);opacity:.88}
+    button:disabled{opacity:.65}
+    .secondary{display:inline-block;margin-top:18px;padding:8px;color:#7f929b;font-size:12px;text-decoration:none}
+    .footer{margin:48px 0 0;color:#4f6068;font-size:10px;letter-spacing:.13em;text-transform:uppercase}
+    @media(prefers-reduced-motion:no-preference){.mark{animation:arrive .45s ease-out both}@keyframes arrive{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 8.5h17M6 5.5h12M6 11.5h12M8 15.5h8M10 19.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M4.5 3.5h15a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" opacity=".65"/></svg>
+    </div>
+    <p class="eyebrow">KitSetups · Connection status</p>
+    <h1>You're temporarily<br>off the grid.</h1>
+    <p class="copy">We couldn't reach KitSetups. Your app isn't broken — your connection may just need a moment.</p>
+    <div class="notice"><span class="dot"></span><span id="status">Check your internet connection, then try reconnecting.</span></div>
+    <button id="retry" type="button">Try again <span aria-hidden="true">↗</span></button>
+    <a class="secondary" href="https://kitsetups.xyz/">Open KitSetups in your browser</a>
+    <p class="footer">Market clarity. Without the noise.</p>
+  </main>
+  <script>
+    const button = document.getElementById('retry');
+    const status = document.getElementById('status');
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      button.textContent = 'Reconnecting…';
+      status.textContent = 'Trying to reconnect securely.';
+      window.location.replace('https://kitsetups.xyz/?_app_retry=' + Date.now());
+      window.setTimeout(() => {
+        button.disabled = false;
+        button.textContent = 'Try again ↗';
+        status.textContent = 'Still having trouble? Check your connection and retry.';
+      }, 7000);
+    });
+  </script>
+</body>
+</html>
