@@ -34,7 +34,7 @@ function emptyStructure(){
   };
 }
 
-export function structuralBreakEvents(c,highs,lows,asOf=c.length-1){
+export function structuralBreakEvents(c,highs,lows,asOf=(Array.isArray(c)?c.length-1:0)){
   if(!Array.isArray(c)||!c.length)return [];
   const end=Math.min(c.length-1,Math.max(0,Math.floor(Number(asOf))));
   if(!Number.isFinite(end))return [];
