@@ -69,18 +69,27 @@ async function fetchReplayCandles(symbol,tf){
   let end;
   while(rows.length<requestedLimit){
     const pageLimit=Math.min(1000,requestedLimit-rows.length);
-    const url=new URL('https://api.bybit.com/v5/market/kline');
-    url.searchParams.set('category','linear');
-    url.searchParams.set('symbol',symbol);
-    url.searchParams.set('interval',interval);
-    url.searchParams.set('limit',String(pageLimit));
-    if(end!=null)url.searchParams.set('end',String(end));
-    const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
-    if(!response.ok)throw new Error('Bybit linear historical candles HTTP '+response.status+' '+response.statusText);
-    const payload=await response.json();
-    if(payload.retCode!==0||!Array.isArray(payload.result?.list)||!payload.result.list.length){
+    let payload=null,lastError='Bybit historical candles unavailable';
+    for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+      try{
+        const url=new URL('/v5/market/kline',host);
+        url.searchParams.set('category','linear');
+        url.searchParams.set('symbol',symbol);
+        url.searchParams.set('interval',interval);
+        url.searchParams.set('limit',String(pageLimit));
+        if(end!=null)url.searchParams.set('end',String(end));
+        const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
+        if(!response.ok){lastError='Bybit historical candles HTTP '+response.status+' '+response.statusText+' ('+host+')';continue;}
+        const candidate=await response.json();
+        if(candidate.retCode!==0){lastError='Bybit historical candles retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown provider error');continue;}
+        if(!Array.isArray(candidate.result?.list)||!candidate.result.list.length){lastError='Bybit returned no historical candles ('+host+')';continue;}
+        payload=candidate;
+        break;
+      }catch(error){lastError='Bybit historical candles request failed ('+host+'): '+(error?.message||error);}
+    }
+    if(!payload){
       if(rows.length)break;
-      throw new Error('Bybit historical candles error: '+(payload.retMsg||payload.retCode||'no candles'));
+      throw new Error(lastError);
     }
     const page=payload.result.list;
     rows.push(...page.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
