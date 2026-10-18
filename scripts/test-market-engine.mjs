@@ -1,6 +1,6 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
-import {structure,selectStructuralTarget} from '../server/market-engine/structure.js';
+import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
@@ -305,6 +305,19 @@ const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
 lookaheadCandles[24]=bar(24,100,150,99,101);
 const lookaheadTarget=selectStructuralTarget(lookaheadCandles,'BULLISH',100,{asOf:15,asOfTime:lookaheadCandles[15].time,minDistance:1});
 assert('Target selection cannot use post-event structure',()=>!lookaheadTarget||lookaheadTarget.index<=15);
+
+// Active structural break validation: older levels must not produce a fresh BOS
+// after a newer confirmed swing has superseded them.
+const breakFixture=Array.from({length:8},(_,i)=>bar(i,6,11,5,[6,7,7,6,7,9,9,11][i]));
+const breakHighs=[
+  {price:8,index:0,confirmationIndex:1,time:breakFixture[0].time},
+  {price:10,index:3,confirmationIndex:4,time:breakFixture[3].time}
+];
+const staleBreaks=structuralBreakEvents(breakFixture.slice(0,7),breakHighs,[],6);
+const confirmedBreaks=structuralBreakEvents(breakFixture,breakHighs,[],7);
+assert('A superseded lower swing cannot create a fresh BOS when price closes below the active higher swing',()=>staleBreaks.length===0);
+assert('A BOS is recorded when price closes through the latest confirmed active swing',()=>confirmedBreaks.length===1&&confirmedBreaks[0].direction==='BULLISH'&&confirmedBreaks[0].level===10&&confirmedBreaks[0].index===7);
+assert('Structural break events retain the swing confirmation index for auditability',()=>confirmedBreaks[0]?.confirmationIndex===4);
 
 // Structure model validation: protected swings must be external structure, not
 // the latest internal wick.
