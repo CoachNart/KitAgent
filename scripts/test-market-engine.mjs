@@ -102,7 +102,7 @@ assert('MSNR keeps the public latest-confirmation helper exact',()=>latestMSNRCo
 assert('MSNR accepts a confirmation from the recent execution window',()=>recentMSNRConfirmations([...vCc,bar(4,103,104,102,103.2)],2).every(x=>x.signalIndex>=3));
 
 // A full-body confirmation must be the current closed candle, never an open candle.
-const layers=['4H','2H','1H','30m','30m'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
+const layers=['4H','2H','1H','30m'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
 const msnrResult=evaluateMSNR({candles:vCc,layers,price:103.5});
 assert('MSNR strategy returns a result object',!!msnrResult&&Array.isArray(msnrResult.failures));
 assert('MSNR does not use the generic execution resolver',()=>{
@@ -372,11 +372,11 @@ try{
   const scannerUniverse=await topSymbols();
   assert('Scanner discovers the configured perpetual universe',()=>scannerUniverse.length===18&&scannerUniverse.every(x=>/USDT$/.test(x.symbol)&&x.turnover24h>0));
   const scannerCandles=await candlesFor('BTCUSDT');
-  assert('Scanner loads every supported execution timeframe plus 1D context',()=>['30m','30m','1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
+  assert('Scanner loads every supported execution timeframe plus 1D context',()=>['30m','1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
   const scannerSetups=await scanSymbol(scannerUniverse[0]);
-  assert('Scanner completes the six-strategy five-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
+  assert('Scanner completes the six-strategy four-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
   assert('Scanner never publishes invalid directional geometry',()=>scannerSetups.every(x=>(x.bias==='LONG'&&x.stopLoss<x.entry&&x.takeProfit>x.entry)||(x.bias==='SHORT'&&x.stopLoss>x.entry&&x.takeProfit<x.entry)));
-  assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['30m','30m','1H','2H','4H'].includes(x.timeframe)));
+  assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['30m','1H','2H','4H'].includes(x.timeframe)));
 }finally{globalThis.fetch=originalFetch;}
 // Structural trade audit: every retained strategy must publish an execution zone and
 // a numeric invalidation anchor so an SL cannot be generated from an arbitrary distance.
