@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
-import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType} from '../server/market-engine/topDown.js';
+import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
@@ -152,6 +152,19 @@ const tdMismatch=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{
 assert('Top-Down rejects conflicting higher-timeframe directions',()=>tdMismatch.direction==='NEUTRAL'&&tdMismatch.failures.length>0);
 const tdNoBos=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Top-Down requires execution BOS before entry',()=>tdNoBos.direction==='BULLISH'&&tdNoBos.failures.some(x=>x.includes('BOS')));
+const retestBars=[
+  bar(0,100,102,99,101),
+  bar(1,101,106,100,105),
+  bar(2,104,105,100.5,102),
+  bar(3,102,103,99,99.5),
+  bar(4,99.5,104,99,103)
+];
+const invalidRetest=findValidRetest(retestBars,{index:1,level:101},'BULLISH');
+assert('Top-Down invalidates a BOS when price closes back through the broken level',()=>invalidRetest?.failed===true&&invalidRetest.index===3);
+const cleanRetest=findValidRetest(retestBars.slice(0,3),{index:1,level:101},'BULLISH');
+assert('Top-Down accepts the first confirmed retest that holds the broken level',()=>cleanRetest?.index===2&&!cleanRetest.failed);
+const noRetestAfterBos=findValidRetest([bar(0,100,101,99,100),bar(1,100,103,100,102)],{index:1,level:101},'BULLISH');
+assert('Top-Down does not invent a retest when no post-BOS candle touches the level',()=>noRetestAfterBos===null);
 assert('Top-Down uses live price to classify execution order',()=>{
   return executionOrderType({direction:'BULLISH',entry:11.577,price:11.1725,tolerance:.01})===null &&
     executionOrderType({direction:'BULLISH',entry:11.577,price:11.60,tolerance:.01})==='LIMIT' &&
