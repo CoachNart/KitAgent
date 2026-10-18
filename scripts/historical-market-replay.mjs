@@ -59,22 +59,43 @@ function fingerprint(t,direction){
 }
 
 async function fetchReplayCandles(symbol,tf){
-  // Research-only historical feed. The production/live engine remains Bybit-only.
-  const intervals={'30m':'30m','1H':'1H','2H':'2H','4H':'4H','1D':'1D'};
-  const url=new URL('https://www.okx.com/api/v5/market/candles');
-  url.searchParams.set('instId',symbol.replace(/USDT$/,'-USDT-SWAP'));
-  url.searchParams.set('bar',intervals[tf]);
-  url.searchParams.set('limit','300');
-  const response=await fetch(url,{signal:AbortSignal.timeout(12000)});
-  if(!response.ok)throw new Error('OKX perpetual historical candles HTTP '+response.status+' '+response.statusText);
-  const payload=await response.json();
-  if(payload.code!=='0'||!Array.isArray(payload.data)||!payload.data.length)throw new Error('OKX historical candles error: '+(payload.msg||payload.code||'no candles'));
-  return payload.data.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]);
+  // Bybit is the sole market-data source for both live analysis and historical replay.
+  // Its v5 endpoint returns newest-first candles and accepts at most 1000 rows per request.
+  const intervals={'30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
+  const interval=intervals[tf];
+  if(!interval)throw new Error('Unsupported Bybit replay timeframe: '+tf);
+  const requestedLimit=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
+  const rows=[];
+  let end;
+  while(rows.length<requestedLimit){
+    const pageLimit=Math.min(1000,requestedLimit-rows.length);
+    const url=new URL('https://api.bybit.com/v5/market/kline');
+    url.searchParams.set('category','linear');
+    url.searchParams.set('symbol',symbol);
+    url.searchParams.set('interval',interval);
+    url.searchParams.set('limit',String(pageLimit));
+    if(end!=null)url.searchParams.set('end',String(end));
+    const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw new Error('Bybit linear historical candles HTTP '+response.status+' '+response.statusText);
+    const payload=await response.json();
+    if(payload.retCode!==0||!Array.isArray(payload.result?.list)||!payload.result.list.length){
+      if(rows.length)break;
+      throw new Error('Bybit historical candles error: '+(payload.retMsg||payload.retCode||'no candles'));
+    }
+    const page=payload.result.list;
+    rows.push(...page.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
+    const oldest=Math.min(...page.map(x=>Number(x[0])).filter(Number.isFinite));
+    if(!Number.isFinite(oldest)||page.length<pageLimit)break;
+    const nextEnd=oldest-1;
+    if(end!=null&&nextEnd>=end)break;
+    end=nextEnd;
+  }
+  return normalizeRows(rows).slice(-requestedLimit);
 }
 
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
-console.log('Research candle source: OKX USDT-swap public candles (offline replay only; live engine remains Bybit-only).');
-console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',bars,'| round-trip cost assumption:',roundTripCostBps,'bps');
+console.log('Historical candle source: Bybit v5 linear perpetual candles (same exchange as live market data).');
+console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',bars,'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
   let history;
@@ -156,7 +177,7 @@ console.log('\nSUMMARY',JSON.stringify({
   resolved:totalResolved,wins:totalWins,losses:totalLosses,
   winRatePct:totalResolved?+(100*totalWins/totalResolved).toFixed(2):null,
   averageNetR:averageNetR===null?null:+averageNetR.toFixed(3),
-  note:'Exploratory historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and exchange-specific fee tiers.'
+  note:'Exploratory Bybit historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and account-specific fee tiers.'
 },null,2));
 if(loadedSymbols===0){
   console.error('REPLAY FAILED: no historical candle data was loaded; refusing to report an empty replay as a successful test.');
