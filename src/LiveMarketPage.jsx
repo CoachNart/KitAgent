@@ -4,10 +4,9 @@ import {auth} from './firebase.js';
 import {MarketWatchlist, StrategySelector} from './MarketExtras.jsx';
 import './market-extras.css';
 import './live-market-final.css';
-export const TIMEFRAMES=['AUTO','15m','30m','1H','2H','4H'];
+export const TIMEFRAMES=['AUTO','30m','1H','2H','4H'];
 const TIMEFRAME_GUIDE={
  'AUTO':{title:'AUTO · best qualified execution',desc:'Evaluates every supported execution timeframe and selects the strongest strategy-specific setup that passes all rules.'},
- '15m':{title:'15m · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 15m; higher-timeframe context is checked automatically.'},
  '30m':{title:'30m · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 30m; higher-timeframe context is checked automatically.'},
  '1H':{title:'1H · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 1H; higher-timeframe context is checked automatically.'},
  '2H':{title:'2H · execution timeframe',desc:'The selected strategy must complete its own trigger and entry model on 2H; higher-timeframe context is checked automatically.'},
