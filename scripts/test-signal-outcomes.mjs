@@ -9,6 +9,7 @@ const minute=Math.floor(Date.now()/60000)*60000;
 const generatedAt=new Date(minute-4*60000).toISOString();
 const baseSignal={
   id:'test-limit-signal',
+  engineVersion:'market-engine-v7',
   market:'perpetual',
   symbol:'BTCUSDT',
   direction:'LONG',
@@ -32,7 +33,7 @@ try{
   ]);
   const ambiguous=await resolveStatus(baseSignal,96);
   assert('Limit entry and stop in the same candle are not counted as a verified loss',
-    ambiguous.status==='activation_ambiguous'&&ambiguous.closedAt==null&&ambiguous.pnlPercent==null&&ambiguous.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE');
+    ambiguous.status==='activation_ambiguous'&&ambiguous.closedAt==null&&ambiguous.pnlPercent==null&&ambiguous.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE'&&ambiguous.outcomeEvidence?.engineVersion==='market-engine-v7');
 
   globalThis.fetch=mockKlines([
     row(minute-4*60000,100,101,99,100.5),
@@ -40,7 +41,7 @@ try{
   ]);
   const verified=await resolveStatus(baseSignal,97.5);
   assert('A clean entry candle followed by a later stop candle resolves as a loss',
-    verified.status==='stop_hit'&&verified.result==='loss'&&verified.closedAt!=null&&verified.outcomeEvidence?.event==='STOP_TOUCH');
+    verified.status==='stop_hit'&&verified.result==='loss'&&verified.closedAt!=null&&verified.outcomeEvidence?.event==='STOP_TOUCH'&&verified.outcomeEvidence?.engineVersion==='market-engine-v7');
 
   globalThis.fetch=mockKlines([
     row(minute-4*60000,100,101,99,100.5),
