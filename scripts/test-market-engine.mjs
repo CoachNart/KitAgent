@@ -6,7 +6,7 @@ import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRe
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
-import {gradeSetup,validateTradeGeometry,executableTrade} from '../server/market-engine/grading.js';
+import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
 
@@ -358,6 +358,14 @@ const limitExecution=executableTrade({entry:100,marketEntry:101,stop:98,target:1
 assert('Market orders use the live executable quote as entry and preserve the planned level',()=>marketExecution.entry===101.5&&marketExecution.marketEntry===101.5&&marketExecution.plannedEntry===100&&marketExecution.executionPriceSource==='market_quote_at_signal_time');
 assert('Market-order R:R is recomputed from executable entry',()=>marketExecution.risk===3.5&&marketExecution.reward===2.5&&Math.abs(marketExecution.rr-(2.5/3.5))<1e-9);
 assert('Limit-order entry remains at its planned limit price',()=>limitExecution.entry===100&&limitExecution.plannedEntry===undefined);
+
+// Shared order-state validation: pending limits cannot remain published after
+// the executable quote reaches or crosses their planned entry.
+assert('Shared entry validation accepts a bullish limit that is still waiting below price',()=>validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BULLISH',livePrice:101}).valid);
+assert('Shared entry validation rejects a bullish limit already reached by price',()=>!validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BULLISH',livePrice:99.9}).valid);
+assert('Shared entry validation accepts a bearish limit that is still waiting above price',()=>validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BEARISH',livePrice:99}).valid);
+assert('Shared entry validation rejects a bearish limit already reached by price',()=>!validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BEARISH',livePrice:100.1}).valid);
+assert('Shared entry validation accepts a valid market order without applying pending-limit rules',()=>validateEntryExecution({trade:{entry:100,orderType:'MARKET'},direction:'BULLISH',livePrice:100.2}).valid);
 
 // Trade Geometry Contract: entry, stop, target and invalidation must describe
 // one coherent setup. Extreme R:R is rejected instead of being celebrated.
