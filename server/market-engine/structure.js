@@ -34,22 +34,41 @@ function emptyStructure(){
   };
 }
 
-function breakEvents(c,highs,lows,asOf){
+export function structuralBreakEvents(c,highs,lows,asOf=c.length-1){
+  if(!Array.isArray(c)||!c.length)return [];
+  const end=Math.min(c.length-1,Math.max(0,Math.floor(Number(asOf))));
+  if(!Number.isFinite(end))return [];
+  const orderedHighs=[...(highs||[])].sort((a,b)=>a.confirmationIndex-b.confirmationIndex||a.index-b.index);
+  const orderedLows=[...(lows||[])].sort((a,b)=>a.confirmationIndex-b.confirmationIndex||a.index-b.index);
   const events=[];
-  for(const x of highs){
-    for(let i=x.confirmationIndex;i<=asOf;i++){
-      if(c[i].close>x.price){
-        events.push({type:'BOS',direction:'BULLISH',level:x.price,index:i,brokenSwingIndex:x.index,age:asOf-i});
-        break;
-      }
+  let highCursor=0,lowCursor=0,activeHigh=null,activeLow=null;
+
+  // Keep only the latest confirmed swing on each side active. Older levels are
+  // superseded when a newer pivot confirms; breaking a stale level must not
+  // masquerade as a fresh BOS while the current structural swing still holds.
+  for(let i=0;i<=end;i++){
+    while(highCursor<orderedHighs.length&&orderedHighs[highCursor].confirmationIndex<=i){
+      activeHigh=orderedHighs[highCursor++];
     }
-  }
-  for(const x of lows){
-    for(let i=x.confirmationIndex;i<=asOf;i++){
-      if(c[i].close<x.price){
-        events.push({type:'BOS',direction:'BEARISH',level:x.price,index:i,brokenSwingIndex:x.index,age:asOf-i});
-        break;
-      }
+    while(lowCursor<orderedLows.length&&orderedLows[lowCursor].confirmationIndex<=i){
+      activeLow=orderedLows[lowCursor++];
+    }
+    const close=Number(c[i]?.close);
+    if(!Number.isFinite(close))continue;
+
+    if(activeHigh&&i>=activeHigh.confirmationIndex&&close>activeHigh.price){
+      events.push({
+        type:'BOS',direction:'BULLISH',level:activeHigh.price,index:i,
+        brokenSwingIndex:activeHigh.index,confirmationIndex:activeHigh.confirmationIndex,age:end-i
+      });
+      activeHigh=null;
+    }
+    if(activeLow&&i>=activeLow.confirmationIndex&&close<activeLow.price){
+      events.push({
+        type:'BOS',direction:'BEARISH',level:activeLow.price,index:i,
+        brokenSwingIndex:activeLow.index,confirmationIndex:activeLow.confirmationIndex,age:end-i
+      });
+      activeLow=null;
     }
   }
   return events.sort((a,b)=>a.index-b.index);
@@ -83,7 +102,7 @@ export function structure(c,asOf=c.length-1){
   const hh=lh.price>ph.price,hl=ll.price>pl.price;
   const lowerHigh=lh.price<ph.price,lowerLow=ll.price<pl.price;
   const rawDirection=hh&&hl?'BULLISH':lowerHigh&&lowerLow?'BEARISH':'NEUTRAL';
-  const events=breakEvents(c,eh,el,asOf);
+  const events=structuralBreakEvents(c,eh,el,asOf);
   const last=events.at(-1)||null;
   const prior=events.at(-2)||null;
 
