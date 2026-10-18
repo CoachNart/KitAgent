@@ -4,7 +4,7 @@ import {structure,selectStructuralTarget} from './structure.js';
 import {liquidityMap} from './liquidity.js';
 import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
-import {noTrade,validateTradeGeometry,executableTrade} from './grading.js';
+import {noTrade,validateTradeGeometry,validateEntryExecution,executableTrade} from './grading.js';
 
 const BYBIT={'30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
 const CHAIN={
@@ -199,6 +199,14 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quot
   let failures=[...(result.failures||[])];
   const executablePrice=result.direction==='BULLISH'&&Number(quote?.ask)>0?Number(quote.ask):result.direction==='BEARISH'&&Number(quote?.bid)>0?Number(quote.bid):price;
   let trade=executableTrade(result.trade,result.direction,executablePrice);
+  if(trade){
+    const entryExecution=validateEntryExecution({trade,direction:result.direction,livePrice:executablePrice});
+    if(!entryExecution.valid){
+      failures.push(...entryExecution.failures);
+      grade=noTrade(entryExecution.failures);
+      trade=null;
+    }
+  }
   if(trade){
     let geometry=validateTradeGeometry({trade,direction:result.direction,candles:execution.candles});
     if(!geometry.valid&&geometry.failures.some(x=>x.includes('below the 3R minimum'))){
