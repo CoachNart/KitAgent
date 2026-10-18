@@ -300,7 +300,7 @@ export default async function handler(req,res){
     if(strategy!=='AUTO'&&!STRATEGIES[strategy])return json(res,400,{ok:false,error:'Unsupported strategy'});
     if(!symbol)return json(res,400,{ok:false,error:'Missing symbol'});
     if(requested!=='AUTO'&&!EXECUTION_TIMEFRAMES.includes(requested))
-      return json(res,400,{ok:false,error:'Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO'});
+      return json(res,400,{ok:false,error:'Execution timeframe must be 30m, 1H, 2H, 4H, or AUTO'});
 
     const price=await fetchPrice(market,symbol);
     const tfs=requested==='AUTO'?EXECUTION_TIMEFRAMES:[requested];
