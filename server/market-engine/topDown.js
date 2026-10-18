@@ -36,17 +36,19 @@ function executionBOS(c,direction){
 export function findValidRetest(c,bos,direction){
   if(!Array.isArray(c)||!bos||!Number.isInteger(bos.index)||bos.index<0||bos.index>=c.length-1)return null;
   if(!['BULLISH','BEARISH'].includes(direction)||!Number.isFinite(bos.level))return null;
+  let candidate=null;
   for(let i=bos.index+1;i<c.length;i++){
     const x=c[i];
     if(!x||![x.open,x.high,x.low,x.close].every(Number.isFinite))continue;
     const invalidated=direction==='BULLISH'?x.close<bos.level:x.close>bos.level;
     if(invalidated)return {failed:true,index:i,level:bos.level,close:x.close};
+    if(candidate)continue;
     const touched=direction==='BULLISH'?x.low<=bos.level&&x.high>=bos.level:x.high>=bos.level&&x.low<=bos.level;
     const held=direction==='BULLISH'?x.close>bos.level:x.close<bos.level;
     const ratio=bodyRatio(x);
-    if(touched&&held&&ratio>=.35)return {index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i,bodyRatio:ratio};
+    if(touched&&held&&ratio>=.35)candidate={index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i,bodyRatio:ratio};
   }
-  return null;
+  return candidate;
 }
 
 export function executionOrderType({direction,entry,price,tolerance}){
