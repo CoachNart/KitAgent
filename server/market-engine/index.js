@@ -6,9 +6,8 @@ import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
 import {noTrade,validateTradeGeometry,executableTrade} from './grading.js';
 
-const BYBIT={'15m':'15','30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
+const BYBIT={'30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
 const CHAIN={
-  '15m':['4H','2H','1H','30m','15m'],
   '30m':['4H','2H','1H','30m'],
   '1H':['4H','2H','1H'],
   '2H':['4H','2H'],
@@ -117,7 +116,7 @@ const STRATEGY_REASONS={
 
 function plan(tf){
   if(tf==='AUTO')return EXECUTION_TIMEFRAMES;
-  if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO');
+  if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 30m, 1H, 2H, 4H, or AUTO');
   return CHAIN[tf];
 }
 
@@ -301,7 +300,7 @@ export default async function handler(req,res){
     if(strategy!=='AUTO'&&!STRATEGIES[strategy])return json(res,400,{ok:false,error:'Unsupported strategy'});
     if(!symbol)return json(res,400,{ok:false,error:'Missing symbol'});
     if(requested!=='AUTO'&&!EXECUTION_TIMEFRAMES.includes(requested))
-      return json(res,400,{ok:false,error:'Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO'});
+      return json(res,400,{ok:false,error:'Execution timeframe must be 30m, 1H, 2H, 4H, or AUTO'});
 
     const price=await fetchPrice(market,symbol);
     const tfs=requested==='AUTO'?EXECUTION_TIMEFRAMES:[requested];

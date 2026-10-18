@@ -1,6 +1,6 @@
-const TF_MS={ '15m':900000,'30m':1800000,'1H':3600000,'2H':7200000,'4H':14400000,'1D':86400000,'1W':604800000 };
-export const EXECUTION_TIMEFRAMES=['15m','30m','1H','2H','4H'];
-export const CONTEXT_CHAIN=['4H','2H','1H','30m','15m'];
+const TF_MS={ '30m':1800000,'1H':3600000,'2H':7200000,'4H':14400000,'1D':86400000,'1W':604800000 };
+export const EXECUTION_TIMEFRAMES=['30m','1H','2H','4H'];
+export const CONTEXT_CHAIN=['4H','2H','1H','30m'];
 export function normalizeRows(rows){
  const byTime=new Map();
  for(const r of rows||[]){

@@ -2,7 +2,9 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
 const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
-const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6']);
+const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6','market-engine-v7']);
+const REQUEST_TIMEFRAMES=new Set(['AUTO','30m','1H','2H','4H']);
+const ENTRY_TIMEFRAMES=new Set(['30m','1H','2H','4H']);
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -175,9 +177,9 @@ export default async function handler(req,res){
       if(count)await batch.commit();return json(res,200,{ok:true,deleted});
     }
     if(req.method==='POST'){
-      const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),strategy=clean(body.strategy||setup.strategy,30).toUpperCase().replace(/[-\s]/g,'_'),bias=clean(setup.bias,10).toUpperCase(),source=clean(body.source,40)||'live-market-analysis',scannerSetupId=clean(body.scannerSetupId,160);
+      const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),entryTimeframe=clean(setup.entryTimeframe,10),strategy=clean(body.strategy||setup.strategy,30).toUpperCase().replace(/[-\s]/g,'_'),bias=clean(setup.bias,10).toUpperCase(),source=clean(body.source,40)||'live-market-analysis',scannerSetupId=clean(body.scannerSetupId,160);
       const orderType=clean(setup.orderType,20).toUpperCase();
-      if(market!=='perpetual'||!symbol||!timeframe||!ACTIVE_STRATEGIES.has(strategy)||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
+      if(market!=='perpetual'||!symbol||!REQUEST_TIMEFRAMES.has(timeframe)||!ENTRY_TIMEFRAMES.has(entryTimeframe)||!ACTIVE_STRATEGIES.has(strategy)||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
       const recordId=scannerSetupId?`scanner-${scannerSetupId.replace(/[^A-Z0-9_-]/gi,'-').slice(0,140)}`:null;
       const ref=recordId?collection.doc(recordId):collection.doc();
       if(recordId){const existing=await ref.get();if(existing.exists)return json(res,200,{ok:true,id:ref.id,existing:true,signal:{id:ref.id,...existing.data()}});}
@@ -193,11 +195,11 @@ export default async function handler(req,res){
           return json(res,200,{ok:true,id:duplicateDoc?.id||null,existing:true,duplicate:true,signal:{id:duplicateDoc?.id||null,...duplicate}});
         }
       }
-      const signal={signalId:recordId?`SC-${scannerSetupId}`:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,strategy,engineVersion:'market-engine-v6',direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),plannedEntry:numberOrNull(setup.plannedEntry),marketEntry:numberOrNull(setup.marketEntry),currentPrice:numberOrNull(setup.price??setup.marketEntry),limitEntry:orderType==='LIMIT'?numberOrNull(setup.limitEntry??setup.entry):null,stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source,scannerSetupId:scannerSetupId||null};
+      const signal={signalId:recordId?`SC-${scannerSetupId}`:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,strategy,engineVersion:'market-engine-v7',entryTimeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),plannedEntry:numberOrNull(setup.plannedEntry),marketEntry:numberOrNull(setup.marketEntry),currentPrice:numberOrNull(setup.price??setup.marketEntry),limitEntry:orderType==='LIMIT'?numberOrNull(setup.limitEntry??setup.entry):null,stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source,scannerSetupId:scannerSetupId||null};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
-    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&ENGINE_VERSIONS.has(String(s.engineVersion||'')));
+    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&ENGINE_VERSIONS.has(String(s.engineVersion||''))&&REQUEST_TIMEFRAMES.has(String(s.timeframe||''))&&(!s.entryTimeframe||ENTRY_TIMEFRAMES.has(String(s.entryTimeframe))));
     const dedupedRaw=dedupeSignals(currentRaw);
     const unresolved=dedupedRaw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
     const priority=[...dedupedRaw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];
