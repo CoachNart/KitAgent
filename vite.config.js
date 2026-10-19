@@ -7,6 +7,7 @@ import marketHandler from './api/market.js';
 import registerDeviceHandler from './server/register-device.js';
 import verifyPaymentHandler from './server/verify-payment.js';
 import signalsHandler from './api/signals.js';
+import communityMessageHandler from './api/community-message.js';
 
 function loadLocalFirebaseAdminEnv(mode){
   const env=loadEnv(mode,process.cwd(),'');
@@ -27,15 +28,16 @@ const localApi=()=>({
   name:'kitagent-local-api',
   configureServer(server){
     server.middlewares.use(async(req,res,next)=>{
-      if(!/^\/api\/(market|register-device|verify-payment|signals)/.test(req.url||''))return next();
+      if(!/^\/api\/(market|register-device|verify-payment|signals|community-message)/.test(req.url||''))return next();
       try{
         const url=new URL(req.url,'http://localhost');
         req.query=Object.fromEntries(url.searchParams.entries());
-        if(req.url.startsWith('/api/register-device')||req.url.startsWith('/api/verify-payment')||req.url.startsWith('/api/signals')){
+        if(req.url.startsWith('/api/register-device')||req.url.startsWith('/api/verify-payment')||req.url.startsWith('/api/signals')||req.url.startsWith('/api/community-message')){
           loadLocalFirebaseAdminEnv('development');
           const chunks=[];for await(const chunk of req)chunks.push(chunk);
           req.body=Buffer.concat(chunks).toString('utf8');
           if(req.url.startsWith('/api/signals'))return signalsHandler(req,res);
+          if(req.url.startsWith('/api/community-message'))return communityMessageHandler(req,res);
           return req.url.startsWith('/api/verify-payment')?verifyPaymentHandler(req,res):registerDeviceHandler(req,res);
         }
         return marketHandler(req,res);
@@ -47,15 +49,16 @@ const localApi=()=>({
   },
   configurePreviewServer(server){
     server.middlewares.use(async(req,res,next)=>{
-      if(!/^\/api\/(market|register-device|verify-payment|signals)/.test(req.url||''))return next();
+      if(!/^\/api\/(market|register-device|verify-payment|signals|community-message)/.test(req.url||''))return next();
       try{
         const url=new URL(req.url,'http://localhost');
         req.query=Object.fromEntries(url.searchParams.entries());
-        if(req.url.startsWith('/api/register-device')||req.url.startsWith('/api/verify-payment')||req.url.startsWith('/api/signals')){
+        if(req.url.startsWith('/api/register-device')||req.url.startsWith('/api/verify-payment')||req.url.startsWith('/api/signals')||req.url.startsWith('/api/community-message')){
           loadLocalFirebaseAdminEnv('production');
           const chunks=[];for await(const chunk of req)chunks.push(chunk);
           req.body=Buffer.concat(chunks).toString('utf8');
           if(req.url.startsWith('/api/signals'))return signalsHandler(req,res);
+          if(req.url.startsWith('/api/community-message'))return communityMessageHandler(req,res);
           return req.url.startsWith('/api/verify-payment')?verifyPaymentHandler(req,res):registerDeviceHandler(req,res);
         }
         return marketHandler(req,res);

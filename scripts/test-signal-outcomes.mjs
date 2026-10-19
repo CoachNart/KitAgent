@@ -5,8 +5,9 @@ const assert=(name,condition)=>{
   console.log('PASS: '+name);
 };
 const originalFetch=globalThis.fetch;
-const minute=Math.floor(Date.now()/60000)*60000;
-const generatedAt=new Date(minute-4*60000).toISOString();
+const candleStart=Math.floor((Date.now()-2*60*60*1000)/1800000)*1800000;
+const nextCandle=candleStart+30*60000;
+const generatedAt=new Date(candleStart).toISOString();
 const baseSignal={
   id:'test-limit-signal',
   market:'perpetual',
@@ -21,30 +22,32 @@ const baseSignal={
   status:'limit_pending'
 };
 const row=(time,open,high,low,close)=>[String(time),String(open),String(high),String(low),String(close),'1000'];
+let requestedInterval=null;
 function mockKlines(candles){
   // Bybit returns newest first; marketKlines must normalize chronological order.
-  return async()=>({ok:true,json:async()=>({retCode:0,result:{list:candles.slice().reverse()}})});
+  return async(input)=>{requestedInterval=new URL(String(input)).searchParams.get('interval');return {ok:true,json:async()=>({retCode:0,result:{list:candles.slice().reverse()}})}};
 }
 try{
   globalThis.fetch=mockKlines([
-    row(minute-4*60000,100,101,97,99),
-    row(minute-3*60000,99,100,96,97)
+    row(candleStart,100,101,97,99),
+    row(nextCandle,99,100,96,97)
   ]);
   const ambiguous=await resolveStatus(baseSignal,96);
+  assert('Signal outcome verification requests 30m candles',requestedInterval==='30');
   assert('Limit entry and stop in the same candle are not counted as a verified loss',
     ambiguous.status==='activation_ambiguous'&&ambiguous.closedAt==null&&ambiguous.pnlPercent==null&&ambiguous.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE');
 
   globalThis.fetch=mockKlines([
-    row(minute-4*60000,100,101,99,100.5),
-    row(minute-3*60000,100,100.5,97,97.5)
+    row(candleStart,100,101,99,100.5),
+    row(nextCandle,100,100.5,97,97.5)
   ]);
   const verified=await resolveStatus(baseSignal,97.5);
   assert('A clean entry candle followed by a later stop candle resolves as a loss',
     verified.status==='stop_hit'&&verified.result==='loss'&&verified.closedAt!=null&&verified.outcomeEvidence?.event==='STOP_TOUCH');
 
   globalThis.fetch=mockKlines([
-    row(minute-4*60000,100,101,99,100.5),
-    row(minute-3*60000,100.5,100.8,97.5,98)
+    row(candleStart,100,101,99,100.5),
+    row(nextCandle,100.5,100.8,97.5,98)
   ]);
   const legacyLimit={...baseSignal,limitEntry:null};
   const legacyOutcome=await resolveStatus(legacyLimit,98);
@@ -52,8 +55,8 @@ try{
     legacyOutcome.status==='stop_hit'&&legacyOutcome.result==='loss');
 
   globalThis.fetch=mockKlines([
-    row(minute-4*60000,101,101.5,100.4,100.8),
-    row(minute-3*60000,100.8,101,100.6,100.7)
+    row(candleStart,101,101.5,100.4,100.8),
+    row(nextCandle,100.8,101,100.6,100.7)
   ]);
   const marketSignal={...baseSignal,orderType:'MARKET',status:'watching',entry:100,marketEntry:101,currentPrice:101,stopLoss:100.5,takeProfit1:103};
   const marketOutcome=await resolveStatus(marketSignal,100.7);

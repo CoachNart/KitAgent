@@ -4,11 +4,11 @@ import {structure,selectStructuralTarget} from './structure.js';
 import {liquidityMap} from './liquidity.js';
 import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
-import {noTrade,validateTradeGeometry,executableTrade} from './grading.js';
+import {noTrade,validateTradeGeometry,validateEntryExecution,executableTrade} from './grading.js';
 
-const BYBIT={'15m':'15','30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
+const BYBIT={'30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
+const analysisLayerCache=new WeakMap();
 const CHAIN={
-  '15m':['4H','2H','1H','30m','15m'],
   '30m':['4H','2H','1H','30m'],
   '1H':['4H','2H','1H'],
   '2H':['4H','2H'],
@@ -117,7 +117,7 @@ const STRATEGY_REASONS={
 
 function plan(tf){
   if(tf==='AUTO')return EXECUTION_TIMEFRAMES;
-  if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO');
+  if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 30m, 1H, 2H, 4H, or AUTO');
   return CHAIN[tf];
 }
 
@@ -163,12 +163,30 @@ export function selectMinimumRRStructuralTarget({trade,direction,candles=[],laye
 
 export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quote=null){
   const order=CHAIN[tf];
-  const layers=order.map(x=>({
-    tf:x,
-    candles:allCandles[x],
-    structure:structure(allCandles[x]),
-    liquidity:liquidityMap(allCandles[x])
-  }));
+  let byTimeframe=analysisLayerCache.get(allCandles);
+  if(!byTimeframe){
+    byTimeframe=new Map();
+    analysisLayerCache.set(allCandles,byTimeframe);
+  }
+  let layers=byTimeframe.get(tf);
+  if(!layers){
+    const profileLayers=process.env.KITAGENT_PROFILE_LAYERS==='1';
+    layers=order.map(x=>{
+      const candles=allCandles[x];
+      const structureStarted=performance.now();
+      const structureResult=structure(candles);
+      const structureMs=+(performance.now()-structureStarted).toFixed(2);
+      const liquidityStarted=performance.now();
+      const liquidityResult=liquidityMap(candles);
+      const liquidityMs=+(performance.now()-liquidityStarted).toFixed(2);
+      if(profileLayers)console.log('LAYER PROFILE',JSON.stringify({
+        symbol,executionTimeframe:tf,layerTimeframe:x,candles:candles?.length||0,
+        structureMs,liquidityMs,totalMs:+(structureMs+liquidityMs).toFixed(2)
+      }));
+      return{tf:x,candles,structure:structureResult,liquidity:liquidityResult};
+    });
+    byTimeframe.set(tf,layers);
+  }
 
   const hard=[];
   for(const layer of layers){
@@ -200,6 +218,14 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quot
   let failures=[...(result.failures||[])];
   const executablePrice=result.direction==='BULLISH'&&Number(quote?.ask)>0?Number(quote.ask):result.direction==='BEARISH'&&Number(quote?.bid)>0?Number(quote.bid):price;
   let trade=executableTrade(result.trade,result.direction,executablePrice);
+  if(trade){
+    const entryExecution=validateEntryExecution({trade,direction:result.direction,livePrice:executablePrice});
+    if(!entryExecution.valid){
+      failures.push(...entryExecution.failures);
+      grade=noTrade(entryExecution.failures);
+      trade=null;
+    }
+  }
   if(trade){
     let geometry=validateTradeGeometry({trade,direction:result.direction,candles:execution.candles});
     if(!geometry.valid&&geometry.failures.some(x=>x.includes('below the 3R minimum'))){
@@ -301,7 +327,7 @@ export default async function handler(req,res){
     if(strategy!=='AUTO'&&!STRATEGIES[strategy])return json(res,400,{ok:false,error:'Unsupported strategy'});
     if(!symbol)return json(res,400,{ok:false,error:'Missing symbol'});
     if(requested!=='AUTO'&&!EXECUTION_TIMEFRAMES.includes(requested))
-      return json(res,400,{ok:false,error:'Execution timeframe must be 15m, 30m, 1H, 2H, 4H, or AUTO'});
+      return json(res,400,{ok:false,error:'Execution timeframe must be 30m, 1H, 2H, 4H, or AUTO'});
 
     const price=await fetchPrice(market,symbol);
     const tfs=requested==='AUTO'?EXECUTION_TIMEFRAMES:[requested];

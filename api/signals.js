@@ -2,7 +2,9 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
 const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
-const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6']);
+const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6','market-engine-v7']);
+const REQUEST_TIMEFRAMES=new Set(['AUTO','30m','1H','2H','4H']);
+const ENTRY_TIMEFRAMES=new Set(['30m','1H','2H','4H']);
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -50,14 +52,14 @@ export async function marketKlines(signal) {
     const all=[];
     let pageEnd=now,pages=0;
     // Bybit caps each kline response at 1,000 rows. A single request cannot
-    // reliably resolve signals older than ~16h on 1-minute candles.
+    // reliably resolve signals older than ~20 days on 30-minute candles.
     // Page backwards so outcome verification never silently loses the beginning
     // of a trade's lifecycle.
     while(pageEnd>=startMs&&pages<48){
       const u=new URL('https://api.bybit.com/v5/market/kline');
       u.searchParams.set('category','linear');
       u.searchParams.set('symbol',symbol);
-      u.searchParams.set('interval','1');
+      u.searchParams.set('interval','30');
       u.searchParams.set('start',String(startMs));
       u.searchParams.set('end',String(pageEnd));
       u.searchParams.set('limit','1000');
@@ -98,7 +100,7 @@ export async function currentPrice(signal) {
  */
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
-  // A limit order whose first entry-touching 1m candle also touches TP or SL
+  // A limit order whose first entry-touching 30m candle also touches TP or SL
   // cannot be proven filled-before-exit from OHLC alone. Keep it out of the
   // verified trade record instead of guessing the intrabar path.
   if(signal.status==='activation_ambiguous'&&signal.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE')return signal;
@@ -121,12 +123,12 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       if(candle.time<generatedMs)continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
+      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
         const targetTouched=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
         if(invalidated||targetTouched){
           return {...signal,currentPrice:price,status:'activation_ambiguous',result:null,pnlPercent:null,exitPrice:null,closedAt:null,
-            outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_AND_EXIT_SAME_CANDLE',candleTime:new Date(candle.time).toISOString(),note:'OHLC cannot prove the order of entry, stop, and target touches; excluded from verified outcomes.'}};
+            outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'ENTRY_AND_EXIT_SAME_CANDLE',candleTime:new Date(candle.time).toISOString(),note:'OHLC cannot prove the order of entry, stop, and target touches; excluded from verified outcomes.'}};
         }
         // Activate only after an entry-touching candle with no TP/SL touch has
         // completed. Later candles can then be evaluated without guessing.
@@ -136,18 +138,18 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   } else return {...signal,currentPrice:price,status:'watching'};
   if(!active)return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
   let ambiguous=false;
-  const activationCandleStart=Math.floor(Number(activatedAt)/60000)*60000;
+  const activationCandleStart=Math.floor(Number(activatedAt)/1800000)*1800000;
   for(const candle of candles){
     if(candle.time<activatedAt)continue;
-    // A MARKET signal may be generated part-way through a 1-minute candle.
+    // A MARKET signal may be generated part-way through a 30-minute candle.
     // OHLC cannot tell whether TP/SL was touched before or after generation,
     // so the overlapping candle is excluded unless generation happened exactly at its start.
     if(candle.time===activationCandleStart&&Number(activatedAt)>candle.time)continue;
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
-    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
-    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
   }
   return {...signal,currentPrice:livePrice,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
 }
@@ -175,9 +177,9 @@ export default async function handler(req,res){
       if(count)await batch.commit();return json(res,200,{ok:true,deleted});
     }
     if(req.method==='POST'){
-      const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),strategy=clean(body.strategy||setup.strategy,30).toUpperCase().replace(/[-\s]/g,'_'),bias=clean(setup.bias,10).toUpperCase(),source=clean(body.source,40)||'live-market-analysis',scannerSetupId=clean(body.scannerSetupId,160);
+      const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}),setup=body.setup||{},market=clean(body.market,30),symbol=clean(body.symbol,40),timeframe=clean(body.timeframe,10),entryTimeframe=clean(setup.entryTimeframe,10),strategy=clean(body.strategy||setup.strategy,30).toUpperCase().replace(/[-\s]/g,'_'),bias=clean(setup.bias,10).toUpperCase(),source=clean(body.source,40)||'live-market-analysis',scannerSetupId=clean(body.scannerSetupId,160);
       const orderType=clean(setup.orderType,20).toUpperCase();
-      if(market!=='perpetual'||!symbol||!timeframe||!ACTIVE_STRATEGIES.has(strategy)||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
+      if(market!=='perpetual'||!symbol||!REQUEST_TIMEFRAMES.has(timeframe)||!ENTRY_TIMEFRAMES.has(entryTimeframe)||!ACTIVE_STRATEGIES.has(strategy)||!setup.tradeReady||!['LONG','SHORT'].includes(bias)||!['MARKET','LIMIT'].includes(orderType)||![setup.entry,setup.stopLoss,setup.takeProfit1].every(v=>Number.isFinite(Number(v))))return json(res,400,{error:'Only a generated, trade-ready MARKET or LIMIT setup with Entry, Stop Loss and TP1 can be recorded.'});
       const recordId=scannerSetupId?`scanner-${scannerSetupId.replace(/[^A-Z0-9_-]/gi,'-').slice(0,140)}`:null;
       const ref=recordId?collection.doc(recordId):collection.doc();
       if(recordId){const existing=await ref.get();if(existing.exists)return json(res,200,{ok:true,id:ref.id,existing:true,signal:{id:ref.id,...existing.data()}});}
@@ -193,11 +195,11 @@ export default async function handler(req,res){
           return json(res,200,{ok:true,id:duplicateDoc?.id||null,existing:true,duplicate:true,signal:{id:duplicateDoc?.id||null,...duplicate}});
         }
       }
-      const signal={signalId:recordId?`SC-${scannerSetupId}`:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,strategy,engineVersion:'market-engine-v6',direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),plannedEntry:numberOrNull(setup.plannedEntry),marketEntry:numberOrNull(setup.marketEntry),currentPrice:numberOrNull(setup.price??setup.marketEntry),limitEntry:orderType==='LIMIT'?numberOrNull(setup.limitEntry??setup.entry):null,stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source,scannerSetupId:scannerSetupId||null};
+      const signal={signalId:recordId?`SC-${scannerSetupId}`:`KA-${symbol.replace(/[^A-Z0-9]/gi,'').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,userId:decoded.uid,market,symbol,timeframe,strategy,engineVersion:'market-engine-v7',entryTimeframe,direction:bias,orderType,confidence:numberOrNull(setup.confidence),entry:numberOrNull(setup.entry),plannedEntry:numberOrNull(setup.plannedEntry),marketEntry:numberOrNull(setup.marketEntry),currentPrice:numberOrNull(setup.price??setup.marketEntry),limitEntry:orderType==='LIMIT'?numberOrNull(setup.limitEntry??setup.entry):null,stopLoss:numberOrNull(setup.stopLoss),takeProfit1:numberOrNull(setup.takeProfit1),takeProfit2:numberOrNull(setup.takeProfit2),riskReward:clean(setup.riskReward,40),status:bias==='WAIT'?'watching':(orderType==='LIMIT'?'limit_pending':'watching'),result:null,pnlPercent:null,exitPrice:null,closedAt:null,generatedAt:admin.firestore.FieldValue.serverTimestamp(),createdAt:admin.firestore.FieldValue.serverTimestamp(),source,scannerSetupId:scannerSetupId||null};
       await ref.set(signal);return json(res,201,{ok:true,id:ref.id,signal:{...signal,generatedAt:new Date().toISOString(),createdAt:new Date().toISOString()}});
     }
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
-    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&ENGINE_VERSIONS.has(String(s.engineVersion||'')));
+    const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&ENGINE_VERSIONS.has(String(s.engineVersion||''))&&REQUEST_TIMEFRAMES.has(String(s.timeframe||''))&&(!s.entryTimeframe||ENTRY_TIMEFRAMES.has(String(s.entryTimeframe))));
     const dedupedRaw=dedupeSignals(currentRaw);
     const unresolved=dedupedRaw.filter(s=>!['target_hit','stop_hit','missed_entry'].includes(s.status));
     const priority=[...dedupedRaw.filter(s=>s.status==='open'),...unresolved.filter(s=>s.status!=='open')];

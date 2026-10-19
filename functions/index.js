@@ -108,9 +108,9 @@ exports.initializeKitAgentAccount = onCall({ region: 'us-central1', enforceAppCh
 
 
 const BYBIT_BASE = 'https://api.bybit.com';
-const ALERT_STATE_REF = db.doc('system/marketAlerts');
+const ALERT_STATE_REF = db.doc('system/marketAlerts-30m');
 const ALERT_SYMBOL_LIMIT = 5;
-const ALERT_INTERVAL = '5';
+const ALERT_INTERVAL = '30';
 const ALERT_LOOKBACK = 150;
 
 async function bybitJson(path, params = {}) {
@@ -222,13 +222,13 @@ async function sendMarketPushes(event) {
     tokens: uniqueTokens.map(item => item.token),
     notification: {
       title: `${event.symbol.replace('USDT', '')} ${event.direction} structure`,
-      body: `5m BOS detected at ${event.level}. Open KitSetups to inspect the setup.`,
+      body: `30m BOS detected at ${event.level}. Open KitSetups to inspect the setup.`,
     },
     data: {
       alertId: `structure-${event.symbol}-${event.direction}-${event.candleTime}`,
       symbol: event.symbol,
       direction: event.direction,
-      timeframe: '5m',
+      timeframe: '30m',
       url: '/market',
     },
     webpush: {

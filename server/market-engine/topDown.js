@@ -23,25 +23,105 @@ function htfBias(layers){
 function executionBOS(c,direction){
   const s=confirmedSwings(c,1);
   const swings=direction==='BULLISH'?s.highs:s.lows;
+  if(!swings.length||!c.length)return [];
+  // A BOS is the FIRST close beyond a confirmed swing after that swing
+  // becomes available. Using the latest close makes the "BOS" candle itself
+  // the final continuation candle, so no later candle can retest and hold the
+  // level without becoming a newer BOS; that made valid retests impossible.
+  // The segment tree finds the first qualifying close in O(log n).
+  const size=1<<Math.ceil(Math.log2(c.length));
+  const tree=new Float64Array(size*2);
+  const bullish=direction==='BULLISH';
+  const neutral=bullish?-Infinity:Infinity;
+  tree.fill(neutral);
+  for(let i=0;i<c.length;i++){
+    const close=Number(c[i]?.close);
+    tree[size+i]=Number.isFinite(close)?close:neutral;
+  }
+  for(let i=size-1;i>0;i--){
+    tree[i]=bullish?Math.max(tree[i*2],tree[i*2+1]):Math.min(tree[i*2],tree[i*2+1]);
+  }
+  function firstBreak(node,left,right,from,threshold){
+    if(right<from)return -1;
+    const extreme=tree[node];
+    if(bullish?extreme<=threshold:extreme>=threshold)return -1;
+    if(left===right)return left<c.length?left:-1;
+    const mid=(left+right)>>>1;
+    const found=firstBreak(node*2,left,mid,from,threshold);
+    return found>=0?found:firstBreak(node*2+1,mid+1,right,from,threshold);
+  }
   const events=[];
-  for(const sw of swings.slice().reverse()){
-    for(let i=c.length-1;i>sw.confirmationIndex;i--){
-      if(direction==='BULLISH'&&c[i].close>sw.price){events.push({index:i,level:sw.price,swingIndex:sw.index,age:c.length-1-i});break;}
-      if(direction==='BEARISH'&&c[i].close<sw.price){events.push({index:i,level:sw.price,swingIndex:sw.index,age:c.length-1-i});break;}
-    }
+  for(const sw of swings){
+    const index=firstBreak(1,0,size-1,sw.confirmationIndex+1,sw.price);
+    if(index<0)continue;
+    events.push({index,level:sw.price,swingIndex:sw.index,age:c.length-1-index});
   }
   return events.sort((a,b)=>a.index-b.index);
 }
 
-function retest(c,bos,direction){
-  const points=[];
-  for(let i=bos.index+1;i<c.length;i++){
+function retestCloseExtrema(c){
+  const minClose=new Float64Array(c.length);
+  const maxClose=new Float64Array(c.length);
+  let min=Infinity,max=-Infinity;
+  for(let i=c.length-1;i>=0;i--){
     const x=c[i];
-    const touched=direction==='BULLISH'?x.low<=bos.level:x.high>=bos.level;
-    const held=direction==='BULLISH'?x.close>bos.level:x.close<bos.level;
-    if(touched&&held&&bodyRatio(x)>=.35)points.push({index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i,bodyRatio:bodyRatio(x)});
+    if(x&&[x.open,x.high,x.low,x.close].every(Number.isFinite)){
+      min=Math.min(min,x.close);
+      max=Math.max(max,x.close);
+    }
+    minClose[i]=min;
+    maxClose[i]=max;
   }
-  return points.at(-1)||null;
+  return {minClose,maxClose};
+}
+
+export function findValidRetest(c,bos,direction,closeExtrema=null){
+  if(!Array.isArray(c)||!bos||!Number.isInteger(bos.index)||bos.index<0||bos.index>=c.length-1)return null;
+  if(!['BULLISH','BEARISH'].includes(direction)||!Number.isFinite(bos.level))return null;
+  const extrema=closeExtrema||retestCloseExtrema(c);
+  const from=bos.index+1;
+  const extreme=direction==='BULLISH'?extrema.minClose[from]:extrema.maxClose[from];
+  const invalidated=direction==='BULLISH'?extreme<bos.level:extreme>bos.level;
+  if(invalidated){
+    // Suffix extrema establish that a breach exists, but binary-searching
+    // them locates the LAST breach, not the first. Find the first candle whose
+    // close actually invalidated the BOS so chronology diagnostics are honest.
+    let index=-1;
+    for(let i=from;i<c.length;i++){
+      const close=Number(c[i]?.close);
+      if(!Number.isFinite(close))continue;
+      const breached=direction==='BULLISH'?close<bos.level:close>bos.level;
+      if(breached){index=i;break;}
+    }
+    const x=c[index];
+    if(index>=from&&x&&[x.open,x.high,x.low,x.close].every(Number.isFinite)){
+      // Diagnostic only: determine whether a valid retest happened before the
+      // later invalidation. The setup remains rejected either way.
+      let retestBeforeFailure=null;
+      for(let i=from;i<index;i++){
+        const candle=c[i];
+        if(!candle||![candle.open,candle.high,candle.low,candle.close].every(Number.isFinite))continue;
+        const touched=direction==='BULLISH'?candle.low<=bos.level&&candle.high>=bos.level:candle.high>=bos.level&&candle.low<=bos.level;
+        const held=direction==='BULLISH'?candle.close>bos.level:candle.close<bos.level;
+        if(touched&&held&&bodyRatio(candle)>=.35){
+          retestBeforeFailure={index:i,age:c.length-1-i};
+          break;
+        }
+      }
+      return {failed:true,index,level:bos.level,close:x.close,retestBeforeFailure};
+    }
+  }
+  for(let i=from;i<c.length;i++){
+    const x=c[i];
+    if(!x||![x.open,x.high,x.low,x.close].every(Number.isFinite))continue;
+    const touched=direction==='BULLISH'?x.low<=bos.level&&x.high>=bos.level:x.high>=bos.level&&x.low<=bos.level;
+    const held=direction==='BULLISH'?x.close>bos.level:x.close<bos.level;
+    const ratio=bodyRatio(x);
+    if(touched&&held&&ratio>=.35){
+      return {index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i,bodyRatio:ratio};
+    }
+  }
+  return null;
 }
 
 export function executionOrderType({direction,entry,price,tolerance}){
@@ -116,26 +196,59 @@ export function evaluateTopDown({candles,layers,price}){
   if(c.length<40)return{direction:'NEUTRAL',failures:['Insufficient execution candles for Top-Down.'],evidence:[]};
   const direction=htfBias(layers);
   if(!direction)return{direction:'NEUTRAL',failures:['Higher-timeframe layers do not agree on a directional bias.'],evidence:[]};
+  const bosStarted=Date.now();
   const bosCandidates=executionBOS(c,direction);
-  if(!bosCandidates.length)return{direction,failures:['Execution timeframe has not confirmed a BOS in the higher-timeframe direction.'],evidence:[{type:'HTF_ALIGNMENT',direction}]};
+  const bosMs=Date.now()-bosStarted;
+  if(!bosCandidates.length)return{direction,failures:['Execution timeframe has not confirmed a BOS in the higher-timeframe direction.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'TOP_DOWN_REJECTION_DIAGNOSTICS',bosCandidates:0,bosMs}]};
   const a=atr(c,14);
   if(!Number.isFinite(price)||price<=0||!a)return{direction,failures:['Live price or execution volatility is unavailable.'],evidence:[]};
   let selected=null;
+  const diagnostics={bosCandidates:bosCandidates.length,bosMs,distanceEligible:0,retestFound:0,retestInvalidated:0,retestBeforeInvalidation:0,recentRetestBeforeInvalidation:0,retestBeforeInvalidationSamples:[],noRetest:0,staleRetest:0,retestMs:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
+  const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
-    const rt=retest(c,bos,direction);
-    if(!rt||rt.failed||rt.age>4)continue;
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
     if(distance>tolerance)continue;
+    diagnostics.distanceEligible++;
+    const retestStarted=Date.now();
+    const rt=findValidRetest(c,bos,direction,closeExtrema);
+    diagnostics.retestMs+=Date.now()-retestStarted;
+    if(rt?.failed){
+      diagnostics.retestInvalidated++;
+      if(rt.retestBeforeFailure){
+        diagnostics.retestBeforeInvalidation++;
+        if(rt.retestBeforeFailure.age<=4)diagnostics.recentRetestBeforeInvalidation++;
+        if(diagnostics.retestBeforeInvalidationSamples.length<5){
+          diagnostics.retestBeforeInvalidationSamples.push({
+            bosIndex:bos.index,
+            bosAge:bos.age,
+            bosLevel:bos.level,
+            retestIndex:rt.retestBeforeFailure.index,
+            retestAge:rt.retestBeforeFailure.age,
+            invalidationIndex:rt.index,
+            invalidationAge:c.length-1-rt.index,
+            invalidationClose:rt.close
+          });
+        }
+      }
+      continue;
+    }
+    if(!rt){diagnostics.noRetest++;continue;}
+    diagnostics.retestFound++;
+    if(rt.age>4){diagnostics.staleRetest++;continue;}
+    diagnostics.recentRetest++;
     const targetSwing=nextTarget(c,direction,rt.index,entry,layers);
     if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))continue;
+    diagnostics.targetFound++;
     const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
     if(!tradeResult)continue;
+    diagnostics.tradeConstructed++;
     const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,rr:tradeResult.rr,candles:c,direction});
+    if(scored.score>=78)diagnostics.scoreAtLeast78++;
     selected={bos,rt,entry,targetSwing,tradeResult,scored};
     break;
   }
   if(!selected){
-    return{direction,failures:['No recent execution BOS produced a complete retest, executable entry, and meaningful structural target.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS_CANDIDATES',count:bosCandidates.length}]};
+    return{direction,failures:['No recent execution BOS produced a complete retest, executable entry, and meaningful structural target.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'TOP_DOWN_REJECTION_DIAGNOSTICS',...diagnostics}]};
   }
   const {bos,rt,entry,targetSwing,tradeResult,scored}=selected;
   if(scored.score<78)return{direction,grade:{grade:'NO-TRADE',score:scored.score,hardFailures:['Top-Down confluence is insufficient for execution.']},failures:['Top-Down confluence is insufficient for execution.'],evidence:scored.evidence};

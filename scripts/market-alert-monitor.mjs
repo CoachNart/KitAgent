@@ -5,11 +5,11 @@ import { homedir } from 'node:os';
 
 const BYBIT_BASE = 'https://api.bybit.com';
 const SYMBOL_LIMIT = 5;
-const INTERVAL = '5';
+const INTERVAL = '30';
 const LOOKBACK = 150;
 const POLL_MS = 5 * 60 * 1000;
 const BRIDGE_PORT = Number(process.env.KITSETUPS_ALERT_PORT || 17873);
-const STATE_FILE = process.env.KITSETUPS_ALERT_STATE || `${homedir()}/.kitsetups-market-alerts.json`;
+const STATE_FILE = process.env.KITSETUPS_ALERT_STATE || `${homedir()}/.kitsetups-market-alerts-30m.json`;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -120,7 +120,7 @@ function formatPrice(value) {
 
 async function notify(event) {
   const title=`${event.symbol.replace('USDT','')} ${event.direction} structure`;
-  const content=`5m BOS detected at ${formatPrice(event.level)}`;
+  const content=`30m BOS detected at ${formatPrice(event.level)}`;
   try {
     const {execFile}=await import('node:child_process');
     await new Promise((resolve,reject)=>{
@@ -146,7 +146,7 @@ async function checkOnce() {
   if(!symbols.length) throw new Error('Bybit returned no USDT perpetual markets.');
   console.log(`[market-alerts] ${lastCheckAt} checking ${symbols.join(', ')}`);
   const state=await loadState();
-  const sent=state.sentEvents && typeof state.sentEvents==='object' ? state.sentEvents : {};
+  const sent=state.sentEvents30m && typeof state.sentEvents30m==='object' ? state.sentEvents30m : {};
   for(const symbol of symbols) {
     const event=await inspect(symbol);
     if(!event) continue;
@@ -160,7 +160,7 @@ async function checkOnce() {
   }
   const cutoff=Date.now()-7*24*60*60*1000;
   for(const [key,value] of Object.entries(sent)) if(!value?.at || value.at<cutoff) delete sent[key];
-  await saveState({sentEvents:sent,updatedAt:Date.now()});
+  await saveState({sentEvents30m:sent,updatedAt:Date.now()});
 }
 
 async function main() {
