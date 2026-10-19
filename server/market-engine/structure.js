@@ -10,7 +10,16 @@ function pivot(c,i,k=2){
   return {high:hi,low:lo};
 }
 
+const confirmedSwingCache=new WeakMap();
+
 export function confirmedSwings(c,k=2){
+  if(!Array.isArray(c))return {highs:[],lows:[]};
+  let byStrength=confirmedSwingCache.get(c);
+  if(!byStrength){
+    byStrength=new Map();
+    confirmedSwingCache.set(c,byStrength);
+  }
+  if(byStrength.has(k))return byStrength.get(k);
   const highs=[],lows=[];
   for(let i=k;i<c.length-k;i++){
     const p=pivot(c,i,k);
@@ -19,7 +28,9 @@ export function confirmedSwings(c,k=2){
     if(p.high)highs.push({price:c[i].high,index:i,confirmationIndex,time:c[i].time});
     if(p.low)lows.push({price:c[i].low,index:i,confirmationIndex,time:c[i].time});
   }
-  return {highs,lows};
+  const result={highs,lows};
+  byStrength.set(k,result);
+  return result;
 }
 
 function lastBefore(a,asOf){return a.filter(x=>x.confirmationIndex<=asOf);}
