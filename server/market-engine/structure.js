@@ -10,7 +10,16 @@ function pivot(c,i,k=2){
   return {high:hi,low:lo};
 }
 
+const confirmedSwingCache=new WeakMap();
+
 export function confirmedSwings(c,k=2){
+  if(!Array.isArray(c))return {highs:[],lows:[]};
+  let byStrength=confirmedSwingCache.get(c);
+  if(!byStrength){
+    byStrength=new Map();
+    confirmedSwingCache.set(c,byStrength);
+  }
+  if(byStrength.has(k))return byStrength.get(k);
   const highs=[],lows=[];
   for(let i=k;i<c.length-k;i++){
     const p=pivot(c,i,k);
@@ -19,7 +28,9 @@ export function confirmedSwings(c,k=2){
     if(p.high)highs.push({price:c[i].high,index:i,confirmationIndex,time:c[i].time});
     if(p.low)lows.push({price:c[i].low,index:i,confirmationIndex,time:c[i].time});
   }
-  return {highs,lows};
+  const result={highs,lows};
+  byStrength.set(k,result);
+  return result;
 }
 
 function lastBefore(a,asOf){return a.filter(x=>x.confirmationIndex<=asOf);}
@@ -34,22 +45,41 @@ function emptyStructure(){
   };
 }
 
-function breakEvents(c,highs,lows,asOf){
+export function structuralBreakEvents(c,highs,lows,asOf=(Array.isArray(c)?c.length-1:0)){
+  if(!Array.isArray(c)||!c.length)return [];
+  const end=Math.min(c.length-1,Math.max(0,Math.floor(Number(asOf))));
+  if(!Number.isFinite(end))return [];
+  const orderedHighs=[...(highs||[])].sort((a,b)=>a.confirmationIndex-b.confirmationIndex||a.index-b.index);
+  const orderedLows=[...(lows||[])].sort((a,b)=>a.confirmationIndex-b.confirmationIndex||a.index-b.index);
   const events=[];
-  for(const x of highs){
-    for(let i=x.confirmationIndex;i<=asOf;i++){
-      if(c[i].close>x.price){
-        events.push({type:'BOS',direction:'BULLISH',level:x.price,index:i,brokenSwingIndex:x.index,age:asOf-i});
-        break;
-      }
+  let highCursor=0,lowCursor=0,activeHigh=null,activeLow=null;
+
+  // Keep only the latest confirmed swing on each side active. Older levels are
+  // superseded when a newer pivot confirms; breaking a stale level must not
+  // masquerade as a fresh BOS while the current structural swing still holds.
+  for(let i=0;i<=end;i++){
+    while(highCursor<orderedHighs.length&&orderedHighs[highCursor].confirmationIndex<=i){
+      activeHigh=orderedHighs[highCursor++];
     }
-  }
-  for(const x of lows){
-    for(let i=x.confirmationIndex;i<=asOf;i++){
-      if(c[i].close<x.price){
-        events.push({type:'BOS',direction:'BEARISH',level:x.price,index:i,brokenSwingIndex:x.index,age:asOf-i});
-        break;
-      }
+    while(lowCursor<orderedLows.length&&orderedLows[lowCursor].confirmationIndex<=i){
+      activeLow=orderedLows[lowCursor++];
+    }
+    const close=Number(c[i]?.close);
+    if(!Number.isFinite(close))continue;
+
+    if(activeHigh&&i>=activeHigh.confirmationIndex&&close>activeHigh.price){
+      events.push({
+        type:'BOS',direction:'BULLISH',level:activeHigh.price,index:i,
+        brokenSwingIndex:activeHigh.index,confirmationIndex:activeHigh.confirmationIndex,age:end-i
+      });
+      activeHigh=null;
+    }
+    if(activeLow&&i>=activeLow.confirmationIndex&&close<activeLow.price){
+      events.push({
+        type:'BOS',direction:'BEARISH',level:activeLow.price,index:i,
+        brokenSwingIndex:activeLow.index,confirmationIndex:activeLow.confirmationIndex,age:end-i
+      });
+      activeLow=null;
     }
   }
   return events.sort((a,b)=>a.index-b.index);
@@ -83,7 +113,7 @@ export function structure(c,asOf=c.length-1){
   const hh=lh.price>ph.price,hl=ll.price>pl.price;
   const lowerHigh=lh.price<ph.price,lowerLow=ll.price<pl.price;
   const rawDirection=hh&&hl?'BULLISH':lowerHigh&&lowerLow?'BEARISH':'NEUTRAL';
-  const events=breakEvents(c,eh,el,asOf);
+  const events=structuralBreakEvents(c,eh,el,asOf);
   const last=events.at(-1)||null;
   const prior=events.at(-2)||null;
 
@@ -144,6 +174,10 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
   const add=(price,source,index=-1,tf='EXECUTION',strength=0,meta={})=>{
     if(!Number.isFinite(price))return;
     if(asOf!==null&&tf==='EXECUTION'&&Number.isFinite(index)&&index>=0&&index>asOf)return;
+    // A swing is not usable until its right-side candles confirm it. Filtering
+    // by the pivot candle's timestamp alone leaks future-confirmed structure
+    // into historical decisions, because the pivot itself predates confirmation.
+    if(asOf!==null&&tf==='EXECUTION'&&Number.isFinite(meta?.confirmationIndex)&&meta.confirmationIndex>asOf)return;
     if(asOfTime!==null&&Number.isFinite(meta?.time)&&meta.time>asOfTime)return;
     const beyond=direction==='BULLISH'?price>entry:price<entry;
     if(!beyond||Math.abs(price-entry)<distanceFloor)return;
@@ -164,7 +198,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
     for(const x of points){
       add(x.price,k===4?'EXECUTION_MAJOR_SWING':'EXECUTION_EXTERNAL_SWING',x.index,'EXECUTION',k===4?95:78,{
         confirmationIndex:x.confirmationIndex,
-        time:x.time
+        time:c[x.confirmationIndex]?.time??x.time
       });
     }
   }
@@ -180,7 +214,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
       for(const x of points){
         add(x.price,k===4?'HTF_MAJOR_SWING':'HTF_EXTERNAL_SWING',x.index,layer.tf||'HTF',k===4?110:88,{
           confirmationIndex:x.confirmationIndex,
-          time:x.time
+          time:lc[x.confirmationIndex]?.time??x.time
         });
       }
     }
@@ -188,14 +222,17 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 
   // Collapse repeated highs/lows into liquidity/structure pools. A level
   // seen more than once is materially stronger than a single isolated pivot.
-  for(const candidate of candidates){
-    const peers=candidates.filter(x=>Math.abs(x.price-candidate.price)<=clusterTolerance);
-    candidate.clusterCount=peers.length;
-    candidate.pool=peers.length>=3?'LIQUIDITY_POOL':peers.length===2?'REPEATED_STRUCTURE':'SINGLE_STRUCTURE';
-    candidate.quality=candidate.strength
-      +(candidate.clusterCount>=3?24:candidate.clusterCount===2?14:0)
-      +(candidate.tf!=='EXECUTION'?8:0)
-      +(candidate.native?20:0);
+  const priceOrder=candidates.map((candidate,index)=>({price:candidate.price,index})).sort((a,b)=>a.price-b.price||a.index-b.index);
+  let left=0,right=0;
+  for(let i=0;i<priceOrder.length;i++){
+    const current=priceOrder[i];
+    while(left<priceOrder.length&&current.price-priceOrder[left].price>clusterTolerance)left++;
+    if(right<i)right=i;
+    while(right+1<priceOrder.length&&priceOrder[right+1].price-current.price<=clusterTolerance)right++;
+    const candidate=candidates[current.index];
+    candidate.clusterCount=right-left+1;
+    candidate.pool=candidate.clusterCount>=3?'LIQUIDITY_POOL':candidate.clusterCount===2?'REPEATED_STRUCTURE':'SINGLE_STRUCTURE';
+    candidate.quality=candidate.strength+(candidate.clusterCount>=3?24:candidate.clusterCount===2?14:0)+(candidate.tf!=='EXECUTION'?8:0)+(candidate.native?20:0);
   }
 
   return candidates
