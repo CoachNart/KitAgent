@@ -48,7 +48,7 @@ export default function NotificationCenter({user,embedded=false}){
    const poll=async()=>{
      try{
        const token=await user.getIdToken();
-       const response=await fetch('/api/community-message?notifications=1',{headers:{Authorization:\`Bearer \${token}\`},cache:'no-store'});
+       const response=await fetch('/api/community-message?notifications=1',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
        if(!response.ok)return;
        const payload=await response.json();
        if(dead)return;
