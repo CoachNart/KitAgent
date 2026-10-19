@@ -52,14 +52,14 @@ export async function marketKlines(signal) {
     const all=[];
     let pageEnd=now,pages=0;
     // Bybit caps each kline response at 1,000 rows. A single request cannot
-    // reliably resolve signals older than ~16h on 1-minute candles.
+    // reliably resolve signals older than ~16h on 30-minute candles.
     // Page backwards so outcome verification never silently loses the beginning
     // of a trade's lifecycle.
     while(pageEnd>=startMs&&pages<48){
       const u=new URL('https://api.bybit.com/v5/market/kline');
       u.searchParams.set('category','linear');
       u.searchParams.set('symbol',symbol);
-      u.searchParams.set('interval','1');
+      u.searchParams.set('interval','30');
       u.searchParams.set('start',String(startMs));
       u.searchParams.set('end',String(pageEnd));
       u.searchParams.set('limit','1000');
@@ -100,7 +100,7 @@ export async function currentPrice(signal) {
  */
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
-  // A limit order whose first entry-touching 1m candle also touches TP or SL
+  // A limit order whose first entry-touching 30m candle also touches TP or SL
   // cannot be proven filled-before-exit from OHLC alone. Keep it out of the
   // verified trade record instead of guessing the intrabar path.
   if(signal.status==='activation_ambiguous'&&signal.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE')return signal;
@@ -123,12 +123,12 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       if(candle.time<generatedMs)continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
+      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
         const targetTouched=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
         if(invalidated||targetTouched){
           return {...signal,currentPrice:price,status:'activation_ambiguous',result:null,pnlPercent:null,exitPrice:null,closedAt:null,
-            outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_AND_EXIT_SAME_CANDLE',candleTime:new Date(candle.time).toISOString(),note:'OHLC cannot prove the order of entry, stop, and target touches; excluded from verified outcomes.'}};
+            outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'ENTRY_AND_EXIT_SAME_CANDLE',candleTime:new Date(candle.time).toISOString(),note:'OHLC cannot prove the order of entry, stop, and target touches; excluded from verified outcomes.'}};
         }
         // Activate only after an entry-touching candle with no TP/SL touch has
         // completed. Later candles can then be evaluated without guessing.
@@ -141,15 +141,15 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   const activationCandleStart=Math.floor(Number(activatedAt)/60000)*60000;
   for(const candle of candles){
     if(candle.time<activatedAt)continue;
-    // A MARKET signal may be generated part-way through a 1-minute candle.
+    // A MARKET signal may be generated part-way through a 30-minute candle.
     // OHLC cannot tell whether TP/SL was touched before or after generation,
     // so the overlapping candle is excluded unless generation happened exactly at its start.
     if(candle.time===activationCandleStart&&Number(activatedAt)>candle.time)continue;
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
-    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
-    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
   }
   return {...signal,currentPrice:livePrice,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
 }
