@@ -174,6 +174,10 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
   const add=(price,source,index=-1,tf='EXECUTION',strength=0,meta={})=>{
     if(!Number.isFinite(price))return;
     if(asOf!==null&&tf==='EXECUTION'&&Number.isFinite(index)&&index>=0&&index>asOf)return;
+    // A swing is not usable until its right-side candles confirm it. Filtering
+    // by the pivot candle's timestamp alone leaks future-confirmed structure
+    // into historical decisions, because the pivot itself predates confirmation.
+    if(asOf!==null&&tf==='EXECUTION'&&Number.isFinite(meta?.confirmationIndex)&&meta.confirmationIndex>asOf)return;
     if(asOfTime!==null&&Number.isFinite(meta?.time)&&meta.time>asOfTime)return;
     const beyond=direction==='BULLISH'?price>entry:price<entry;
     if(!beyond||Math.abs(price-entry)<distanceFloor)return;
@@ -194,7 +198,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
     for(const x of points){
       add(x.price,k===4?'EXECUTION_MAJOR_SWING':'EXECUTION_EXTERNAL_SWING',x.index,'EXECUTION',k===4?95:78,{
         confirmationIndex:x.confirmationIndex,
-        time:x.time
+        time:c[x.confirmationIndex]?.time??x.time
       });
     }
   }
@@ -210,7 +214,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
       for(const x of points){
         add(x.price,k===4?'HTF_MAJOR_SWING':'HTF_EXTERNAL_SWING',x.index,layer.tf||'HTF',k===4?110:88,{
           confirmationIndex:x.confirmationIndex,
-          time:x.time
+          time:lc[x.confirmationIndex]?.time??x.time
         });
       }
     }
