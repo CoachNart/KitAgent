@@ -299,6 +299,8 @@ export default function CommunityPage({ user }) {
 
   const updateDraft = value => {
     setDraft(value);
+    setMentionUids(current => current.filter(uid => members.some(member => member.uid === uid && value.includes('@' + member.displayName))));
+    if (!value.includes('@everyone')) setMentionEveryoneFlag(false);
     const caret = textareaRef.current?.selectionStart ?? value.length;
     const beforeCaret = value.slice(0, caret);
     const match = beforeCaret.match(/(^|\s)@([\w.-]{0,32})$/);
