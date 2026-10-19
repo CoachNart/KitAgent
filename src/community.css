@@ -113,7 +113,7 @@
 }
 .community-room-bar{
   border-bottom-color:rgba(0,199,254,.15);
-  background:linear-gradient(100deg,rgba(0,199,254,.11),rgba(56,189,248,.045) 55%,rgba(244,114,182,.045));
+  background:linear-gradient(100deg,rgba(0,199,254,.11),rgba(56,189,248,.045) 55%,rgba(0,199,254,.045));
 }
 .community-room-icon{
   border-color:rgba(0,199,254,.28);
