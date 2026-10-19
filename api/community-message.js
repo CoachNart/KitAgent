@@ -53,6 +53,14 @@ export default async function handler(req, res) {
     const messages = db.collection('communityMessages');
 
     if (req.method === 'GET') {
+      if (String(req.query?.notifications || '') === '1') {
+        const snapshot = await db.collection('communityNotifications').where('uid', '==', identity.uid).limit(30).get();
+        const notifications = snapshot.docs.map(item => {
+          const data = item.data();
+          return { id: item.id, type: String(data.type || 'mention'), messageId: String(data.messageId || ''), senderName: String(data.senderName || 'KitSetups member'), text: String(data.text || ''), read: Boolean(data.read), createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null };
+        }).sort((x, y) => String(y.createdAt || '').localeCompare(String(x.createdAt || '')));
+        return json(res, 200, { ok: true, notifications });
+      }
       if (String(req.query?.members || '') === '1') {
         const listed = await a.auth().listUsers(1000);
         const memberList = listed.users.map(member => ({
