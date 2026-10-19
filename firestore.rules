@@ -54,6 +54,15 @@ service cloud.firestore {
     }
 
 
+    // Shared community feed: signed-in users may read messages. Posting is handled
+    // by the authenticated server API, not direct client writes. Users may delete
+    // only messages that belong to their own UID.
+    match /communityMessages/{messageId} {
+      allow read: if signedIn();
+      allow create, update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     match /supportChats/{chatId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create, update, delete: if false;
