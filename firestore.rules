@@ -54,6 +54,16 @@ service cloud.firestore {
     }
 
 
+    // One shared public community room. Every authenticated KitSetups user can
+    // read and post; users can only delete their own messages.
+    match /communityMessages/{messageId} {
+      allow read: if signedIn();
+      // Messages are created by the authenticated server API, which resolves the
+      // canonical display name from Firebase Auth and enforces per-user send limits.
+      allow create, update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     match /supportChats/{chatId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create, update, delete: if false;
