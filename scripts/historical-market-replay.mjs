@@ -25,6 +25,15 @@ function rejection(strategy,tf,reason){
   failures.set(key,(failures.get(key)||0)+1);
 }
 function hit(c,price){return c.low<=price&&c.high>=price;}
+function closedPrefixEnd(rows,tf,cutoff){
+  let lo=0,hi=rows.length;
+  while(lo<hi){
+    const mid=(lo+hi)>>>1;
+    if(rows[mid].time+DURATIONS[tf]<=cutoff)lo=mid+1;
+    else hi=mid;
+  }
+  return lo;
+}
 function simulate(trade,direction,orderType,future,tf){
   const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
@@ -149,7 +158,7 @@ for(const symbol of symbols){
       const cutoff=candle.time+DURATIONS[tf];
       const all={};
       for(const layerTf of [...EXECUTION_TIMEFRAMES,'1D']){
-        all[layerTf]=(history[layerTf]||[]).filter(x=>x.time+DURATIONS[layerTf]<=cutoff);
+        const layerRows=history[layerTf]||[];\n        all[layerTf]=layerRows.slice(0,closedPrefixEnd(layerRows,layerTf,cutoff));
         if(all[layerTf].some(x=>x.time+DURATIONS[layerTf]>cutoff)){
           throw new Error('LOOKAHEAD GUARD: future candle leaked into '+layerTf+' snapshot at '+new Date(cutoff).toISOString());
         }
@@ -158,8 +167,7 @@ for(const symbol of symbols){
       if(all[tf].at(-1)?.time!==candle.time){
         throw new Error('HISTORICAL SNAPSHOT GUARD: latest '+tf+' candle does not match the decision candle at '+new Date(cutoff).toISOString());
       }
-      for(const strategy of strategies){
-        console.log('REPLAY PROGRESS',symbol,tf, snapshotIndex+'/'+snapshots.length, strategy, new Date(cutoff).toISOString());
+      if(snapshotIndex===1||snapshotIndex===snapshots.length||snapshotIndex%25===0){\n        console.log('REPLAY PROGRESS',symbol,tf,snapshotIndex+'/'+snapshots.length,new Date(cutoff).toISOString());\n      }\n      for(const strategy of strategies){
         const stat=bucket(strategy,tf);stat.evaluated++;
         let result;
         try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close);}
@@ -177,7 +185,7 @@ for(const symbol of symbols){
         if(previous!=null&&cutoff-previous<DURATIONS[tf]*3)continue;
         seen.set(strategy+'|'+fp,cutoff);
         stat.tradeCandidates++;
-        const future=exec.filter(x=>x.time>=cutoff);
+        const future=exec.slice(start+snapshotIndex);
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
