@@ -25,16 +25,6 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-async function authenticate(req, a) {
-  const match = String(req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
-  if (!match) return { response: json(req.res, 401, { error: 'Sign in to join the community.' }) };
-  try {
-    return { identity: await a.auth().verifyIdToken(match[1]) };
-  } catch {
-    return { response: json(req.res, 401, { error: 'Your session expired. Sign in again.' }) };
-  }
-}
-
 function bodyOf(req) {
   return typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
 }
