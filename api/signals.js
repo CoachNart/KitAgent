@@ -52,7 +52,7 @@ export async function marketKlines(signal) {
     const all=[];
     let pageEnd=now,pages=0;
     // Bybit caps each kline response at 1,000 rows. A single request cannot
-    // reliably resolve signals older than ~16h on 30-minute candles.
+    // reliably resolve signals older than ~20 days on 30-minute candles.
     // Page backwards so outcome verification never silently loses the beginning
     // of a trade's lifecycle.
     while(pageEnd>=startMs&&pages<48){
@@ -138,7 +138,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   } else return {...signal,currentPrice:price,status:'watching'};
   if(!active)return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
   let ambiguous=false;
-  const activationCandleStart=Math.floor(Number(activatedAt)/60000)*60000;
+  const activationCandleStart=Math.floor(Number(activatedAt)/1800000)*1800000;
   for(const candle of candles){
     if(candle.time<activatedAt)continue;
     // A MARKET signal may be generated part-way through a 30-minute candle.
