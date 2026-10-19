@@ -108,7 +108,7 @@ exports.initializeKitAgentAccount = onCall({ region: 'us-central1', enforceAppCh
 
 
 const BYBIT_BASE = 'https://api.bybit.com';
-const ALERT_STATE_REF = db.doc('system/marketAlerts');
+const ALERT_STATE_REF = db.doc('system/marketAlerts-30m');
 const ALERT_SYMBOL_LIMIT = 5;
 const ALERT_INTERVAL = '30';
 const ALERT_LOOKBACK = 150;
