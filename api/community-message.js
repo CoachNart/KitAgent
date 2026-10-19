@@ -213,10 +213,10 @@ export default async function handler(req, res) {
     });
 
     // Notifications are driven by explicit tags in the message text, not client flags alone.
-    const everyoneTagPresent = /(^|\\s)@everyone\\b/i.test(text);
+    const everyoneTagPresent = /(^|\s)@everyone\b/i.test(text);
     let validRecipients = [];
     if (everyoneTagPresent) {
-      // listUsers is paginated; keep following pageToken so @everyone reaches every member.
+      // listUsers is paginated; follow every page so @everyone reaches every member.
       let pageToken;
       do {
         const page = await a.auth().listUsers(1000, pageToken);
@@ -226,20 +226,15 @@ export default async function handler(req, res) {
         pageToken = page.pageToken;
       } while (pageToken);
     } else {
+      const lowerText = text.toLocaleLowerCase();
       for (const uid of requestedMentions) {
         try {
           const member = await a.auth().getUser(uid);
-          const name = String(member.displayName || member.email?.split('@')[0] || `Trader ${String(member.uid || '').slice(-4)}`).trim();
-          const escapedName = name.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\    let validRecipients = [];
-    if (mentionEveryone) {
-      const allUsers = await a.auth().listUsers(1000);
-      validRecipients = allUsers.users.filter(member => member.uid !== identity.uid).map(member => ({ uid: member.uid }));
-    } else {
-      for (const uid of requestedMentions) {
-        try { await a.auth().getUser(uid); validRecipients.push({ uid }); } catch {}
-      }
-    }');
-          const explicitTag = name && new RegExp('@' + escapedName + '(?![\\w])', 'i').test(text);
+          const name = String(member.displayName || member.email?.split('@')[0] || ('Trader ' + String(member.uid || '').slice(-4))).trim();
+          const token = '@' + name.toLocaleLowerCase();
+          const index = lowerText.indexOf(token);
+          const nextCharacter = index >= 0 ? lowerText[index + token.length] || '' : '';
+          const explicitTag = index >= 0 && !/[a-z0-9_]/i.test(nextCharacter);
           if (explicitTag) validRecipients.push({ uid });
         } catch {}
       }
