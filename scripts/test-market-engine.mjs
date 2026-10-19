@@ -1,12 +1,12 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
-import {structure,selectStructuralTarget} from '../server/market-engine/structure.js';
+import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
-import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType} from '../server/market-engine/topDown.js';
+import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
-import {gradeSetup,validateTradeGeometry,executableTrade} from '../server/market-engine/grading.js';
+import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
 
@@ -152,6 +152,19 @@ const tdMismatch=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{
 assert('Top-Down rejects conflicting higher-timeframe directions',()=>tdMismatch.direction==='NEUTRAL'&&tdMismatch.failures.length>0);
 const tdNoBos=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Top-Down requires execution BOS before entry',()=>tdNoBos.direction==='BULLISH'&&tdNoBos.failures.some(x=>x.includes('BOS')));
+const retestBars=[
+  bar(0,100,102,99,101),
+  bar(1,101,106,100,105),
+  bar(2,104,105,100.5,102),
+  bar(3,102,103,99,99.5),
+  bar(4,99.5,104,99,103)
+];
+const invalidRetest=findValidRetest(retestBars,{index:1,level:101},'BULLISH');
+assert('Top-Down invalidates a BOS when price closes back through the broken level',()=>invalidRetest?.failed===true&&invalidRetest.index===3);
+const cleanRetest=findValidRetest(retestBars.slice(0,3),{index:1,level:101},'BULLISH');
+assert('Top-Down accepts the first confirmed retest that holds the broken level',()=>cleanRetest?.index===2&&!cleanRetest.failed);
+const noRetestAfterBos=findValidRetest([bar(0,100,101,99,100),bar(1,100,103,100,102)],{index:1,level:101},'BULLISH');
+assert('Top-Down does not invent a retest when no post-BOS candle touches the level',()=>noRetestAfterBos===null);
 assert('Top-Down uses live price to classify execution order',()=>{
   return executionOrderType({direction:'BULLISH',entry:11.577,price:11.1725,tolerance:.01})===null &&
     executionOrderType({direction:'BULLISH',entry:11.577,price:11.60,tolerance:.01})==='LIMIT' &&
@@ -306,6 +319,19 @@ lookaheadCandles[24]=bar(24,100,150,99,101);
 const lookaheadTarget=selectStructuralTarget(lookaheadCandles,'BULLISH',100,{asOf:15,asOfTime:lookaheadCandles[15].time,minDistance:1});
 assert('Target selection cannot use post-event structure',()=>!lookaheadTarget||lookaheadTarget.index<=15);
 
+// Active structural break validation: older levels must not produce a fresh BOS
+// after a newer confirmed swing has superseded them.
+const breakFixture=Array.from({length:8},(_,i)=>bar(i,6,11,5,[6,7,7,6,7,9,9,11][i]));
+const breakHighs=[
+  {price:8,index:0,confirmationIndex:1,time:breakFixture[0].time},
+  {price:10,index:3,confirmationIndex:4,time:breakFixture[3].time}
+];
+const staleBreaks=structuralBreakEvents(breakFixture.slice(0,7),breakHighs,[],6);
+const confirmedBreaks=structuralBreakEvents(breakFixture,breakHighs,[],7);
+assert('A superseded lower swing cannot create a fresh BOS when price closes below the active higher swing',()=>staleBreaks.length===0);
+assert('A BOS is recorded when price closes through the latest confirmed active swing',()=>confirmedBreaks.length===1&&confirmedBreaks[0].direction==='BULLISH'&&confirmedBreaks[0].level===10&&confirmedBreaks[0].index===7);
+assert('Structural break events retain the swing confirmation index for auditability',()=>confirmedBreaks[0]?.confirmationIndex===4);
+
 // Structure model validation: protected swings must be external structure, not
 // the latest internal wick.
 const structured=structure(hierarchyCandles);
@@ -332,6 +358,14 @@ const limitExecution=executableTrade({entry:100,marketEntry:101,stop:98,target:1
 assert('Market orders use the live executable quote as entry and preserve the planned level',()=>marketExecution.entry===101.5&&marketExecution.marketEntry===101.5&&marketExecution.plannedEntry===100&&marketExecution.executionPriceSource==='market_quote_at_signal_time');
 assert('Market-order R:R is recomputed from executable entry',()=>marketExecution.risk===3.5&&marketExecution.reward===2.5&&Math.abs(marketExecution.rr-(2.5/3.5))<1e-9);
 assert('Limit-order entry remains at its planned limit price',()=>limitExecution.entry===100&&limitExecution.plannedEntry===undefined);
+
+// Shared order-state validation: pending limits cannot remain published after
+// the executable quote reaches or crosses their planned entry.
+assert('Shared entry validation accepts a bullish limit that is still waiting below price',()=>validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BULLISH',livePrice:101}).valid);
+assert('Shared entry validation rejects a bullish limit already reached by price',()=>!validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BULLISH',livePrice:99.9}).valid);
+assert('Shared entry validation accepts a bearish limit that is still waiting above price',()=>validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BEARISH',livePrice:99}).valid);
+assert('Shared entry validation rejects a bearish limit already reached by price',()=>!validateEntryExecution({trade:{entry:100,orderType:'LIMIT'},direction:'BEARISH',livePrice:100.1}).valid);
+assert('Shared entry validation accepts a valid market order without applying pending-limit rules',()=>validateEntryExecution({trade:{entry:100,orderType:'MARKET'},direction:'BULLISH',livePrice:100.2}).valid);
 
 // Trade Geometry Contract: entry, stop, target and invalidation must describe
 // one coherent setup. Extreme R:R is rejected instead of being celebrated.
