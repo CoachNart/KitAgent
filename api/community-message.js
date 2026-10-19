@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 
 function getAdmin() {
   if (admin.apps.length) return admin;
@@ -62,6 +63,13 @@ export default async function handler(req, res) {
           photoURL: String(data.photoURL || ''),
           text: String(data.text || ''),
           imageUrl: String(data.imageUrl || ''),
+          replyTo: data.replyTo && typeof data.replyTo === 'object' ? {
+            id: String(data.replyTo.id || ''),
+            uid: String(data.replyTo.uid || ''),
+            displayName: String(data.replyTo.displayName || 'Trader'),
+            text: String(data.replyTo.text || '').slice(0, 240),
+            imageUrl: String(data.replyTo.imageUrl || '')
+          } : null,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null
         };
       }).reverse();
@@ -84,9 +92,20 @@ export default async function handler(req, res) {
 
     const body = bodyOf(req);
     const text = String(body.text || '').trim();
-    const imageUrl = String(body.imageUrl || '').trim();
-    if (!text && !imageUrl) return json(res, 400, { error: 'Write a message or attach an image first.' });
+    let imageUrl = String(body.imageUrl || '').trim();
+    const imageData = String(body.imageData || '').trim();
+    const imageType = String(body.imageType || '').trim().toLowerCase();
+    const replyToId = String(body.replyToId || '').trim();
+    if (!text && !imageUrl && !imageData) return json(res, 400, { error: 'Write a message or attach an image first.' });
     if (text.length > 1000) return json(res, 400, { error: 'Messages must be 1,000 characters or fewer.' });
+    if (imageData) {
+      if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(imageType)) {
+        return json(res, 400, { error: 'Choose a JPG, PNG, WebP or GIF image.' });
+      }
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(imageData) || Buffer.byteLength(imageData, 'base64') > 2.2 * 1024 * 1024) {
+        return json(res, 413, { error: 'That image is too large to send. Try a smaller screenshot.' });
+      }
+    }
     if (imageUrl) {
       let parsed;
       try { parsed = new URL(imageUrl); } catch { return json(res, 400, { error: 'That image URL is invalid.' }); }
@@ -119,12 +138,51 @@ export default async function handler(req, res) {
       throw error;
     }
 
+    let replyTo = null;
+    if (replyToId) {
+      if (replyToId.length > 200 || replyToId.includes('/')) return json(res, 400, { error: 'That reply target is invalid.' });
+      const original = await messages.doc(replyToId).get();
+      if (!original.exists) return json(res, 404, { error: 'The message you are replying to no longer exists.' });
+      const originalData = original.data();
+      replyTo = {
+        id: original.id,
+        uid: String(originalData.uid || ''),
+        displayName: String(originalData.displayName || 'Trader'),
+        text: String(originalData.text || '').slice(0, 240),
+        imageUrl: String(originalData.imageUrl || '')
+      };
+    }
+
+    if (imageData) {
+      try {
+        const bucketName = String(process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || a.app().options.storageBucket || '').trim();
+        if (!bucketName) throw new Error('FIREBASE_STORAGE_BUCKET_MISSING');
+        const bucket = a.storage().bucket(bucketName);
+        const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' })[imageType];
+        const objectPath = 'communityImages/' + identity.uid + '/' + Date.now() + '-' + randomUUID() + '.' + extension;
+        const downloadToken = randomUUID();
+        await bucket.file(objectPath).save(Buffer.from(imageData, 'base64'), {
+          resumable: false,
+          metadata: {
+            contentType: imageType,
+            cacheControl: 'public, max-age=31536000, immutable',
+            metadata: { firebaseStorageDownloadTokens: downloadToken }
+          }
+        });
+        imageUrl = 'https://firebasestorage.googleapis.com/v0/b/' + encodeURIComponent(bucket.name) + '/o/' + encodeURIComponent(objectPath) + '?alt=media&token=' + downloadToken;
+      } catch (uploadError) {
+        console.error('KitSetups community image upload failed:', uploadError);
+        return json(res, 500, { error: 'Image upload failed. Check that Firebase Storage is enabled and the production storage bucket is configured.' });
+      }
+    }
+
     const messageRef = await messages.add({
       uid: identity.uid,
       displayName,
       photoURL,
       text,
       imageUrl,
+      replyTo,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
