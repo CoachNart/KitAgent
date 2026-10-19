@@ -57,22 +57,49 @@ function executionBOS(c,direction){
   return events.sort((a,b)=>a.index-b.index);
 }
 
-export function findValidRetest(c,bos,direction){
+function retestCloseExtrema(c){
+  const minClose=new Float64Array(c.length);
+  const maxClose=new Float64Array(c.length);
+  let min=Infinity,max=-Infinity;
+  for(let i=c.length-1;i>=0;i--){
+    const x=c[i];
+    if(x&&[x.open,x.high,x.low,x.close].every(Number.isFinite)){
+      min=Math.min(min,x.close);
+      max=Math.max(max,x.close);
+    }
+    minClose[i]=min;
+    maxClose[i]=max;
+  }
+  return {minClose,maxClose};
+}
+
+export function findValidRetest(c,bos,direction,closeExtrema=null){
   if(!Array.isArray(c)||!bos||!Number.isInteger(bos.index)||bos.index<0||bos.index>=c.length-1)return null;
   if(!['BULLISH','BEARISH'].includes(direction)||!Number.isFinite(bos.level))return null;
-  let candidate=null;
-  for(let i=bos.index+1;i<c.length;i++){
+  const extrema=closeExtrema||retestCloseExtrema(c);
+  const from=bos.index+1;
+  const extreme=direction==='BULLISH'?extrema.minClose[from]:extrema.maxClose[from];
+  const invalidated=direction==='BULLISH'?extreme<bos.level:extreme>bos.level;
+  if(invalidated){
+    for(let i=from;i<c.length;i++){
+      const x=c[i];
+      if(!x||![x.open,x.high,x.low,x.close].every(Number.isFinite))continue;
+      if(direction==='BULLISH'?x.close<bos.level:x.close>bos.level){
+        return {failed:true,index:i,level:bos.level,close:x.close};
+      }
+    }
+  }
+  for(let i=from;i<c.length;i++){
     const x=c[i];
     if(!x||![x.open,x.high,x.low,x.close].every(Number.isFinite))continue;
-    const invalidated=direction==='BULLISH'?x.close<bos.level:x.close>bos.level;
-    if(invalidated)return {failed:true,index:i,level:bos.level,close:x.close};
-    if(candidate)continue;
     const touched=direction==='BULLISH'?x.low<=bos.level&&x.high>=bos.level:x.high>=bos.level&&x.low<=bos.level;
     const held=direction==='BULLISH'?x.close>bos.level:x.close<bos.level;
     const ratio=bodyRatio(x);
-    if(touched&&held&&ratio>=.35)candidate={index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i,bodyRatio:ratio};
+    if(touched&&held&&ratio>=.35){
+      return {index:i,price:bos.level,low:x.low,high:x.high,age:c.length-1-i,bodyRatio:ratio};
+    }
   }
-  return candidate;
+  return null;
 }
 
 export function executionOrderType({direction,entry,price,tolerance}){
@@ -152,11 +179,12 @@ export function evaluateTopDown({candles,layers,price}){
   const a=atr(c,14);
   if(!Number.isFinite(price)||price<=0||!a)return{direction,failures:['Live price or execution volatility is unavailable.'],evidence:[]};
   let selected=null;
+  const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
-    const rt=findValidRetest(c,bos,direction);
-    if(!rt||rt.failed||rt.age>4)continue;
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
     if(distance>tolerance)continue;
+    const rt=findValidRetest(c,bos,direction,closeExtrema);
+    if(!rt||rt.failed||rt.age>4)continue;
     const targetSwing=nextTarget(c,direction,rt.index,entry,layers);
     if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))continue;
     const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
