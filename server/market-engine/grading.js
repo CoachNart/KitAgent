@@ -78,6 +78,28 @@ export function executableTrade(trade,direction,livePrice){
   };
 }
 
+// Shared execution contract for all strategies. A pending limit must still be
+// waiting on the correct side of the live executable quote; if price has already
+// reached/passed it, the setup must be reevaluated rather than published as pending.
+export function validateEntryExecution({trade,direction,livePrice}={}){
+  const failures=[];
+  if(!trade||!['BULLISH','BEARISH'].includes(direction))
+    return {valid:false,failures:['Missing directional entry execution data.']};
+  const orderType=String(trade.orderType||'').toUpperCase();
+  const entry=Number(trade.entry),live=Number(livePrice);
+  if(!['MARKET','LIMIT'].includes(orderType))
+    failures.push('Unsupported or missing execution order type.');
+  if(!(Number.isFinite(entry)&&entry>0&&Number.isFinite(live)&&live>0))
+    failures.push('Entry and live executable quote must be valid positive prices.');
+  if(orderType==='LIMIT'&&Number.isFinite(entry)&&Number.isFinite(live)){
+    if(direction==='BULLISH'&&live<=entry)
+      failures.push('Bullish limit entry has already been reached or crossed by the executable quote; refresh the setup instead of publishing a stale pending order.');
+    if(direction==='BEARISH'&&live>=entry)
+      failures.push('Bearish limit entry has already been reached or crossed by the executable quote; refresh the setup instead of publishing a stale pending order.');
+  }
+  return {valid:failures.length===0,failures};
+}
+
 export function validateTradeGeometry({trade,direction,candles=[]}={}){
   const failures=[];
   if(!trade||!['BULLISH','BEARISH'].includes(direction))return {valid:false,failures:['Missing directional trade geometry.']};
