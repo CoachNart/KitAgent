@@ -54,6 +54,27 @@ service cloud.firestore {
     }
 
 
+    // One shared public community room. Every authenticated KitSetups user can
+    // read and post; users can only delete their own messages.
+    match /communityMessages/{messageId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'photoURL', 'text', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'displayName', 'photoURL', 'text', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 48
+        && request.resource.data.photoURL is string
+        && request.resource.data.photoURL.size() <= 500
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     match /supportChats/{chatId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create, update, delete: if false;
