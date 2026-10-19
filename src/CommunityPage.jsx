@@ -387,10 +387,10 @@ export default function CommunityPage({ user }) {
               <article id={'community-message-' + message.id} className={own ? 'community-message own' : 'community-message'} key={message.id}
                 style={{ '--message-accent': accent }} onTouchStart={handleMessageTouchStart}
                 onTouchEnd={event => handleMessageTouchEnd(event, message)}>
-                {!own && <div className="community-avatar" style={{ '--message-accent': accent }}>{photo ? <img src={photo} alt="" referrerPolicy="no-referrer" /> : <span>{initials(message.displayName)}</span>}</div>}
+                <div className="community-avatar" style={{ '--message-accent': accent }}>{photo ? <img src={photo} alt="" referrerPolicy="no-referrer" /> : <span>{initials(own ? displayName : message.displayName)}</span>}</div>
                 <div className="community-message-body">
                   <div className="community-message-meta">
-                    {!own && <strong style={{ color: accent }}>{message.displayName || 'KitSetups trader'}</strong>}
+                    <strong style={{ color: accent }}>{own ? 'You' : (message.displayName || 'KitSetups trader')}</strong>
                     <time>{formatTime(message.createdAt)}</time>
                     <button type="button" className="community-reply-button" aria-label={'Reply to ' + (message.displayName || 'trader')} title="Reply" onClick={() => startReply(message)}><Reply size={15} /></button>
                     {own && <div className="community-message-menu-wrap">
@@ -408,7 +408,6 @@ export default function CommunityPage({ user }) {
                       <img className="community-shared-image" src={message.imageUrl} alt="Shared community image" loading="lazy" onError={() => setBrokenImages(current => ({ ...current, [message.id]: true }))} />
                     </a>)}
                 </div>
-                {own && <div className="community-avatar own-avatar" style={{ '--message-accent': accent }}>{photo ? <img src={photo} alt="" referrerPolicy="no-referrer" /> : <span>{initials(displayName)}</span>}</div>}
               </article>
             );
           })}
