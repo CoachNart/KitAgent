@@ -53,6 +53,15 @@ export default async function handler(req, res) {
     const messages = db.collection('communityMessages');
 
     if (req.method === 'GET') {
+      if (String(req.query?.members || '') === '1') {
+        const listed = await a.auth().listUsers(1000);
+        const memberList = listed.users.map(member => ({
+          uid: String(member.uid || ''),
+          displayName: String(member.displayName || member.email?.split('@')[0] || `Trader ${String(member.uid || '').slice(-4)}`).trim().slice(0, 48),
+          photoURL: String(member.photoURL || '').slice(0, 500)
+        })).filter(member => member.uid).sort((x, y) => x.displayName.localeCompare(y.displayName));
+        return json(res, 200, { ok: true, members: memberList });
+      }
       const snapshot = await messages.orderBy('createdAt', 'desc').limit(100).get();
       const result = snapshot.docs.map(item => {
         const data = item.data();
@@ -96,6 +105,8 @@ export default async function handler(req, res) {
     const imageData = String(body.imageData || '').trim();
     const imageType = String(body.imageType || '').trim().toLowerCase();
     const replyToId = String(body.replyToId || '').trim();
+    const requestedMentions = Array.isArray(body.mentionUids) ? [...new Set(body.mentionUids.map(uid => String(uid || '').trim()).filter(uid => uid && uid !== identity.uid))].slice(0, 200) : [];
+    const mentionEveryone = body.mentionEveryone === true;
     if (!text && !imageUrl && !imageData) return json(res, 400, { error: 'Write a message or attach an image first.' });
     if (text.length > 1000) return json(res, 400, { error: 'Messages must be 1,000 characters or fewer.' });
     if (imageData) {
@@ -188,8 +199,59 @@ export default async function handler(req, res) {
       text,
       imageUrl,
       replyTo,
+      mentionUids: requestedMentions,
+      mentionEveryone,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
+
+    let validRecipients = [];
+    if (mentionEveryone) {
+      const allUsers = await a.auth().listUsers(1000);
+      validRecipients = allUsers.users.filter(member => member.uid !== identity.uid).map(member => ({ uid: member.uid }));
+    } else {
+      for (const uid of requestedMentions) {
+        try { await a.auth().getUser(uid); validRecipients.push({ uid }); } catch {}
+      }
+    }
+    if (validRecipients.length) {
+      const notificationText = text ? text.slice(0, 180) : 'Shared an image in the community.';
+      for (let i = 0; i < validRecipients.length; i += 400) {
+        const batch = db.batch();
+        for (const recipient of validRecipients.slice(i, i + 400)) {
+          const notificationRef = db.collection('communityNotifications').doc();
+          batch.set(notificationRef, {
+            uid: recipient.uid,
+            type: mentionEveryone ? 'everyone_mention' : 'mention',
+            messageId: messageRef.id,
+            senderUid: identity.uid,
+            senderName: displayName,
+            text: notificationText,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false
+          });
+        }
+        await batch.commit();
+      }
+      try {
+        const tokenUsers = await Promise.all(validRecipients.map(async recipient => {
+          const snap = await db.collection('users').doc(recipient.uid).get();
+          return Object.keys(snap.exists ? snap.data()?.pushTokens || {} : {});
+        }));
+        const pushTokens = [...new Set(tokenUsers.flat())];
+        for (let i = 0; i < pushTokens.length; i += 500) {
+          const tokens = pushTokens.slice(i, i + 500);
+          if (!tokens.length) continue;
+          await a.messaging().sendEachForMulticast({
+            tokens,
+            notification: { title: mentionEveryone ? `${displayName} tagged everyone in KitSetups` : `${displayName} mentioned you in KitSetups`, body: notificationText },
+            data: { type: 'community_mention', messageId: messageRef.id, senderUid: identity.uid },
+            webpush: { notification: { icon: '/kitsetups-logo.svg', badge: '/kitsetups-logo.svg', tag: `community-${messageRef.id}` }, fcmOptions: { link: '/?page=community' } }
+          });
+        }
+      } catch (notificationError) {
+        console.error('KitSetups community mention push failed:', notificationError?.message || 'Unknown push error');
+      }
+    }
 
     return json(res, 201, { ok: true, id: messageRef.id });
   } catch (error) {
