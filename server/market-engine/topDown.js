@@ -83,16 +83,16 @@ export function findValidRetest(c,bos,direction,closeExtrema=null){
   if(invalidated){
     // Suffix extrema are monotonic, so binary-search the earliest candle
     // that breached the BOS instead of rescanning the entire post-BOS range.
-    let lo=from,hi=c.length-1;
-    while(lo<hi){
+    let lo=from,hi=c.length;
+    while(hi-lo>1){
       const mid=(lo+hi)>>>1;
       const suffixExtreme=direction==='BULLISH'?extrema.minClose[mid]:extrema.maxClose[mid];
       const breached=direction==='BULLISH'?suffixExtreme<bos.level:suffixExtreme>bos.level;
-      if(breached)lo=mid+1;
+      if(breached)lo=mid;
       else hi=mid;
     }
-    // The first non-breached suffix is immediately after the first breach.
-    const index=lo-1;
+    // The last suffix containing a breach starts at the first breach candle.
+    const index=lo;
     const x=c[index];
     if(index>=from&&x&&[x.open,x.high,x.low,x.close].every(Number.isFinite)){
       return {failed:true,index,level:bos.level,close:x.close};
