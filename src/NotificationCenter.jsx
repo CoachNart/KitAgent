@@ -35,6 +35,40 @@ export default function NotificationCenter({user,embedded=false}){
    setDoc(doc(db,'users',user.uid),{priceAlerts,notificationSettings:{enabled:permission==='granted',browser:true,updatedAt:serverTimestamp()}},{merge:true}).catch(error=>console.warn('KitSetups price alerts could not be saved:',error));
  },[alerts,alertsHydrated,user?.uid,permission]);
  useEffect(()=>localStorage.setItem(ACTIVITY_KEY,JSON.stringify(activity.slice(0,12))),[activity]);
+ useEffect(()=>{
+   if(!user?.uid)return;
+   let dead=false, initialized=false;
+   const storageKey='kitsetups:community-notifications-seen:'+user.uid;
+   const seen=new Set();
+   try{JSON.parse(localStorage.getItem(storageKey)||'[]').forEach(id=>seen.add(id))}catch{}
+   const poll=async()=>{
+     try{
+       const token=await user.getIdToken();
+       const response=await fetch('/api/community-message?notifications=1',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
+       if(!response.ok)return;
+       const payload=await response.json();
+       if(dead)return;
+       const items=Array.isArray(payload.notifications)?payload.notifications:[];
+       const fresh=items.filter(item=>item.id&&!seen.has(item.id)&&(!item.createdAt||Date.now()-new Date(item.createdAt).getTime()<7*86400000));
+       items.forEach(item=>seen.add(item.id));
+       try{localStorage.setItem(storageKey,JSON.stringify([...seen].slice(-150)))}catch{}
+       if(initialized&&fresh.length){
+         const item=fresh[0];
+         window.dispatchEvent(new CustomEvent('kitsetups:community-notification',{detail:item}));
+         if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
+           try{new Notification(item.type==='everyone_mention'?'KitSetups · @everyone':'KitSetups · Mention',{body:(item.senderName?item.senderName+': ':'')+(item.text||'You were mentioned in the community.'),icon:'/kitsetups-logo.svg',tag:'community-mention-'+item.id})}catch{}
+         }
+       } else if(!initialized&&fresh.length) {
+         const item=fresh[0];
+         window.dispatchEvent(new CustomEvent('kitsetups:community-notification',{detail:item}));
+       }
+       initialized=true;
+     }catch(error){console.warn('KitSetups community notifications could not be checked:',error)}
+   };
+   poll();const timer=setInterval(poll,15000);
+   return()=>{dead=true;clearInterval(timer)};
+ },[user?.uid]);
+
  useEffect(()=>{try{startMarketAlerts()}catch(error){console.warn('KitSetups live activity monitor could not start:',error)}},[]);
  useEffect(()=>{
    const onUpdate=e=>{const next=e.detail||getMarketAlertSnapshot();setMarket(next);const event=next.lastConfirmed||next.lastEvent;if(event?.symbol){setActivity(a=>{const key=event.symbol+'-'+event.direction+'-'+(event.time||event.detectedAt)+'-'+(event.timeframe||'');if(a.some(x=>x.key===key))return a;return [{key,symbol:event.symbol,direction:event.direction,type:event.type||'BOS',level:event.level,detectedAt:event.detectedAt||Date.now(),timeframe:event.timeframe||'live'},...a].slice(0,12)})}};
