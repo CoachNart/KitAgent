@@ -7,6 +7,7 @@ import {evaluateStrategy,STRATEGIES} from './strategies.js';
 import {noTrade,validateTradeGeometry,validateEntryExecution,executableTrade} from './grading.js';
 
 const BYBIT={'30m':'30','1H':'60','2H':'120','4H':'240','1D':'D'};
+const analysisLayerCache=new WeakMap();
 const CHAIN={
   '30m':['4H','2H','1H','30m'],
   '1H':['4H','2H','1H'],
@@ -162,12 +163,21 @@ export function selectMinimumRRStructuralTarget({trade,direction,candles=[],laye
 
 export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quote=null){
   const order=CHAIN[tf];
-  const layers=order.map(x=>({
-    tf:x,
-    candles:allCandles[x],
-    structure:structure(allCandles[x]),
-    liquidity:liquidityMap(allCandles[x])
-  }));
+  let byTimeframe=analysisLayerCache.get(allCandles);
+  if(!byTimeframe){
+    byTimeframe=new Map();
+    analysisLayerCache.set(allCandles,byTimeframe);
+  }
+  let layers=byTimeframe.get(tf);
+  if(!layers){
+    layers=order.map(x=>({
+      tf:x,
+      candles:allCandles[x],
+      structure:structure(allCandles[x]),
+      liquidity:liquidityMap(allCandles[x])
+    }));
+    byTimeframe.set(tf,layers);
+  }
 
   const hard=[];
   for(const layer of layers){
