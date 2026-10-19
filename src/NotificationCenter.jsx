@@ -37,32 +37,37 @@ export default function NotificationCenter({user,embedded=false}){
  useEffect(()=>localStorage.setItem(ACTIVITY_KEY,JSON.stringify(activity.slice(0,12))),[activity]);
  useEffect(()=>{
    if(!user?.uid)return;
-   let dead=false, initialized=false;
+   let dead=false;
    const storageKey='kitsetups:community-notifications-seen:'+user.uid;
    const seen=new Set();
-   try{JSON.parse(localStorage.getItem(storageKey)||'[]').forEach(id=>seen.add(id))}catch{}
+   let initialized=false;
+   try{
+     const stored=localStorage.getItem(storageKey);
+     if(stored!==null){JSON.parse(stored).forEach(id=>seen.add(id));initialized=true;}
+   }catch{}
    const poll=async()=>{
      try{
        const token=await user.getIdToken();
-       const response=await fetch('/api/community-message?notifications=1',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
+       const response=await fetch('/api/community-message?notifications=1',{headers:{Authorization:\`Bearer \${token}\`},cache:'no-store'});
        if(!response.ok)return;
        const payload=await response.json();
        if(dead)return;
        const items=Array.isArray(payload.notifications)?payload.notifications:[];
-       const fresh=items.filter(item=>item.id&&!seen.has(item.id)&&(!item.createdAt||Date.now()-new Date(item.createdAt).getTime()<7*86400000));
-       items.forEach(item=>seen.add(item.id));
-       try{localStorage.setItem(storageKey,JSON.stringify([...seen].slice(-150)))}catch{}
-       if(initialized&&fresh.length){
-         const item=fresh[0];
-         window.dispatchEvent(new CustomEvent('kitsetups:community-notification',{detail:item}));
-         if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
-           try{new Notification(item.type==='everyone_mention'?'KitSetups · @everyone':'KitSetups · Mention',{body:(item.senderName?item.senderName+': ':'')+(item.text||'You were mentioned in the community.'),icon:'/kitsetups-logo.svg',tag:'community-mention-'+item.id})}catch{}
+       if(!initialized){
+         // First visit: establish a baseline without notifying for old mentions.
+         items.forEach(item=>{if(item.id)seen.add(item.id)});
+         initialized=true;
+       }else{
+         const fresh=items.filter(item=>item.id&&!seen.has(item.id)&&item.createdAt&&Date.now()-new Date(item.createdAt).getTime()<7*86400000);
+         for(const item of fresh.slice().reverse()){
+           window.dispatchEvent(new CustomEvent('kitsetups:community-notification',{detail:item}));
+           if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
+             try{new Notification(item.type==='everyone_mention'?'KitSetups · @everyone':'KitSetups · Mention',{body:(item.senderName?item.senderName+': ':'')+(item.text||'You were mentioned in the community.'),icon:'/kitsetups-logo.svg',tag:'community-mention-'+item.id})}catch{}
+           }
          }
-       } else if(!initialized&&fresh.length) {
-         const item=fresh[0];
-         window.dispatchEvent(new CustomEvent('kitsetups:community-notification',{detail:item}));
+         items.forEach(item=>{if(item.id)seen.add(item.id)});
        }
-       initialized=true;
+       try{localStorage.setItem(storageKey,JSON.stringify([...seen].slice(-150)))}catch{}
      }catch(error){console.warn('KitSetups community notifications could not be checked:',error)}
    };
    poll();const timer=setInterval(poll,15000);
