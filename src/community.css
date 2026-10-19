@@ -339,10 +339,10 @@
     top: 46px;
     left: 0;
     right: 0;
-    bottom: auto;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
     width: auto !important;
     max-width: none !important;
-    height: calc(var(--community-visual-height, 100dvh) - 46px - 64px - env(safe-area-inset-bottom, 0px));
+    height: auto;
     min-height: 0;
     margin: 0 !important;
     padding: 0 !important;
@@ -424,7 +424,8 @@
 }
 @media(max-width:380px) {
   .community-page {
-    height: calc(var(--community-visual-height, 100dvh) - 46px - 60px - env(safe-area-inset-bottom, 0px));
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    height: auto;
   }
   .community-message-list { padding-left: 8px; padding-right: 8px; }
   .community-composer-wrap .community-composer { gap: 5px; padding-left: 7px; padding-right: 7px; }
