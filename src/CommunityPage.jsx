@@ -31,7 +31,7 @@ async function fileToImagePayload(file) {
       for (const quality of [0.92, 0.86, 0.8, 0.74]) {
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', quality));
         if (blob && (blob.size < uploadFile.size || blob.size <= MAX_UPLOAD_BYTES)) {
-          uploadFile = new File([blob], file.name.replace(/\\.[^.]+$/, '') + '.webp', { type: 'image/webp', lastModified: Date.now() });
+          uploadFile = new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp', lastModified: Date.now() });
           if (uploadFile.size <= MAX_UPLOAD_BYTES) break;
         }
       }
