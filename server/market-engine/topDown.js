@@ -24,9 +24,11 @@ function executionBOS(c,direction){
   const s=confirmedSwings(c,1);
   const swings=direction==='BULLISH'?s.highs:s.lows;
   if(!swings.length||!c.length)return [];
-  // Build a range-extrema tree once, then find each swing's latest qualifying
-  // close in O(log n). This preserves the original backward scan's exact
-  // "most recent close beyond this swing after confirmation" semantics.
+  // A BOS is the FIRST close beyond a confirmed swing after that swing
+  // becomes available. Using the latest close makes the "BOS" candle itself
+  // the final continuation candle, so no later candle can retest and hold the
+  // level without becoming a newer BOS; that made valid retests impossible.
+  // The segment tree finds the first qualifying close in O(log n).
   const size=1<<Math.ceil(Math.log2(c.length));
   const tree=new Float64Array(size*2);
   const bullish=direction==='BULLISH';
@@ -39,18 +41,18 @@ function executionBOS(c,direction){
   for(let i=size-1;i>0;i--){
     tree[i]=bullish?Math.max(tree[i*2],tree[i*2+1]):Math.min(tree[i*2],tree[i*2+1]);
   }
-  function rightmostBreak(node,left,right,from,threshold){
+  function firstBreak(node,left,right,from,threshold){
     if(right<from)return -1;
     const extreme=tree[node];
     if(bullish?extreme<=threshold:extreme>=threshold)return -1;
     if(left===right)return left<c.length?left:-1;
     const mid=(left+right)>>>1;
-    const found=rightmostBreak(node*2+1,mid+1,right,from,threshold);
-    return found>=0?found:rightmostBreak(node*2,left,mid,from,threshold);
+    const found=firstBreak(node*2,left,mid,from,threshold);
+    return found>=0?found:firstBreak(node*2+1,mid+1,right,from,threshold);
   }
   const events=[];
-  for(const sw of swings.slice().reverse()){
-    const index=rightmostBreak(1,0,size-1,sw.confirmationIndex+1,sw.price);
+  for(const sw of swings){
+    const index=firstBreak(1,0,size-1,sw.confirmationIndex+1,sw.price);
     if(index<0)continue;
     events.push({index,level:sw.price,swingIndex:sw.index,age:c.length-1-index});
   }
