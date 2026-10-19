@@ -143,7 +143,9 @@ for(const symbol of symbols){
     const start=Math.max(40,exec.length-bars);
     const snapshots=exec.slice(start);
     const seen=new Map();
+    let snapshotIndex=0;
     for(const candle of snapshots){
+      snapshotIndex++;
       const cutoff=candle.time+DURATIONS[tf];
       const all={};
       for(const layerTf of [...EXECUTION_TIMEFRAMES,'1D']){
@@ -157,6 +159,7 @@ for(const symbol of symbols){
         throw new Error('HISTORICAL SNAPSHOT GUARD: latest '+tf+' candle does not match the decision candle at '+new Date(cutoff).toISOString());
       }
       for(const strategy of strategies){
+        console.log('REPLAY PROGRESS',symbol,tf, snapshotIndex+'/'+snapshots.length, strategy, new Date(cutoff).toISOString());
         const stat=bucket(strategy,tf);stat.evaluated++;
         let result;
         try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close);}
