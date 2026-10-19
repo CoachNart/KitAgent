@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { AlertCircle, ArrowDown, Hash, LoaderCircle, MessageCircle, MoreHorizontal, Send, ShieldCheck, Trash2, Users, Wifi } from 'lucide-react';
 import { db } from './firebase.js';
 import './community.css';
@@ -96,21 +96,25 @@ export default function CommunityPage({ user }) {
     setSending(true);
     setError('');
     try {
-      await addDoc(collection(db, 'communityMessages'), {
-        uid: user.uid,
-        displayName,
-        photoURL: String(user.photoURL || '').slice(0, 500),
-        text,
-        createdAt: serverTimestamp()
+      const token = await user.getIdToken();
+      const response = await fetch('/api/community-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text })
       });
+      let payload = {};
+      try { payload = await response.json(); } catch {}
+      if (!response.ok) {
+        const sendError = new Error(payload.error || 'Message not sent. Please try again.');
+        sendError.status = response.status;
+        throw sendError;
+      }
       setDraft('');
       atBottomRef.current = true;
       setShowLatest(false);
     } catch (err) {
       console.error('KitSetups community send failed:', err);
-      setError(err?.code === 'permission-denied'
-        ? 'You do not have permission to post yet. Community access rules may need deploying.'
-        : 'Message not sent. Check your connection and try again.');
+      setError(err?.status === 429 ? (err.message || 'Give it a second before sending another message.') : (err?.status === 401 ? (err.message || 'Your session expired. Sign in again.') : (err?.message || 'Message not sent. Check your connection and try again.')));
       lastSentAtRef.current = 0;
     } finally {
       setSending(false);
