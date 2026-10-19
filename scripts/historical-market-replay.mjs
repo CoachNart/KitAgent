@@ -173,9 +173,16 @@ for(const symbol of symbols){
       }
       for(const strategy of strategies){
         const stat=bucket(strategy,tf);stat.evaluated++;
+        const strategyStarted=Date.now();
+        console.log('STRATEGY START',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy);
         let result;
         try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close);}
-        catch(error){rejection(strategy,tf,'EXCEPTION: '+(error?.message||error));continue;}
+        catch(error){
+          console.error('STRATEGY ERROR',symbol,tf,snapshotIndex,strategy,Date.now()-strategyStarted+'ms',error?.stack||error);
+          rejection(strategy,tf,'EXCEPTION: '+(error?.message||error));
+          continue;
+        }
+        console.log('STRATEGY DONE',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy,Date.now()-strategyStarted+'ms');
         if(!result.trade||!['A','A+'].includes(result.grade?.grade)){
           for(const reason of (result.failures||[]).slice(0,2))rejection(strategy,tf,reason);
           if(result.trade&&result.grade?.grade==='A')stat.gradeA++;
