@@ -170,12 +170,21 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quot
   }
   let layers=byTimeframe.get(tf);
   if(!layers){
-    layers=order.map(x=>({
-      tf:x,
-      candles:allCandles[x],
-      structure:structure(allCandles[x]),
-      liquidity:liquidityMap(allCandles[x])
-    }));
+    const profileLayers=process.env.KITAGENT_PROFILE_LAYERS==='1';
+    layers=order.map(x=>{
+      const candles=allCandles[x];
+      const structureStarted=performance.now();
+      const structureResult=structure(candles);
+      const structureMs=+(performance.now()-structureStarted).toFixed(2);
+      const liquidityStarted=performance.now();
+      const liquidityResult=liquidityMap(candles);
+      const liquidityMs=+(performance.now()-liquidityStarted).toFixed(2);
+      if(profileLayers)console.log('LAYER PROFILE',JSON.stringify({
+        symbol,executionTimeframe:tf,layerTimeframe:x,candles:candles?.length||0,
+        structureMs,liquidityMs,totalMs:+(structureMs+liquidityMs).toFixed(2)
+      }));
+      return{tf:x,candles,structure:structureResult,liquidity:liquidityResult};
+    });
     byTimeframe.set(tf,layers);
   }
 
