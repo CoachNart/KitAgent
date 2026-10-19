@@ -183,20 +183,26 @@ export function evaluateTopDown({candles,layers,price}){
   if(c.length<40)return{direction:'NEUTRAL',failures:['Insufficient execution candles for Top-Down.'],evidence:[]};
   const direction=htfBias(layers);
   if(!direction)return{direction:'NEUTRAL',failures:['Higher-timeframe layers do not agree on a directional bias.'],evidence:[]};
+  const bosStarted=Date.now();
   const bosCandidates=executionBOS(c,direction);
-  if(!bosCandidates.length)return{direction,failures:['Execution timeframe has not confirmed a BOS in the higher-timeframe direction.'],evidence:[{type:'HTF_ALIGNMENT',direction}]};
+  const bosMs=Date.now()-bosStarted;
+  if(!bosCandidates.length)return{direction,failures:['Execution timeframe has not confirmed a BOS in the higher-timeframe direction.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'TOP_DOWN_REJECTION_DIAGNOSTICS',bosCandidates:0,bosMs}]};
   const a=atr(c,14);
   if(!Number.isFinite(price)||price<=0||!a)return{direction,failures:['Live price or execution volatility is unavailable.'],evidence:[]};
   let selected=null;
-  const diagnostics={bosCandidates:bosCandidates.length,distanceEligible:0,retestFound:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
+  const diagnostics={bosCandidates:bosCandidates.length,bosMs,distanceEligible:0,retestFound:0,retestInvalidated:0,noRetest:0,staleRetest:0,retestMs:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
   const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
     if(distance>tolerance)continue;
     diagnostics.distanceEligible++;
+    const retestStarted=Date.now();
     const rt=findValidRetest(c,bos,direction,closeExtrema);
-    if(rt&&!rt.failed)diagnostics.retestFound++;
-    if(!rt||rt.failed||rt.age>4)continue;
+    diagnostics.retestMs+=Date.now()-retestStarted;
+    if(rt?.failed){diagnostics.retestInvalidated++;continue;}
+    if(!rt){diagnostics.noRetest++;continue;}
+    diagnostics.retestFound++;
+    if(rt.age>4){diagnostics.staleRetest++;continue;}
     diagnostics.recentRetest++;
     const targetSwing=nextTarget(c,direction,rt.index,entry,layers);
     if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))continue;
