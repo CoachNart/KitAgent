@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     if (imageUrl) {
       let parsed;
       try { parsed = new URL(imageUrl); } catch { return json(res, 400, { error: 'That image URL is invalid.' }); }
-      if (parsed.protocol !== 'https:' || parsed.hostname !== 'firebasestorage.googleapis.com') {
+      if (parsed.protocol !== 'https:' || !(parsed.hostname === 'firebasestorage.googleapis.com' || parsed.hostname === 'ik.imagekit.io' || parsed.hostname.endsWith('.imagekit.io'))) {
         return json(res, 400, { error: 'Please attach an image from KitSetups storage.' });
       }
     }
@@ -155,24 +155,29 @@ export default async function handler(req, res) {
 
     if (imageData) {
       try {
-        const bucketName = String(process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || a.app().options.storageBucket || '').trim();
-        if (!bucketName) throw new Error('FIREBASE_STORAGE_BUCKET_MISSING');
-        const bucket = a.storage().bucket(bucketName);
+        const privateKey = String(process.env.IMAGEKIT_PRIVATE_KEY || '').trim();
+        if (!privateKey) throw new Error('IMAGEKIT_PRIVATE_KEY_MISSING');
         const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' })[imageType];
-        const objectPath = 'communityImages/' + identity.uid + '/' + Date.now() + '-' + randomUUID() + '.' + extension;
-        const downloadToken = randomUUID();
-        await bucket.file(objectPath).save(Buffer.from(imageData, 'base64'), {
-          resumable: false,
-          metadata: {
-            contentType: imageType,
-            cacheControl: 'public, max-age=31536000, immutable',
-            metadata: { firebaseStorageDownloadTokens: downloadToken }
-          }
+        const form = new FormData();
+        form.append('file', new Blob([Buffer.from(imageData, 'base64')], { type: imageType }), 'community-' + Date.now() + '.' + extension);
+        form.append('fileName', 'community-' + Date.now() + '-' + randomUUID() + '.' + extension);
+        form.append('folder', '/communityImages/' + identity.uid);
+        form.append('useUniqueFileName', 'true');
+        const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+          method: 'POST',
+          headers: { Authorization: 'Basic ' + Buffer.from(privateKey + ':').toString('base64') },
+          body: form,
+          signal: AbortSignal.timeout(30000)
         });
-        imageUrl = 'https://firebasestorage.googleapis.com/v0/b/' + encodeURIComponent(bucket.name) + '/o/' + encodeURIComponent(objectPath) + '?alt=media&token=' + downloadToken;
+        const uploadResult = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok || !uploadResult.url) {
+          console.error('KitSetups ImageKit upload failed:', uploadResponse.status, uploadResult?.message || uploadResult?.help || 'No image URL returned');
+          return json(res, 502, { error: 'Image upload failed. Please try again with a smaller image.' });
+        }
+        imageUrl = String(uploadResult.url);
       } catch (uploadError) {
-        console.error('KitSetups community image upload failed:', uploadError);
-        return json(res, 500, { error: 'Image upload failed. Check that Firebase Storage is enabled and the production storage bucket is configured.' });
+        console.error('KitSetups community image upload failed:', uploadError?.message || 'Unknown upload error');
+        return json(res, 502, { error: uploadError?.name === 'TimeoutError' ? 'Image upload timed out. Try again.' : 'Image upload failed. Please try again.' });
       }
     }
 
