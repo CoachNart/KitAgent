@@ -431,3 +431,76 @@
   .community-attach-button { width: 35px; flex-basis: 35px; }
   .community-send-button { width: 39px; flex-basis: 39px; }
 }
+
+
+/* Correct mobile viewport bounds: stop the chat immediately above fixed bottom nav. */
+@media(max-width:760px) {
+  .community-page {
+    top: 46px !important;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
+  .community-chat {
+    height: auto !important;
+    min-height: 0 !important;
+    flex: 1 1 0 !important;
+    overflow: hidden;
+  }
+  .community-message-list {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+  .community-composer-wrap {
+    position: relative !important;
+    inset: auto !important;
+    flex: 0 0 auto !important;
+    width: 100%;
+    visibility: visible !important;
+    display: block !important;
+    padding-bottom: 6px !important;
+  }
+}
+@media(max-width:380px) {
+  .community-page {
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Keep the shared group feed, while your own posts stay on the right. */
+.community-message.own {
+  justify-content: flex-end !important;
+}
+.community-message.own .community-avatar {
+  order: 2;
+}
+.community-message.own .community-message-body {
+  order: 1;
+  align-items: flex-end !important;
+}
+.community-message.own .community-message-meta {
+  justify-content: flex-end !important;
+}
+.community-message.own .community-message-body>p {
+  display: block;
+  width: fit-content;
+  max-width: min(100%, 650px);
+  padding: 11px 15px;
+  border: 1px solid rgba(0,199,254,.38);
+  border-radius: 16px 5px 16px 16px;
+  background: linear-gradient(135deg,rgba(0,199,254,.22),rgba(0,126,170,.12));
+  box-shadow: 0 5px 18px rgba(0,0,0,.08);
+  color: #e7f7fb;
+}
+@media(max-width:760px) {
+  .community-message.own .community-message-body>p {
+    max-width: 100%;
+    padding: 2px 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}
