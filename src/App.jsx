@@ -10,11 +10,12 @@ import AccessGateComponent from './AccessGate.jsx';
 import LiveMarketComponent from './LiveMarketPage.jsx';
 import SetupEducationPage from './SetupEducationPage.jsx';
 import NotificationCenter from './NotificationCenter.jsx';
+import CommunityPage from './CommunityPage.jsx';
 import './ui-polish.css';
 import './header-polish.css';
-import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, X, Zap } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, MessageCircle, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, X, Zap } from 'lucide-react';
 
-const nav=[['home','Home',House],['market','Market analysis',BarChart3],['defi','Chart terminal',Layers3],['setups','Setups',ScanSearch],['history','History',History],['profile','Profile',CircleUserRound]];
+const nav=[['home','Home',House],['market','Market analysis',BarChart3],['community','Community',MessageCircle],['defi','Chart terminal',Layers3],['setups','Setups',ScanSearch],['history','History',History],['profile','Profile',CircleUserRound]];
 const appSearchItems=nav.map(([id,label])=>({type:'workspace',label,meta:'Workspace',action:id}));
 
 export default function App({user}){
@@ -45,13 +46,13 @@ export default function App({user}){
     <div className="header-pulse" aria-label="System pulse"><i className="pulse-green"/><i className="pulse-red"/></div>
     <button type="button" className="profile-avatar" aria-label="Open profile" title="Profile" onClick={()=>go('profile')}><span className="profile-avatar-ring">{(displayUser?.photoURL||displayUser?.photoUrl||displayUser?.avatarUrl)?<img src={displayUser.photoURL||displayUser.photoUrl||displayUser.avatarUrl} alt="" referrerPolicy="no-referrer"/>:<span>{initials(displayUser?.displayName||displayUser?.email||'K')}</span>}</span><i className="profile-status"/></button>
   </div>
-</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='setup-guide'&&<SetupEducationPage onBack={()=>go('market')}/>} {page==='defi'&&<ChartTerminal/>} {page==='setups'&&<AccessGateComponent user={user}><DailySetupsPage/></AccessGateComponent>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
+</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='community'&&<CommunityPage user={user}/>} {page==='setup-guide'&&<SetupEducationPage onBack={()=>go('market')}/>} {page==='defi'&&<ChartTerminal/>} {page==='setups'&&<AccessGateComponent user={user}><DailySetupsPage/></AccessGateComponent>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
 }
 
 function KitNavigation({page,go}){
   return <nav className="kit-nav" aria-label="KitSetups navigation">
-    <div className="kit-nav-inner" style={{'--nav-index':Math.max(0,nav.findIndex(([id])=>id===page)),'--nav-cell-width':'calc((100% - 34px) / 6)','--nav-pill-width':`${Math.min(116,Math.max(78,66 + String(nav.find(([id])=>id===page)?.[1]||'').length*3.55))}px`}}>
-      {nav.map(([id,label,Icon])=><button key={id} type="button" className={page===id?'kit-nav-item active':'kit-nav-item'} aria-current={page===id?'page':undefined} onClick={()=>go(id)}>
+    <div className="kit-nav-inner" style={{'--nav-index':Math.max(0,nav.findIndex(([id])=>id===page)),'--nav-cell-width':'calc((100% - 34px) / 7)','--nav-pill-width':`${Math.min(116,Math.max(78,66 + String(nav.find(([id])=>id===page)?.[1]||'').length*3.55))}px`}}>
+      {nav.map(([id,label,Icon])=><button key={id} type="button" className={page===id?'kit-nav-item active':'kit-nav-item'} aria-label={label} title={label} aria-current={page===id?'page':undefined} onClick={()=>go(id)}>
         <span className="kit-nav-icon"><Icon size={20}/></span>
         <span className="kit-nav-label">{label}</span>
       </button>)}
