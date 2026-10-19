@@ -199,8 +199,8 @@ export function buildMSNRLevels(candles){
   return makeBaseLevels(candles).map(level=>trackLevel(level,candles));
 }
 
-export function recentMSNRConfirmations(candles,maxAge=2){
-  const levels=buildMSNRLevels(candles);
+export function recentMSNRConfirmations(candles,maxAge=2,prebuiltLevels=null){
+  const levels=Array.isArray(prebuiltLevels)?prebuiltLevels:buildMSNRLevels(candles);
   const lastIndex=candles.length-1;
   const floor=Math.max(0,lastIndex-Math.max(0,maxAge));
   return levels
@@ -233,11 +233,19 @@ function objective(levels,direction,entry,minDistance=0){
   const distanceFloor=Math.max(minDistance,Math.abs(entry)*.005);
   const candidates=opposing
     .filter(x=>(x.fresh||x.type==='RBS'||x.type==='SBR')&&Math.abs(x.level-entry)>=distanceFloor);
-  for(const x of candidates){
-    const peers=candidates.filter(y=>Math.abs(y.level-x.level)<=Math.max(distanceFloor*.35,Math.abs(entry)*.0015));
+  const clusterTolerance=Math.max(distanceFloor*.35,Math.abs(entry)*.0015);
+  const priceOrder=candidates.map((candidate,index)=>({level:candidate.level,index})).sort((a,b)=>a.level-b.level||a.index-b.index);
+  let left=0,right=0;
+  for(let i=0;i<priceOrder.length;i++){
+    const current=priceOrder[i];
+    while(left<priceOrder.length&&current.level-priceOrder[left].level>clusterTolerance)left++;
+    if(right<i)right=i;
+    while(right+1<priceOrder.length&&priceOrder[right+1].level-current.level<=clusterTolerance)right++;
+    const x=candidates[current.index];
+    const clusterCount=right-left+1;
     const strength=x.type==='RBS'||x.type==='SBR'?100:x.type==='A'||x.type==='V'?90:75;
-    x.clusterCount=peers.length;
-    x.quality=strength+(x.fresh?18:0)+(x.flipCount>0?12:0)+(peers.length>=3?24:peers.length===2?14:0)+(x.tf?8:0);
+    x.clusterCount=clusterCount;
+    x.quality=strength+(x.fresh?18:0)+(x.flipCount>0?12:0)+(clusterCount>=3?24:clusterCount===2?14:0)+(x.tf?8:0);
   }
   return candidates
     .sort((a,b)=>b.quality-a.quality||Math.abs(a.level-entry)-Math.abs(b.level-entry))
@@ -259,7 +267,9 @@ function gradeMSNR({level,event,context,target,rr}){
 
 export function evaluateMSNR({candles,layers,price}){
   const levels=buildMSNRLevels(candles);
-  const events=recentMSNRConfirmations(candles,2);
+  // Reuse the already-built level state; rebuilding it here repeats the
+  // full historical level-tracking pass for every MSNR evaluation.
+  const events=recentMSNRConfirmations(candles,2,levels);
   const failures=[];
   if(!events.length)failures.push('No fresh MSNR confirmation candle at a live key level.');
   const liveExecutionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
@@ -290,6 +300,11 @@ export function evaluateMSNR({candles,layers,price}){
   }
 
   const candidates=[];
+  // Higher-timeframe MSNR levels depend only on the layer candles, not on the
+  // confirmation event being evaluated. Build them once per evaluation.
+  const allLevels=layers.flatMap(layer=>
+    buildMSNRLevels(layer.candles).map(x=>({...x,tf:layer.tf}))
+  );
   for(const event of events){
     const level=event.levelState;
     const direction=event.direction;
@@ -339,9 +354,16 @@ export function evaluateMSNR({candles,layers,price}){
     const invalidation=structuralInvalidation.price;
     const buffer=Math.max(a*.12,Math.abs(entry)*.00035);
     const stop=direction==='BULLISH'?invalidation-buffer:invalidation+buffer;
-    const allLevels=layers.flatMap(layer=>
-      buildMSNRLevels(layer.candles).map(x=>({...x,tf:layer.tf}))
-    );
+    // A recent confirmation cannot be resurrected after price has already crossed
+    // its actual protective stop. This matters because recentMSNRConfirmations
+    // intentionally permits signals up to two candles old.
+    const invalidatedAfterConfirmation=candles
+      .slice(event.signalIndex+1)
+      .some(candle=>direction==='BULLISH'?candle.low<=stop:candle.high>=stop);
+    if(invalidatedAfterConfirmation){
+      candidates.push({event,level,direction,context,entry,stop,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'MSNR structural invalidation was breached after confirmation; the setup is no longer executable.'});
+      continue;
+    }
     const minTargetDistance=Math.max(a*1.5,Math.abs(entry)*.005);
     const target=objective(allLevels,direction,entry,minTargetDistance);
     if(!target){
