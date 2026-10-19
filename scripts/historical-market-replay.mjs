@@ -11,6 +11,7 @@ const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',
 const strategies=Object.keys(STRATEGIES);
 const stats=new Map();
 const failures=new Map();
+const tradeAudit=[];
 const replayNow=Date.now();
 let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
@@ -24,7 +25,7 @@ function rejection(strategy,tf,reason){
   failures.set(key,(failures.get(key)||0)+1);
 }
 function hit(c,price){return c.low<=price&&c.high>=price;}
-function simulate(trade,direction,orderType,future){
+function simulate(trade,direction,orderType,future,tf){
   const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
   let active=String(orderType).toUpperCase()==='MARKET';
@@ -43,8 +44,8 @@ function simulate(trade,direction,orderType,future){
     const stopHit=direction==='BULLISH'?c.low<=stop:c.high>=stop;
     const targetHit=direction==='BULLISH'?c.high>=target:c.low<=target;
     if(stopHit&&targetHit)return{result:'ambiguous'};
-    if(stopHit)return{result:'loss',exit:stop};
-    if(targetHit)return{result:'win',exit:target};
+    if(stopHit)return{result:'loss',exit:stop,exitTime:c.time+DURATIONS[tf]};
+    if(targetHit)return{result:'win',exit:target,exitTime:c.time+DURATIONS[tf]};
   }
   return{result:active?'unresolved':'missed'};
 }
@@ -177,16 +178,17 @@ for(const symbol of symbols){
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
-        const outcome=simulate(trade,result.direction,trade.orderType,future);
-        if(outcome.result==='ambiguous'){stat.ambiguous++;continue;}
-        if(outcome.result==='missed'){stat.missed++;continue;}
-        if(outcome.result==='unresolved'){stat.unresolved++;continue;}
+        const outcome=simulate(trade,result.direction,trade.orderType,future,tf);
+        if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
+        if(outcome.result==='missed'){stat.missed++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
+        if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
         const gross=rMultiple(trade,result.direction,outcome.exit);
         const riskPct=Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry));
         const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
         const net=gross-costR;
         if(outcome.result==='win')stat.wins++;else stat.losses++;
-        stat.grossR+=gross;stat.netR+=net;stat.returns.push(net);
+        stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
+        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
       }
     }
   }
@@ -196,10 +198,12 @@ const rows=[...stats.values()].map(s=>{
   const resolved=s.wins+s.losses;
   const mean=s.returns.length?s.netR/s.returns.length:0;
   let equity=0,peak=0,maxDrawdown=0;
-  for(const r of s.returns){equity+=r;peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,peak-equity);}
+  for(const r of [...s.returns].sort((a,b)=>a.exitTime-b.exitTime)){equity+=r.net;peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,peak-equity);}
   return{strategy:s.strategy,timeframe:s.timeframe,evaluated:s.evaluated,gradeA:s.gradeA,gradeAplus:s.gradeAplus,candidates:s.tradeCandidates,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+mean.toFixed(3):null,ambiguous:s.ambiguous,missed:s.missed,unresolved:s.unresolved,maxDrawdownR:+maxDrawdown.toFixed(3)};
 });
 console.table(rows);
+console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
+console.table(tradeAudit);
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
 const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
@@ -214,7 +218,7 @@ console.log('\nSUMMARY',JSON.stringify({
   resolved:totalResolved,wins:totalWins,losses:totalLosses,
   winRatePct:totalResolved?+(100*totalWins/totalResolved).toFixed(2):null,
   averageNetR:averageNetR===null?null:+averageNetR.toFixed(3),
-  note:'Exploratory Bybit historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and account-specific fee tiers.'
+  note:'Exploratory Bybit historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and account-specific fee tiers. Drawdown is sorted by simulated exit time across symbols; overlapping positions are not portfolio-simulated.'
 },null,2));
 if(loadedSymbols===0){
   console.error('REPLAY FAILED: no historical candle data was loaded; refusing to report an empty replay as a successful test.');
