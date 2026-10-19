@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ImagePlus, LoaderCircle, MessageCircle, MoreHorizontal, Reply, Send, Trash2, Users, X } from 'lucide-react';
+import { AlertCircle, AtSign, ImagePlus, LoaderCircle, MessageCircle, MoreHorizontal, Reply, Trash2, Users, X } from 'lucide-react';
 import './community.css';
 
 const MAX_MESSAGE_LENGTH = 1000;
@@ -84,6 +84,11 @@ export default function CommunityPage({ user }) {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [replyTo, setReplyTo] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [mentionUids, setMentionUids] = useState([]);
+  const [mentionEveryoneFlag, setMentionEveryoneFlag] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState(null);
+  const [mentionStart, setMentionStart] = useState(-1);
   const [sendingStage, setSendingStage] = useState('');
   const [brokenImages, setBrokenImages] = useState({});
   const [loading, setLoading] = useState(true);
@@ -140,6 +145,7 @@ export default function CommunityPage({ user }) {
     try {
       const payload = await authorizedFetch(user);
       setMessages(Array.isArray(payload.messages) ? payload.messages : []);
+      if (Array.isArray(payload.members)) setMembers(payload.members);
       setError('');
       setLoading(false);
       if (firstLoadRef.current || atBottomRef.current) {
@@ -195,7 +201,7 @@ export default function CommunityPage({ user }) {
         const response = await fetch('/api/community-message', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, ...imagePayload, replyToId: replyTo?.id || '' }),
+          body: JSON.stringify({ text, ...imagePayload, replyToId: replyTo?.id || '', mentionUids, mentionEveryone: mentionEveryoneFlag }),
           cache: 'no-store',
           signal: controller.signal
         });
@@ -206,6 +212,10 @@ export default function CommunityPage({ user }) {
         window.clearTimeout(timeout);
       }
       setDraft('');
+      setMentionUids([]);
+      setMentionEveryoneFlag(false);
+      setMentionQuery(null);
+      setMentionStart(-1);
       setReplyTo(null);
       clearImage();
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -279,6 +289,57 @@ export default function CommunityPage({ user }) {
     window.setTimeout(() => target.classList.remove('community-message-highlight'), 1300);
   };
 
+  const updateDraft = value => {
+    setDraft(value);
+    const caret = textareaRef.current?.selectionStart ?? value.length;
+    const beforeCaret = value.slice(0, caret);
+    const match = beforeCaret.match(/(^|\\s)@([\\w.-]{0,32})$/);
+    if (match) {
+      setMentionQuery(match[2].toLowerCase());
+      setMentionStart(caret - match[2].length - 1);
+    } else {
+      setMentionQuery(null);
+      setMentionStart(-1);
+    }
+    if (error) setError('');
+  };
+
+  const insertMention = member => {
+    const start = mentionStart >= 0 ? mentionStart : draft.length;
+    const caret = textareaRef.current?.selectionStart ?? draft.length;
+    const end = textareaRef.current?.selectionEnd ?? caret;
+    const before = draft.slice(0, start);
+    const after = draft.slice(end);
+    const token = '@' + member.displayName.replace(/\\s+/g, ' ') + ' ';
+    setDraft(before + token + after);
+    setMentionUids(current => current.includes(member.uid) ? current : [...current, member.uid]);
+    setMentionQuery(null);
+    setMentionStart(-1);
+    requestAnimationFrame(() => {
+      const node = textareaRef.current;
+      if (!node) return;
+      const position = (before + token).length;
+      node.focus();
+      node.setSelectionRange(position, position);
+      node.style.height = 'auto';
+      node.style.height = Math.min(node.scrollHeight, 180) + 'px';
+    });
+  };
+
+  const mentionMatches = mentionQuery === null ? [] : members
+    .filter(member => member.uid !== user?.uid && member.displayName.toLowerCase().includes(mentionQuery))
+    .slice(0, 6);
+
+  const mentionEveryone = () => {
+    const allUids = members.map(member => member.uid).filter(uid => uid && uid !== user?.uid);
+    setMentionUids(current => [...new Set([...current, ...allUids])]);
+    setMentionEveryoneFlag(true);
+    setDraft(current => (current.trimEnd() ? current.trimEnd() + ' ' : '') + '@everyone ');
+    setMentionQuery(null);
+    setMentionStart(-1);
+    textareaRef.current?.focus();
+  };
+
   const handleListScroll = () => {
     const node = listRef.current;
     if (!node) return;
@@ -297,7 +358,7 @@ export default function CommunityPage({ user }) {
       <section className="community-chat" aria-label="Community chat">
         <header className="community-room-bar">
           <div className="community-room-icon"><MessageCircle size={18} /></div>
-          <div className="community-room-copy"><strong>General</strong><span>KitSetups</span></div>
+          <div className="community-room-copy"><strong>General</strong><span>KitSetups · {members.length ? `${members.length} members` : "Community chat"}</span></div>
           <span className="community-live-indicator" aria-label="Connected"><i /></span>
         </header>
 
@@ -332,7 +393,7 @@ export default function CommunityPage({ user }) {
                   {message.replyTo && <button type="button" className="community-reply-quote" onClick={() => jumpToMessage(message.replyTo.id)}>
                     <strong>{message.replyTo.displayName || 'Trader'}</strong><span>{message.replyTo.text || (message.replyTo.imageUrl ? '📷 Image' : 'Message')}</span>
                   </button>}
-                  {message.text && <p>{message.text}</p>}
+                  {message.text && <p>{message.text.split(/(@everyone|@[\\w.-]+(?:\\s[\\w.-]+)?)/g).map((part, index) => part.startsWith("@") ? <span className="community-mention-text" key={index}>{part}</span> : part)}</p>}
                   {message.imageUrl && (brokenImages[message.id]
                     ? <a className="community-image-fallback" href={message.imageUrl} target="_blank" rel="noreferrer">Image unavailable · Open image</a>
                     : <a className="community-shared-image-link" href={message.imageUrl} target="_blank" rel="noreferrer">
@@ -350,18 +411,24 @@ export default function CommunityPage({ user }) {
           {replyTo && <div className="community-replying-preview"><div><span>Replying to <strong>{replyTo.displayName}</strong></span><small>{replyTo.text || (replyTo.imageUrl ? '📷 Image' : 'Message')}</small></div><button type="button" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><X size={16} /></button></div>}
           {imagePreview && <div className="community-image-preview"><img src={imagePreview} alt="Image ready to share" /><span>{imageFile?.name}</span><button type="button" aria-label="Remove image" onClick={clearImage}><X size={15} /></button></div>}
           {sendingStage && <div className="community-sending-status"><LoaderCircle className="community-spin" size={13} />{sendingStage}</div>}
+          {mentionUids.length > 0 && <div className="community-mention-status"><AtSign size={13}/>{mentionEveryoneFlag ? 'Everyone will be notified' : `${mentionUids.length} member${mentionUids.length === 1 ? '' : 's'} tagged`}</div>}
+          {mentionQuery !== null && <div className="community-mention-menu" role="listbox" aria-label="Mention a member">
+            <button type="button" className="community-mention-option community-mention-everyone" onMouseDown={event => event.preventDefault()} onClick={mentionEveryone}><span className="community-mention-avatar"><Users size={15}/></span><span><strong>@everyone</strong><small>Notify all community members</small></span></button>
+            {mentionMatches.map(member => <button type="button" className="community-mention-option" key={member.uid} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(member)}><span className="community-mention-avatar">{member.photoURL ? <img src={member.photoURL} alt="" /> : initials(member.displayName)}</span><span><strong>{member.displayName}</strong><small>Tag member</small></span></button>)}
+            {mentionMatches.length === 0 && <div className="community-mention-no-results">No matching members.</div>}
+          </div>}
           <div className="community-composer">
             <button type="button" className="community-attach-button" aria-label="Attach an image" title="Share an image" onClick={() => fileInputRef.current?.click()} disabled={!user?.uid || sending}><ImagePlus size={19} /></button>
             <div className="community-composer-field">
               <label className="sr-only" htmlFor="community-message-input">Write a message</label>
               <textarea id="community-message-input" ref={textareaRef} value={draft}
-                onChange={event => { setDraft(event.target.value); event.target.style.height = "auto"; event.target.style.height = Math.min(event.target.scrollHeight, 120) + "px"; if (error) setError(""); }}
+                onChange={event => { updateDraft(event.target.value); event.target.style.height = "auto"; event.target.style.height = Math.min(event.target.scrollHeight, 180) + "px"; }}
                 onFocus={event => { window.setTimeout(() => event.target.scrollIntoView({ block: "nearest", behavior: "smooth" }), 120); }}
                 onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }}
                 placeholder="Write a message…" maxLength={MAX_MESSAGE_LENGTH} rows={1} disabled={!user?.uid || sending} />
             </div>
             <input ref={fileInputRef} className="community-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={chooseImage} aria-label="Choose an image to share" />
-            <button className="community-send-button" type="submit" aria-label="Send message" disabled={(!draft.trim() && !imageFile) || sending || !user?.uid}>{sending ? <LoaderCircle className="community-spin" size={18} /> : <Send size={17} />}</button>
+            <button className="community-send-button" type="submit" aria-label="Send message" disabled={(!draft.trim() && !imageFile) || sending || !user?.uid}>{sending ? <LoaderCircle className="community-spin" size={19} /> : <svg className="kitsetups-send-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.8 27.6 9.4v13.2L16 29.2 4.4 22.6V9.4L16 2.8Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/><path d="M8.8 16.4h12.7M16.4 10.5l5.9 5.9-5.9 5.9" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8.8" cy="16.4" r="1.7" fill="currentColor"/></svg>}</button>
           </div>
         </form>
       </section>
