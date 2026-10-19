@@ -183,6 +183,10 @@ for(const symbol of symbols){
           continue;
         }
         console.log('STRATEGY DONE',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy,Date.now()-strategyStarted+'ms');
+        if(strategy==='TOP_DOWN'){
+          const rejectionDiagnostics=(result?.evidence||[]).find(x=>x?.type==='TOP_DOWN_REJECTION_DIAGNOSTICS');
+          if(rejectionDiagnostics)console.log('TOP_DOWN STAGE DIAGNOSTICS',symbol,tf,snapshotIndex+'/'+snapshots.length,JSON.stringify(rejectionDiagnostics));
+        }
         if(!result.trade||!['A','A+'].includes(result.grade?.grade)){
           for(const reason of (result.failures||[]).slice(0,2))rejection(strategy,tf,reason);
           if(result.trade&&result.grade?.grade==='A')stat.gradeA++;
