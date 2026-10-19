@@ -26,6 +26,8 @@ export default function App({user}){
   useEffect(()=>{if(!showLoader)return;const t=setTimeout(()=>{setShowLoader(false);try{sessionStorage.setItem('kitsetups:entrance-seen','1')}catch{}},2300);return()=>clearTimeout(t)},[showLoader]);
   useEffect(()=>{try{sessionStorage.setItem('kitsetups:current-page',page)}catch{}},[page]);
   useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),3600);return()=>clearTimeout(t)},[toast]);
+  useEffect(()=>{const handler=e=>{const item=e.detail||{};setToast((item.senderName?item.senderName+' mentioned you: ':'You were mentioned: ')+(item.text||'Open Community to view the message.'))};window.addEventListener('kitsetups:community-notification',handler);return()=>window.removeEventListener('kitsetups:community-notification',handler)},[]);
+
   const go=p=>{setPage(p);setSearchOpen(false);setAppSearch('')}; const openLesson=id=>{setLessonId(id);setPage('lesson');setSearchOpen(false);setAppSearch('')};
   const searchResults=appSearch.trim()?appSearchItems.filter(x=>`${x.label} ${x.meta}`.toLowerCase().includes(appSearch.trim().toLowerCase())).slice(0,7):[];
   const selectSearchResult=item=>{go(item.action);setAppSearch('');setSearchOpen(false)};
