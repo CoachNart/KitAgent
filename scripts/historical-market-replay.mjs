@@ -11,6 +11,7 @@ const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',
 const strategies=Object.keys(STRATEGIES);
 const stats=new Map();
 const failures=new Map();
+const replayNow=Date.now();
 let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
 function bucket(strategy,tf){
@@ -119,7 +120,7 @@ for(const symbol of symbols){
   try{
     const tfs=[...EXECUTION_TIMEFRAMES,'1D'];
     const rows=await Promise.all(tfs.map(async tf=>{
-      const candles=closedCandles(normalizeRows(await fetchReplayCandles(symbol,tf)),tf);
+      const candles=closedCandles(normalizeRows(await fetchReplayCandles(symbol,tf)),tf,replayNow).filter(x=>x.time+DURATIONS[tf]<=replayNow);
       if(candles.length<80)throw new Error(tf+' has only '+candles.length+' closed candles; minimum 80 required');
       const interval=DURATIONS[tf];
       for(let i=1;i<candles.length;i++){
