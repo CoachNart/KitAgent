@@ -158,7 +158,8 @@ for(const symbol of symbols){
       const cutoff=candle.time+DURATIONS[tf];
       const all={};
       for(const layerTf of [...EXECUTION_TIMEFRAMES,'1D']){
-        const layerRows=history[layerTf]||[];\n        all[layerTf]=layerRows.slice(0,closedPrefixEnd(layerRows,layerTf,cutoff));
+        const layerRows=history[layerTf]||[];
+        all[layerTf]=layerRows.slice(0,closedPrefixEnd(layerRows,layerTf,cutoff));
         if(all[layerTf].some(x=>x.time+DURATIONS[layerTf]>cutoff)){
           throw new Error('LOOKAHEAD GUARD: future candle leaked into '+layerTf+' snapshot at '+new Date(cutoff).toISOString());
         }
@@ -167,7 +168,10 @@ for(const symbol of symbols){
       if(all[tf].at(-1)?.time!==candle.time){
         throw new Error('HISTORICAL SNAPSHOT GUARD: latest '+tf+' candle does not match the decision candle at '+new Date(cutoff).toISOString());
       }
-      if(snapshotIndex===1||snapshotIndex===snapshots.length||snapshotIndex%25===0){\n        console.log('REPLAY PROGRESS',symbol,tf,snapshotIndex+'/'+snapshots.length,new Date(cutoff).toISOString());\n      }\n      for(const strategy of strategies){
+      if(snapshotIndex===1||snapshotIndex===snapshots.length||snapshotIndex%25===0){
+        console.log('REPLAY PROGRESS',symbol,tf,snapshotIndex+'/'+snapshots.length,new Date(cutoff).toISOString());
+      }
+      for(const strategy of strategies){
         const stat=bucket(strategy,tf);stat.evaluated++;
         let result;
         try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close);}
