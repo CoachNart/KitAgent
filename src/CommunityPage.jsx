@@ -64,9 +64,9 @@ function formatTime(value) {
     ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
-async function authorizedFetch(user, method = 'GET', body) {
+async function authorizedFetch(user, method = 'GET', body, query = '') {
   const token = await user.getIdToken();
-  const response = await fetch('/api/community-message', {
+  const response = await fetch('/api/community-message' + query, {
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -94,6 +94,7 @@ export default function CommunityPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [notificationToast, setNotificationToast] = useState(null);
   const [menuFor, setMenuFor] = useState('');
   const [deletingId, setDeletingId] = useState('');
   const listRef = useRef(null);
@@ -103,7 +104,11 @@ export default function CommunityPage({ user }) {
   const firstLoadRef = useRef(true);
   const touchStartRef = useRef(null);
   const lastSentAtRef = useRef(0);
+  const seenNotificationIdsRef = useRef(new Set());
+  const notificationsInitializedRef = useRef(false);
   const displayName = useMemo(() => getDisplayName(user), [user]);
+
+  useEffect(() => { if (!notificationToast) return; const timer = window.setTimeout(() => setNotificationToast(null), 5200); return () => window.clearTimeout(timer); }, [notificationToast]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -145,7 +150,6 @@ export default function CommunityPage({ user }) {
     try {
       const payload = await authorizedFetch(user);
       setMessages(Array.isArray(payload.messages) ? payload.messages : []);
-      if (Array.isArray(payload.members)) setMembers(payload.members);
       setError('');
       setLoading(false);
       if (firstLoadRef.current || atBottomRef.current) {
@@ -163,9 +167,35 @@ export default function CommunityPage({ user }) {
 
   useEffect(() => {
     let active = true;
+    authorizedFetch(user, 'GET', undefined, '?members=1').then(payload => {
+      if (active && Array.isArray(payload.members)) setMembers(payload.members);
+    }).catch(err => console.warn('KitSetups community member list could not load:', err));
+    return () => { active = false; };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    let active = true;
     const refresh = async () => {
       if (!active) return;
       await loadMessages();
+      try {
+        const payload = await authorizedFetch(user, 'GET', undefined, '?notifications=1');
+        const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+        if (!notificationsInitializedRef.current) {
+          notifications.forEach(item => seenNotificationIdsRef.current.add(item.id));
+          notificationsInitializedRef.current = true;
+        } else {
+          const fresh = notifications.filter(item => item.id && !seenNotificationIdsRef.current.has(item.id));
+          notifications.forEach(item => seenNotificationIdsRef.current.add(item.id));
+          if (fresh.length) {
+            const item = fresh[0];
+            setNotificationToast({ title: item.senderName ? item.senderName + ' mentioned you' : 'You were mentioned', text: item.text || 'Open the community to see the message.' });
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              try { new Notification(item.type === 'everyone_mention' ? 'KitSetups · @everyone' : 'KitSetups · Mention', { body: (item.senderName ? item.senderName + ': ' : '') + (item.text || 'You were mentioned in the community.'), icon: '/kitsetups-logo.svg', tag: 'community-mention-' + item.id }); } catch {}
+            }
+          }
+        }
+      } catch (err) { console.warn('KitSetups community notifications could not load:', err); }
     };
     refresh();
     const timer = setInterval(refresh, POLL_INTERVAL);
@@ -293,7 +323,7 @@ export default function CommunityPage({ user }) {
     setDraft(value);
     const caret = textareaRef.current?.selectionStart ?? value.length;
     const beforeCaret = value.slice(0, caret);
-    const match = beforeCaret.match(/(^|\\s)@([\\w.-]{0,32})$/);
+    const match = beforeCaret.match(/(^|\s)@([\w.-]{0,32})$/);
     if (match) {
       setMentionQuery(match[2].toLowerCase());
       setMentionStart(caret - match[2].length - 1);
@@ -310,7 +340,7 @@ export default function CommunityPage({ user }) {
     const end = textareaRef.current?.selectionEnd ?? caret;
     const before = draft.slice(0, start);
     const after = draft.slice(end);
-    const token = '@' + member.displayName.replace(/\\s+/g, ' ') + ' ';
+    const token = '@' + member.displayName.replace(/\s+/g, ' ') + ' ';
     setDraft(before + token + after);
     setMentionUids(current => current.includes(member.uid) ? current : [...current, member.uid]);
     setMentionQuery(null);
@@ -393,7 +423,7 @@ export default function CommunityPage({ user }) {
                   {message.replyTo && <button type="button" className="community-reply-quote" onClick={() => jumpToMessage(message.replyTo.id)}>
                     <strong>{message.replyTo.displayName || 'Trader'}</strong><span>{message.replyTo.text || (message.replyTo.imageUrl ? '📷 Image' : 'Message')}</span>
                   </button>}
-                  {message.text && <p>{message.text.split(/(@everyone|@[\\w.-]+(?:\\s[\\w.-]+)?)/g).map((part, index) => part.startsWith("@") ? <span className="community-mention-text" key={index}>{part}</span> : part)}</p>}
+                  {message.text && <p>{message.text.split(/(@everyone|@[^\s]+)/g).map((part, index) => part.startsWith("@") ? <span className="community-mention-text" key={index}>{part}</span> : part)}</p>}
                   {message.imageUrl && (brokenImages[message.id]
                     ? <a className="community-image-fallback" href={message.imageUrl} target="_blank" rel="noreferrer">Image unavailable · Open image</a>
                     : <a className="community-shared-image-link" href={message.imageUrl} target="_blank" rel="noreferrer">
@@ -407,6 +437,7 @@ export default function CommunityPage({ user }) {
           {error && <div className="community-error" role="status"><AlertCircle size={15} /><span>{error}</span></div>}
         </div>
 
+        {notificationToast && <div className="community-notification-toast" role="status"><span className="community-notification-toast-mark"><AtSign size={15}/></span><span><strong>{notificationToast.title}</strong><small>{notificationToast.text}</small></span><button type="button" aria-label="Dismiss notification" onClick={() => setNotificationToast(null)}><X size={15}/></button></div>}
         <form className="community-composer-wrap" onSubmit={sendMessage}>
           {replyTo && <div className="community-replying-preview"><div><span>Replying to <strong>{replyTo.displayName}</strong></span><small>{replyTo.text || (replyTo.imageUrl ? '📷 Image' : 'Message')}</small></div><button type="button" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><X size={16} /></button></div>}
           {imagePreview && <div className="community-image-preview"><img src={imagePreview} alt="Image ready to share" /><span>{imageFile?.name}</span><button type="button" aria-label="Remove image" onClick={clearImage}><X size={15} /></button></div>}
