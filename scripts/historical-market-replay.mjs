@@ -11,7 +11,6 @@ const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',
 const strategies=Object.keys(STRATEGIES);
 const stats=new Map();
 const failures=new Map();
-const allResults=[];
 let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
 function bucket(strategy,tf){
@@ -24,8 +23,6 @@ function rejection(strategy,tf,reason){
   failures.set(key,(failures.get(key)||0)+1);
 }
 function hit(c,price){return c.low<=price&&c.high>=price;}
-function directionStopTouched(c,direction,stop){return direction==='BULLISH'?c.low<=stop:c.high>=stop;}
-function directionTargetTouched(c,direction,target){return direction==='BULLISH'?c.high>=target:c.low<=target;}
 function simulate(trade,direction,orderType,future){
   const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
@@ -35,6 +32,7 @@ function simulate(trade,direction,orderType,future){
       const entryTouched=hit(c,entry);
       const invalidated=direction==='BULLISH'?c.low<=stop:c.high>=stop;
       const targetTouched=direction==='BULLISH'?c.high>=target:c.low<=target;
+      if(targetTouched&&!entryTouched)return{result:'missed',reason:'target reached before limit entry'};
       if(!entryTouched&&invalidated)return{result:'missed'};
       if(!entryTouched)continue;
       if(invalidated||targetTouched)return{result:'ambiguous'};
@@ -88,18 +86,28 @@ async function fetchReplayCandles(symbol,tf){
       }catch(error){lastError='Bybit historical candles request failed ('+host+'): '+(error?.message||error);}
     }
     if(!payload){
-      if(rows.length)break;
-      throw new Error(lastError);
+      const partial=rows.length?(' after loading '+rows.length+' raw candles; refusing partial history. '):' ';
+      throw new Error('Bybit historical pagination failed'+partial+lastError);
     }
     const page=payload.result.list;
+    const pageTimes=page.map(x=>Number(x[0]));
+    if(!pageTimes.length||pageTimes.some(x=>!Number.isFinite(x)||x<=0)){
+      throw new Error('Bybit returned invalid candle timestamps for '+symbol+' '+tf);
+    }
     rows.push(...page.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
-    const oldest=Math.min(...page.map(x=>Number(x[0])).filter(Number.isFinite));
-    if(!Number.isFinite(oldest)||page.length<pageLimit)break;
+    const oldest=Math.min(...pageTimes);
+    if(page.length<pageLimit)break; // Provider has no older candles available.
     const nextEnd=oldest-1;
-    if(end!=null&&nextEnd>=end)break;
+    if(end!=null&&nextEnd>=end){
+      throw new Error('Bybit historical pagination stalled for '+symbol+' '+tf+'; refusing incomplete history');
+    }
     end=nextEnd;
   }
-  return normalizeRows(rows).slice(-requestedLimit);
+  const normalized=normalizeRows(rows).slice(-requestedLimit);
+  if(normalized.length<80){
+    throw new Error('Insufficient Bybit history for '+symbol+' '+tf+': received '+normalized.length+' normalized candles (minimum 80)');
+  }
+  return normalized;
 }
 
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
@@ -110,9 +118,20 @@ for(const symbol of symbols){
   let history;
   try{
     const tfs=[...EXECUTION_TIMEFRAMES,'1D'];
-    const rows=await Promise.all(tfs.map(async tf=>[tf,closedCandles(normalizeRows(await fetchReplayCandles(symbol,tf)),tf)]));
+    const rows=await Promise.all(tfs.map(async tf=>{
+      const candles=closedCandles(normalizeRows(await fetchReplayCandles(symbol,tf)),tf);
+      if(candles.length<80)throw new Error(tf+' has only '+candles.length+' closed candles; minimum 80 required');
+      const interval=DURATIONS[tf];
+      for(let i=1;i<candles.length;i++){
+        if(candles[i].time-candles[i-1].time!==interval){
+          throw new Error(tf+' history has a missing/irregular candle between '+new Date(candles[i-1].time).toISOString()+' and '+new Date(candles[i].time).toISOString()+'; refusing an unreliable replay');
+        }
+      }
+      return [tf,candles];
+    }));
     history=Object.fromEntries(rows);
     loadedSymbols++;
+    console.log('DATA OK',symbol,...tfs.map(tf=>tf+':'+history[tf].length+' candles ('+new Date(history[tf][0].time).toISOString()+' → '+new Date(history[tf].at(-1).time+DURATIONS[tf]).toISOString()+')'));
   }catch(error){
     console.error('DATA ERROR',symbol,error?.message||error);
     continue;
@@ -127,8 +146,14 @@ for(const symbol of symbols){
       const all={};
       for(const layerTf of [...EXECUTION_TIMEFRAMES,'1D']){
         all[layerTf]=(history[layerTf]||[]).filter(x=>x.time+DURATIONS[layerTf]<=cutoff);
+        if(all[layerTf].some(x=>x.time+DURATIONS[layerTf]>cutoff)){
+          throw new Error('LOOKAHEAD GUARD: future candle leaked into '+layerTf+' snapshot at '+new Date(cutoff).toISOString());
+        }
       }
       if(!all[tf]||all[tf].length<40)continue;
+      if(all[tf].at(-1)?.time!==candle.time){
+        throw new Error('HISTORICAL SNAPSHOT GUARD: latest '+tf+' candle does not match the decision candle at '+new Date(cutoff).toISOString());
+      }
       for(const strategy of strategies){
         const stat=bucket(strategy,tf);stat.evaluated++;
         let result;
@@ -148,6 +173,9 @@ for(const symbol of symbols){
         seen.set(strategy+'|'+fp,cutoff);
         stat.tradeCandidates++;
         const future=exec.filter(x=>x.time>=cutoff);
+        if(future.some(x=>x.time<cutoff)){
+          throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
+        }
         const outcome=simulate(trade,result.direction,trade.orderType,future);
         if(outcome.result==='ambiguous'){stat.ambiguous++;continue;}
         if(outcome.result==='missed'){stat.missed++;continue;}
@@ -158,7 +186,6 @@ for(const symbol of symbols){
         const net=gross-costR;
         if(outcome.result==='win')stat.wins++;else stat.losses++;
         stat.grossR+=gross;stat.netR+=net;stat.returns.push(net);
-        allResults.push({symbol,strategy,tf,result:outcome.result,netR:net,cutoff});
       }
     }
   }
