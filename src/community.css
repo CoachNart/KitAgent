@@ -291,10 +291,3 @@
  .community-mention-status{padding:7px 10px 0}
 }
 @media(min-width:761px) and (max-height:800px){.community-chat{height:calc(100dvh - 145px);min-height:480px}}
-
-.community-notification-toast{position:absolute;z-index:40;top:86px;right:16px;display:flex;align-items:center;gap:10px;width:min(360px,calc(100% - 32px));padding:12px;border:1px solid rgba(0,199,254,.28);border-radius:13px;background:rgba(8,17,22,.97);box-shadow:0 14px 40px rgba(0,0,0,.4);backdrop-filter:blur(18px);color:#eaf2f5}
-.community-notification-toast-mark{width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;border-radius:10px;background:rgba(0,199,254,.12);color:#8be8ff}
-.community-notification-toast>span:nth-child(2){display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
-.community-notification-toast strong{font-size:12px}
-.community-notification-toast small{font-size:11px;color:#9bbbc4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.community-notification-toast button{border:0;background:transparent;color:#8daab3;cursor:pointer}
