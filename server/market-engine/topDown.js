@@ -205,7 +205,7 @@ export function evaluateTopDown({candles,layers,price}){
   const a=atr(c,14);
   if(!Number.isFinite(price)||price<=0||!a)return{direction,failures:['Live price or execution volatility is unavailable.'],evidence:[]};
   let selected=null;
-  const diagnostics={bosCandidates:bosCandidates.length,bosMs,distanceEligible:0,retestFound:0,retestInvalidated:0,retestBeforeInvalidation:0,recentRetestBeforeInvalidation:0,noRetest:0,staleRetest:0,retestMs:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
+  const diagnostics={bosCandidates:bosCandidates.length,bosMs,distanceEligible:0,retestFound:0,retestInvalidated:0,retestBeforeInvalidation:0,recentRetestBeforeInvalidation:0,retestBeforeInvalidationSamples:[],noRetest:0,staleRetest:0,retestMs:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
   const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
@@ -219,6 +219,18 @@ export function evaluateTopDown({candles,layers,price}){
       if(rt.retestBeforeFailure){
         diagnostics.retestBeforeInvalidation++;
         if(rt.retestBeforeFailure.age<=4)diagnostics.recentRetestBeforeInvalidation++;
+        if(diagnostics.retestBeforeInvalidationSamples.length<5){
+          diagnostics.retestBeforeInvalidationSamples.push({
+            bosIndex:bos.index,
+            bosAge:bos.age,
+            bosLevel:bos.level,
+            retestIndex:rt.retestBeforeFailure.index,
+            retestAge:rt.retestBeforeFailure.age,
+            invalidationIndex:rt.index,
+            invalidationAge:c.length-1-rt.index,
+            invalidationClose:rt.close
+          });
+        }
       }
       continue;
     }
