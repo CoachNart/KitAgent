@@ -188,22 +188,29 @@ export function evaluateTopDown({candles,layers,price}){
   const a=atr(c,14);
   if(!Number.isFinite(price)||price<=0||!a)return{direction,failures:['Live price or execution volatility is unavailable.'],evidence:[]};
   let selected=null;
+  const diagnostics={bosCandidates:bosCandidates.length,distanceEligible:0,retestFound:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
   const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
     if(distance>tolerance)continue;
+    diagnostics.distanceEligible++;
     const rt=findValidRetest(c,bos,direction,closeExtrema);
+    if(rt&&!rt.failed)diagnostics.retestFound++;
     if(!rt||rt.failed||rt.age>4)continue;
+    diagnostics.recentRetest++;
     const targetSwing=nextTarget(c,direction,rt.index,entry,layers);
     if(!targetSwing||(direction==='BULLISH'?targetSwing.price<=entry:targetSwing.price>=entry))continue;
+    diagnostics.targetFound++;
     const tradeResult=trade({c,bos,retestPoint:rt,direction,price,targetSwing});
     if(!tradeResult)continue;
+    diagnostics.tradeConstructed++;
     const scored=scoreSetup({layers,bos,retestPoint:rt,price,entry,target:targetSwing,rr:tradeResult.rr,candles:c,direction});
+    if(scored.score>=78)diagnostics.scoreAtLeast78++;
     selected={bos,rt,entry,targetSwing,tradeResult,scored};
     break;
   }
   if(!selected){
-    return{direction,failures:['No recent execution BOS produced a complete retest, executable entry, and meaningful structural target.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'EXECUTION_BOS_CANDIDATES',count:bosCandidates.length}]};
+    return{direction,failures:['No recent execution BOS produced a complete retest, executable entry, and meaningful structural target.'],evidence:[{type:'HTF_ALIGNMENT',direction},{type:'TOP_DOWN_REJECTION_DIAGNOSTICS',...diagnostics}]};
   }
   const {bos,rt,entry,targetSwing,tradeResult,scored}=selected;
   if(scored.score<78)return{direction,grade:{grade:'NO-TRADE',score:scored.score,hardFailures:['Top-Down confluence is insufficient for execution.']},failures:['Top-Down confluence is insufficient for execution.'],evidence:scored.evidence};
