@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import './kit-nav.css';
 import DailySetupsPage from './DailySetupsPage.jsx';
 import SignalHistory from './SignalHistory.jsx';
@@ -47,7 +48,7 @@ export default function App({user}){
     <div className="header-pulse" aria-label="System pulse"><i className="pulse-green"/><i className="pulse-red"/></div>
     <button type="button" className="profile-avatar" aria-label="Open profile" title="Profile" onClick={()=>go('profile')}><span className="profile-avatar-ring">{(displayUser?.photoURL||displayUser?.photoUrl||displayUser?.avatarUrl)?<img src={displayUser.photoURL||displayUser.photoUrl||displayUser.avatarUrl} alt="" referrerPolicy="no-referrer"/>:<span>{initials(displayUser?.displayName||displayUser?.email||'K')}</span>}</span><i className="profile-status"/></button>
   </div>
-</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='community'&&<CommunityPage user={user}/>} {page==='setup-guide'&&<SetupEducationPage onBack={()=>go('market')}/>} {page==='setups'&&<AccessGateComponent user={user}><DailySetupsPage/></AccessGateComponent>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
+</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='community'&&createPortal(<CommunityPage user={user}/>,document.body)} {page==='setup-guide'&&<SetupEducationPage onBack={()=>go('market')}/>} {page==='setups'&&<AccessGateComponent user={user}><DailySetupsPage/></AccessGateComponent>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
 }
 
 function KitNavigation({page,go}){
