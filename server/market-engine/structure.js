@@ -207,14 +207,17 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 
   // Collapse repeated highs/lows into liquidity/structure pools. A level
   // seen more than once is materially stronger than a single isolated pivot.
-  for(const candidate of candidates){
-    const peers=candidates.filter(x=>Math.abs(x.price-candidate.price)<=clusterTolerance);
-    candidate.clusterCount=peers.length;
-    candidate.pool=peers.length>=3?'LIQUIDITY_POOL':peers.length===2?'REPEATED_STRUCTURE':'SINGLE_STRUCTURE';
-    candidate.quality=candidate.strength
-      +(candidate.clusterCount>=3?24:candidate.clusterCount===2?14:0)
-      +(candidate.tf!=='EXECUTION'?8:0)
-      +(candidate.native?20:0);
+  const priceOrder=candidates.map((candidate,index)=>({price:candidate.price,index})).sort((a,b)=>a.price-b.price||a.index-b.index);
+  let left=0,right=0;
+  for(let i=0;i<priceOrder.length;i++){
+    const current=priceOrder[i];
+    while(left<priceOrder.length&&current.price-priceOrder[left].price>clusterTolerance)left++;
+    if(right<i)right=i;
+    while(right+1<priceOrder.length&&priceOrder[right+1].price-current.price<=clusterTolerance)right++;
+    const candidate=candidates[current.index];
+    candidate.clusterCount=right-left+1;
+    candidate.pool=candidate.clusterCount>=3?'LIQUIDITY_POOL':candidate.clusterCount===2?'REPEATED_STRUCTURE':'SINGLE_STRUCTURE';
+    candidate.quality=candidate.strength+(candidate.clusterCount>=3?24:candidate.clusterCount===2?14:0)+(candidate.tf!=='EXECUTION'?8:0)+(candidate.native?20:0);
   }
 
   return candidates
