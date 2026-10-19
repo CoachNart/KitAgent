@@ -7,7 +7,7 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const POLL_INTERVAL = 5000;
 const MAX_UPLOAD_BYTES = 2.2 * 1024 * 1024;
-const ACCENT_COLORS = ['#a78bfa', '#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#fb7185', '#2dd4bf', '#c084fc'];
+const ACCENT_COLORS = ['#00c7fe', '#35d6e8', '#42e6a0', '#60a5fa', '#2dd4bf', '#8be8ff', '#79dff3', '#00a8d6'];
 
 function accentFor(value) {
   const text = String(value || 'trader');
