@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { AlertCircle, ArrowDown, Hash, LoaderCircle, MessageCircle, MoreHorizontal, Send, ShieldCheck, Trash2, Users, Wifi } from 'lucide-react';
+import { AlertCircle, ArrowDown, Hash, LoaderCircle, MessageCircle, MoreHorizontal, Send, Trash2, Wifi } from 'lucide-react';
 import { db } from './firebase.js';
 import './community.css';
 
@@ -20,8 +20,7 @@ function formatTime(value) {
   const date = value?.toDate ? value.toDate() : value instanceof Date ? value : null;
   if (!date || Number.isNaN(date.getTime())) return 'Sending…';
   const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
-  return sameDay
+  return date.toDateString() === now.toDateString()
     ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -39,7 +38,6 @@ export default function CommunityPage({ user }) {
   const atBottomRef = useRef(true);
   const firstSnapshotRef = useRef(true);
   const lastSentAtRef = useRef(0);
-
   const displayName = useMemo(() => getDisplayName(user), [user]);
 
   useEffect(() => {
@@ -48,7 +46,6 @@ export default function CommunityPage({ user }) {
       setError('Sign in to join the KitSetups community.');
       return undefined;
     }
-
     setLoading(true);
     const feed = query(collection(db, 'communityMessages'), orderBy('createdAt', 'desc'), limit(MESSAGE_WINDOW));
     const unsubscribe = onSnapshot(feed, snapshot => {
@@ -74,7 +71,6 @@ export default function CommunityPage({ user }) {
         ? 'Community access is still being configured. Please try again shortly.'
         : 'Could not load the community. Check your connection and try again.');
     });
-
     return () => unsubscribe();
   }, [user?.uid]);
 
@@ -91,7 +87,6 @@ export default function CommunityPage({ user }) {
       setError('Give it a second before sending another message.');
       return;
     }
-
     lastSentAtRef.current = now;
     setSending(true);
     setError('');
@@ -148,11 +143,10 @@ export default function CommunityPage({ user }) {
     <section className="community-page" aria-labelledby="community-title">
       <header className="community-heading">
         <div className="community-heading-copy">
-          <span className="community-eyebrow"><span className="community-live-dot" /> KITSETUPS SOCIAL</span>
           <h1 id="community-title">Community</h1>
-          <p>One room. Every trader. Share the thinking behind the trade.</p>
+          <p>Ideas, market views, and conversations with fellow traders.</p>
         </div>
-        <div className="community-members-chip"><Users size={15} /><span>All traders</span></div>
+        <div className="community-live-status community-heading-status"><span className="community-live-dot" /> Live</div>
       </header>
 
       <div className="community-layout">
@@ -160,23 +154,18 @@ export default function CommunityPage({ user }) {
           <div className="community-room-icon"><Hash size={18} /></div>
           <div className="community-room-copy">
             <strong>general</strong>
-            <span>Market talk, trade ideas & everything trading</span>
+            <span>Everyone in one shared room</span>
           </div>
-          <div className="community-live-status"><Wifi size={14} /><span>Live</span></div>
-        </div>
-
-        <div className="community-guideline">
-          <ShieldCheck size={16} />
-          <span>Keep it useful. Challenge ideas, respect traders, and never present an opinion as a guaranteed result.</span>
+          <div className="community-room-members">Open to all members</div>
         </div>
 
         <div className="community-message-list" ref={listRef} onScroll={handleListScroll} aria-live="polite" aria-label="Community messages">
-          {loading && <div className="community-state"><LoaderCircle className="community-spin" size={20} /><span>Loading the room…</span></div>}
+          {loading && <div className="community-state"><LoaderCircle className="community-spin" size={20} /><span>Loading messages…</span></div>}
           {!loading && messages.length === 0 && !error && (
             <div className="community-empty">
-              <div className="community-empty-icon"><MessageCircle size={24} /></div>
+              <div className="community-empty-icon"><MessageCircle size={23} /></div>
               <h2>Start the conversation</h2>
-              <p>This is the shared room for everyone on KitSetups. Ask a question, share your market view, or welcome the next trader in.</p>
+              <p>Share a thought, ask a question, or welcome the community.</p>
             </div>
           )}
           {!loading && messages.map(message => {
@@ -216,21 +205,17 @@ export default function CommunityPage({ user }) {
               value={draft}
               onChange={event => { setDraft(event.target.value); if (error) setError(''); }}
               onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }}
-              placeholder="Message everyone in the room…"
+              placeholder="Write a message…"
               maxLength={MAX_MESSAGE_LENGTH}
               rows={1}
               disabled={!user?.uid || sending}
             />
-            <div className="community-composer-footer">
-              <span>{draft.length}/{MAX_MESSAGE_LENGTH}</span>
-              <span>Enter to send · Shift + Enter for a new line</span>
-            </div>
+            {draft.length > 0 && <div className="community-composer-footer"><span>{draft.length}/{MAX_MESSAGE_LENGTH}</span><span>Shift + Enter for a new line</span></div>}
           </div>
           <button className="community-send-button" type="submit" aria-label="Send message" disabled={!draft.trim() || sending || !user?.uid}>
             {sending ? <LoaderCircle className="community-spin" size={18} /> : <Send size={17} />}
           </button>
         </form>
-        <footer className="community-room-footer"><span><ShieldCheck size={13} /> Public to all registered KitSetups users</span><span>No DMs · One shared room</span></footer>
       </div>
     </section>
   );
