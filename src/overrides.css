@@ -174,3 +174,11 @@
 
 /* Restore the app's compact terminal typography. Keep reduced-motion behavior independent. */
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}}
+
+/* The floating support launcher must never cover the Community composer on mobile. */
+@media(max-width:760px) {
+  body:has(.community-page) .kit-floating-support {
+    display: none !important;
+    pointer-events: none !important;
+  }
+}
