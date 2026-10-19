@@ -139,7 +139,6 @@ export default function CommunityPage({ user }) {
       <header className="community-heading">
         <div className="community-heading-copy">
           <h1 id="community-title">Community</h1>
-          <p> </p>
         </div>
         <div className="community-members-chip"><Users size={15} /><span>Community</span></div>
       </header>
