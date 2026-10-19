@@ -354,6 +354,16 @@ export function evaluateMSNR({candles,layers,price}){
     const invalidation=structuralInvalidation.price;
     const buffer=Math.max(a*.12,Math.abs(entry)*.00035);
     const stop=direction==='BULLISH'?invalidation-buffer:invalidation+buffer;
+    // A recent confirmation cannot be resurrected after price has already crossed
+    // its actual protective stop. This matters because recentMSNRConfirmations
+    // intentionally permits signals up to two candles old.
+    const invalidatedAfterConfirmation=candles
+      .slice(event.signalIndex+1)
+      .some(candle=>direction==='BULLISH'?candle.low<=stop:candle.high>=stop);
+    if(invalidatedAfterConfirmation){
+      candidates.push({event,level,direction,context,entry,stop,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'MSNR structural invalidation was breached after confirmation; the setup is no longer executable.'});
+      continue;
+    }
     const minTargetDistance=Math.max(a*1.5,Math.abs(entry)*.005);
     const target=objective(allLevels,direction,entry,minTargetDistance);
     if(!target){
