@@ -12,7 +12,7 @@ import NotificationCenter from './NotificationCenter.jsx';
 import CommunityPage from './CommunityPage.jsx';
 import './ui-polish.css';
 import './header-polish.css';
-import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, Layers3, LockKeyhole, Menu, MessageCircle, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, X, Zap } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, LockKeyhole, Menu, MessageCircle, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, X, Zap } from 'lucide-react';
 
 const nav=[['home','Home',House],['market','Market analysis',BarChart3],['setups','Setups',ScanSearch],['community','Community',MessageCircle],['history','History',History],['profile','Profile',CircleUserRound]];
 const appSearchItems=nav.map(([id,label])=>({type:'workspace',label,meta:'Workspace',action:id}));
