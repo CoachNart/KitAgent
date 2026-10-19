@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, LoaderCircle, MessageCircle, MoreHorizontal, Send, Trash2, Users } from 'lucide-react';
+import { getApps } from 'firebase/app';
+import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { AlertCircle, ImagePlus, LoaderCircle, MessageCircle, MoreHorizontal, Send, Trash2, Users, X } from 'lucide-react';
 import './community.css';
 
 const MAX_MESSAGE_LENGTH = 1000;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const POLL_INTERVAL = 5000;
 
 function getDisplayName(user) {
@@ -37,16 +41,60 @@ async function authorizedFetch(user, method = 'GET', body) {
 export default function CommunityPage({ user }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [menuFor, setMenuFor] = useState('');
   const [deletingId, setDeletingId] = useState('');
   const listRef = useRef(null);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const atBottomRef = useRef(true);
   const firstLoadRef = useRef(true);
   const lastSentAtRef = useRef(0);
   const displayName = useMemo(() => getDisplayName(user), [user]);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const updateViewport = () => document.documentElement.style.setProperty('--community-visual-height', (viewport?.height || window.innerHeight) + 'px');
+    updateViewport();
+    viewport?.addEventListener('resize', updateViewport);
+    window.addEventListener('resize', updateViewport);
+    return () => {
+      viewport?.removeEventListener('resize', updateViewport);
+      window.removeEventListener('resize', updateViewport);
+      document.documentElement.style.removeProperty('--community-visual-height');
+    };
+  }, []);
+
+  useEffect(() => () => { if (imagePreview) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
+
+  const chooseImage = event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) { setError('Choose a JPG, PNG, WebP or GIF image.'); return; }
+    if (file.size > MAX_IMAGE_SIZE) { setError('Images must be 5 MB or smaller.'); return; }
+    setError('');
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(current => { if (current) URL.revokeObjectURL(current); return ''; });
+  };
+
+  const uploadImage = async file => {
+    const app = getApps()[0];
+    if (!app) throw new Error('Image sharing is not configured. Please try again later.');
+    const storage = getStorage(app);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'image';
+    const uploaded = await uploadBytes(storageRef(storage, 'communityImages/' + user.uid + '/' + Date.now() + '-' + safeName), file, { contentType: file.type });
+    return getDownloadURL(uploaded.ref);
+  };
 
   const loadMessages = async (quiet = false) => {
     if (!user?.uid) {
@@ -86,7 +134,7 @@ export default function CommunityPage({ user }) {
   const sendMessage = async event => {
     event?.preventDefault();
     const text = draft.trim();
-    if (!text || !user?.uid || sending) return;
+    if ((!text && !imageFile) || !user?.uid || sending) return;
     if (text.length > MAX_MESSAGE_LENGTH) {
       setError(`Messages must be ${MAX_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`);
       return;
@@ -99,8 +147,11 @@ export default function CommunityPage({ user }) {
     setSending(true);
     setError('');
     try {
-      await authorizedFetch(user, 'POST', { text });
+      const imageUrl = imageFile ? await uploadImage(imageFile) : '';
+      await authorizedFetch(user, 'POST', { text, imageUrl });
       setDraft('');
+      clearImage();
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
       atBottomRef.current = true;
       await loadMessages(true);
     } catch (err) {
@@ -174,7 +225,8 @@ export default function CommunityPage({ user }) {
                       {menuFor === message.id && <div className="community-message-menu"><button type="button" disabled={deletingId === message.id} onClick={() => deleteMessage(message)}><Trash2 size={14} /> Delete</button></div>}
                     </div>}
                   </div>
-                  <p>{message.text}</p>
+                  {message.text && <p>{message.text}</p>}
+                  {message.imageUrl && <a className="community-shared-image-link" href={message.imageUrl} target="_blank" rel="noreferrer"><img className="community-shared-image" src={message.imageUrl} alt="Shared community image" loading="lazy" /></a>}
                 </div>
                 {own && <div className="community-avatar own-avatar">{photo ? <img src={photo} alt="" referrerPolicy="no-referrer" /> : <span>{initials(displayName)}</span>}</div>}
               </article>
@@ -183,23 +235,21 @@ export default function CommunityPage({ user }) {
           {error && <div className="community-error" role="status"><AlertCircle size={15} /><span>{error}</span></div>}
         </div>
 
-        <form className="community-composer" onSubmit={sendMessage}>
-          <div className="community-composer-field">
-            <label className="sr-only" htmlFor="community-message-input">Write a message</label>
-            <textarea
-              id="community-message-input"
-              value={draft}
-              onChange={event => { setDraft(event.target.value); if (error) setError(''); }}
-              onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }}
-              placeholder="Write a message…"
-              maxLength={MAX_MESSAGE_LENGTH}
-              rows={1}
-              disabled={!user?.uid || sending}
-            />
+        <form className="community-composer-wrap" onSubmit={sendMessage}>
+          {imagePreview && <div className="community-image-preview"><img src={imagePreview} alt="Image ready to share" /><span>{imageFile?.name}</span><button type="button" aria-label="Remove image" onClick={clearImage}><X size={15} /></button></div>}
+          <div className="community-composer">
+            <button type="button" className="community-attach-button" aria-label="Attach an image" title="Share an image" onClick={() => fileInputRef.current?.click()} disabled={!user?.uid || sending}><ImagePlus size={19} /></button>
+            <div className="community-composer-field">
+              <label className="sr-only" htmlFor="community-message-input">Write a message</label>
+              <textarea id="community-message-input" ref={textareaRef} value={draft}
+                onChange={event => { setDraft(event.target.value); event.target.style.height = "auto"; event.target.style.height = Math.min(event.target.scrollHeight, 120) + "px"; if (error) setError(""); }}
+                onFocus={event => { window.setTimeout(() => event.target.scrollIntoView({ block: "nearest", behavior: "smooth" }), 120); }}
+                onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }}
+                placeholder="Write a message…" maxLength={MAX_MESSAGE_LENGTH} rows={1} disabled={!user?.uid || sending} />
+            </div>
+            <input ref={fileInputRef} className="community-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={chooseImage} aria-label="Choose an image to share" />
+            <button className="community-send-button" type="submit" aria-label="Send message" disabled={(!draft.trim() && !imageFile) || sending || !user?.uid}>{sending ? <LoaderCircle className="community-spin" size={18} /> : <Send size={17} />}</button>
           </div>
-          <button className="community-send-button" type="submit" aria-label="Send message" disabled={!draft.trim() || sending || !user?.uid}>
-            {sending ? <LoaderCircle className="community-spin" size={18} /> : <Send size={17} />}
-          </button>
         </form>
       </section>
     </section>

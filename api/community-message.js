@@ -61,6 +61,7 @@ export default async function handler(req, res) {
           displayName: String(data.displayName || 'KitSetups trader'),
           photoURL: String(data.photoURL || ''),
           text: String(data.text || ''),
+          imageUrl: String(data.imageUrl || ''),
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null
         };
       }).reverse();
@@ -83,8 +84,16 @@ export default async function handler(req, res) {
 
     const body = bodyOf(req);
     const text = String(body.text || '').trim();
-    if (!text) return json(res, 400, { error: 'Write a message first.' });
+    const imageUrl = String(body.imageUrl || '').trim();
+    if (!text && !imageUrl) return json(res, 400, { error: 'Write a message or attach an image first.' });
     if (text.length > 1000) return json(res, 400, { error: 'Messages must be 1,000 characters or fewer.' });
+    if (imageUrl) {
+      let parsed;
+      try { parsed = new URL(imageUrl); } catch { return json(res, 400, { error: 'That image URL is invalid.' }); }
+      if (parsed.protocol !== 'https:' || parsed.hostname !== 'firebasestorage.googleapis.com') {
+        return json(res, 400, { error: 'Please attach an image from KitSetups storage.' });
+      }
+    }
 
     const user = await a.auth().getUser(identity.uid);
     const displayName = String(user.displayName || user.email?.split('@')[0] || `Trader ${identity.uid.slice(-4)}`).trim().slice(0, 48);
@@ -115,6 +124,7 @@ export default async function handler(req, res) {
       displayName,
       photoURL,
       text,
+      imageUrl,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
