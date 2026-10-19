@@ -94,7 +94,6 @@ export default function CommunityPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [notificationToast, setNotificationToast] = useState(null);
   const [menuFor, setMenuFor] = useState('');
   const [deletingId, setDeletingId] = useState('');
   const listRef = useRef(null);
@@ -104,11 +103,7 @@ export default function CommunityPage({ user }) {
   const firstLoadRef = useRef(true);
   const touchStartRef = useRef(null);
   const lastSentAtRef = useRef(0);
-  const seenNotificationIdsRef = useRef(new Set());
-  const notificationsInitializedRef = useRef(false);
   const displayName = useMemo(() => getDisplayName(user), [user]);
-
-  useEffect(() => { if (!notificationToast) return; const timer = window.setTimeout(() => setNotificationToast(null), 5200); return () => window.clearTimeout(timer); }, [notificationToast]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -178,24 +173,7 @@ export default function CommunityPage({ user }) {
     const refresh = async () => {
       if (!active) return;
       await loadMessages();
-      try {
-        const payload = await authorizedFetch(user, 'GET', undefined, '?notifications=1');
-        const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
-        if (!notificationsInitializedRef.current) {
-          notifications.forEach(item => seenNotificationIdsRef.current.add(item.id));
-          notificationsInitializedRef.current = true;
-        } else {
-          const fresh = notifications.filter(item => item.id && !seenNotificationIdsRef.current.has(item.id));
-          notifications.forEach(item => seenNotificationIdsRef.current.add(item.id));
-          if (fresh.length) {
-            const item = fresh[0];
-            setNotificationToast({ title: item.senderName ? item.senderName + ' mentioned you' : 'You were mentioned', text: item.text || 'Open the community to see the message.' });
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-              try { new Notification(item.type === 'everyone_mention' ? 'KitSetups · @everyone' : 'KitSetups · Mention', { body: (item.senderName ? item.senderName + ': ' : '') + (item.text || 'You were mentioned in the community.'), icon: '/kitsetups-logo.svg', tag: 'community-mention-' + item.id }); } catch {}
-            }
-          }
-        }
-      } catch (err) { console.warn('KitSetups community notifications could not load:', err); }
+
     };
     refresh();
     const timer = setInterval(refresh, POLL_INTERVAL);
@@ -437,7 +415,6 @@ export default function CommunityPage({ user }) {
           {error && <div className="community-error" role="status"><AlertCircle size={15} /><span>{error}</span></div>}
         </div>
 
-        {notificationToast && <div className="community-notification-toast" role="status"><span className="community-notification-toast-mark"><AtSign size={15}/></span><span><strong>{notificationToast.title}</strong><small>{notificationToast.text}</small></span><button type="button" aria-label="Dismiss notification" onClick={() => setNotificationToast(null)}><X size={15}/></button></div>}
         <form className="community-composer-wrap" onSubmit={sendMessage}>
           {replyTo && <div className="community-replying-preview"><div><span>Replying to <strong>{replyTo.displayName}</strong></span><small>{replyTo.text || (replyTo.imageUrl ? '📷 Image' : 'Message')}</small></div><button type="button" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><X size={16} /></button></div>}
           {imagePreview && <div className="community-image-preview"><img src={imagePreview} alt="Image ready to share" /><span>{imageFile?.name}</span><button type="button" aria-label="Remove image" onClick={clearImage}><X size={15} /></button></div>}
