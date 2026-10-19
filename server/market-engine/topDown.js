@@ -97,7 +97,20 @@ export function findValidRetest(c,bos,direction,closeExtrema=null){
     const index=lo;
     const x=c[index];
     if(index>=from&&x&&[x.open,x.high,x.low,x.close].every(Number.isFinite)){
-      return {failed:true,index,level:bos.level,close:x.close};
+      // Diagnostic only: determine whether a valid retest happened before the
+      // later invalidation. The setup remains rejected either way.
+      let retestBeforeFailure=null;
+      for(let i=from;i<index;i++){
+        const candle=c[i];
+        if(!candle||![candle.open,candle.high,candle.low,candle.close].every(Number.isFinite))continue;
+        const touched=direction==='BULLISH'?candle.low<=bos.level&&candle.high>=bos.level:candle.high>=bos.level&&candle.low<=bos.level;
+        const held=direction==='BULLISH'?candle.close>bos.level:candle.close<bos.level;
+        if(touched&&held&&bodyRatio(candle)>=.35){
+          retestBeforeFailure={index:i,age:c.length-1-i};
+          break;
+        }
+      }
+      return {failed:true,index,level:bos.level,close:x.close,retestBeforeFailure};
     }
   }
   for(let i=from;i<c.length;i++){
@@ -192,7 +205,7 @@ export function evaluateTopDown({candles,layers,price}){
   const a=atr(c,14);
   if(!Number.isFinite(price)||price<=0||!a)return{direction,failures:['Live price or execution volatility is unavailable.'],evidence:[]};
   let selected=null;
-  const diagnostics={bosCandidates:bosCandidates.length,bosMs,distanceEligible:0,retestFound:0,retestInvalidated:0,noRetest:0,staleRetest:0,retestMs:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
+  const diagnostics={bosCandidates:bosCandidates.length,bosMs,distanceEligible:0,retestFound:0,retestInvalidated:0,retestBeforeInvalidation:0,recentRetestBeforeInvalidation:0,noRetest:0,staleRetest:0,retestMs:0,recentRetest:0,targetFound:0,tradeConstructed:0,scoreAtLeast78:0};
   const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
@@ -201,7 +214,14 @@ export function evaluateTopDown({candles,layers,price}){
     const retestStarted=Date.now();
     const rt=findValidRetest(c,bos,direction,closeExtrema);
     diagnostics.retestMs+=Date.now()-retestStarted;
-    if(rt?.failed){diagnostics.retestInvalidated++;continue;}
+    if(rt?.failed){
+      diagnostics.retestInvalidated++;
+      if(rt.retestBeforeFailure){
+        diagnostics.retestBeforeInvalidation++;
+        if(rt.retestBeforeFailure.age<=4)diagnostics.recentRetestBeforeInvalidation++;
+      }
+      continue;
+    }
     if(!rt){diagnostics.noRetest++;continue;}
     diagnostics.retestFound++;
     if(rt.age>4){diagnostics.staleRetest++;continue;}
