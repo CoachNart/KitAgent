@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 
 const BYBIT_BASE = 'https://api.bybit.com';
 const SYMBOL_LIMIT = 5;
-const INTERVAL = '5';
+const INTERVAL = '30';
 const LOOKBACK = 150;
 const POLL_MS = 5 * 60 * 1000;
 const BRIDGE_PORT = Number(process.env.KITSETUPS_ALERT_PORT || 17873);
@@ -120,7 +120,7 @@ function formatPrice(value) {
 
 async function notify(event) {
   const title=`${event.symbol.replace('USDT','')} ${event.direction} structure`;
-  const content=`5m BOS detected at ${formatPrice(event.level)}`;
+  const content=`30m BOS detected at ${formatPrice(event.level)}`;
   try {
     const {execFile}=await import('node:child_process');
     await new Promise((resolve,reject)=>{
