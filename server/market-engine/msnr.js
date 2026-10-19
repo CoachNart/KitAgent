@@ -199,8 +199,8 @@ export function buildMSNRLevels(candles){
   return makeBaseLevels(candles).map(level=>trackLevel(level,candles));
 }
 
-export function recentMSNRConfirmations(candles,maxAge=2){
-  const levels=buildMSNRLevels(candles);
+export function recentMSNRConfirmations(candles,maxAge=2,prebuiltLevels=null){
+  const levels=Array.isArray(prebuiltLevels)?prebuiltLevels:buildMSNRLevels(candles);
   const lastIndex=candles.length-1;
   const floor=Math.max(0,lastIndex-Math.max(0,maxAge));
   return levels
@@ -259,7 +259,9 @@ function gradeMSNR({level,event,context,target,rr}){
 
 export function evaluateMSNR({candles,layers,price}){
   const levels=buildMSNRLevels(candles);
-  const events=recentMSNRConfirmations(candles,2);
+  // Reuse the already-built level state; rebuilding it here repeats the
+  // full historical level-tracking pass for every MSNR evaluation.
+  const events=recentMSNRConfirmations(candles,2,levels);
   const failures=[];
   if(!events.length)failures.push('No fresh MSNR confirmation candle at a live key level.');
   const liveExecutionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
