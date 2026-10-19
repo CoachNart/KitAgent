@@ -212,7 +212,25 @@ export default async function handler(req, res) {
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Notifications are driven by explicit tags in the message text, not client flags alone.
+    const everyoneTagPresent = /(^|\\s)@everyone\\b/i.test(text);
     let validRecipients = [];
+    if (everyoneTagPresent) {
+      // listUsers is paginated; keep following pageToken so @everyone reaches every member.
+      let pageToken;
+      do {
+        const page = await a.auth().listUsers(1000, pageToken);
+        validRecipients.push(...page.users
+          .filter(member => member.uid !== identity.uid)
+          .map(member => ({ uid: member.uid })));
+        pageToken = page.pageToken;
+      } while (pageToken);
+    } else {
+      for (const uid of requestedMentions) {
+        try {
+          const member = await a.auth().getUser(uid);
+          const name = String(member.displayName || member.email?.split('@')[0] || `Trader ${String(member.uid || '').slice(-4)}`).trim();
+          const escapedName = name.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\    let validRecipients = [];
     if (mentionEveryone) {
       const allUsers = await a.auth().listUsers(1000);
       validRecipients = allUsers.users.filter(member => member.uid !== identity.uid).map(member => ({ uid: member.uid }));
@@ -220,7 +238,13 @@ export default async function handler(req, res) {
       for (const uid of requestedMentions) {
         try { await a.auth().getUser(uid); validRecipients.push({ uid }); } catch {}
       }
+    }');
+          const explicitTag = name && new RegExp('@' + escapedName + '(?![\\w])', 'i').test(text);
+          if (explicitTag) validRecipients.push({ uid });
+        } catch {}
+      }
     }
+    const shouldNotifyEveryone = everyoneTagPresent;
     if (validRecipients.length) {
       const notificationText = text ? text.slice(0, 180) : 'Shared an image in the community.';
       for (let i = 0; i < validRecipients.length; i += 400) {
@@ -229,7 +253,7 @@ export default async function handler(req, res) {
           const notificationRef = db.collection('communityNotifications').doc();
           batch.set(notificationRef, {
             uid: recipient.uid,
-            type: mentionEveryone ? 'everyone_mention' : 'mention',
+            type: shouldNotifyEveryone ? 'everyone_mention' : 'mention',
             messageId: messageRef.id,
             senderUid: identity.uid,
             senderName: displayName,
@@ -251,7 +275,7 @@ export default async function handler(req, res) {
           if (!tokens.length) continue;
           await a.messaging().sendEachForMulticast({
             tokens,
-            notification: { title: mentionEveryone ? `${displayName} tagged everyone in KitSetups` : `${displayName} mentioned you in KitSetups`, body: notificationText },
+            notification: { title: shouldNotifyEveryone ? `${displayName} tagged everyone in KitSetups` : `${displayName} mentioned you in KitSetups`, body: notificationText },
             data: { type: 'community_mention', messageId: messageRef.id, senderUid: identity.uid },
             webpush: { notification: { icon: '/kitsetups-logo.svg', badge: '/kitsetups-logo.svg', tag: `community-${messageRef.id}` }, fcmOptions: { link: '/?page=community' } }
           });
