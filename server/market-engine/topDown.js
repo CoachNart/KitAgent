@@ -83,18 +83,16 @@ export function findValidRetest(c,bos,direction,closeExtrema=null){
   const extreme=direction==='BULLISH'?extrema.minClose[from]:extrema.maxClose[from];
   const invalidated=direction==='BULLISH'?extreme<bos.level:extreme>bos.level;
   if(invalidated){
-    // Suffix extrema are monotonic, so binary-search the earliest candle
-    // that breached the BOS instead of rescanning the entire post-BOS range.
-    let lo=from,hi=c.length;
-    while(hi-lo>1){
-      const mid=(lo+hi)>>>1;
-      const suffixExtreme=direction==='BULLISH'?extrema.minClose[mid]:extrema.maxClose[mid];
-      const breached=direction==='BULLISH'?suffixExtreme<bos.level:suffixExtreme>bos.level;
-      if(breached)lo=mid;
-      else hi=mid;
+    // Suffix extrema establish that a breach exists, but binary-searching
+    // them locates the LAST breach, not the first. Find the first candle whose
+    // close actually invalidated the BOS so chronology diagnostics are honest.
+    let index=-1;
+    for(let i=from;i<c.length;i++){
+      const close=Number(c[i]?.close);
+      if(!Number.isFinite(close))continue;
+      const breached=direction==='BULLISH'?close<bos.level:close>bos.level;
+      if(breached){index=i;break;}
     }
-    // The last suffix containing a breach starts at the first breach candle.
-    const index=lo;
     const x=c[index];
     if(index>=from&&x&&[x.open,x.high,x.low,x.close].every(Number.isFinite)){
       // Diagnostic only: determine whether a valid retest happened before the
