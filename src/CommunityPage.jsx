@@ -250,7 +250,8 @@ export default function CommunityPage({ user }) {
             <input ref={fileInputRef} className="community-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={chooseImage} aria-label="Choose an image to share" />
             <button className="community-send-button" type="submit" aria-label="Send message" disabled={(!draft.trim() && !imageFile) || sending || !user?.uid}>{sending ? <LoaderCircle className="community-spin" size={18} /> : <Send size={17} />}</button>
           </div>
-        </form>      </section>
+        </form>
+      </section>
     </section>
   );
 }
