@@ -54,11 +54,11 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       if (String(req.query?.notifications || '') === '1') {
-        const snapshot = await db.collection('communityNotifications').where('uid', '==', identity.uid).orderBy('createdAt', 'desc').limit(30).get();
+        const snapshot = await db.collection('communityNotifications').where('uid', '==', identity.uid).get();
         const notifications = snapshot.docs.map(item => {
           const data = item.data();
           return { id: item.id, type: String(data.type || 'mention'), messageId: String(data.messageId || ''), senderName: String(data.senderName || 'KitSetups member'), text: String(data.text || ''), read: Boolean(data.read), createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null };
-        }).sort((x, y) => String(y.createdAt || '').localeCompare(String(x.createdAt || '')));
+        }).sort((x, y) => String(y.createdAt || '').localeCompare(String(x.createdAt || ''))).slice(0, 30);
         return json(res, 200, { ok: true, notifications });
       }
       if (String(req.query?.members || '') === '1') {
