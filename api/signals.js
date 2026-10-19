@@ -123,12 +123,12 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       if(candle.time<generatedMs)continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
-      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
+      if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:String(signal.engineVersion||'unknown'),event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
         const targetTouched=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
         if(invalidated||targetTouched){
           return {...signal,currentPrice:price,status:'activation_ambiguous',result:null,pnlPercent:null,exitPrice:null,closedAt:null,
-            outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'ENTRY_AND_EXIT_SAME_CANDLE',candleTime:new Date(candle.time).toISOString(),note:'OHLC cannot prove the order of entry, stop, and target touches; excluded from verified outcomes.'}};
+            outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:String(signal.engineVersion||'unknown'),event:'ENTRY_AND_EXIT_SAME_CANDLE',candleTime:new Date(candle.time).toISOString(),note:'OHLC cannot prove the order of entry, stop, and target touches; excluded from verified outcomes.'}};
         }
         // Activate only after an entry-touching candle with no TP/SL touch has
         // completed. Later candles can then be evaluated without guessing.
@@ -148,8 +148,8 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
-    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
-    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:'market-engine',event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitSL)return {...signal,currentPrice:price,status:'stop_hit',result:'loss',exitPrice:sl,pnlPercent:dir==='LONG'?((sl-entry)/entry)*100:((entry-sl)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:String(signal.engineVersion||'unknown'),event:'STOP_TOUCH',candleTime:new Date(candle.time).toISOString()}};
+    if(hitTP)return {...signal,currentPrice:price,status:'target_hit',result:'win',exitPrice:tp1,pnlPercent:dir==='LONG'?((tp1-entry)/entry)*100:((entry-tp1)/entry)*100,closedAt:new Date(candle.time).toISOString(),activatedAt:new Date(activatedAt).toISOString(),outcomeEvidence:{source:'bybit_1m_ohlc',engineVersion:String(signal.engineVersion||'unknown'),event:'TP1_TOUCH',candleTime:new Date(candle.time).toISOString()}};
   }
   return {...signal,currentPrice:livePrice,status:'open',activatedAt:new Date(activatedAt).toISOString(),ambiguousOutcome:ambiguous||undefined};
 }

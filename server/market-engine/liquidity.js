@@ -2,10 +2,16 @@ import {atr} from './data.js';
 import {confirmedSwings} from './structure.js';
 function equalPools(c,asOf=c.length-1){
  const s=confirmedSwings(c,2),out=[];
+ // The tolerance is identical for every swing pair at this asOf index.
+ // Compute ATR once, rather than recalculating it inside the O(n^2) pair loop.
+ const close=c[asOf]?.close;
+ if(!Number.isFinite(close))return out;
+ const a=atr(c.slice(0,asOf+1),14)||close*.002;
+ const tol=Math.max(a*.18,close*.0005);
  for(const side of ['highs','lows']){
-  const a=s[side].filter(x=>x.confirmationIndex<=asOf);
-  for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
-   const x=a[i],y=a[j],tol=Math.max((atr(c.slice(0,asOf+1),14)||c[asOf].close*.002)*.18,c[asOf].close*.0005);
+  const swings=s[side].filter(x=>x.confirmationIndex<=asOf);
+  for(let i=0;i<swings.length;i++)for(let j=i+1;j<swings.length;j++){
+   const x=swings[i],y=swings[j];
    if(Math.abs(x.price-y.price)<=tol)out.push({type:side==='highs'?'EQUAL_HIGHS':'EQUAL_LOWS',level:(x.price+y.price)/2,first:x.index,second:y.index,age:asOf-y.index});
   }
  }
