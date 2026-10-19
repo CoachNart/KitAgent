@@ -52,7 +52,7 @@ export default function App({user}){
 function KitNavigation({page,go}){
   return <nav className="kit-nav" aria-label="KitSetups navigation">
     <div className="kit-nav-inner" style={{'--nav-index':Math.max(0,nav.findIndex(([id])=>id===page)),'--nav-cell-width':'calc((100% - 34px) / 7)','--nav-pill-width':`${Math.min(116,Math.max(78,66 + String(nav.find(([id])=>id===page)?.[1]||'').length*3.55))}px`}}>
-      {nav.map(([id,label,Icon])=><button key={id} type="button" className={page===id?'kit-nav-item active':'kit-nav-item'} aria-current={page===id?'page':undefined} onClick={()=>go(id)}>
+      {nav.map(([id,label,Icon])=><button key={id} type="button" className={page===id?'kit-nav-item active':'kit-nav-item'} aria-label={label} title={label} aria-current={page===id?'page':undefined} onClick={()=>go(id)}>
         <span className="kit-nav-icon"><Icon size={20}/></span>
         <span className="kit-nav-label">{label}</span>
       </button>)}
