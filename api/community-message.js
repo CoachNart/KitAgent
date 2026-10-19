@@ -54,7 +54,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       if (String(req.query?.notifications || '') === '1') {
-        const snapshot = await db.collection('communityNotifications').where('uid', '==', identity.uid).limit(30).get();
+        const snapshot = await db.collection('communityNotifications').where('uid', '==', identity.uid).orderBy('createdAt', 'desc').limit(30).get();
         const notifications = snapshot.docs.map(item => {
           const data = item.data();
           return { id: item.id, type: String(data.type || 'mention'), messageId: String(data.messageId || ''), senderName: String(data.senderName || 'KitSetups member'), text: String(data.text || ''), read: Boolean(data.read), createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null };
@@ -212,15 +212,34 @@ export default async function handler(req, res) {
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Notifications are driven by explicit tags in the message text, not client flags alone.
+    const everyoneTagPresent = /(^|\s)@everyone\b/i.test(text);
     let validRecipients = [];
-    if (mentionEveryone) {
-      const allUsers = await a.auth().listUsers(1000);
-      validRecipients = allUsers.users.filter(member => member.uid !== identity.uid).map(member => ({ uid: member.uid }));
+    if (everyoneTagPresent) {
+      // listUsers is paginated; follow every page so @everyone reaches every member.
+      let pageToken;
+      do {
+        const page = await a.auth().listUsers(1000, pageToken);
+        validRecipients.push(...page.users
+          .filter(member => member.uid !== identity.uid)
+          .map(member => ({ uid: member.uid })));
+        pageToken = page.pageToken;
+      } while (pageToken);
     } else {
+      const lowerText = text.toLocaleLowerCase();
       for (const uid of requestedMentions) {
-        try { await a.auth().getUser(uid); validRecipients.push({ uid }); } catch {}
+        try {
+          const member = await a.auth().getUser(uid);
+          const name = String(member.displayName || member.email?.split('@')[0] || ('Trader ' + String(member.uid || '').slice(-4))).trim();
+          const token = '@' + name.toLocaleLowerCase();
+          const index = lowerText.indexOf(token);
+          const nextCharacter = index >= 0 ? lowerText[index + token.length] || '' : '';
+          const explicitTag = index >= 0 && !/[a-z0-9_]/i.test(nextCharacter);
+          if (explicitTag) validRecipients.push({ uid });
+        } catch {}
       }
     }
+    const shouldNotifyEveryone = everyoneTagPresent;
     if (validRecipients.length) {
       const notificationText = text ? text.slice(0, 180) : 'Shared an image in the community.';
       for (let i = 0; i < validRecipients.length; i += 400) {
@@ -229,7 +248,7 @@ export default async function handler(req, res) {
           const notificationRef = db.collection('communityNotifications').doc();
           batch.set(notificationRef, {
             uid: recipient.uid,
-            type: mentionEveryone ? 'everyone_mention' : 'mention',
+            type: shouldNotifyEveryone ? 'everyone_mention' : 'mention',
             messageId: messageRef.id,
             senderUid: identity.uid,
             senderName: displayName,
@@ -251,7 +270,7 @@ export default async function handler(req, res) {
           if (!tokens.length) continue;
           await a.messaging().sendEachForMulticast({
             tokens,
-            notification: { title: mentionEveryone ? `${displayName} tagged everyone in KitSetups` : `${displayName} mentioned you in KitSetups`, body: notificationText },
+            notification: { title: shouldNotifyEveryone ? `${displayName} tagged everyone in KitSetups` : `${displayName} mentioned you in KitSetups`, body: notificationText },
             data: { type: 'community_mention', messageId: messageRef.id, senderUid: identity.uid },
             webpush: { notification: { icon: '/kitsetups-logo.svg', badge: '/kitsetups-logo.svg', tag: `community-${messageRef.id}` }, fcmOptions: { link: '/?page=community' } }
           });
