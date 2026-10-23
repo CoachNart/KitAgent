@@ -102,7 +102,7 @@ assert('MSNR keeps the public latest-confirmation helper exact',()=>latestMSNRCo
 assert('MSNR accepts a confirmation from the recent execution window',()=>recentMSNRConfirmations([...vCc,bar(4,103,104,102,103.2)],2).every(x=>x.signalIndex>=3));
 
 // A full-body confirmation must be the current closed candle, never an open candle.
-const layers=['4H','2H','1H','30m'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
+const layers=['4H','2H','1H','LTF'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
 const msnrResult=evaluateMSNR({candles:vCc,layers,price:103.5});
 assert('MSNR strategy returns a result object',!!msnrResult&&Array.isArray(msnrResult.failures));
 assert('MSNR does not use the generic execution resolver',()=>{
@@ -132,12 +132,12 @@ smcCandles[42]=bar(42,106.3,107.1,104.2,106.0);
 smcCandles[43]=bar(43,106.0,106.4,105.2,105.6);
 smcCandles[44]=bar(44,105.6,108.8,105.4,108.5);
 smcCandles[45]=bar(45,108.5,109.2,108.4,108.9);
-const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}},{tf:'30m',candles:smcCandles,structure:{direction:'BULLISH'}}];
+const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}},{tf:'LTF',candles:smcCandles,structure:{direction:'BULLISH'}}];
 assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG');
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
 assert('SMC liquidity sweep detector only accepts sweep plus reclaim',()=>findSweeps(smcCandles,'BULLISH').every(x=>smcCandles[x.index].low<x.level&&smcCandles[x.index].close>x.level));
-const smcConflict=evaluateSMC({candles:smcCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'30m',structure:{direction:'BULLISH'}}],price:108.9});
+const smcConflict=evaluateSMC({candles:smcCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:108.9});
 assert('SMC rejects conflicting higher-timeframe bias',()=>smcConflict.direction==='NEUTRAL'&&smcConflict.failures.some(x=>x.includes('conflicts')));
 
 const smcIncompleteCandles=Array.from({length:50},(_,i)=>bar(i,100+i*.15,100+i*.65,100+i*.05,100+i*.5));
@@ -148,7 +148,7 @@ assert('SMC routes through its own evaluator',()=>{const routed=evaluateStrategy
 // Top-Down contract: aligned HTF direction -> execution BOS -> retest/hold -> structural target.
 const tdCandles=Array.from({length:50},(_,i)=>bar(i,100+i*.1,101+i*.1,99+i*.1,100.5+i*.1));
 assert('Top-Down uses a defined multi-timeframe entry model',TOP_DOWN_MODEL==='HTF_ALIGNMENT_EXECUTION_BOS_RETEST');
-const tdMismatch=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'30m',structure:{direction:'BULLISH'}}],price:105});
+const tdMismatch=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:105});
 assert('Top-Down rejects conflicting higher-timeframe directions',()=>tdMismatch.direction==='NEUTRAL'&&tdMismatch.failures.length>0);
 const tdNoBos=evaluateTopDown({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Top-Down requires execution BOS before entry',()=>tdNoBos.direction==='BULLISH'&&tdNoBos.failures.some(x=>x.includes('BOS')));
@@ -180,7 +180,7 @@ const topDownScore=scoreSetup({
   layers:[
     {tf:'4H',structure:{direction:'BULLISH'}},
     {tf:'2H',structure:{direction:'BULLISH'}},
-    {tf:'30m',structure:{direction:'BULLISH'}}
+    {tf:'LTF',structure:{direction:'BULLISH'}}
   ],
   bos:{age:0},retestPoint:{age:0},price:100,entry:100,
   target:{source:'HTF_MAJOR_SWING',quality:95},rr:3,
@@ -190,7 +190,7 @@ assert('Top-Down score calculation receives directional context without runtime 
 
 // Pullback contract: aligned HTF trend -> confirmed impulse -> 38.2%-61.8% retracement -> closed continuation break.
 assert('Pullback uses a defined trend-retracement-continuation model',PULLBACK_MODEL==='HTF_TREND_IMPULSE_RETRACE_CONTINUATION');
-const pbConflict=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'30m',structure:{direction:'BULLISH'}}],price:105});
+const pbConflict=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:105});
 assert('Pullback rejects conflicting higher-timeframe directions',()=>pbConflict.direction==='NEUTRAL'&&pbConflict.failures.some(x=>x.includes('aligned')));
 const pbNoImpulse=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Pullback requires a confirmed directional impulse before retracement',()=>pbNoImpulse.direction==='BULLISH'&&pbNoImpulse.failures.some(x=>x.includes('impulse')));
@@ -198,7 +198,7 @@ assert('Pullback routes through its own evaluator',()=>{const routed=evaluateStr
 
 // Breakout & Retest contract: defined level -> decisive close -> timely role-reversal retest -> continuation.
 assert('Breakout & Retest uses a defined breakout-retest model',BREAKOUT_MODEL==='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION');
-const brMismatch=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'30m',structure:{direction:'BULLISH'}}],price:105});
+const brMismatch=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:105});
 assert('Breakout & Retest rejects conflicting higher-timeframe directions',()=>brMismatch.direction==='NEUTRAL'&&brMismatch.failures.some(x=>x.includes('aligned')));
 const brNoLevel=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
 assert('Breakout & Retest requires a defined multi-touch level',()=>brNoLevel.direction==='BULLISH'&&brNoLevel.failures.some(x=>x.includes('level')));
@@ -229,18 +229,18 @@ crtHTF[19]=htfBar(19,108,112,98,105);
 crtExecution.forEach((x,i)=>{x.time=crtHTF[19].time+i*1800000;});
 const crtLayers=[
   {tf:'4H',candles:crtHTF,structure:{direction:'BULLISH'}},
-  {tf:'30m',candles:crtExecution,structure:{direction:'BULLISH'}}
+  {tf:'LTF',candles:crtExecution,structure:{direction:'BULLISH'}}
 ];
 assert('CRT exposes the intended entry model',CRT_MODEL==='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST');
 const crtValid=evaluateCRT({candles:crtExecution,layers:crtLayers,price:103});
 assert('CRT accepts a valid low-sweep/reclaim setup',()=>crtValid.direction==='BULLISH'&&crtValid.tradeReady===true);
 assert('CRT requires the HTF sweep to close back inside',()=>{
   const bad=[...crtHTF.slice(0,2),htfBar(2,108,117,98,117.2)];
-  const result=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:bad,structure:{direction:'BULLISH'}},{tf:'30m',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
+  const result=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:bad,structure:{direction:'BULLISH'}},{tf:'LTF',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
   return result.failures.some(x=>x.includes('close back inside')||x.includes('No recent completed CRT range'));
 });
 assert('CRT rejects conflicting HTF bias',()=>{
-  const r=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:crtHTF,structure:{direction:'BEARISH'}},{tf:'2H',candles:crtExecution,structure:{direction:'BULLISH'}},{tf:'30m',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
+  const r=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:crtHTF,structure:{direction:'BEARISH'}},{tf:'2H',candles:crtExecution,structure:{direction:'BULLISH'}},{tf:'LTF',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
   return r.direction==='NEUTRAL'&&r.failures.some(x=>x.includes('agree'));
 });
 assert('CRT requires lower-timeframe MSS before entry',()=>{
@@ -406,11 +406,11 @@ try{
   const scannerUniverse=await topSymbols();
   assert('Scanner discovers the configured perpetual universe',()=>scannerUniverse.length===18&&scannerUniverse.every(x=>/USDT$/.test(x.symbol)&&x.turnover24h>0));
   const scannerCandles=await candlesFor('BTCUSDT');
-  assert('Scanner loads every supported execution timeframe plus 1D context',()=>['30m','1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
+  assert('Scanner loads every supported execution timeframe plus 1D context',()=>['1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
   const scannerSetups=await scanSymbol(scannerUniverse[0]);
-  assert('Scanner completes the six-strategy four-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
+  assert('Scanner completes the six-strategy three-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
   assert('Scanner never publishes invalid directional geometry',()=>scannerSetups.every(x=>(x.bias==='LONG'&&x.stopLoss<x.entry&&x.takeProfit>x.entry)||(x.bias==='SHORT'&&x.stopLoss>x.entry&&x.takeProfit<x.entry)));
-  assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['30m','1H','2H','4H'].includes(x.timeframe)));
+  assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['1H','2H','4H'].includes(x.timeframe)));
 }finally{globalThis.fetch=originalFetch;}
 // Structural trade audit: every retained strategy must publish an execution zone and
 // a numeric invalidation anchor so an SL cannot be generated from an arbitrary distance.
