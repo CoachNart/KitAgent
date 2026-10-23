@@ -8,14 +8,19 @@ import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
+import {EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
 import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
 
 const tests=[];
+const supportedExecutionTimeframes=['1H','2H','4H'];
+const executionTimeframesAreCorrect=EXECUTION_TIMEFRAMES.length===supportedExecutionTimeframes.length&&supportedExecutionTimeframes.every(tf=>EXECUTION_TIMEFRAMES.includes(tf));
+
 const assert=(name,okOrFn,detail='')=>{
   let ok=false;
   try{ok=typeof okOrFn==='function'?!!okOrFn():!!okOrFn}catch(e){detail=e.message}
   tests.push({name,ok,detail});
 };
+assert('Execution timeframe allowlist contains only 1H, 2H, and 4H',executionTimeframesAreCorrect);
 
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
