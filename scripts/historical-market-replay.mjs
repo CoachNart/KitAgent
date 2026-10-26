@@ -283,7 +283,7 @@ for(const t of tradeAudit){
   const key=[t.strategy,t.timeframe,t.orderType,t.direction].join('|');
   if(!executionGroups.has(key))executionGroups.set(key,{strategy:t.strategy,timeframe:t.timeframe,orderType:t.orderType,direction:t.direction,resolved:0,wins:0,losses:0,grossR:0,observedCostR:0,stopGapLosses:0,sensitivity:Object.fromEntries(costSensitivity.map(bps=>[bps,0]))});
   const g=executionGroups.get(key);g.resolved++;g[t.outcome==='win'?'wins':'losses']++;g.grossR+=Number(t.grossR);g.observedCostR+=Number(t.costR)||0;
-  if(String(t.reason||'').toLowerCase().includes('gapped'))g.stopGapLosses++;
+  if(t.outcome==='loss'&&String(t.reason||'').toLowerCase().includes('stop gapped'))g.stopGapLosses++;
   for(const bps of costSensitivity){const riskPct=Number(t.riskPct);const cost=(riskPct>0?(bps/10000)/(riskPct/100):0);g.sensitivity[bps]+=Number(t.grossR)-cost;}
 }
 console.log('\\nEXECUTION DIAGNOSTICS (resolved trades; descriptive, not optimized)');
