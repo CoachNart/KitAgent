@@ -1,7 +1,7 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,pullbackTouches,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,levelCluster,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -138,6 +138,14 @@ smcCandles[43]=bar(43,106.0,106.4,105.2,105.6);
 smcCandles[44]=bar(44,105.6,108.8,105.4,108.5);
 smcCandles[45]=bar(45,108.5,109.2,108.4,108.9);
 const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}},{tf:'LTF',candles:smcCandles,structure:{direction:'BULLISH'}}];
+assert('SMC sweep quality is measured using ATR available at the sweep candle',()=>{
+  const history=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
+  history[20]=bar(20,100,102,98.5,101.2);
+  const futureVolatility=[...history,...Array.from({length:10},(_,i)=>bar(30+i,100,120,80,110))];
+  const prefix=sweepQuality(history,history[20],'BULLISH',99,20);
+  const extended=sweepQuality(futureVolatility,futureVolatility[20],'BULLISH',99,20);
+  return prefix!==null&&extended!==null&&Math.abs(prefix.rangeATR-extended.rangeATR)<1e-12&&Math.abs(prefix.penetrationATR-extended.penetrationATR)<1e-12;
+});
 assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG');
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
