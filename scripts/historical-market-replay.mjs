@@ -76,6 +76,28 @@ function rMultiple(trade,direction,exit){
 function fingerprint(t,direction){
   return [direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
 }
+function setupFingerprint(strategy,result,trade,direction){
+  if(strategy==='MSNR'){
+    const candidate=(result?.candidates||[]).find(x=>
+      x?.trade&&x?.event&&x?.level&&
+      Number(x.trade.entry)===Number(trade.entry)&&
+      Number(x.trade.stop)===Number(trade.stop)&&
+      Number(x.trade.target)===Number(trade.target)
+    );
+    if(candidate){
+      const level=candidate.level;
+      return [
+        direction,'MSNR_EVENT',
+        candidate.event.signalIndex??candidate.event.index??'unknown',
+        candidate.event.type??'unknown',
+        level.type??'unknown',level.side??'unknown',
+        Number(level.zoneLow).toPrecision(10),
+        Number(level.zoneHigh).toPrecision(10)
+      ].join('|');
+    }
+  }
+  return fingerprint(trade,direction);
+}
 
 async function fetchReplayCandles(symbol,tf){
   const requestedLimit=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
@@ -206,8 +228,11 @@ for(const symbol of symbols){
         if(result.grade.grade==='A')stat.gradeA++;
         if(result.grade.grade==='A+')stat.gradeAplus++;
         const trade=result.trade;
-        const fp=fingerprint(trade,result.direction),previous=seen.get(strategy+'|'+fp);
-        if(previous!=null&&cutoff-previous<DURATIONS[tf]*3)continue;
+        const fp=setupFingerprint(strategy,result,trade,result.direction),previous=seen.get(strategy+'|'+fp);
+        // MSNR can keep the same confirmed event eligible across many snapshots.
+        // Deduplicate that event for the entire replay window; other strategies
+        // retain the existing three-candle cooldown for identical trade geometry.
+        if(previous!=null&&(strategy==='MSNR'||cutoff-previous<DURATIONS[tf]*3))continue;
         seen.set(strategy+'|'+fp,cutoff);
         stat.tradeCandidates++;
         const future=exec.slice(exec.indexOf(candle)+1,windowEnd);
