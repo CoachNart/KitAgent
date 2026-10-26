@@ -4,14 +4,17 @@ import {gradeSetup} from './grading.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
-export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade};
+export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade, sweepQuality};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
 const MIN_FVG_SIZE_ATR=.10;
 
-function sweepQuality(c,x,direction,level){
-  const a=atr(c,14);
+export function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
+  // Grade a historical sweep against volatility known at that candle, not ATR
+  // calculated from the later end of the series.
+  const end=Math.min(c.length-1,Math.max(0,Math.floor(Number(asOfIndex))));
+  const a=atr(c.slice(0,end+1),14);
   const r=x?.high-x?.low;
   if(!x||!a||!Number.isFinite(r)||r<=0)return null;
   const penetration=direction==='BULLISH'?level-x.low:x.high-level;
@@ -51,7 +54,7 @@ function findSweeps(c,direction){
   for(const p of pools)for(let i=p.confirmationIndex;i<c.length;i++){
     const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price,reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
     if(swept&&reclaimed){
-      const quality=sweepQuality(c,x,direction,p.price);
+      const quality=sweepQuality(c,x,direction,p.price,i);
       if(!quality)continue;
       const extreme=direction==='BULLISH'?x.low:x.high;
       const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
