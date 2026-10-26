@@ -137,6 +137,12 @@ export function preBreakRangeBoundary(c,direction,selectedLevel,breakoutIndex,sw
     :Math.max(...opposite.map(x=>x.price),selectedLevel.level+a);
 }
 
+export function breakoutStopBuffer(c,entry,confirmationIndex){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(confirmationIndex)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  return Math.max(a*.5,Math.abs(entry)*.0005);
+}
+
 function target(c,direction,entry,after,rangeHeight,layers=[]){
   const a=atr(c.slice(0,after+1),14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005,rangeHeight*.75);
@@ -189,13 +195,13 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const {br,rt,confirm}=selected;
   const selectedLevel=selected.level;
   const entry=selectedLevel.level;
-  const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const executionAtr=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
   // Use the full retest-to-continuation structure as invalidation. A single
   // retest candle can be unusually small and is not a robust noise boundary.
   const retestSequence=candles.slice(rt.index,confirm.index+1);
   const retestLow=Math.min(...retestSequence.map(x=>x.low));
   const retestHigh=Math.max(...retestSequence.map(x=>x.high));
-  const stopBuffer=Math.max(a*.5,Math.abs(entry)*.0005);
+  const stopBuffer=breakoutStopBuffer(candles,entry,confirm.index);
   const invalidationPrice=direction==='BULLISH'?retestLow:retestHigh;
   const stop=direction==='BULLISH'
     ?invalidationPrice-stopBuffer
@@ -212,7 +218,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const reward=Math.abs(tgt.price-entry),rr=reward/risk;
   if(!(reward>0)){failures.push('Continuation target is not beyond entry.');return {direction,failures,evidence:[{type:'BREAKOUT',...br},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm},{type:'TARGET',...tgt,rr}]};}
 
-  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+  const tolerance=Math.max(executionAtr*.35,Math.abs(entry)*.0015);
   const orderType=executionOrderType({direction,entry,price:Number(price),tolerance});
   if(!orderType){failures.push('Live price is no longer executable at the broken structural level.');return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...selectedLevel},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm}]};}
   const grade=gradeSetup({
