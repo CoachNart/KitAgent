@@ -79,7 +79,8 @@ function confirmation(c,touch,direction){
 }
 
 function nextTarget(c,direction,entry,move,after,layers=[]){
-  const a=atr(c,14)||0;
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(after)+1)));
+  const a=atr(history,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
   const native=(direction==='BULLISH'&&move.end.price>entry)||(direction==='BEARISH'&&move.end.price<entry)
     ?{price:move.end.price,index:move.end.index,source:'IMPULSE_EXTREME'}
