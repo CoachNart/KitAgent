@@ -4,9 +4,16 @@ import {gradeSetup} from './grading.js';
 
 export const TOP_DOWN_MODEL='HTF_ALIGNMENT_EXECUTION_BOS_RETEST';
 
+export function topDownMinimumTargetDistance(c,afterIndex,entry){
+  // Historical setup geometry must use volatility available at the event time;
+  // later candles must not make a past target appear too close or too far.
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(afterIndex)+1)));
+  const a=atr(history,14)||0;
+  return Math.max(a*1.5,Math.abs(entry)*.005);
+}
+
 function nextTarget(c,direction,afterIndex,entry,layers=[]){
-  const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  const minDistance=topDownMinimumTargetDistance(c,afterIndex,entry);
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:afterIndex,asOfTime:c[afterIndex]?.time??null});
 }
 function htfBias(layers){
