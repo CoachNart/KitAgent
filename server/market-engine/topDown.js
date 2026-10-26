@@ -150,7 +150,7 @@ function structuralStop(c,retestPoint,direction){
 }
 
 function trade({c,bos,retestPoint,direction,price,targetSwing}){
-  const a=atr(c,14);
+  const a=atr(c.slice(0,retestPoint.index+1),14);
   if(!a)return null;
   const entry=bos.level;
   const stopSwing=structuralStop(c,retestPoint,direction);
