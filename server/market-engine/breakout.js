@@ -123,8 +123,9 @@ function continuation(c,rt,direction){
 // Build the pre-break range using only swings that were confirmed before
 // the breakout candle. A pivot can sit visually before the breakout while its
 // right-side confirmation bars close after it; that pivot is future information.
-export function preBreakRangeBoundary(c,direction,selectedLevel,breakoutIndex){
-  const oppositePoints=direction==='BULLISH'?confirmedSwings(c,2).lows:confirmedSwings(c,2).highs;
+export function preBreakRangeBoundary(c,direction,selectedLevel,breakoutIndex,swingData=null){
+  const swings=swingData||confirmedSwings(c,2);
+  const oppositePoints=direction==='BULLISH'?swings.lows:swings.highs;
   const firstTouchIndex=Math.min(...(selectedLevel?.touches||[]).map(x=>x.index));
   const opposite=oppositePoints.filter(x=>
     x.index<firstTouchIndex&&x.confirmationIndex<breakoutIndex
