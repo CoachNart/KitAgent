@@ -71,5 +71,12 @@ assert('Bearish stop gap is filled at the worse candle open',()=>{
 assert('A candle touching both stop and target remains ambiguous',()=>{
   return replayExitOnCandle('BULLISH',99,108,{open:102,high:109,low:98})?.result==='ambiguous';
 });
+assert('Bullish target gap is credited at target, not the better candle open',()=>{
+  const exit=replayExitOnCandle('BULLISH',99,108,{open:110,high:112,low:109});
+  return exit?.result==='win'&&exit.exit===108;
+});
+assert('Malformed replay candle stays unresolved instead of manufacturing an exit',()=>{
+  return replayExitOnCandle('BULLISH',99,108,{open:102,high:NaN,low:100})?.result==='unresolved';
+});
 console.log('Bybit CSV and replay execution tests:',passed,'passed');
-if(passed!==16)process.exitCode=1;
+if(passed!==18)process.exitCode=1;
