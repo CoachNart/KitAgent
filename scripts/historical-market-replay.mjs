@@ -4,7 +4,7 @@ import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market
 import {parseBybitCsv} from './replay-bybit-csv.mjs';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {STRATEGIES} from '../server/market-engine/strategies.js';
-import {executionEntry,executionTrade,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
+import {executionEntry,executionTrade,validTradeGeometry,rMultiple,replayExitOnCandle} from '../server/market-engine/replay-execution.js';
 
 const DURATIONS={'1H':60*60_000,'2H':2*60*60_000,'4H':4*60*60_000,'1D':24*60*60_000};
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
@@ -62,18 +62,10 @@ function simulate(trade,direction,orderType,future,tf){
       active=true;
       continue; // A limit activation candle cannot also establish the exit order.
     }
-    const open=Number(c.open);
-    // Stop-market orders can gap through their stop; charge the opening price
-    // rather than granting an unrealistic fill at the stop level.
-    const stopGap=direction==='BULLISH'?open<=stop:open>=stop;
-    const targetGap=direction==='BULLISH'?open>=target:open<=target;
-    if(stopGap)return{result:'loss',exit:open,exitTime:c.time+DURATIONS[tf]};
-    if(targetGap)return{result:'win',exit:target,exitTime:c.time+DURATIONS[tf]};
-    const stopHit=direction==='BULLISH'?c.low<=stop:c.high>=stop;
-    const targetHit=direction==='BULLISH'?c.high>=target:c.low<=target;
-    if(stopHit&&targetHit)return{result:'ambiguous'};
-    if(stopHit)return{result:'loss',exit:stop,exitTime:c.time+DURATIONS[tf]};
-    if(targetHit)return{result:'win',exit:target,exitTime:c.time+DURATIONS[tf]};
+    // Stop gaps fill at the next candle open; target gaps are conservatively
+    // credited only at the target. Both-level intrabar touches remain ambiguous.
+    const exit=replayExitOnCandle(direction,stop,target,c);
+    if(exit)return {...exit,exitTime:c.time+DURATIONS[tf]};
   }
   return{result:active?'unresolved':'missed'};
 }
