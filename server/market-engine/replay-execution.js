@@ -1,9 +1,8 @@
 export function executionEntry(trade,orderType){
   const planned=Number(trade?.entry);
   const market=Number(trade?.marketEntry);
-  return String(orderType).toUpperCase()==='MARKET'&&Number.isFinite(market)&&market>0
-    ?market
-    :planned;
+  if(String(orderType).toUpperCase()==='MARKET')return Number.isFinite(market)&&market>0?market:Number.NaN;
+  return planned;
 }
 
 export function validTradeGeometry(entry,stop,target,direction){
@@ -18,4 +17,10 @@ export function rMultiple(trade,direction,exit,orderType){
   const risk=Math.abs(entry-Number(trade.stop));
   if(!(risk>0))return 0;
   return (direction==='BULLISH'?exit-entry:entry-exit)/risk;
+}
+
+export function executionTrade(trade,orderType,nextCandle){
+  if(String(orderType).toUpperCase()!=='MARKET')return trade;
+  const nextOpen=Number(nextCandle?.open);
+  return {...trade,marketEntry:Number.isFinite(nextOpen)&&nextOpen>0?nextOpen:Number.NaN};
 }
