@@ -213,7 +213,8 @@ export function evaluateCRT({candles=[],layers=[],price}){
   // close inside the retest candle. The retest proves that this level is being
   // defended; the level itself is the price that defines the trade zone.
   const entry=mss.level;
-  const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const eventHistory=candles.slice(0,Math.min(candles.length,mss.index+1));
+  const a=atr(eventHistory,14)||Math.max(Math.abs(entry)*.001,1e-9);
   const stop=direction==='BULLISH'
     ?sweep.extreme-a*.25
     :sweep.extreme+a*.25;
