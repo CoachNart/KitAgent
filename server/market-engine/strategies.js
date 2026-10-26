@@ -17,6 +17,20 @@ export const STRATEGIES={
 const DIRECTIONS=new Set(['BULLISH','BEARISH']);
 
 /**
+ * Prefer established HH/HL or LH/LL structure over a direction inferred from
+ * one recent break while the swing sequence is still neutral/transitional.
+ * A structure invalidated by its own protected swing remains neutral.
+ */
+function confirmedLayerDirection(structure){
+  if(!structure)return 'NEUTRAL';
+  if(Object.prototype.hasOwnProperty.call(structure,'rawDirection')){
+    if(!DIRECTIONS.has(structure.rawDirection)||structure.direction==='NEUTRAL')return 'NEUTRAL';
+    return structure.rawDirection;
+  }
+  return DIRECTIONS.has(structure.direction)?structure.direction:'NEUTRAL';
+}
+
+/**
  * Final market-structure veto shared by every strategy.
  *
  * A strategy may identify a pattern, but it cannot override the currently
@@ -28,7 +42,7 @@ const DIRECTIONS=new Set(['BULLISH','BEARISH']);
 export function applyMarketStructureGuard(result,layers=[]){
   if(!result||!result.trade||!DIRECTIONS.has(result.direction))return result;
   const directional=(Array.isArray(layers)?layers:[])
-    .map(layer=>({tf:String(layer?.tf||'UNKNOWN'),direction:layer?.structure?.direction}))
+    .map(layer=>({tf:String(layer?.tf||'UNKNOWN'),direction:confirmedLayerDirection(layer?.structure)}))
     .filter(x=>DIRECTIONS.has(x.direction));
 
   if(!directional.length){
@@ -36,7 +50,7 @@ export function applyMarketStructureGuard(result,layers=[]){
       ...result,
       direction:'NEUTRAL',
       trade:null,
-      failures:[...(result.failures||[]),'Market-structure guard: no timeframe has a confirmed directional bias; setup blocked.'],
+      failures:[...(result.failures||[]),'Market-structure guard: no timeframe has a confirmed directional swing sequence; setup blocked.'],
       marketStructureGuard:{allowed:false,reason:'NO_DIRECTIONAL_STRUCTURE',directionalLayers:[]}
     };
   }
