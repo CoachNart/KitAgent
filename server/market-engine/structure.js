@@ -185,7 +185,8 @@ export function structure(c,asOf=c.length-1){
 
 export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0,nativeTargets=[],asOf=null,asOfTime=null}={}){
   if(!Array.isArray(c)||!c.length||!Number.isFinite(entry)||!['BULLISH','BEARISH'].includes(direction))return [];
-  const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const history=asOf===null?c:c.slice(0,Math.min(c.length,Math.max(0,Math.floor(asOf)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(entry)*.001,1e-9);
   const distanceFloor=Math.max(minDistance,a*1.5,Math.abs(entry)*.005);
   const clusterTolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const candidates=[];
@@ -263,7 +264,8 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 export function selectStructuralTarget(c,direction,entry,options={}){
   const candidates=rankStructuralTargets(c,direction,entry,options);
   if(!candidates.length)return null;
-  const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const history=options.asOf===null||options.asOf===undefined?c:c.slice(0,Math.min(c.length,Math.max(0,Math.floor(options.asOf)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(entry)*.001,1e-9);
   // Do not choose a distant high-scoring HTF pool merely because its quality
   // number outranks a nearer executable objective. Targets beyond this range
   // are not valid execution-timeframe take-profits.
