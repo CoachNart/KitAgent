@@ -78,25 +78,23 @@ function fingerprint(t,direction){
 }
 function setupFingerprint(strategy,result,trade,direction){
   if(strategy==='MSNR'){
-    const near=(a,b)=>{
-      const x=Number(a),y=Number(b);
-      return Number.isFinite(x)&&Number.isFinite(y)&&
-        Math.abs(x-y)<=Math.max(1,Math.abs(x),Math.abs(y))*1e-9;
-    };
-    const candidate=(result?.candidates||[]).find(x=>
-      x?.trade&&x?.event&&x?.level&&
-      near(x.trade.entry,trade.entry)&&near(x.trade.stop,trade.stop)
-    );
-    if(candidate){
-      const level=candidate.level;
+    // Use timestamps and price-level identity, not array indexes. The replay
+    // slides its history window, so signalIndex/originIndex can change for the
+    // same historical event as newer candles arrive.
+    const event=result?.msnr?.confirmation;
+    const level=result?.msnr?.level;
+    const signalCandle=event?.signalCandle;
+    const signalTime=signalCandle?.time??signalCandle?.timestamp??event?.signalTime;
+    const originTime=level?.originTime;
+    if(event&&level&&signalTime!=null&&originTime!=null){
       return [
         direction,'MSNR_EVENT',
-        candidate.event.signalIndex??candidate.event.index??'unknown',
-        candidate.event.type??'unknown',
-        level.originIndex??'unknown',level.originTime??'unknown',
-        level.type??'unknown',level.side??'unknown',
-        Number(level.zoneLow).toPrecision(10),
-        Number(level.zoneHigh).toPrecision(10)
+        String(signalTime),
+        String(originTime),
+        event.type??'unknown',
+        level.type??'unknown',
+        level.side??'unknown',
+        Number(level.price).toPrecision(10)
       ].join('|');
     }
   }
