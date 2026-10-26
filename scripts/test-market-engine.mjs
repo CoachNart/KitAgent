@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,SMC_MODEL} from '../server/market-engine/smc.js';
-import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
+import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest,topDownMinimumTargetDistance} from '../server/market-engine/topDown.js';
 import {evaluatePullback,pullbackTouches,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,levelCluster,preBreakRangeBoundary,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
@@ -384,6 +384,13 @@ assert('Structural target ranking is not an RR gate',()=>{
   if(!structuralTarget)return true;
   return structuralTarget.rr===undefined;
 });
+
+// Top-Down target-distance volatility must be frozen at the setup event.
+const tdVolatilityHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+const tdFutureVolatility=[...tdVolatilityHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,130,70,112))];
+const tdDistanceAtEvent=topDownMinimumTargetDistance(tdVolatilityHistory,18,100);
+const tdDistanceWithFutureBars=topDownMinimumTargetDistance(tdFutureVolatility,18,100);
+assert('Top-Down target distance ignores volatility that occurred after the setup event',()=>tdDistanceAtEvent===tdDistanceWithFutureBars);
 
 // Target lookahead guard: a structural target must not use a swing formed after the setup event.
 const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
