@@ -3,7 +3,7 @@ import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
-import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
+import {evaluatePullback,pullbackTouches,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
@@ -192,6 +192,21 @@ const topDownScore=scoreSetup({
   candles:topDownScoreCandles,direction:'BULLISH'
 });
 assert('Top-Down score calculation receives directional context without runtime ReferenceError',()=>Number.isFinite(topDownScore.score)&&topDownScore.score>0);
+
+// Pullback chronology: a swing-point wick is not a usable impulse endpoint until its confirmation bars have closed.
+const pbTouchBars=[
+  bar(0,100,101,99,100),
+  bar(1,100,105,98,104), // impulse swing point
+  bar(2,103,104,99,100), // retracement-looking candle before swing confirmation
+  bar(3,100,102,99,101), // first eligible post-confirmation touch
+  bar(4,101,103,100,102),
+  bar(5,102,104,101,103)
+];
+const pbTouchZone={low:98.5,high:100.5};
+assert('Pullback ignores retracement touches before impulse swing confirmation',()=>{
+  const touches=pullbackTouches(pbTouchBars,pbTouchZone,2);
+  return touches.length===3&&touches.every(x=>x.index>=3);
+});
 
 // Pullback contract: aligned HTF trend -> confirmed impulse -> 38.2%-61.8% retracement -> closed continuation break.
 assert('Pullback uses a defined trend-retracement-continuation model',PULLBACK_MODEL==='HTF_TREND_IMPULSE_RETRACE_CONTINUATION');
