@@ -62,6 +62,13 @@ function simulate(trade,direction,orderType,future,tf){
       active=true;
       continue; // A limit activation candle cannot also establish the exit order.
     }
+    const open=Number(c.open);
+    // Stop-market orders can gap through their stop; charge the opening price
+    // rather than granting an unrealistic fill at the stop level.
+    const stopGap=direction==='BULLISH'?open<=stop:open>=stop;
+    const targetGap=direction==='BULLISH'?open>=target:open<=target;
+    if(stopGap)return{result:'loss',exit:open,exitTime:c.time+DURATIONS[tf]};
+    if(targetGap)return{result:'win',exit:target,exitTime:c.time+DURATIONS[tf]};
     const stopHit=direction==='BULLISH'?c.low<=stop:c.high>=stop;
     const targetHit=direction==='BULLISH'?c.high>=target:c.low<=target;
     if(stopHit&&targetHit)return{result:'ambiguous'};
