@@ -224,6 +224,17 @@ export function latestMSNRConfirmations(candles){
   return recentMSNRConfirmations(candles,0);
 }
 
+// A confirmation is no longer executable if a later closed candle has
+// body-closed through the event-time level. Returning to the original side
+// later must not resurrect the invalidated setup.
+export function confirmationLevelBrokenAfterSignal(candles,event){
+  if(!Array.isArray(candles)||!event?.levelState||!Number.isInteger(event.signalIndex))return false;
+  const level=event.levelState;
+  return candles.slice(event.signalIndex+1).some(candle=>
+    breakThroughZone(candle,level.side,level)
+  );
+}
+
 function levelStrength(type){
   if(type==='RBS'||type==='SBR')return 1;
   if(type==='A'||type==='V')return .9;
@@ -320,6 +331,10 @@ export function evaluateMSNR({candles,layers,price}){
     const level=event.levelState;
     const direction=event.direction;
     const context=currentContext(layers,direction);
+    if(confirmationLevelBrokenAfterSignal(candles,event)){
+      candidates.push({event,level,direction,context,entry:price,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'MSNR level was body-broken after confirmation; the original setup is invalidated.'});
+      continue;
+    }
     const executionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
     const opposingHigherTimeframe=layers.slice(0,-1)
       .map(x=>x.structure?.direction||'NEUTRAL')
