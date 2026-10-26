@@ -137,7 +137,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const breakoutCandidates=breakout(candles,level.level,direction);
   if(!breakoutCandidates.length){
     failures.push('No decisive closed breakout beyond the defined level.');
-    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...selectedLevel}]};
+    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level}]};
   }
 
   let selected=null;
@@ -160,7 +160,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   }
   if(!selected){
     failures.push('No recent breakout produced a complete retest-and-continuation sequence.');
-    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...selectedLevel},{type:'BREAKOUT_CANDIDATES',count:breakoutCandidates.length}]};
+    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'BREAKOUT_CANDIDATES',count:breakoutCandidates.length}]};
   }
   const {br,rt,confirm}=selected;
   const selectedLevel=selected.level;
@@ -184,7 +184,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const rangeBoundary=direction==='BULLISH'
     ?Math.min(...opposite.map(x=>x.price),selectedLevel.level-a)
     :Math.max(...opposite.map(x=>x.price),selectedLevel.level+a);
-  const rangeHeight=Math.abs(level.level-rangeBoundary);
+  const rangeHeight=Math.abs(selectedLevel.level-rangeBoundary);
   if(!(rangeHeight>0)){failures.push('No measurable pre-break range.');return {direction,failures,evidence:[]};}
 
   const tgt=target(candles,direction,entry,confirm.index,rangeHeight,layers);
@@ -194,7 +194,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
 
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const orderType=executionOrderType({direction,entry,price:Number(price),tolerance});
-  if(!orderType){failures.push('Live price is no longer executable at the broken structural level.');return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm}]};}
+  if(!orderType){failures.push('Live price is no longer executable at the broken structural level.');return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...selectedLevel},{type:'RETEST_HOLD',...rt},{type:'CONTINUATION',...confirm}]};}
   const grade=gradeSetup({
     strategy:'BREAKOUT',
     context:{aligned:true,trend:layers.at(-1)?.structure?.direction===direction},
@@ -228,7 +228,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
     evidence:[
       ...grade.confidenceEvidence,
       {type:'HTF_ALIGNMENT',direction},
-      {type:'BREAKOUT_LEVEL',...level},
+      {type:'BREAKOUT_LEVEL',...selectedLevel},
       {type:'BREAKOUT',...br},
       {type:'RETEST_HOLD',...rt},
       {type:'CONTINUATION',...confirm},
