@@ -254,6 +254,7 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quot
     grade,
     trade,
     evidence:result.evidence||[],
+    candidates:result.candidates||[],
     failures,
     layers:layers.map(x=>({
       tf:x.tf,
