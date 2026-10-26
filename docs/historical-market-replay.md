@@ -29,6 +29,18 @@ bybit-data/
 
 Each file must contain at least 80 valid candles and cover a continuous interval. The replay rejects missing/irregular candle intervals rather than silently filling gaps. For a meaningful replay, collect enough history to cover warm-up plus the selected decision snapshots; the default history request is 3,000 candles per timeframe.
 
+## Chronological decision windows
+
+Use `--decision-start` and `--decision-end` to replay only signals whose decision candle closes inside a fixed UTC window. Higher-timeframe context may use candles that closed before each signal, but simulated exits are capped at the window end; trades that have not resolved by then remain unresolved. This prevents a signal from one research window being scored using price action from a later window.
+
+Example:
+
+```bash
+npm run test:market-engine-replay -- --data-dir=./bybit-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --bars-by-timeframe=1H:1000,2H:500,4H:250 --history-candles=3000 --round-trip-cost-bps=10 --decision-start=2026-09-01T00:00:00Z --decision-end=2026-10-15T00:00:00Z
+```
+
+The CI runs separate July, August, and September-to-mid-October windows and stores each report as an artifact. These are chronological robustness checks, not a guarantee of future returns; do not tune strategy thresholds to the holdout window and then reuse that same window as independent evidence.
+
 ## CSV format
 
 The parser accepts a header row with these columns (case-insensitive):
