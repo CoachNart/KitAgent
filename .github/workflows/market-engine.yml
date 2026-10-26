@@ -109,7 +109,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import json, re
+          import json, re, os
 
           reports = [
               ("Recent", "bybit-replay-report.txt"),
