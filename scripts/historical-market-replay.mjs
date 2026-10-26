@@ -20,6 +20,9 @@ const stats=new Map();
 const failures=new Map();
 const tradeAudit=[];
 const replayNow=Date.now();
+const decisionStart=args['decision-start']?Date.parse(String(args['decision-start'])):-Infinity;
+const decisionEnd=args['decision-end']?Date.parse(String(args['decision-end'])):replayNow;
+if(!Number.isFinite(decisionEnd)||decisionStart===Infinity||Number.isNaN(decisionStart)||decisionStart>=decisionEnd)throw new Error('Invalid decision window: use --decision-start=ISO and --decision-end=ISO with start before end.');
 let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
 function bucket(strategy,tf){
@@ -128,6 +131,7 @@ async function fetchReplayCandles(symbol,tf){
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log(args['data-dir']?'Historical candle source: user-supplied Bybit CSV files only; no network exchange fallback.':'Historical candle source: Bybit v5 linear perpetual candles only. No other exchange is used as a fallback.');
 if(args['data-dir'])console.log('CSV input directory:',resolve(String(args['data-dir'])),'| required files: SYMBOL_TIMEFRAME.csv (for example BTCUSDT_1H.csv).');
+console.log('Decision window:',Number.isFinite(decisionStart)?new Date(decisionStart).toISOString():'history start','→',new Date(decisionEnd).toISOString());
 console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',JSON.stringify(Object.fromEntries(requested.map(tf=>[tf,barsFor(tf)]))),'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
@@ -154,8 +158,9 @@ for(const symbol of symbols){
   }
   for(const tf of requested){
     const exec=history[tf]||[];
-    const start=Math.max(40,exec.length-barsFor(tf));
-    const snapshots=exec.slice(start);
+    const windowEnd=closedPrefixEnd(exec,tf,decisionEnd);
+    const start=Math.max(40,windowEnd-barsFor(tf));
+    const snapshots=exec.slice(start,windowEnd).filter(x=>x.time+DURATIONS[tf]>decisionStart);
     const seen=new Map();
     let snapshotIndex=0;
     for(const candle of snapshots){
@@ -205,7 +210,7 @@ for(const symbol of symbols){
         if(previous!=null&&cutoff-previous<DURATIONS[tf]*3)continue;
         seen.set(strategy+'|'+fp,cutoff);
         stat.tradeCandidates++;
-        const future=exec.slice(start+snapshotIndex);
+        const future=exec.slice(exec.indexOf(candle)+1,windowEnd);
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
