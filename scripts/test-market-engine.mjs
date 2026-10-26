@@ -410,6 +410,14 @@ const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
 lookaheadCandles[24]=bar(24,100,150,99,101);
 const lookaheadTarget=selectStructuralTarget(lookaheadCandles,'BULLISH',100,{asOf:15,asOfTime:lookaheadCandles[15].time,minDistance:1});
 assert('Target selection cannot use post-event structure',()=>!lookaheadTarget||lookaheadTarget.index<=15);
+const targetVolatilityHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+targetVolatilityHistory[8]=bar(8,100,105,99,104);
+targetVolatilityHistory[12]=bar(12,104,106,103,105);
+const targetFutureVolatility=[...targetVolatilityHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,150,50,112))];
+const targetAtEvent=selectStructuralTarget(targetVolatilityHistory,'BULLISH',100,{asOf:18,asOfTime:targetVolatilityHistory[18].time,minDistance:1});
+const targetWithFutureBars=selectStructuralTarget(targetFutureVolatility,'BULLISH',100,{asOf:18,asOfTime:targetFutureVolatility[18].time,minDistance:1});
+assert('Shared structural target ranking ignores volatility after the setup event',()=>JSON.stringify(targetAtEvent&&{price:targetAtEvent.price,source:targetAtEvent.source,index:targetAtEvent.index})===JSON.stringify(targetWithFutureBars&&{price:targetWithFutureBars.price,source:targetWithFutureBars.source,index:targetWithFutureBars.index}));
+
 
 // Active structural break validation: older levels must not produce a fresh BOS
 // after a newer confirmed swing has superseded them.
