@@ -82,9 +82,13 @@ function freshFvg(c,fvg,asOf){
   }
   return true;
 }
+export function smcMinimumTargetDistance(c,asOfIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(asOfIndex)+1)));
+  const a=atr(history,14)||0;
+  return Math.max(a*1.5,Math.abs(entry)*.005);
+}
 function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
-  const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  const minDistance=smcMinimumTargetDistance(c,asOfIndex,entry);
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null})||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
