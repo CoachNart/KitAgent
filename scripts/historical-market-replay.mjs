@@ -9,6 +9,8 @@ const DURATIONS={'1H':60*60_000,'2H':2*60*60_000,'4H':4*60*60_000,'1D':24*60*60_
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,SUIUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
+const barsByTimeframe=Object.fromEntries(String(args['bars-by-timeframe']||'').split(',').map(part=>part.trim()).filter(Boolean).map(part=>{const [tf,value]=part.split(':');return [tf.trim().toUpperCase(),Math.max(5,Math.min(1000,Number(value)||bars))];}));
+const barsFor=tf=>barsByTimeframe[tf]??bars;
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
 const requestedStrategies=String(args.strategies||Object.keys(STRATEGIES).join(',')).split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
@@ -126,7 +128,7 @@ async function fetchReplayCandles(symbol,tf){
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log(args['data-dir']?'Historical candle source: user-supplied Bybit CSV files only; no network exchange fallback.':'Historical candle source: Bybit v5 linear perpetual candles only. No other exchange is used as a fallback.');
 if(args['data-dir'])console.log('CSV input directory:',resolve(String(args['data-dir'])),'| required files: SYMBOL_TIMEFRAME.csv (for example BTCUSDT_1H.csv).');
-console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',bars,'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
+console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',JSON.stringify(Object.fromEntries(requested.map(tf=>[tf,barsFor(tf)]))),'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
   let history;
@@ -152,7 +154,7 @@ for(const symbol of symbols){
   }
   for(const tf of requested){
     const exec=history[tf]||[];
-    const start=Math.max(40,exec.length-bars);
+    const start=Math.max(40,exec.length-barsFor(tf));
     const snapshots=exec.slice(start);
     const seen=new Map();
     let snapshotIndex=0;
@@ -241,7 +243,7 @@ const totalLosses=rows.reduce((n,x)=>n+x.losses,0);
 const totalNetR=[...stats.values()].reduce((n,x)=>n+x.netR,0);
 const averageNetR=totalResolved?totalNetR/totalResolved:null;
 console.log('\nSUMMARY',JSON.stringify({
-  symbols,requestedTimeframes:requested,barsPerTimeframe:bars,roundTripCostBps,
+  symbols,requestedTimeframes:requested,barsPerTimeframe:bars,barsByTimeframe:Object.fromEntries(requested.map(tf=>[tf,barsFor(tf)])),roundTripCostBps,
   evaluated:rows.reduce((n,x)=>n+x.evaluated,0),
   candidates:rows.reduce((n,x)=>n+x.candidates,0),
   resolved:totalResolved,wins:totalWins,losses:totalLosses,
