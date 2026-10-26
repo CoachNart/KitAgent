@@ -52,6 +52,13 @@ const invalidated=applyMarketStructureGuard(candidate(),[
 ]);
 assert('A protected-swing invalidation leaves the layer neutral, not bullish',invalidated.trade===null&&invalidated.marketStructureGuard?.reason==='NO_DIRECTIONAL_STRUCTURE');
 
+const opposingTransition=applyMarketStructureGuard(candidate(),[
+  {tf:'4H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}},
+  {tf:'2H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}},
+  {tf:'1H',structure:{direction:'BEARISH',rawDirection:'NEUTRAL'}}
+]);
+assert('An unresolved bearish break blocks a bullish setup against the higher-timeframe bias',opposingTransition.trade===null&&opposingTransition.marketStructureGuard?.reason==='TRANSITIONAL_STRUCTURE_CONFLICT');
+
 const noCandidate=applyMarketStructureGuard({direction:'BULLISH',trade:null,failures:['No valid entry']},[
   layer('4H','BEARISH'),layer('2H','BEARISH'),layer('1H','BEARISH')
 ]);
