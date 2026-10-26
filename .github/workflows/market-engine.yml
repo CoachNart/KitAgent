@@ -21,6 +21,23 @@ jobs:
         run: npm run test:market-engine
       - name: Bybit CSV replay input tests
         run: npm run test:replay-bybit-csv
+      - name: Download archived Bybit candles for reproducible replay
+        run: |
+          mkdir -p bybit-archive-data
+          for symbol in BTCUSDT ETHUSDT; do
+            for suffix in 60 240 D; do
+              curl --fail --location --silent --show-error --retry 3 \
+                "https://raw.githubusercontent.com/mestoness/btc-eth-candles-history/master/${symbol}_${suffix}.csv" \
+                -o "bybit-archive-data/${symbol}_${suffix}.csv"
+            done
+            cp "bybit-archive-data/${symbol}_60.csv" "bybit-archive-data/${symbol}_1H.csv"
+            cp "bybit-archive-data/${symbol}_240.csv" "bybit-archive-data/${symbol}_4H.csv"
+            cp "bybit-archive-data/${symbol}_D.csv" "bybit-archive-data/${symbol}_1D.csv"
+          done
+      - name: Prepare 2-hour candles from archived Bybit 1-hour data
+        run: node scripts/prepare-bybit-archive-replay.mjs
+      - name: Historical replay on archived Bybit candles (BTC and ETH)
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --bars=240 --history-candles=3000 --round-trip-cost-bps=10
       - name: Market structure bias guard
         run: npm run test:market-structure-guard
       - name: Signal outcome regression suite
