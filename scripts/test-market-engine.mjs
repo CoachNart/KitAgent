@@ -4,7 +4,7 @@ import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest,topDownMinimumTargetDistance} from '../server/market-engine/topDown.js';
 import {evaluatePullback,pullbackTouches,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
-import {evaluateBreakout,levelCluster,preBreakRangeBoundary,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
+import {evaluateBreakout,levelCluster,preBreakRangeBoundary,breakoutStopBuffer,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
@@ -394,6 +394,12 @@ const tdFutureVolatility=[...tdVolatilityHistory,...Array.from({length:10},(_,i)
 const tdDistanceAtEvent=topDownMinimumTargetDistance(tdVolatilityHistory,18,100);
 const tdDistanceWithFutureBars=topDownMinimumTargetDistance(tdFutureVolatility,18,100);
 assert('Top-Down target distance ignores volatility that occurred after the setup event',()=>tdDistanceAtEvent===tdDistanceWithFutureBars);
+
+const breakoutRiskHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+const breakoutRiskWithFutureVolatility=[...breakoutRiskHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,130,70,112))];
+const breakoutStopBufferAtEvent=breakoutStopBuffer(breakoutRiskHistory,100,18);
+const breakoutStopBufferWithFuture=breakoutStopBuffer(breakoutRiskWithFutureVolatility,100,18);
+assert('Breakout stop buffer uses volatility available at confirmation, not later candles',()=>breakoutStopBufferAtEvent===breakoutStopBufferWithFuture);
 
 // Target lookahead guard: a structural target must not use a swing formed after the setup event.
 const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
