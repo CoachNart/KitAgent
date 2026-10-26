@@ -140,6 +140,9 @@ function trackLevel(seed,candles){
               freshBefore:true,
               signalCandle:signal,
               middleCandle:middle,
+              // Freeze the level state at confirmation time. Later touches or
+              // flips must not rewrite the historical setup's evidence.
+              levelState:{...seed,type:currentType,side,fresh,touches,flipCount,lastTouchIndex,lastFlipIndex},
               reason:'Fresh role-reversal level was body-broken, then the very next closed candle rejected the new side.'
             });
           }
@@ -170,6 +173,9 @@ function trackLevel(seed,candles){
             freshBefore:true,
             signalCandle:candle,
             middleCandle:previous,
+            // This event describes the level before the signal consumes its
+            // freshness; preserve that historical state independently.
+            levelState:{...seed,type:currentType,side,fresh,touches,flipCount,lastTouchIndex,lastFlipIndex},
             reason:'Fresh MSNR level was touched and rejected by a full-body confirmation candle.'
           });
         }
@@ -204,7 +210,12 @@ export function recentMSNRConfirmations(candles,maxAge=2,prebuiltLevels=null){
   const lastIndex=candles.length-1;
   const floor=Math.max(0,lastIndex-Math.max(0,maxAge));
   return levels
-    .flatMap(level=>level.confirmations.map(event=>({...event,levelState:level})))
+    .flatMap(level=>level.confirmations.map(event=>({
+      ...event,
+      // Older/prebuilt level records may not have snapshots; prefer the
+      // event-time state whenever it exists.
+      levelState:event.levelState||level
+    })))
     .filter(event=>event.signalIndex>=floor&&event.signalIndex<=lastIndex)
     .sort((a,b)=>b.signalIndex-a.signalIndex||b.levelState.originIndex-a.levelState.originIndex);
 }
