@@ -82,6 +82,11 @@ function freshFvg(c,fvg,asOf){
   }
   return true;
 }
+export function smcSweepStopBuffer(c,sweepIndex,price){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(sweepIndex)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(price)*.001,1e-9);
+  return Math.max(a*.15,Math.abs(price)*.00035);
+}
 export function smcMinimumTargetDistance(c,asOfIndex,entry){
   const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(asOfIndex)+1)));
   const a=atr(history,14)||0;
@@ -93,9 +98,7 @@ function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9);
-  const eventHistory=c.slice(0,Math.min(c.length,sweep.index+1));
-  const riskAtr=atr(eventHistory,14)||Math.max(Math.abs(price)*.001,1e-9);
-  const buffer=Math.max(riskAtr*.15,Math.abs(price)*.00035);
+  const buffer=smcSweepStopBuffer(c,sweep.index,price);
   const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer,entry=fvg.midpoint,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
   if(!Number.isFinite(rr)||rr<=0)return null;
   if(direction==='BULLISH'&&price<sweep.extreme)return null;
