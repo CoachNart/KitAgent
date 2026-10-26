@@ -45,6 +45,23 @@ function emptyStructure(){
   };
 }
 
+function confirmedDirectionAt(highs,lows,index){
+  const h=(highs||[]).filter(x=>x.confirmationIndex<=index).slice(-2);
+  const l=(lows||[]).filter(x=>x.confirmationIndex<=index).slice(-2);
+  if(h.length<2||l.length<2)return 'NEUTRAL';
+  const hh=h[1].price>h[0].price;
+  const hl=l[1].price>l[0].price;
+  const lh=h[1].price<h[0].price;
+  const ll=l[1].price<l[0].price;
+  return hh&&hl?'BULLISH':lh&&ll?'BEARISH':'NEUTRAL';
+}
+
+function classifyStructuralBreak(direction,highs,lows,index){
+  const established=confirmedDirectionAt(highs,lows,index);
+  if(established==='NEUTRAL')return 'STRUCTURE_BREAK';
+  return established===direction?'BOS':'CHoCH';
+}
+
 export function structuralBreakEvents(c,highs,lows,asOf=(Array.isArray(c)?c.length-1:0)){
   if(!Array.isArray(c)||!c.length)return [];
   const end=Math.min(c.length-1,Math.max(0,Math.floor(Number(asOf))));
@@ -69,14 +86,14 @@ export function structuralBreakEvents(c,highs,lows,asOf=(Array.isArray(c)?c.leng
 
     if(activeHigh&&i>=activeHigh.confirmationIndex&&close>activeHigh.price){
       events.push({
-        type:'BOS',direction:'BULLISH',level:activeHigh.price,index:i,
+        type:classifyStructuralBreak('BULLISH',orderedHighs,orderedLows,i),direction:'BULLISH',level:activeHigh.price,index:i,
         brokenSwingIndex:activeHigh.index,confirmationIndex:activeHigh.confirmationIndex,age:end-i
       });
       activeHigh=null;
     }
     if(activeLow&&i>=activeLow.confirmationIndex&&close<activeLow.price){
       events.push({
-        type:'BOS',direction:'BEARISH',level:activeLow.price,index:i,
+        type:classifyStructuralBreak('BEARISH',orderedHighs,orderedLows,i),direction:'BEARISH',level:activeLow.price,index:i,
         brokenSwingIndex:activeLow.index,confirmationIndex:activeLow.confirmationIndex,age:end-i
       });
       activeLow=null;
@@ -138,14 +155,14 @@ export function structure(c,asOf=c.length-1){
   if(direction==='BULLISH'&&protectedLow&&price<protectedLow.price)direction='NEUTRAL';
   if(direction==='BEARISH'&&protectedHigh&&price>protectedHigh.price)direction='NEUTRAL';
 
-  // A break against the established trend is a CHOCH. A break in the same direction
-  // is BOS. MSS is reserved for a recent CHOCH/BOS event rather than a generic trend flag.
+  // Break labels are assigned at the event candle using only swings confirmed
+  // by that time. Do not relabel old breaks later using today's swing direction.
   let bos=null,choch=null;
-  if(last){
-    if(rawDirection!=='NEUTRAL'&&last.direction!==rawDirection)choch={...last,type:'CHoCH'};
-    else bos={...last,type:'BOS'};
-  }
-  const mss=(choch||bos)&&((choch||bos).age<=8)?{...(choch||bos),type:'MSS'}:null;
+  if(last?.type==='BOS')bos=last;
+  if(last?.type==='CHoCH')choch=last;
+  const latestDirectionalBreak=choch||bos;
+  const mss=latestDirectionalBreak&&latestDirectionalBreak.age<=8
+    ?{...latestDirectionalBreak,type:'MSS'}:null;
 
   const a=atr(c.slice(0,asOf+1),14)||Math.max(price*.001,1e-9);
   const avg=rangeAverage(c.slice(0,asOf+1),20)||a;
