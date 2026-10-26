@@ -1,7 +1,7 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,confirmationLevelBrokenAfterSignal,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest,topDownMinimumTargetDistance} from '../server/market-engine/topDown.js';
 import {evaluatePullback,pullbackTouches,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,levelCluster,preBreakRangeBoundary,breakoutStopBuffer,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -400,6 +400,10 @@ const breakoutRiskWithFutureVolatility=[...breakoutRiskHistory,...Array.from({le
 const breakoutStopBufferAtEvent=breakoutStopBuffer(breakoutRiskHistory,100,18);
 const breakoutStopBufferWithFuture=breakoutStopBuffer(breakoutRiskWithFutureVolatility,100,18);
 assert('Breakout stop buffer uses volatility available at confirmation, not later candles',()=>breakoutStopBufferAtEvent===breakoutStopBufferWithFuture);
+
+const smcVolatilityHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+const smcFutureVolatility=[...smcVolatilityHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,130,70,112))];
+assert('SMC target distance ignores volatility that occurred after its FVG event',()=>smcMinimumTargetDistance(smcVolatilityHistory,18,100)===smcMinimumTargetDistance(smcFutureVolatility,18,100));
 
 // Target lookahead guard: a structural target must not use a swing formed after the setup event.
 const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
