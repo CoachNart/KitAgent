@@ -125,7 +125,7 @@ jobs:
                   rows.append((label, None))
                   continue
               content = path.read_text(errors="replace")
-              matches = re.findall(r"SUMMARY\\s+(\\{.*?\\n\\})", content, re.S)
+          matches = re.findall(r"SUMMARY\s+(\{.*?\n\})", content, re.S)
               summary = None
               for match in matches:
                   try:
@@ -149,8 +149,8 @@ jobs:
               status = "NEGATIVE/NO POSITIVE EDGE" if negative else "Positive in this sample only"
               lines.append(f"| {label} | {s.get('evaluated','—')} | {s.get('candidates','—')} | {s.get('resolved','—')} | {s.get('wins','—')} | {s.get('losses','—')} | {s.get('winRatePct','—')}% | {net} | {status} |")
           lines += ["", "**Interpretation:** negative net expectancy means this replay does not support calling the setup engine ready. Results exclude funding, exact bid/ask spread, partial fills, fee-tier variation, and portfolio-level overlap. Do not tune against the holdout window and reuse it as independent evidence.", ""]
-          with open("$GITHUB_STEP_SUMMARY", "a") as f:
-              f.write("\\n".join(lines) + "\\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("\n".join(lines) + "\n")
           print("Historical replay summary published; expectancy status:", "negative or unavailable" if any_negative else "review report rows")
           PY
       - name: Market structure bias guard
