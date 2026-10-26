@@ -21,7 +21,11 @@ jobs:
         run: npm run test:market-engine
       - name: Signal outcome regression suite
         run: npm run test:signal-outcomes
-      - name: Historical market replay (public futures candles)
+      - name: Historical market replay (external Bybit data)
+        # This replay depends on a third-party exchange endpoint that can block
+        # hosted CI runners. Keep it visible as a diagnostic without allowing
+        # exchange availability to mask deterministic regression-test results.
+        continue-on-error: true
         run: npm run test:market-engine-replay -- --bars=240 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
