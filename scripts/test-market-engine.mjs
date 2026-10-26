@@ -239,6 +239,16 @@ const crtLayers=[
 assert('CRT exposes the intended entry model',CRT_MODEL==='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST');
 const crtValid=evaluateCRT({candles:crtExecution,layers:crtLayers,price:103});
 assert('CRT accepts a valid low-sweep/reclaim setup',()=>crtValid.direction==='BULLISH'&&crtValid.tradeReady===true);
+assert('CRT rejects an execution sweep that occurs before the higher-timeframe sweep candle closes',()=>{
+  const earlySweep=crtExecution.map(x=>({...x}));
+  earlySweep[2]={...bar(2,104,105,98.5,101),time:crtExecution[2].time};
+  earlySweep[16]={...bar(16,102,103,101,102.2),time:crtExecution[16].time};
+  const r=evaluateCRT({candles:earlySweep,layers:[
+    {tf:'4H',candles:crtHTF,structure:{direction:'BULLISH'}},
+    {tf:'LTF',candles:earlySweep,structure:{direction:'BULLISH'}}
+  ],price:103});
+  return !r.tradeReady&&r.failures.some(x=>x.includes('No recent completed CRT range'));
+});
 assert('CRT requires the HTF sweep to close back inside',()=>{
   const bad=[...crtHTF.slice(0,2),htfBar(2,108,117,98,117.2)];
   const result=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:bad,structure:{direction:'BULLISH'}},{tf:'LTF',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
