@@ -92,7 +92,10 @@ function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null})||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
-  const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
+  const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9);
+  const eventHistory=c.slice(0,Math.min(c.length,sweep.index+1));
+  const riskAtr=atr(eventHistory,14)||Math.max(Math.abs(price)*.001,1e-9);
+  const buffer=Math.max(riskAtr*.15,Math.abs(price)*.00035);
   const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer,entry=fvg.midpoint,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
   if(!Number.isFinite(rr)||rr<=0)return null;
   if(direction==='BULLISH'&&price<sweep.extreme)return null;
