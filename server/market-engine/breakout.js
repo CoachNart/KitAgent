@@ -27,7 +27,8 @@ export function levelCluster(c,direction,asOfIndex= c.length){
   const points=(direction==='BULLISH'?s.highs:s.lows)
     .filter(x=>x.confirmationIndex<asOfIndex);
   if(points.length<2)return null;
-  const a=atr(c,14);
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(asOfIndex))));
+  const a=atr(history,14);
   if(!a)return null;
   const recent=points.slice(-10);
   const tolerance=a*.35;
@@ -54,11 +55,17 @@ export function levelCluster(c,direction,asOfIndex= c.length){
   };
 }
 
-function breakout(c,level,direction){
-  const a=atr(c,14),avg=rangeAverage(c,20);
-  if(!a||!avg)return [];
+function breakout(c,direction){
   const events=[];
   for(let i=c.length-1;i>=Math.max(1,c.length-12);i--){
+    // Evaluate each candidate against the level and volatility available at
+    // that candle; a future swing or later volatility must not define it.
+    const historicalLevel=levelCluster(c,direction,i);
+    if(!historicalLevel)continue;
+    const history=c.slice(0,i+1);
+    const a=atr(history,14),avg=rangeAverage(history,20);
+    if(!a||!avg)continue;
+    const level=historicalLevel.level;
     const x=c[i],r=x.high-x.low;
     const body=bodyRatio(x);
     const directional=direction==='BULLISH'?x.close>level&&x.close>x.open:x.close<level&&x.close<x.open;
@@ -68,14 +75,14 @@ function breakout(c,level,direction){
       const av=volumeAvg.reduce((s,v)=>s+v,0)/volumeAvg.length;
       if(!(x.volume>=av*1.1))continue;
     }
-    events.push({index:i,candle:x,level,bodyRatio:body,range:r,atrMultiple:r/a});
+    events.push({index:i,candle:x,level,levelEvidence:historicalLevel,bodyRatio:body,range:r,atrMultiple:r/a});
   }
   return events;
 }
 
 function retest(c,br,direction){
   const maxIndex=Math.min(c.length-1,br.index+8);
-  const a=atr(c,14)||Math.max(Math.abs(br.level)*.001,1e-9);
+  const a=atr(c.slice(0,br.index+1),14)||Math.max(Math.abs(br.level)*.001,1e-9);
   const zone=a*.15;
   for(let i=br.index+1;i<=maxIndex;i++){
     const x=c[i];
@@ -114,7 +121,7 @@ function continuation(c,rt,direction){
 }
 
 function target(c,direction,entry,after,rangeHeight,layers=[]){
-  const a=atr(c,14)||0;
+  const a=atr(c.slice(0,after+1),14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005,rangeHeight*.75);
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:after,asOfTime:c[after]?.time??null});
 }
@@ -134,7 +141,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
 
-  const breakoutCandidates=breakout(candles,level.level,direction);
+  const breakoutCandidates=breakout(candles,direction);
   if(!breakoutCandidates.length){
     failures.push('No decisive closed breakout beyond the defined level.');
     return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level}]};
@@ -144,7 +151,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   for(const candidate of breakoutCandidates){
     // Rebuild the level using information available before this breakout candle.
     // The full-series cluster is discovery only; it must not define a past event.
-    const historicalLevel=levelCluster(candles,direction,candidate.index);
+    const historicalLevel=candidate.levelEvidence;
     if(!historicalLevel)continue;
     const breaksHistoricalLevel=direction==='BULLISH'
       ?candidate.candle.close>historicalLevel.level
