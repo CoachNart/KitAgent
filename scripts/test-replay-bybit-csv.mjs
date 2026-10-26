@@ -1,5 +1,5 @@
 import {parseBybitCsv} from './replay-bybit-csv.mjs';
-import {executionEntry,executionTrade,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
+import {executionEntry,executionTrade,validTradeGeometry,rMultiple,replayExitOnCandle} from '../server/market-engine/replay-execution.js';
 
 let passed=0;
 function assert(name,fn){
@@ -60,5 +60,16 @@ assert('Limit orders keep planned entry regardless of next candle open',()=>{
 assert('Replay rejects a bearish market fill whose target/stop geometry is inverted',()=>{
   return !validTradeGeometry(98,97,101,'BEARISH');
 });
+assert('Bullish stop gap is filled at the worse candle open, not the stop price',()=>{
+  const exit=replayExitOnCandle('BULLISH',99,108,{open:97,high:101,low:96});
+  return exit?.result==='loss'&&exit.exit===97;
+});
+assert('Bearish stop gap is filled at the worse candle open',()=>{
+  const exit=replayExitOnCandle('BEARISH',103,94,{open:105,high:107,low:101});
+  return exit?.result==='loss'&&exit.exit===105;
+});
+assert('A candle touching both stop and target remains ambiguous',()=>{
+  return replayExitOnCandle('BULLISH',99,108,{open:102,high:109,low:98})?.result==='ambiguous';
+});
 console.log('Bybit CSV and replay execution tests:',passed,'passed');
-if(passed!==13)process.exitCode=1;
+if(passed!==16)process.exitCode=1;
