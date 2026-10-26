@@ -235,6 +235,16 @@ const rows=[...stats.values()].map(s=>{
 console.table(rows);
 console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
 console.table(tradeAudit);
+const symbolDirectionStats=new Map();
+for(const t of tradeAudit){
+  if(!['win','loss'].includes(t.outcome)||!Number.isFinite(Number(t.netR)))continue;
+  const key=[t.symbol,t.strategy,t.timeframe,t.direction].join('|');
+  if(!symbolDirectionStats.has(key))symbolDirectionStats.set(key,{symbol:t.symbol,strategy:t.strategy,timeframe:t.timeframe,direction:t.direction,resolved:0,wins:0,losses:0,netR:0});
+  const x=symbolDirectionStats.get(key);x.resolved++;x[t.outcome==='win'?'wins':'losses']++;x.netR+=Number(t.netR);
+}
+console.log('\nSYMBOL + DIRECTION BREAKDOWN (resolved trades)');
+console.table([...symbolDirectionStats.values()].map(x=>({...x,winRatePct:+(100*x.wins/x.resolved).toFixed(2),avgNetR:+(x.netR/x.resolved).toFixed(3),totalNetR:+x.netR.toFixed(3)})));
+
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
 const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
