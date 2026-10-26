@@ -252,10 +252,13 @@ rangeFixture[7]=bar(7,100,103,97,101);
 rangeFixture[12]=bar(12,101,106,100,105);
 rangeFixture[15]=bar(15,104,107,102,106);
 const rangeLevel={level:105,touches:[{index:7,price:103},{index:12,price:106}]};
-const rangeBoundaryBeforeFuturePivot=preBreakRangeBoundary(rangeFixture,'BULLISH',rangeLevel,16);
-const rangeWithFuturePivot=[...rangeFixture,bar(24,100,101,90,100),bar(25,100,101,89,90),bar(26,90,92,88,91)];
-const rangeBoundaryAfterFuturePivot=preBreakRangeBoundary(rangeWithFuturePivot,'BULLISH',rangeLevel,16);
-assert('Breakout pre-range excludes swings whose confirmation occurs after the breakout',()=>Number.isFinite(rangeBoundaryBeforeFuturePivot)&&Math.abs(rangeBoundaryBeforeFuturePivot-rangeBoundaryAfterFuturePivot)<1e-12);
+const syntheticRangeSwings={highs:[],lows:[
+  {index:2,confirmationIndex:4,price:95},
+  {index:3,confirmationIndex:17,price:80}
+]};
+const rangeBoundaryBeforeFuturePivot=preBreakRangeBoundary(rangeFixture,'BULLISH',rangeLevel,16,syntheticRangeSwings);
+const rangeBoundaryAfterFuturePivot=preBreakRangeBoundary([...rangeFixture,bar(24,100,101,90,100)],'BULLISH',rangeLevel,16,syntheticRangeSwings);
+assert('Breakout pre-range excludes a visually earlier swing confirmed after the breakout',()=>rangeBoundaryBeforeFuturePivot===95&&rangeBoundaryAfterFuturePivot===95);
 const futureVolatilityHistory=[...breakoutHistory,...Array.from({length:8},(_,i)=>bar(28+i,100,125,75,112))];
 const levelWithFutureVolatility=levelCluster(futureVolatilityHistory,'BULLISH',16);
 assert('Breakout level builder excludes swings confirmed after the historical breakout event',()=>!!levelBeforeFutureSwing&&levelBeforeFutureSwing.touches.every(x=>x.confirmationIndex<16)&&levelBeforeFutureSwing.level<110);
