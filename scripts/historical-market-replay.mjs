@@ -249,7 +249,7 @@ for(const symbol of symbols){
         const net=gross-costR;
         if(outcome.result==='win')stat.wins++;else stat.losses++;
         stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
-        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:filledEntry,plannedEntry:trade.entry,signalClose:trade.marketEntry??'',marketEntry:filledEntry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
+        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:filledEntry,plannedEntry:trade.entry,signalClose:trade.marketEntry??'',marketEntry:filledEntry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),costR:+costR.toFixed(3),riskPct:+(riskPct*100).toFixed(4),netR:+net.toFixed(3),reason:outcome.reason||(outcome.result==='loss'?'Stop reached':'Target reached')});
       }
     }
   }
@@ -274,6 +274,20 @@ for(const t of tradeAudit){
 }
 console.log('\nSYMBOL + DIRECTION BREAKDOWN (resolved trades)');
 console.table([...symbolDirectionStats.values()].map(x=>({...x,winRatePct:+(100*x.wins/x.resolved).toFixed(2),avgNetR:+(x.netR/x.resolved).toFixed(3),totalNetR:+x.netR.toFixed(3)})));
+
+// Separate signal outcomes from order-type and transaction-cost effects.
+const executionGroups=new Map();
+const costSensitivity=[0,5,10,15,20];
+for(const t of tradeAudit){
+  if(!['win','loss'].includes(t.outcome)||!Number.isFinite(Number(t.grossR)))continue;
+  const key=[t.strategy,t.timeframe,t.orderType,t.direction].join('|');
+  if(!executionGroups.has(key))executionGroups.set(key,{strategy:t.strategy,timeframe:t.timeframe,orderType:t.orderType,direction:t.direction,resolved:0,wins:0,losses:0,grossR:0,observedCostR:0,stopGapLosses:0,sensitivity:Object.fromEntries(costSensitivity.map(bps=>[bps,0]))});
+  const g=executionGroups.get(key);g.resolved++;g[t.outcome==='win'?'wins':'losses']++;g.grossR+=Number(t.grossR);g.observedCostR+=Number(t.costR)||0;
+  if(String(t.reason||'').toLowerCase().includes('gapped'))g.stopGapLosses++;
+  for(const bps of costSensitivity){const riskPct=Number(t.riskPct);const cost=(riskPct>0?(bps/10000)/(riskPct/100):0);g.sensitivity[bps]+=Number(t.grossR)-cost;}
+}
+console.log('\\nEXECUTION DIAGNOSTICS (resolved trades; descriptive, not optimized)');
+console.table([...executionGroups.values()].map(g=>({strategy:g.strategy,timeframe:g.timeframe,orderType:g.orderType,direction:g.direction,resolved:g.resolved,winRatePct:+(100*g.wins/g.resolved).toFixed(2),avgGrossR:+(g.grossR/g.resolved).toFixed(3),avgObservedCostR:+(g.observedCostR/g.resolved).toFixed(3),avgNetRAtConfiguredCost:+((g.grossR-g.observedCostR)/g.resolved).toFixed(3),stopGapLosses:g.stopGapLosses,avgNetR_0bps:+(g.sensitivity[0]/g.resolved).toFixed(3),avgNetR_5bps:+(g.sensitivity[5]/g.resolved).toFixed(3),avgNetR_10bps:+(g.sensitivity[10]/g.resolved).toFixed(3),avgNetR_15bps:+(g.sensitivity[15]/g.resolved).toFixed(3),avgNetR_20bps:+(g.sensitivity[20]/g.resolved).toFixed(3)})));
 
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
