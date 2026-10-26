@@ -43,7 +43,7 @@ assert('Replay validates stop and target relative to the actual market fill',()=
 });
 assert('Replay R multiple uses actual market fill and actual risk distance',()=>{
   const trade={entry:100,marketEntry:102,stop:99};
-  return Math.abs(rMultiple(trade,'BULLISH',108,'MARKET')-6)<1e-9;
+  return Math.abs(rMultiple(trade,'BULLISH',108,'MARKET')-2)<1e-9;
 });
 assert('Replay rejects a bearish market fill whose target/stop geometry is inverted',()=>{
   return !validTradeGeometry(98,97,101,'BEARISH');
