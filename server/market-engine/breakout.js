@@ -20,7 +20,7 @@ function alignedDirection(layers=[]){
   return bias;
 }
 
-function levelCluster(c,direction,asOfIndex= c.length){
+export function levelCluster(c,direction,asOfIndex= c.length){
   const s=confirmedSwings(c,2);
   // A level is only available after its swing-confirmation bars have closed.
   // When evaluating a historical breakout, exclude every swing confirmed later.
