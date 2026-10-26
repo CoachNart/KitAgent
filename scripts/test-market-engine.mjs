@@ -4,7 +4,7 @@ import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,pullbackTouches,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
-import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
+import {evaluateBreakout,levelCluster,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
@@ -218,6 +218,13 @@ assert('Pullback routes through its own evaluator',()=>{const routed=evaluateStr
 
 // Breakout & Retest contract: defined level -> decisive close -> timely role-reversal retest -> continuation.
 assert('Breakout & Retest uses a defined breakout-retest model',BREAKOUT_MODEL==='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION');
+const breakoutHistory=Array.from({length:28},(_,i)=>bar(i,100,101,99,100.2));
+breakoutHistory[3]=bar(3,101,105,100,104);
+breakoutHistory[7]=bar(7,101,105.2,100,104.5);
+breakoutHistory[18]=bar(18,110,118,109,117);
+breakoutHistory[22]=bar(22,111,117,110,116);
+const levelBeforeFutureSwing=levelCluster(breakoutHistory,'BULLISH',16);
+assert('Breakout level builder excludes swings confirmed after the historical breakout event',()=>!!levelBeforeFutureSwing&&levelBeforeFutureSwing.touches.every(x=>x.confirmationIndex<16)&&levelBeforeFutureSwing.level<110);
 const brMismatch=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:105});
 assert('Breakout & Retest rejects conflicting higher-timeframe directions',()=>brMismatch.direction==='NEUTRAL'&&brMismatch.failures.some(x=>x.includes('aligned')));
 const brNoLevel=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
