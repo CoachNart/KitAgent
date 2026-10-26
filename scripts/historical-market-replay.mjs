@@ -68,61 +68,92 @@ function fingerprint(t,direction){
 }
 
 async function fetchReplayCandles(symbol,tf){
-  // Bybit is the sole market-data source for both live analysis and historical replay.
-  // Its v5 endpoint returns newest-first candles and accepts at most 1000 rows per request.
-  const intervals={'1H':'60','2H':'120','4H':'240','1D':'D'};
-  const interval=intervals[tf];
-  if(!interval)throw new Error('Unsupported Bybit replay timeframe: '+tf);
   const requestedLimit=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
-  const rows=[];
-  let end;
-  while(rows.length<requestedLimit){
-    const pageLimit=Math.min(1000,requestedLimit-rows.length);
-    let payload=null,lastError='Bybit historical candles unavailable';
-    for(const host of ['https://api.bybit.com','https://api.bytick.com']){
-      try{
-        const url=new URL('/v5/market/kline',host);
-        url.searchParams.set('category','linear');
-        url.searchParams.set('symbol',symbol);
-        url.searchParams.set('interval',interval);
-        url.searchParams.set('limit',String(pageLimit));
-        if(end!=null)url.searchParams.set('end',String(end));
-        const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
-        if(!response.ok){lastError='Bybit historical candles HTTP '+response.status+' '+response.statusText+' ('+host+')';continue;}
-        const candidate=await response.json();
-        if(candidate.retCode!==0){lastError='Bybit historical candles retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown provider error');continue;}
-        if(!Array.isArray(candidate.result?.list)||!candidate.result.list.length){lastError='Bybit returned no historical candles ('+host+')';continue;}
-        payload=candidate;
-        break;
-      }catch(error){lastError='Bybit historical candles request failed ('+host+'): '+(error?.message||error);}
+  const normalizeAndValidate=(rows,provider)=>{
+    const normalized=normalizeRows(rows).slice(-requestedLimit);
+    if(normalized.length<80)throw new Error(provider+' returned only '+normalized.length+' normalized candles (minimum 80)');
+    return normalized;
+  };
+  async function fetchBybit(){
+    const intervals={'1H':'60','2H':'120','4H':'240','1D':'D'};
+    const interval=intervals[tf];
+    if(!interval)throw new Error('Unsupported Bybit replay timeframe: '+tf);
+    const rows=[];
+    let end;
+    while(rows.length<requestedLimit){
+      const pageLimit=Math.min(1000,requestedLimit-rows.length);
+      let payload=null,lastError='Bybit historical candles unavailable';
+      for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+        try{
+          const url=new URL('/v5/market/kline',host);
+          url.searchParams.set('category','linear');
+          url.searchParams.set('symbol',symbol);
+          url.searchParams.set('interval',interval);
+          url.searchParams.set('limit',String(pageLimit));
+          if(end!=null)url.searchParams.set('end',String(end));
+          const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
+          if(!response.ok){lastError='Bybit historical candles HTTP '+response.status+' '+response.statusText+' ('+host+')';continue;}
+          const candidate=await response.json();
+          if(candidate.retCode!==0){lastError='Bybit historical candles retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown provider error');continue;}
+          if(!Array.isArray(candidate.result?.list)||!candidate.result.list.length){lastError='Bybit returned no historical candles ('+host+')';continue;}
+          payload=candidate;
+          break;
+        }catch(error){lastError='Bybit historical candles request failed ('+host+'): '+(error?.message||error);}
+      }
+      if(!payload)throw new Error('Bybit historical pagination failed'+(rows.length?' after loading '+rows.length+' raw candles; refusing partial history. ':' ')+lastError);
+      const page=payload.result.list;
+      const pageTimes=page.map(x=>Number(x[0]));
+      if(!pageTimes.length||pageTimes.some(x=>!Number.isFinite(x)||x<=0))throw new Error('Bybit returned invalid candle timestamps for '+symbol+' '+tf);
+      rows.push(...page.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
+      const oldest=Math.min(...pageTimes);
+      if(page.length<pageLimit)break;
+      const nextEnd=oldest-1;
+      if(end!=null&&nextEnd>=end)throw new Error('Bybit historical pagination stalled for '+symbol+' '+tf+'; refusing incomplete history');
+      end=nextEnd;
     }
-    if(!payload){
-      const partial=rows.length?(' after loading '+rows.length+' raw candles; refusing partial history. '):' ';
-      throw new Error('Bybit historical pagination failed'+partial+lastError);
-    }
-    const page=payload.result.list;
-    const pageTimes=page.map(x=>Number(x[0]));
-    if(!pageTimes.length||pageTimes.some(x=>!Number.isFinite(x)||x<=0)){
-      throw new Error('Bybit returned invalid candle timestamps for '+symbol+' '+tf);
-    }
-    rows.push(...page.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
-    const oldest=Math.min(...pageTimes);
-    if(page.length<pageLimit)break; // Provider has no older candles available.
-    const nextEnd=oldest-1;
-    if(end!=null&&nextEnd>=end){
-      throw new Error('Bybit historical pagination stalled for '+symbol+' '+tf+'; refusing incomplete history');
-    }
-    end=nextEnd;
+    return normalizeAndValidate(rows,'Bybit');
   }
-  const normalized=normalizeRows(rows).slice(-requestedLimit);
-  if(normalized.length<80){
-    throw new Error('Insufficient Bybit history for '+symbol+' '+tf+': received '+normalized.length+' normalized candles (minimum 80)');
+  async function fetchBinance(){
+    const intervals={'1H':'1h','2H':'2h','4H':'4h','1D':'1d'};
+    const interval=intervals[tf];
+    if(!interval)throw new Error('Unsupported Binance replay timeframe: '+tf);
+    const rows=[];
+    let endTime;
+    while(rows.length<requestedLimit){
+      const pageLimit=Math.min(1000,requestedLimit-rows.length);
+      const url=new URL('/fapi/v1/klines','https://fapi.binance.com');
+      url.searchParams.set('symbol',symbol);
+      url.searchParams.set('interval',interval);
+      url.searchParams.set('limit',String(pageLimit));
+      if(endTime!=null)url.searchParams.set('endTime',String(endTime));
+      const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
+      if(!response.ok)throw new Error('Binance USD-M historical candles HTTP '+response.status+' '+response.statusText);
+      const page=await response.json();
+      if(!Array.isArray(page)||!page.length)throw new Error('Binance returned no historical candles for '+symbol+' '+tf);
+      if(page.some(x=>!Array.isArray(x)||!Number.isFinite(Number(x[0]))||Number(x[0])<=0))throw new Error('Binance returned invalid candle timestamps for '+symbol+' '+tf);
+      rows.push(...page.map(x=>[x[0],x[1],x[2],x[3],x[4],x[5]]));
+      if(page.length<pageLimit)break;
+      const oldest=Math.min(...page.map(x=>Number(x[0])));
+      const nextEnd=oldest-1;
+      if(endTime!=null&&nextEnd>=endTime)throw new Error('Binance historical pagination stalled for '+symbol+' '+tf+'; refusing incomplete history');
+      endTime=nextEnd;
+    }
+    return normalizeAndValidate(rows,'Binance USD-M');
   }
-  return normalized;
+  try{
+    const candles=await fetchBybit();
+    return candles;
+  }catch(bybitError){
+    console.warn('Bybit replay source unavailable for '+symbol+' '+tf+'; trying Binance USD-M fallback:',bybitError?.message||bybitError);
+    try{return await fetchBinance();}
+    catch(binanceError){
+      throw new Error('Both historical providers failed. Bybit: '+(bybitError?.message||bybitError)+'; Binance USD-M: '+(binanceError?.message||binanceError));
+    }
+  }
 }
 
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
-console.log('Historical candle source: Bybit v5 linear perpetual candles (same exchange as live market data).');
+console.log('Historical candle source: Bybit v5 linear perpetual candles; Binance USD-M futures is used only if Bybit is blocked or unavailable.');
 console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',bars,'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
