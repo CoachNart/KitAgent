@@ -4,6 +4,12 @@ import {gradeSetup} from './grading.js';
 
 export const CRT_MODEL='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST';
 
+export function crtStopBuffer(c,mssIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(mssIndex)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  return a*.25;
+}
+
 const dirs=new Set(['BULLISH','BEARISH']);
 const TIMEFRAME_MS={'1H':3600000,'2H':7200000,'4H':14400000,'1D':86400000};
 const MIN_SWEEP_PENETRATION_ATR=.15;
@@ -213,11 +219,10 @@ export function evaluateCRT({candles=[],layers=[],price}){
   // close inside the retest candle. The retest proves that this level is being
   // defended; the level itself is the price that defines the trade zone.
   const entry=mss.level;
-  const eventHistory=candles.slice(0,Math.min(candles.length,mss.index+1));
-  const a=atr(eventHistory,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const stopBuffer=crtStopBuffer(candles,mss.index,entry);
   const stop=direction==='BULLISH'
-    ?sweep.extreme-a*.25
-    :sweep.extreme+a*.25;
+    ?sweep.extreme-stopBuffer
+    :sweep.extreme+stopBuffer;
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){
     failures.push('CRT sweep invalidation produces non-positive risk.');
