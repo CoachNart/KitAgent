@@ -24,3 +24,18 @@ export function executionTrade(trade,orderType,nextCandle){
   const nextOpen=Number(nextCandle?.open);
   return {...trade,marketEntry:Number.isFinite(nextOpen)&&nextOpen>0?nextOpen:Number.NaN};
 }
+
+export function replayExitOnCandle(direction,stop,target,candle){
+  const open=Number(candle?.open),high=Number(candle?.high),low=Number(candle?.low);
+  if(![open,high,low,stop,target].every(Number.isFinite))return {result:'unresolved'};
+  const stopGap=direction==='BULLISH'?open<=stop:direction==='BEARISH'?open>=stop:false;
+  const targetGap=direction==='BULLISH'?open>=target:direction==='BEARISH'?open<=target:false;
+  if(stopGap)return {result:'loss',exit:open,reason:'Stop gapped; filled at candle open'};
+  if(targetGap)return {result:'win',exit:target,reason:'Target gapped; filled at target'};
+  const stopHit=direction==='BULLISH'?low<=stop:direction==='BEARISH'?high>=stop:false;
+  const targetHit=direction==='BULLISH'?high>=target:direction==='BEARISH'?low<=target:false;
+  if(stopHit&&targetHit)return {result:'ambiguous'};
+  if(stopHit)return {result:'loss',exit:stop};
+  if(targetHit)return {result:'win',exit:target};
+  return null;
+}
