@@ -1,4 +1,4 @@
-import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
+import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,confirmationLevelBrokenAfterSignal,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,SMC_MODEL} from '../server/market-engine/smc.js';
@@ -76,6 +76,9 @@ const aFinalLevel=buildMSNRLevels(aCcThenFlipped)
   .find(x=>x.originIndex===0&&x.baseType==='A');
 assert('MSNR confirmation keeps its event-time level type after a later role reversal',()=>aHistoricalConfirmation?.levelState?.type==='A'&&aFinalLevel?.type==='RBS');
 assert('MSNR confirmation keeps freshness and flip count from signal time',()=>aHistoricalConfirmation?.levelState?.fresh===true&&aHistoricalConfirmation.levelState.flipCount===0&&aHistoricalConfirmation.levelState.side==='RESISTANCE');
+assert('MSNR rejects a confirmation after its level is later body-broken',()=>!!aHistoricalConfirmation&&confirmationLevelBrokenAfterSignal(aCcThenFlipped,aHistoricalConfirmation));
+const aCcReturnedBelow=[...aCcThenFlipped,bar(4,99,100,96,97)];
+assert('MSNR cannot resurrect a broken level after price returns to the original side',()=>!!aHistoricalConfirmation&&confirmationLevelBrokenAfterSignal(aCcReturnedBelow,aHistoricalConfirmation));
 
 
 // RBS: body closes above resistance, then ONLY the next candle can confirm.
