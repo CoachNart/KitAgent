@@ -130,7 +130,8 @@ export function evaluatePullback({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
   const entry=confirm.level;
-  const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const eventHistory=candles.slice(0,Math.min(candles.length,confirm.index+1));
+  const a=atr(eventHistory,14)||Math.max(Math.abs(entry)*.001,1e-9);
   // Invalidation belongs beyond the actual retracement extreme. The impulse
   // origin remains a thesis-level invalidation check, not the executable stop.
   const pullbackCandles=candles.slice(touch.index,confirm.index+1);
