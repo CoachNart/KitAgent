@@ -81,7 +81,7 @@ jobs:
         run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --bars=240 --history-candles=3000 --round-trip-cost-bps=10 2>&1 | tee bybit-replay-report.txt
       - name: Focused 1,000-bar replay for core strategies
         continue-on-error: true
-        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --history-candles=3000 --round-trip-cost-bps=10 2>&1 | tee bybit-focused-replay-report.txt
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --bars-by-timeframe=1H:1000,2H:500,4H:250 --history-candles=3000 --round-trip-cost-bps=10 2>&1 | tee bybit-focused-replay-report.txt
       - name: Upload historical replay report
         if: always()
         uses: actions/upload-artifact@v4
