@@ -125,7 +125,7 @@ jobs:
                   rows.append((label, None))
                   continue
               content = path.read_text(errors="replace")
-          matches = re.findall(r"SUMMARY\s+(\{.*?\n\})", content, re.S)
+              matches = re.findall(r"SUMMARY\s+(\{.*?\n\})", content, re.S)
               summary = None
               for match in matches:
                   try:
