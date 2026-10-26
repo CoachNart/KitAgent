@@ -104,6 +104,55 @@ jobs:
             bybit-holdout-replay-report.txt
           if-no-files-found: warn
           retention-days: 14
+      - name: Publish historical replay expectancy summary
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, re
+
+          reports = [
+              ("Recent", "bybit-replay-report.txt"),
+              ("Focused", "bybit-focused-replay-report.txt"),
+              ("July research", "bybit-july-replay-report.txt"),
+              ("August validation", "bybit-august-replay-report.txt"),
+              ("Sep–Oct holdout", "bybit-holdout-replay-report.txt"),
+          ]
+          rows = []
+          for label, filename in reports:
+              path = Path(filename)
+              if not path.exists():
+                  rows.append((label, None))
+                  continue
+              content = path.read_text(errors="replace")
+              matches = re.findall(r"SUMMARY\\s+(\\{.*?\\n\\})", content, re.S)
+              summary = None
+              for match in matches:
+                  try:
+                      summary = json.loads(match)
+                  except json.JSONDecodeError:
+                      pass
+              rows.append((label, summary))
+
+          lines = ["## Historical Bybit replay — research status", "",
+                   "These replay jobs are diagnostic and intentionally do not make the build green/red based on strategy expectancy. A successful build is not evidence of a profitable strategy.", "",
+                   "| Window | Evaluated | Candidates | Resolved | Wins | Losses | Win rate | Average net R | Status |",
+                   "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
+          any_negative = False
+          for label, s in rows:
+              if not s:
+                  lines.append(f"| {label} | — | — | — | — | — | — | — | Report unavailable |")
+                  continue
+              net = s.get("averageNetR")
+              negative = isinstance(net, (int, float)) and net <= 0
+              any_negative |= negative
+              status = "NEGATIVE/NO POSITIVE EDGE" if negative else "Positive in this sample only"
+              lines.append(f"| {label} | {s.get('evaluated','—')} | {s.get('candidates','—')} | {s.get('resolved','—')} | {s.get('wins','—')} | {s.get('losses','—')} | {s.get('winRatePct','—')}% | {net} | {status} |")
+          lines += ["", "**Interpretation:** negative net expectancy means this replay does not support calling the setup engine ready. Results exclude funding, exact bid/ask spread, partial fills, fee-tier variation, and portfolio-level overlap. Do not tune against the holdout window and reuse it as independent evidence.", ""]
+          with open("$GITHUB_STEP_SUMMARY", "a") as f:
+              f.write("\\n".join(lines) + "\\n")
+          print("Historical replay summary published; expectancy status:", "negative or unavailable" if any_negative else "review report rows")
+          PY
       - name: Market structure bias guard
         if: always()
         run: npm run test:market-structure-guard
