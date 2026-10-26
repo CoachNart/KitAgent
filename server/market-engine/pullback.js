@@ -4,6 +4,12 @@ import {gradeSetup} from './grading.js';
 
 export const PULLBACK_MODEL='HTF_TREND_IMPULSE_RETRACE_CONTINUATION';
 
+export function pullbackStopBuffer(c,confirmIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(confirmIndex)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  return Math.max(a*.5,Math.abs(entry)*.0005);
+}
+
 const validDir=d=>d==='BULLISH'||d==='BEARISH';
 const last=a=>a?.at(-1)||null;
 
@@ -139,7 +145,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   const pullbackHigh=Math.max(...pullbackCandles.map(x=>x.high));
   // Buffer the stop beyond the full retracement structure, not just the
   // touch candle. A quarter ATR is too vulnerable to routine execution noise.
-  const stopBuffer=Math.max(a*.5,Math.abs(entry)*.0005);
+  const stopBuffer=pullbackStopBuffer(candles,confirm.index,entry);
   const stop=direction==='BULLISH'
     ?pullbackLow-stopBuffer
     :pullbackHigh+stopBuffer;
