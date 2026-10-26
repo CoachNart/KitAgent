@@ -1,4 +1,7 @@
+import {readFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
 import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
+import {parseBybitCsv} from './replay-bybit-csv.mjs';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {STRATEGIES} from '../server/market-engine/strategies.js';
 
@@ -69,6 +72,13 @@ function fingerprint(t,direction){
 
 async function fetchReplayCandles(symbol,tf){
   const requestedLimit=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
+  if(args['data-dir']){
+    const file=join(resolve(String(args['data-dir'])),symbol+'_'+tf+'.csv');
+    let source;
+    try{source=await readFile(file,'utf8');}
+    catch(error){throw new Error('Unable to read Bybit CSV '+file+': '+(error?.message||error));}
+    return parseBybitCsv(source).slice(-requestedLimit);
+  }
   const intervals={'1H':'60','2H':'120','4H':'240','1D':'D'};
   const interval=intervals[tf];
   if(!interval)throw new Error('Unsupported Bybit replay timeframe: '+tf);
@@ -112,7 +122,8 @@ async function fetchReplayCandles(symbol,tf){
 }
 
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
-console.log('Historical candle source: Bybit v5 linear perpetual candles only. No other exchange is used as a fallback.');
+console.log(args['data-dir']?'Historical candle source: user-supplied Bybit CSV files only; no network exchange fallback.':'Historical candle source: Bybit v5 linear perpetual candles only. No other exchange is used as a fallback.');
+if(args['data-dir'])console.log('CSV input directory:',resolve(String(args['data-dir'])),'| required files: SYMBOL_TIMEFRAME.csv (for example BTCUSDT_1H.csv).');
 console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',bars,'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
