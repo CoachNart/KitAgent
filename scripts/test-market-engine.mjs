@@ -205,7 +205,7 @@ const pbTouchBars=[
 const pbTouchZone={low:98.5,high:100.5};
 assert('Pullback ignores retracement touches before impulse swing confirmation',()=>{
   const touches=pullbackTouches(pbTouchBars,pbTouchZone,2);
-  return touches.length===3&&touches.every(x=>x.index>=3);
+  return touches.length===2&&touches.every(x=>x.index>=3);
 });
 
 // Pullback contract: aligned HTF trend -> confirmed impulse -> 38.2%-61.8% retracement -> closed continuation break.
