@@ -160,9 +160,11 @@ export function structure(c,asOf=c.length-1){
   let bos=null,choch=null;
   if(last?.type==='BOS')bos=last;
   if(last?.type==='CHoCH')choch=last;
-  const latestDirectionalBreak=choch||bos;
-  const mss=latestDirectionalBreak&&latestDirectionalBreak.age<=8
-    ?{...latestDirectionalBreak,type:'MSS'}:null;
+  // MSS is not synonymous with a recent BOS or CHoCH. It requires a
+  // lower-timeframe shift in context (commonly after a liquidity sweep and
+  // directional displacement), which this swing-only module cannot prove.
+  // Strategy modules that validate that sequence expose their own MSS evidence.
+  const mss=null;
 
   const a=atr(c.slice(0,asOf+1),14)||Math.max(price*.001,1e-9);
   const avg=rangeAverage(c.slice(0,asOf+1),20)||a;
