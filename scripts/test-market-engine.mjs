@@ -362,6 +362,7 @@ assert('Protected structure is sourced from external swings',()=>(
 ) && (
   !structured.protectedHigh||structured.external.highs.some(x=>x.index===structured.protectedHigh.index)
 ));
+assert('Swing-only structure module does not mislabel a recent BOS/CHoCH as MSS',()=>structured.mss===null);
 
 // Confidence audit: score structural quality only after the strategy contract passes.
 const strongConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'HTF_MAJOR_SWING',quality:1,rr:2.5},confirmation:{quality:1},freshness:{quality:1}});
