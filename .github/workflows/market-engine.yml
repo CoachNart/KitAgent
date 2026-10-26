@@ -51,10 +51,11 @@ jobs:
                   time_col = next((c for c in ("date", "timestamp", "time", "starttime") if c in df.columns), None)
                   if time_col is None:
                       raise RuntimeError(f"{path}: no timestamp column; columns={list(df.columns)}")
-                  stamp = pd.to_datetime(df[time_col], utc=True, errors="coerce")
-                  if stamp.isna().all() and pd.api.types.is_numeric_dtype(df[time_col]):
+                  if pd.api.types.is_numeric_dtype(df[time_col]):
                       unit = "ms" if df[time_col].abs().max() > 10**11 else "s"
                       stamp = pd.to_datetime(df[time_col], unit=unit, utc=True, errors="coerce")
+                  else:
+                      stamp = pd.to_datetime(df[time_col], utc=True, errors="coerce")
                   df["timestamp"] = (stamp.astype("int64") // 1_000_000).where(stamp.notna())
                   required = ["open", "high", "low", "close"]
                   missing = [c for c in required if c not in df.columns]
