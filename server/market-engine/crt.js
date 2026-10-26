@@ -161,7 +161,8 @@ function retest(c,mss,direction){
 
 function target(range,direction,c,entry,mssIndex,layers=[]){
   const primary=direction==='BULLISH'?range.high:range.low;
-  const a=atr(c,14)||0;
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(mssIndex)+1)));
+  const a=atr(history,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
   if((direction==='BULLISH'&&primary>entry)||(direction==='BEARISH'&&primary<entry)){
     if(Math.abs(primary-entry)>=minDistance)
