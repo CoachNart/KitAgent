@@ -336,6 +336,22 @@ const confirmedBreaks=structuralBreakEvents(breakFixture,breakHighs,[],7);
 assert('A superseded lower swing cannot create a fresh BOS when price closes below the active higher swing',()=>staleBreaks.length===0);
 assert('A BOS is recorded when price closes through the latest confirmed active swing',()=>confirmedBreaks.length===1&&confirmedBreaks[0].direction==='BULLISH'&&confirmedBreaks[0].level===10&&confirmedBreaks[0].index===7);
 assert('Structural break events retain the swing confirmation index for auditability',()=>confirmedBreaks[0]?.confirmationIndex===4);
+const directionalBreakCandles=Array.from({length:8},(_,i)=>bar(i,6,11,3,[6,7,7,6,7,9,9,11][i]));
+const directionalHighs=[
+  {price:8,index:0,confirmationIndex:1,time:directionalBreakCandles[0].time},
+  {price:9,index:2,confirmationIndex:3,time:directionalBreakCandles[2].time},
+  {price:10,index:4,confirmationIndex:5,time:directionalBreakCandles[4].time}
+];
+const risingLows=[
+  {price:4,index:0,confirmationIndex:1,time:directionalBreakCandles[0].time},
+  {price:5,index:2,confirmationIndex:3,time:directionalBreakCandles[2].time}
+];
+const chronologicalBos=structuralBreakEvents(directionalBreakCandles,directionalHighs,risingLows,7);
+assert('A break in an already established HH/HL sequence is classified as BOS at event time',()=>chronologicalBos.at(-1)?.type==='BOS');
+const countertrendCandles=directionalBreakCandles.map((x,i)=>i===7?{...x,close:4,low:2}:x);
+const chronologicalChoch=structuralBreakEvents(countertrendCandles,directionalHighs,risingLows,7);
+assert('A break against the established HH/HL sequence is classified as CHoCH at event time',()=>chronologicalChoch.at(-1)?.type==='CHoCH');
+
 
 // Structure model validation: protected swings must be external structure, not
 // the latest internal wick.
