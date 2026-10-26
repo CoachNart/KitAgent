@@ -4,7 +4,7 @@ import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market
 import {parseBybitCsv} from './replay-bybit-csv.mjs';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {STRATEGIES} from '../server/market-engine/strategies.js';
-import {executionEntry,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
+import {executionEntry,executionTrade,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
 
 const DURATIONS={'1H':60*60_000,'2H':2*60*60_000,'4H':4*60*60_000,'1D':24*60*60_000};
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
@@ -238,18 +238,19 @@ for(const symbol of symbols){
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
-        const outcome=simulate(trade,result.direction,trade.orderType,future,tf);
+        const executableTrade=executionTrade(trade,trade.orderType,future[0]);
+        const outcome=future.length?simulate(executableTrade,result.direction,trade.orderType,future,tf):{result:'unresolved'};
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
         if(outcome.result==='missed'){stat.missed++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
         if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
-        const filledEntry=executionEntry(trade,trade.orderType);
-        const gross=rMultiple(trade,result.direction,outcome.exit,trade.orderType);
-        const riskPct=Math.abs(filledEntry-Number(trade.stop))/Math.abs(filledEntry);
+        const filledEntry=executionEntry(executableTrade,trade.orderType);
+        const gross=rMultiple(executableTrade,result.direction,outcome.exit,trade.orderType);
+        const riskPct=Math.abs(filledEntry-Number(executableTrade.stop))/Math.abs(filledEntry);
         const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
         const net=gross-costR;
         if(outcome.result==='win')stat.wins++;else stat.losses++;
         stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
-        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:filledEntry,plannedEntry:trade.entry,marketEntry:trade.marketEntry??'',stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
+        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:filledEntry,plannedEntry:trade.entry,signalClose:trade.marketEntry??'',marketEntry:filledEntry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
       }
     }
   }
