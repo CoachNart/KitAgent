@@ -16,34 +16,40 @@ export const STRATEGIES={
 
 const DIRECTIONS=new Set(['BULLISH','BEARISH']);
 
-/**
- * Prefer established HH/HL or LH/LL structure over a direction inferred from
- * one recent break while the swing sequence is still neutral/transitional.
- * A structure invalidated by its own protected swing remains neutral.
- */
-function confirmedLayerDirection(structure){
-  if(!structure)return 'NEUTRAL';
-  if(Object.prototype.hasOwnProperty.call(structure,'rawDirection')){
-    if(!DIRECTIONS.has(structure.rawDirection)||structure.direction==='NEUTRAL')return 'NEUTRAL';
-    return structure.rawDirection;
+function structureState(layer){
+  const s=layer?.structure;
+  if(!s)return {tf:String(layer?.tf||'UNKNOWN'),direction:'NEUTRAL',transition:null};
+  // The structure engine can infer a temporary direction from a recent break
+  // while its HH/HL or LH/LL sequence is still neutral. That is not established
+  // trend bias, but it is important contrary evidence and must not be ignored.
+  if(Object.prototype.hasOwnProperty.call(s,'rawDirection')){
+    if(DIRECTIONS.has(s.rawDirection)&&s.direction!=='NEUTRAL'){
+      return {tf:String(layer?.tf||'UNKNOWN'),direction:s.rawDirection,transition:null};
+    }
+    return {
+      tf:String(layer?.tf||'UNKNOWN'),
+      direction:'NEUTRAL',
+      transition:s.rawDirection==='NEUTRAL'&&DIRECTIONS.has(s.direction)?s.direction:null
+    };
   }
-  return DIRECTIONS.has(structure.direction)?structure.direction:'NEUTRAL';
+  return {
+    tf:String(layer?.tf||'UNKNOWN'),
+    direction:DIRECTIONS.has(s.direction)?s.direction:'NEUTRAL',
+    transition:null
+  };
 }
 
 /**
  * Final market-structure veto shared by every strategy.
- *
- * A strategy may identify a pattern, but it cannot override the currently
- * confirmed directional structure on any layer. Neutral layers are not votes;
- * conflicting directional layers, or a trade against any directional layer,
- * invalidate the candidate. If every layer is neutral, there is no defensible
- * structure bias and no trade is published.
+ * Confirmed structure must agree across directional layers and with the
+ * candidate. A temporary break direction is not promoted to trend bias, but
+ * an opposing transition blocks entries until structure resolves.
  */
 export function applyMarketStructureGuard(result,layers=[]){
   if(!result||!result.trade||!DIRECTIONS.has(result.direction))return result;
-  const directional=(Array.isArray(layers)?layers:[])
-    .map(layer=>({tf:String(layer?.tf||'UNKNOWN'),direction:confirmedLayerDirection(layer?.structure)}))
-    .filter(x=>DIRECTIONS.has(x.direction));
+  const states=(Array.isArray(layers)?layers:[]).map(structureState);
+  const directional=states.filter(x=>DIRECTIONS.has(x.direction));
+  const transitions=states.filter(x=>DIRECTIONS.has(x.transition));
 
   if(!directional.length){
     return {
@@ -51,7 +57,7 @@ export function applyMarketStructureGuard(result,layers=[]){
       direction:'NEUTRAL',
       trade:null,
       failures:[...(result.failures||[]),'Market-structure guard: no timeframe has a confirmed directional swing sequence; setup blocked.'],
-      marketStructureGuard:{allowed:false,reason:'NO_DIRECTIONAL_STRUCTURE',directionalLayers:[]}
+      marketStructureGuard:{allowed:false,reason:'NO_DIRECTIONAL_STRUCTURE',directionalLayers:[],transitionLayers:transitions}
     };
   }
 
@@ -63,7 +69,7 @@ export function applyMarketStructureGuard(result,layers=[]){
       direction:'NEUTRAL',
       trade:null,
       failures:[...(result.failures||[]),'Market-structure guard: timeframe structure conflicts ('+directional.map(x=>x.tf+': '+x.direction).join(', ')+'); setup blocked.'],
-      marketStructureGuard:{allowed:false,reason:'TIMEFRAME_STRUCTURE_CONFLICT',directionalLayers:directional}
+      marketStructureGuard:{allowed:false,reason:'TIMEFRAME_STRUCTURE_CONFLICT',directionalLayers:directional,transitionLayers:transitions}
     };
   }
 
@@ -74,13 +80,24 @@ export function applyMarketStructureGuard(result,layers=[]){
       direction:'NEUTRAL',
       trade:null,
       failures:[...(result.failures||[]),'Market-structure guard: '+result.direction+' setup conflicts with confirmed '+bias+' structure ('+against.map(x=>x.tf).join(', ')+'); counter-structure setup blocked.'],
-      marketStructureGuard:{allowed:false,reason:'TRADE_AGAINST_STRUCTURE',bias,proposedDirection:result.direction,directionalLayers:directional}
+      marketStructureGuard:{allowed:false,reason:'TRADE_AGAINST_STRUCTURE',bias,proposedDirection:result.direction,directionalLayers:directional,transitionLayers:transitions}
+    };
+  }
+
+  const opposingTransition=transitions.filter(x=>x.transition!==result.direction);
+  if(opposingTransition.length){
+    return {
+      ...result,
+      direction:'NEUTRAL',
+      trade:null,
+      failures:[...(result.failures||[]),'Market-structure guard: a recent break points against the setup while swing structure is transitional ('+opposingTransition.map(x=>x.tf+': '+x.transition).join(', ')+'); wait for structure to resolve.'],
+      marketStructureGuard:{allowed:false,reason:'TRANSITIONAL_STRUCTURE_CONFLICT',bias,proposedDirection:result.direction,directionalLayers:directional,transitionLayers:transitions}
     };
   }
 
   return {
     ...result,
-    marketStructureGuard:{allowed:true,bias,directionalLayers:directional}
+    marketStructureGuard:{allowed:true,bias,directionalLayers:directional,transitionLayers:transitions}
   };
 }
 
