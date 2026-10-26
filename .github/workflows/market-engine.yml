@@ -79,12 +79,17 @@ jobs:
       - name: Historical replay on recent archived Bybit candles (BTC and ETH)
         continue-on-error: true
         run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --bars=240 --history-candles=3000 --round-trip-cost-bps=10 2>&1 | tee bybit-replay-report.txt
+      - name: Focused 1,000-bar replay for core strategies
+        continue-on-error: true
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --history-candles=3000 --round-trip-cost-bps=10 2>&1 | tee bybit-focused-replay-report.txt
       - name: Upload historical replay report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bybit-historical-replay-report
-          path: bybit-replay-report.txt
+          path: |
+            bybit-replay-report.txt
+            bybit-focused-replay-report.txt
           if-no-files-found: warn
           retention-days: 14
       - name: Market structure bias guard
