@@ -67,6 +67,17 @@ const aEvents=buildMSNRLevels(aCc).flatMap(x=>x.confirmations);
 assert('A CC requires the exact body confirmation sequence',aEvents.some(x=>x.type==='A_CC'&&x.direction==='BEARISH'&&x.signalIndex===2&&x.level===100));
 assert('A CC signal body remains below level',()=>{const e=aEvents.find(x=>x.type==='A_CC');return e&&e.signalCandle.open<e.level&&e.signalCandle.close<e.level});
 
+// Historical MSNR confirmations must retain the level state at signal time,
+// even if the same level is subsequently broken or role-reversed.
+const aCcThenFlipped=[...aCc,bar(3,101,103,100.5,102)];
+const aHistoricalConfirmation=recentMSNRConfirmations(aCcThenFlipped,5)
+  .find(x=>x.type==='A_CC'&&x.signalIndex===2);
+const aFinalLevel=buildMSNRLevels(aCcThenFlipped)
+  .find(x=>x.originIndex===0&&x.baseType==='A');
+assert('MSNR confirmation keeps its event-time level type after a later role reversal',()=>aHistoricalConfirmation?.levelState?.type==='A'&&aFinalLevel?.type==='RBS');
+assert('MSNR confirmation keeps freshness and flip count from signal time',()=>aHistoricalConfirmation?.levelState?.fresh===true&&aHistoricalConfirmation.levelState.flipCount===0&&aHistoricalConfirmation.levelState.side==='RESISTANCE');
+
+
 // RBS: body closes above resistance, then ONLY the next candle can confirm.
 const rbs=[
   bar(0,99,101,98,100),
