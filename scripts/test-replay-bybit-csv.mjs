@@ -1,4 +1,5 @@
 import {parseBybitCsv} from './replay-bybit-csv.mjs';
+import {executionEntry,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
 
 let passed=0;
 function assert(name,fn){
@@ -29,5 +30,23 @@ assert('Rejects missing required OHLC columns',()=>{
 assert('Rejects CSV with fewer than 80 valid candles',()=>{
   try{parseBybitCsv('timestamp,open,high,low,close\n'+Array.from({length:10},(_,i)=>[Date.UTC(2026,0,1)+i*3600000,100,102,99,101].join(',')).join('\n'));return false;}catch(e){return /minimum 80/.test(e.message);}
 });
-console.log('Bybit CSV loader tests:',passed,'passed');
-if(passed!==5)process.exitCode=1;
+assert('Market-order replay uses executable marketEntry instead of planned structure level',()=>{
+  const trade={entry:100,marketEntry:102,stop:99,target:108};
+  return executionEntry(trade,'MARKET')===102;
+});
+assert('Limit-order replay preserves the planned entry',()=>{
+  const trade={entry:100,marketEntry:102,stop:99,target:108};
+  return executionEntry(trade,'LIMIT')===100;
+});
+assert('Replay validates stop and target relative to the actual market fill',()=>{
+  return validTradeGeometry(102,99,108,'BULLISH')&&!validTradeGeometry(102,103,108,'BULLISH');
+});
+assert('Replay R multiple uses actual market fill and actual risk distance',()=>{
+  const trade={entry:100,marketEntry:102,stop:99};
+  return Math.abs(rMultiple(trade,'BULLISH',108,'MARKET')-6)<1e-9;
+});
+assert('Replay rejects a bearish market fill whose target/stop geometry is inverted',()=>{
+  return !validTradeGeometry(98,97,101,'BEARISH');
+});
+console.log('Bybit CSV and replay execution tests:',passed,'passed');
+if(passed!==10)process.exitCode=1;
