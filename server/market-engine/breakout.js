@@ -20,9 +20,12 @@ function alignedDirection(layers=[]){
   return bias;
 }
 
-function levelCluster(c,direction){
+function levelCluster(c,direction,asOfIndex= c.length){
   const s=confirmedSwings(c,2);
-  const points=direction==='BULLISH'?s.highs:s.lows;
+  // A level is only available after its swing-confirmation bars have closed.
+  // When evaluating a historical breakout, exclude every swing confirmed later.
+  const points=(direction==='BULLISH'?s.highs:s.lows)
+    .filter(x=>x.confirmationIndex<asOfIndex);
   if(points.length<2)return null;
   const a=atr(c,14);
   if(!a)return null;
@@ -134,24 +137,34 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const breakoutCandidates=breakout(candles,level.level,direction);
   if(!breakoutCandidates.length){
     failures.push('No decisive closed breakout beyond the defined level.');
-    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level}]};
+    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...selectedLevel}]};
   }
 
   let selected=null;
-  for(const br of breakoutCandidates){
+  for(const candidate of breakoutCandidates){
+    // Rebuild the level using information available before this breakout candle.
+    // The full-series cluster is discovery only; it must not define a past event.
+    const historicalLevel=levelCluster(candles,direction,candidate.index);
+    if(!historicalLevel)continue;
+    const breaksHistoricalLevel=direction==='BULLISH'
+      ?candidate.candle.close>historicalLevel.level
+      :candidate.candle.close<historicalLevel.level;
+    if(!breaksHistoricalLevel)continue;
+    const br={...candidate,level:historicalLevel.level};
     const rt=retest(candles,br,direction);
     if(!rt||rt.failed)continue;
     const confirm=continuation(candles,rt,direction);
     if(!confirm)continue;
-    selected={br,rt,confirm};
+    selected={br,rt,confirm,level:historicalLevel};
     break;
   }
   if(!selected){
     failures.push('No recent breakout produced a complete retest-and-continuation sequence.');
-    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...level},{type:'BREAKOUT_CANDIDATES',count:breakoutCandidates.length}]};
+    return {direction,failures,evidence:[{type:'BREAKOUT_LEVEL',...selectedLevel},{type:'BREAKOUT_CANDIDATES',count:breakoutCandidates.length}]};
   }
   const {br,rt,confirm}=selected;
-  const entry=level.level;
+  const selectedLevel=selected.level;
+  const entry=selectedLevel.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
   // Use the full retest-to-continuation structure as invalidation. A single
   // retest candle can be unusually small and is not a robust noise boundary.
@@ -167,10 +180,10 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   if(!(risk>0)){failures.push('Invalid structural risk.');return {direction,failures,evidence:[]};}
 
   const oppositePoints=direction==='BULLISH'?confirmedSwings(candles,2).lows:confirmedSwings(candles,2).highs;
-  const opposite=oppositePoints.filter(x=>x.index<level.touches[0].index);
+  const opposite=oppositePoints.filter(x=>x.index<selectedLevel.touches[0].index);
   const rangeBoundary=direction==='BULLISH'
-    ?Math.min(...opposite.map(x=>x.price),level.level-a)
-    :Math.max(...opposite.map(x=>x.price),level.level+a);
+    ?Math.min(...opposite.map(x=>x.price),selectedLevel.level-a)
+    :Math.max(...opposite.map(x=>x.price),selectedLevel.level+a);
   const rangeHeight=Math.abs(level.level-rangeBoundary);
   if(!(rangeHeight>0)){failures.push('No measurable pre-break range.');return {direction,failures,evidence:[]};}
 
@@ -199,7 +212,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
       entry,
       marketEntry:Number(price),
       stop,
-      entryZone:{low:level.level-rt.zone,high:level.level+rt.zone,source:'BREAKOUT_RETEST_LEVEL'},
+      entryZone:{low:selectedLevel.level-rt.zone,high:selectedLevel.level+rt.zone,source:'BREAKOUT_RETEST_LEVEL'},
       invalidationPrice,
       target:tgt.price,
       risk,
@@ -221,6 +234,6 @@ export function evaluateBreakout({candles=[],layers=[],price}){
       {type:'CONTINUATION',...confirm},
       {type:'TARGET',...tgt}
     ],
-    breakoutRetest:{model:BREAKOUT_MODEL,direction,level,breakout:br,retest:rt,confirmation:confirm,target:tgt}
+    breakoutRetest:{model:BREAKOUT_MODEL,direction,level:selectedLevel,breakout:br,retest:rt,confirmation:confirm,target:tgt}
   };
 }
