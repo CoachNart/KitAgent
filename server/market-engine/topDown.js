@@ -149,13 +149,19 @@ function structuralStop(c,retestPoint,direction){
   return highs.at(-1)||null;
 }
 
+export function topDownStopBuffer(c,retestIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(retestIndex)+1)));
+  const a=atr(history,14)||0;
+  return Math.max(a*.12,Math.abs(entry)*.00025);
+}
+
 function trade({c,bos,retestPoint,direction,price,targetSwing}){
   const a=atr(c.slice(0,retestPoint.index+1),14);
   if(!a)return null;
   const entry=bos.level;
   const stopSwing=structuralStop(c,retestPoint,direction);
   if(!stopSwing)return null;
-  const buffer=Math.max(a*.12,Math.abs(entry)*.00025);
+  const buffer=topDownStopBuffer(c,retestPoint.index,entry);
   const stop=direction==='BULLISH'?stopSwing.price-buffer:stopSwing.price+buffer;
   const risk=Math.abs(entry-stop);
   const reward=Math.abs(targetSwing.price-entry);
