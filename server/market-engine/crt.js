@@ -5,6 +5,7 @@ import {gradeSetup} from './grading.js';
 export const CRT_MODEL='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST';
 
 const dirs=new Set(['BULLISH','BEARISH']);
+const TIMEFRAME_MS={'1H':3600000,'2H':7200000,'4H':14400000,'1D':86400000};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_RECLAIM_DEPTH_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
@@ -87,7 +88,11 @@ function htfSweep(range,direction,history){
 }
 
 function executionSweep(c,range,direction){
-  const start=range.following.time;
+  const htfDuration=TIMEFRAME_MS[range.tf];
+  if(!Number.isFinite(htfDuration))return null;
+  // The HTF sweep is not confirmed until its candle closes. Do not accept an
+  // execution-timeframe sweep from inside that same still-forming HTF candle.
+  const start=range.following.time+htfDuration;
   const eligible=c.filter(x=>x.time>=start);
   // Select the most recent sweep that is itself meaningful. A wick merely one
   // tick beyond the CRT boundary is not enough; it must show measurable
