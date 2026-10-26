@@ -20,6 +20,14 @@ if(!strategies.length)throw new Error('No valid strategies selected. Available: 
 const stats=new Map();
 const failures=new Map();
 const tradeAudit=[];
+// Counterfactual target study: same entry and stop, different take-profit distance.
+const targetRMultiples=[1,1.5,2,2.5,3];
+const targetSensitivity=new Map();
+function targetBucket(strategy,tf,orderType,direction,multiple){
+ const key=[strategy,tf,orderType,direction,multiple].join('|');
+ if(!targetSensitivity.has(key))targetSensitivity.set(key,{strategy,timeframe:tf,orderType,direction,targetR:multiple,resolved:0,wins:0,losses:0,ambiguous:0,missed:0,unresolved:0,netR:0});
+ return targetSensitivity.get(key);
+}
 const replayNow=Date.now();
 const decisionStart=args['decision-start']?Date.parse(String(args['decision-start'])):-Infinity;
 const decisionEnd=args['decision-end']?Date.parse(String(args['decision-end'])):replayNow;
@@ -238,6 +246,24 @@ for(const symbol of symbols){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
         const executableTrade=executionTrade(trade,trade.orderType,future[0]);
+        // Hold entry, stop, order activation and future candles constant; vary target only.
+        const sensitivityEntry=executionEntry(executableTrade,trade.orderType);
+        const sensitivityStop=Number(executableTrade.stop);
+        const sensitivityRisk=Math.abs(sensitivityEntry-sensitivityStop);
+        if(Number.isFinite(sensitivityEntry)&&Number.isFinite(sensitivityStop)&&sensitivityRisk>0){
+          for(const multiple of targetRMultiples){
+            const fixedTarget=result.direction==='BULLISH'?sensitivityEntry+sensitivityRisk*multiple:sensitivityEntry-sensitivityRisk*multiple;
+            const counterfactual={...executableTrade,target:fixedTarget};
+            const alt=future.length?simulate(counterfactual,result.direction,trade.orderType,future,tf):{result:'unresolved'};
+            const b=targetBucket(strategy,tf,trade.orderType,result.direction,multiple);
+            if(alt.result==='win'||alt.result==='loss'){
+              const gross=rMultiple(counterfactual,result.direction,alt.exit,trade.orderType);
+              const riskPct=sensitivityRisk/Math.abs(sensitivityEntry);
+              const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
+              b.resolved++;b[alt.result==='win'?'wins':'losses']++;b.netR+=gross-costR;
+            }else if(['ambiguous','missed','unresolved'].includes(alt.result))b[alt.result]++;
+          }
+        }
         const outcome=future.length?simulate(executableTrade,result.direction,trade.orderType,future,tf):{result:'unresolved'};
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
         if(outcome.result==='missed'){stat.missed++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
@@ -289,6 +315,8 @@ for(const t of tradeAudit){
 console.log('\\nEXECUTION DIAGNOSTICS (resolved trades; descriptive, not optimized)');
 console.table([...executionGroups.values()].map(g=>({strategy:g.strategy,timeframe:g.timeframe,orderType:g.orderType,direction:g.direction,resolved:g.resolved,winRatePct:+(100*g.wins/g.resolved).toFixed(2),avgGrossR:+(g.grossR/g.resolved).toFixed(3),avgObservedCostR:+(g.observedCostR/g.resolved).toFixed(3),avgNetRAtConfiguredCost:+((g.grossR-g.observedCostR)/g.resolved).toFixed(3),stopGapLosses:g.stopGapLosses,avgNetR_0bps:+(g.sensitivity[0]/g.resolved).toFixed(3),avgNetR_5bps:+(g.sensitivity[5]/g.resolved).toFixed(3),avgNetR_10bps:+(g.sensitivity[10]/g.resolved).toFixed(3),avgNetR_15bps:+(g.sensitivity[15]/g.resolved).toFixed(3),avgNetR_20bps:+(g.sensitivity[20]/g.resolved).toFixed(3)})));
 
+console.log('\nCOUNTERFACTUAL FIXED-R TARGET STUDY (same candidates, entries and stops; diagnostic only)');
+console.table([...targetSensitivity.values()].map(x=>({strategy:x.strategy,timeframe:x.timeframe,orderType:x.orderType,direction:x.direction,targetR:x.targetR,resolved:x.resolved,wins:x.wins,losses:x.losses,winRatePct:x.resolved?+(100*x.wins/x.resolved).toFixed(2):null,avgNetR:x.resolved?+(x.netR/x.resolved).toFixed(3):null,ambiguous:x.ambiguous,missed:x.missed,unresolved:x.unresolved})));
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
 const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
