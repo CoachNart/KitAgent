@@ -1,5 +1,5 @@
 import {parseBybitCsv} from './replay-bybit-csv.mjs';
-import {executionEntry,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
+import {executionEntry,executionTrade,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
 
 let passed=0;
 function assert(name,fn){
@@ -45,8 +45,20 @@ assert('Replay R multiple uses actual market fill and actual risk distance',()=>
   const trade={entry:100,marketEntry:102,stop:99};
   return Math.abs(rMultiple(trade,'BULLISH',108,'MARKET')-2)<1e-9;
 });
+assert('Replay market fills use the next candle open rather than the signal candle close',()=>{
+  const trade={entry:100,marketEntry:101,stop:99,target:108};
+  return executionTrade(trade,'MARKET',{open:103}).marketEntry===103;
+});
+assert('Replay does not silently fall back to planned entry when market fill is unavailable',()=>{
+  const trade=executionTrade({entry:100,marketEntry:101,stop:99,target:108},'MARKET',undefined);
+  return Number.isNaN(executionEntry(trade,'MARKET'));
+});
+assert('Limit orders keep planned entry regardless of next candle open',()=>{
+  const trade={entry:100,marketEntry:101,stop:99,target:108};
+  return executionTrade(trade,'LIMIT',{open:103})===trade&&executionEntry(trade,'LIMIT')===100;
+});
 assert('Replay rejects a bearish market fill whose target/stop geometry is inverted',()=>{
   return !validTradeGeometry(98,97,101,'BEARISH');
 });
 console.log('Bybit CSV and replay execution tests:',passed,'passed');
-if(passed!==10)process.exitCode=1;
+if(passed!==13)process.exitCode=1;
