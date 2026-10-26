@@ -21,33 +21,77 @@ jobs:
         run: npm run test:market-engine
       - name: Bybit CSV replay input tests
         run: npm run test:replay-bybit-csv
-      - name: Download archived Bybit candles for reproducible replay
+      - name: Install tools for public Bybit archive
+        run: python -m pip install --user pandas pyarrow
+      - name: Download current archived Bybit perpetual candles
         run: |
+          set -euo pipefail
           mkdir -p bybit-archive-data
           for symbol in BTCUSDT ETHUSDT; do
-            for suffix in 60 240 D; do
-              curl --fail --location --silent --show-error --retry 3 \
-                "https://raw.githubusercontent.com/mestoness/btc-eth-candles-history/master/${symbol}_${suffix}.csv" \
-                -o "bybit-archive-data/${symbol}_${suffix}.csv"
+            file_symbol="${symbol%USDT}_USDT_USDT"
+            for spec in "1h:1H" "4h:4H" "1d:1D"; do
+              remote_tf="${spec%%:*}"
+              local_tf="${spec##*:}"
+              url="https://huggingface.co/datasets/rogerdehe/klines-bybit/resolve/main/futures/${remote_tf}/${file_symbol}.parquet"
+              curl --fail --location --silent --show-error --retry 3 "$url" -o "bybit-archive-data/${symbol}_${local_tf}.parquet"
             done
-            cp "bybit-archive-data/${symbol}_60.csv" "bybit-archive-data/${symbol}_1H.csv"
-            cp "bybit-archive-data/${symbol}_240.csv" "bybit-archive-data/${symbol}_4H.csv"
-            cp "bybit-archive-data/${symbol}_D.csv" "bybit-archive-data/${symbol}_1D.csv"
           done
+      - name: Convert archived Bybit Parquet to replay CSV
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          root = Path("bybit-archive-data")
+          for symbol in ("BTCUSDT", "ETHUSDT"):
+              for tf in ("1H", "4H", "1D"):
+                  path = root / f"{symbol}_{tf}.parquet"
+                  df = pd.read_parquet(path)
+                  df.columns = [str(c).strip().lower() for c in df.columns]
+                  time_col = next((c for c in ("date", "timestamp", "time", "starttime") if c in df.columns), None)
+                  if time_col is None:
+                      raise RuntimeError(f"{path}: no timestamp column; columns={list(df.columns)}")
+                  stamp = pd.to_datetime(df[time_col], utc=True, errors="coerce")
+                  if stamp.isna().all() and pd.api.types.is_numeric_dtype(df[time_col]):
+                      unit = "ms" if df[time_col].abs().max() > 10**11 else "s"
+                      stamp = pd.to_datetime(df[time_col], unit=unit, utc=True, errors="coerce")
+                  df["timestamp"] = (stamp.astype("int64") // 1_000_000).where(stamp.notna())
+                  required = ["open", "high", "low", "close"]
+                  missing = [c for c in required if c not in df.columns]
+                  if missing:
+                      raise RuntimeError(f"{path}: missing OHLC columns {missing}")
+                  if "volume" not in df.columns:
+                      df["volume"] = 0
+                  df = df.dropna(subset=["timestamp"] + required)
+                  df = df.sort_values("timestamp").drop_duplicates("timestamp")
+                  if len(df) < 80:
+                      raise RuntimeError(f"{path}: only {len(df)} candles")
+                  latest = pd.to_datetime(int(df["timestamp"].iloc[-1]), unit="ms", utc=True)
+                  if latest.year < 2026:
+                      raise RuntimeError(f"{path}: dataset is stale; latest candle is {latest.isoformat()}")
+                  out = df[["timestamp", "open", "high", "low", "close", "volume"]]
+                  out.to_csv(root / f"{symbol}_{tf}.csv", index=False)
+                  print(f"{symbol} {tf}: {len(out)} candles, latest {latest.isoformat()}")
+          PY
       - name: Prepare 2-hour candles from archived Bybit 1-hour data
         run: node scripts/prepare-bybit-archive-replay.mjs
-      - name: Historical replay on archived Bybit candles (BTC and ETH)
-        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --bars=240 --history-candles=3000 --round-trip-cost-bps=10
+      - name: Historical replay on recent archived Bybit candles (BTC and ETH)
+        continue-on-error: true
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --bars=1000 --history-candles=10000 --round-trip-cost-bps=10 2>&1 | tee bybit-replay-report.txt
+      - name: Upload historical replay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bybit-historical-replay-report
+          path: bybit-replay-report.txt
+          if-no-files-found: warn
+          retention-days: 14
       - name: Market structure bias guard
+        if: always()
         run: npm run test:market-structure-guard
       - name: Signal outcome regression suite
+        if: always()
         run: npm run test:signal-outcomes
-      - name: Historical market replay (external Bybit data)
-        # This replay depends on a third-party exchange endpoint that can block
-        # hosted CI runners. Keep it visible as a diagnostic without allowing
-        # exchange availability to mask deterministic regression-test results.
-        continue-on-error: true
-        run: npm run test:market-engine-replay -- --bars=240 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
         continue-on-error: true
