@@ -82,6 +82,15 @@ jobs:
       - name: Focused 1,000-bar replay for core strategies
         continue-on-error: true
         run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --bars-by-timeframe=1H:1000,2H:500,4H:250 --history-candles=3000 --round-trip-cost-bps=10 2>&1 | tee bybit-focused-replay-report.txt
+      - name: Chronological research window (July 2026)
+        continue-on-error: true
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --bars-by-timeframe=1H:1000,2H:500,4H:250 --history-candles=3000 --round-trip-cost-bps=10 --decision-start=2026-07-01T00:00:00Z --decision-end=2026-08-01T00:00:00Z 2>&1 | tee bybit-july-replay-report.txt
+      - name: Chronological validation window (August 2026)
+        continue-on-error: true
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --bars-by-timeframe=1H:1000,2H:500,4H:250 --history-candles=3000 --round-trip-cost-bps=10 --decision-start=2026-08-01T00:00:00Z --decision-end=2026-09-01T00:00:00Z 2>&1 | tee bybit-august-replay-report.txt
+      - name: Chronological holdout window (September to mid-October 2026)
+        continue-on-error: true
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --timeframes=1H,2H,4H --strategies=TOP_DOWN,PULLBACK,MSNR --bars=1000 --bars-by-timeframe=1H:1000,2H:500,4H:250 --history-candles=3000 --round-trip-cost-bps=10 --decision-start=2026-09-01T00:00:00Z --decision-end=2026-10-15T00:00:00Z 2>&1 | tee bybit-holdout-replay-report.txt
       - name: Upload historical replay report
         if: always()
         uses: actions/upload-artifact@v4
@@ -90,6 +99,9 @@ jobs:
           path: |
             bybit-replay-report.txt
             bybit-focused-replay-report.txt
+            bybit-july-replay-report.txt
+            bybit-august-replay-report.txt
+            bybit-holdout-replay-report.txt
           if-no-files-found: warn
           retention-days: 14
       - name: Market structure bias guard
