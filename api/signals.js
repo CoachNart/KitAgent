@@ -106,7 +106,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(signal.status==='activation_ambiguous'&&signal.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE')return signal;
   const market=String(signal.market||'').toLowerCase();
   if(market!=='perpetual')return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
-  const candles=await marketKlines(signal); if(!candles.length)return {...signal,currentPrice:price};
+  const candles=await marketKlines(signal); if(!candles.length){const orderType=String(signal.orderType||'').toUpperCase();return {...signal,currentPrice:price,status:orderType==='MARKET'?'open':orderType==='LIMIT'?'limit_pending':signal.status||'watching'};}
   const livePrice=Number.isFinite(Number(price))?price:candles.at(-1)?.close??null;
   const dir=String(signal.direction||'').toUpperCase();
   if(!['LONG','SHORT'].includes(dir))return {...signal,currentPrice:price,status:'watching'};
