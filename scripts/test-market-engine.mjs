@@ -1,11 +1,11 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,confirmationLevelBrokenAfterSignal,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,SMC_MODEL} from '../server/market-engine/smc.js';
-import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest,topDownMinimumTargetDistance} from '../server/market-engine/topDown.js';
-import {evaluatePullback,pullbackTouches,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,smcSweepStopBuffer,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest,topDownMinimumTargetDistance,topDownStopBuffer} from '../server/market-engine/topDown.js';
+import {evaluatePullback,pullbackTouches,PULLBACK_MODEL,pullbackStopBuffer} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,levelCluster,preBreakRangeBoundary,breakoutStopBuffer,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
-import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
+import {evaluateCRT,CRT_MODEL,crtStopBuffer} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
@@ -417,6 +417,11 @@ const targetFutureVolatility=[...targetVolatilityHistory,...Array.from({length:1
 const targetAtEvent=selectStructuralTarget(targetVolatilityHistory,'BULLISH',100,{asOf:18,asOfTime:targetVolatilityHistory[18].time,minDistance:1});
 const targetWithFutureBars=selectStructuralTarget(targetFutureVolatility,'BULLISH',100,{asOf:18,asOfTime:targetFutureVolatility[18].time,minDistance:1});
 assert('Shared structural target ranking ignores volatility after the setup event',()=>JSON.stringify(targetAtEvent&&{price:targetAtEvent.price,source:targetAtEvent.source,index:targetAtEvent.index})===JSON.stringify(targetWithFutureBars&&{price:targetWithFutureBars.price,source:targetWithFutureBars.source,index:targetWithFutureBars.index}));
+assert('Top-Down stop buffer ignores volatility after the retest event',()=>topDownStopBuffer(targetVolatilityHistory,18,100)===topDownStopBuffer(targetFutureVolatility,18,100));
+assert('CRT stop buffer ignores volatility after the MSS event',()=>crtStopBuffer(targetVolatilityHistory,18,100)===crtStopBuffer(targetFutureVolatility,18,100));
+assert('Pullback stop buffer ignores volatility after the continuation event',()=>pullbackStopBuffer(targetVolatilityHistory,18,100)===pullbackStopBuffer(targetFutureVolatility,18,100));
+assert('SMC stop buffer ignores volatility after the sweep event',()=>smcSweepStopBuffer(targetVolatilityHistory,18,100)===smcSweepStopBuffer(targetFutureVolatility,18,100));
+
 
 
 // Active structural break validation: older levels must not produce a fresh BOS
