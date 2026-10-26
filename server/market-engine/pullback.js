@@ -48,7 +48,7 @@ function retracementZone(move,direction){
   return {low:move.end.price+size*.382,high:move.end.price+size*.618,depthLow:.382,depthHigh:.618};
 }
 
-function pullbackTouches(c,zone,from){
+export function pullbackTouches(c,zone,from){
   const touches=[];
   const end=Math.min(c.length-2,from+MAX_RETRACEMENT_BARS);
   for(let i=Math.max(from+1,0);i<=end;i++){
@@ -102,7 +102,10 @@ export function evaluatePullback({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
   const zone=retracementZone(move,direction);
-  const touches=pullbackTouches(candles,zone,move.end.index);
+  // A swing is only knowable after its confirmation bars close. Do not
+  // classify any candle between the swing point and confirmation as a valid
+  // post-impulse retracement.
+  const touches=pullbackTouches(candles,zone,move.end.confirmationIndex);
   let touch=null,confirm=null;
   for(const candidate of touches){
     const cfm=confirmation(candles,candidate,direction);
