@@ -120,6 +120,22 @@ function continuation(c,rt,direction){
   return null;
 }
 
+// Build the pre-break range using only swings that were confirmed before
+// the breakout candle. A pivot can sit visually before the breakout while its
+// right-side confirmation bars close after it; that pivot is future information.
+export function preBreakRangeBoundary(c,direction,selectedLevel,breakoutIndex){
+  const oppositePoints=direction==='BULLISH'?confirmedSwings(c,2).lows:confirmedSwings(c,2).highs;
+  const firstTouchIndex=Math.min(...(selectedLevel?.touches||[]).map(x=>x.index));
+  const opposite=oppositePoints.filter(x=>
+    x.index<firstTouchIndex&&x.confirmationIndex<breakoutIndex
+  );
+  const history=c.slice(0,Math.max(0,breakoutIndex));
+  const a=atr(history,14)||Math.max(Math.abs(selectedLevel?.level||0)*.001,1e-9);
+  return direction==='BULLISH'
+    ?Math.min(...opposite.map(x=>x.price),selectedLevel.level-a)
+    :Math.max(...opposite.map(x=>x.price),selectedLevel.level+a);
+}
+
 function target(c,direction,entry,after,rangeHeight,layers=[]){
   const a=atr(c.slice(0,after+1),14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005,rangeHeight*.75);
@@ -186,11 +202,7 @@ export function evaluateBreakout({candles=[],layers=[],price}){
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){failures.push('Invalid structural risk.');return {direction,failures,evidence:[]};}
 
-  const oppositePoints=direction==='BULLISH'?confirmedSwings(candles,2).lows:confirmedSwings(candles,2).highs;
-  const opposite=oppositePoints.filter(x=>x.index<selectedLevel.touches[0].index);
-  const rangeBoundary=direction==='BULLISH'
-    ?Math.min(...opposite.map(x=>x.price),selectedLevel.level-a)
-    :Math.max(...opposite.map(x=>x.price),selectedLevel.level+a);
+  const rangeBoundary=preBreakRangeBoundary(candles,direction,selectedLevel,br.index);
   const rangeHeight=Math.abs(selectedLevel.level-rangeBoundary);
   if(!(rangeHeight>0)){failures.push('No measurable pre-break range.');return {direction,failures,evidence:[]};}
 
