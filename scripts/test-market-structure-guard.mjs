@@ -38,6 +38,20 @@ const unclear=applyMarketStructureGuard(candidate(),[
 ]);
 assert('No confirmed directional structure means no trade',unclear.trade===null&&unclear.marketStructureGuard?.reason==='NO_DIRECTIONAL_STRUCTURE');
 
+const inferredFromSingleBreak=applyMarketStructureGuard(candidate(),[
+  {tf:'4H',structure:{direction:'BULLISH',rawDirection:'NEUTRAL'}},
+  {tf:'2H',structure:{direction:'BULLISH',rawDirection:'NEUTRAL'}},
+  {tf:'1H',structure:{direction:'BULLISH',rawDirection:'NEUTRAL'}}
+]);
+assert('A direction inferred from one recent break is not accepted as established bias',inferredFromSingleBreak.trade===null&&inferredFromSingleBreak.marketStructureGuard?.reason==='NO_DIRECTIONAL_STRUCTURE');
+
+const invalidated=applyMarketStructureGuard(candidate(),[
+  {tf:'4H',structure:{direction:'NEUTRAL',rawDirection:'BULLISH'}},
+  {tf:'2H',structure:{direction:'NEUTRAL',rawDirection:'BULLISH'}},
+  {tf:'1H',structure:{direction:'NEUTRAL',rawDirection:'BULLISH'}}
+]);
+assert('A protected-swing invalidation leaves the layer neutral, not bullish',invalidated.trade===null&&invalidated.marketStructureGuard?.reason==='NO_DIRECTIONAL_STRUCTURE');
+
 const noCandidate=applyMarketStructureGuard({direction:'BULLISH',trade:null,failures:['No valid entry']},[
   layer('4H','BEARISH'),layer('2H','BEARISH'),layer('1H','BEARISH')
 ]);
