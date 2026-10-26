@@ -78,10 +78,14 @@ function fingerprint(t,direction){
 }
 function setupFingerprint(strategy,result,trade,direction){
   if(strategy==='MSNR'){
+    const near=(a,b)=>{
+      const x=Number(a),y=Number(b);
+      return Number.isFinite(x)&&Number.isFinite(y)&&
+        Math.abs(x-y)<=Math.max(1,Math.abs(x),Math.abs(y))*1e-9;
+    };
     const candidate=(result?.candidates||[]).find(x=>
       x?.trade&&x?.event&&x?.level&&
-      Number(x.trade.entry)===Number(trade.entry)&&
-      Number(x.trade.stop)===Number(trade.stop)
+      near(x.trade.entry,trade.entry)&&near(x.trade.stop,trade.stop)
     );
     if(candidate){
       const level=candidate.level;
@@ -89,6 +93,7 @@ function setupFingerprint(strategy,result,trade,direction){
         direction,'MSNR_EVENT',
         candidate.event.signalIndex??candidate.event.index??'unknown',
         candidate.event.type??'unknown',
+        level.originIndex??'unknown',level.originTime??'unknown',
         level.type??'unknown',level.side??'unknown',
         Number(level.zoneLow).toPrecision(10),
         Number(level.zoneHigh).toPrecision(10)
