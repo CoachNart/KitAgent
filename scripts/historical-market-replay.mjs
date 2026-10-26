@@ -4,6 +4,7 @@ import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market
 import {parseBybitCsv} from './replay-bybit-csv.mjs';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {STRATEGIES} from '../server/market-engine/strategies.js';
+import {executionEntry,validTradeGeometry,rMultiple} from '../server/market-engine/replay-execution.js';
 
 const DURATIONS={'1H':60*60_000,'2H':2*60*60_000,'4H':4*60*60_000,'1D':24*60*60_000};
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
@@ -44,20 +45,10 @@ function closedPrefixEnd(rows,tf,cutoff){
   }
   return lo;
 }
-function executionEntry(trade,orderType){
-  const planned=Number(trade?.entry);
-  const market=Number(trade?.marketEntry);
-  return String(orderType).toUpperCase()==='MARKET'&&Number.isFinite(market)&&market>0
-    ?market
-    :planned;
-}
 function simulate(trade,direction,orderType,future,tf){
   const entry=executionEntry(trade,orderType),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
-  const validGeometry=direction==='BULLISH'
-    ?stop<entry&&target>entry
-    :direction==='BEARISH'?target<entry&&stop>entry:false;
-  if(!validGeometry)return{result:'missed',reason:'Market/planned entry no longer has valid stop/target geometry'};
+  if(!validTradeGeometry(entry,stop,target,direction))return{result:'missed',reason:'Market/planned entry no longer has valid stop/target geometry'};
   let active=String(orderType).toUpperCase()==='MARKET';
   for(const c of future){
     if(!active){
@@ -78,12 +69,6 @@ function simulate(trade,direction,orderType,future,tf){
     if(targetHit)return{result:'win',exit:target,exitTime:c.time+DURATIONS[tf]};
   }
   return{result:active?'unresolved':'missed'};
-}
-function rMultiple(trade,direction,exit,orderType){
-  const entry=executionEntry(trade,orderType);
-  const risk=Math.abs(entry-Number(trade.stop));
-  if(!(risk>0))return 0;
-  return (direction==='BULLISH'?exit-entry:entry-exit)/risk;
 }
 function fingerprint(t,direction){
   return [direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
