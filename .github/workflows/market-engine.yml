@@ -19,6 +19,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Market engine regression suite
         run: npm run test:market-engine
+      - name: Bybit CSV replay input tests
+        run: npm run test:replay-bybit-csv
       - name: Market structure bias guard
         run: npm run test:market-structure-guard
       - name: Signal outcome regression suite
