@@ -44,9 +44,20 @@ function closedPrefixEnd(rows,tf,cutoff){
   }
   return lo;
 }
+function executionEntry(trade,orderType){
+  const planned=Number(trade?.entry);
+  const market=Number(trade?.marketEntry);
+  return String(orderType).toUpperCase()==='MARKET'&&Number.isFinite(market)&&market>0
+    ?market
+    :planned;
+}
 function simulate(trade,direction,orderType,future,tf){
-  const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
+  const entry=executionEntry(trade,orderType),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
+  const validGeometry=direction==='BULLISH'
+    ?stop<entry&&target>entry
+    :direction==='BEARISH'?target<entry&&stop>entry:false;
+  if(!validGeometry)return{result:'missed',reason:'Market/planned entry no longer has valid stop/target geometry'};
   let active=String(orderType).toUpperCase()==='MARKET';
   for(const c of future){
     if(!active){
@@ -68,10 +79,11 @@ function simulate(trade,direction,orderType,future,tf){
   }
   return{result:active?'unresolved':'missed'};
 }
-function rMultiple(trade,direction,exit){
-  const risk=Math.abs(Number(trade.entry)-Number(trade.stop));
+function rMultiple(trade,direction,exit,orderType){
+  const entry=executionEntry(trade,orderType);
+  const risk=Math.abs(entry-Number(trade.stop));
   if(!(risk>0))return 0;
-  return (direction==='BULLISH'?exit-Number(trade.entry):Number(trade.entry)-exit)/risk;
+  return (direction==='BULLISH'?exit-entry:entry-exit)/risk;
 }
 function fingerprint(t,direction){
   return [direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
@@ -245,13 +257,14 @@ for(const symbol of symbols){
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
         if(outcome.result==='missed'){stat.missed++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
         if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
-        const gross=rMultiple(trade,result.direction,outcome.exit);
-        const riskPct=Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry));
+        const filledEntry=executionEntry(trade,trade.orderType);
+        const gross=rMultiple(trade,result.direction,outcome.exit,trade.orderType);
+        const riskPct=Math.abs(filledEntry-Number(trade.stop))/Math.abs(filledEntry);
         const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
         const net=gross-costR;
         if(outcome.result==='win')stat.wins++;else stat.losses++;
         stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
-        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
+        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:filledEntry,plannedEntry:trade.entry,marketEntry:trade.marketEntry??'',stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
       }
     }
   }
