@@ -242,7 +242,7 @@ assert('CRT accepts a valid low-sweep/reclaim setup',()=>crtValid.direction==='B
 assert('CRT rejects an execution sweep that occurs before the higher-timeframe sweep candle closes',()=>{
   const earlySweep=crtExecution.map(x=>({...x}));
   earlySweep[2]={...bar(2,104,105,98.5,101),time:crtExecution[2].time};
-  earlySweep[16]={...bar(16,102,103,101,102.2),time:crtExecution[16].time};
+  for(let i=16;i<=20;i++)earlySweep[i]={...bar(i,102,103,101,102.2),time:crtExecution[i].time};
   const r=evaluateCRT({candles:earlySweep,layers:[
     {tf:'4H',candles:crtHTF,structure:{direction:'BULLISH'}},
     {tf:'LTF',candles:earlySweep,structure:{direction:'BULLISH'}}
