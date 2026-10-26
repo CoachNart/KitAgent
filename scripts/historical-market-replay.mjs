@@ -81,8 +81,7 @@ function setupFingerprint(strategy,result,trade,direction){
     const candidate=(result?.candidates||[]).find(x=>
       x?.trade&&x?.event&&x?.level&&
       Number(x.trade.entry)===Number(trade.entry)&&
-      Number(x.trade.stop)===Number(trade.stop)&&
-      Number(x.trade.target)===Number(trade.target)
+      Number(x.trade.stop)===Number(trade.stop)
     );
     if(candidate){
       const level=candidate.level;
