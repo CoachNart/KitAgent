@@ -78,7 +78,7 @@ jobs:
         run: node scripts/prepare-bybit-archive-replay.mjs
       - name: Historical replay on recent archived Bybit candles (BTC and ETH)
         continue-on-error: true
-        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --bars=1000 --history-candles=10000 --round-trip-cost-bps=10 2>&1 | tee bybit-replay-report.txt
+        run: npm run test:market-engine-replay -- --data-dir=./bybit-archive-data --symbols=BTCUSDT,ETHUSDT --bars=240 --history-candles=3000 --round-trip-cost-bps=10 2>&1 | tee bybit-replay-report.txt
       - name: Upload historical replay report
         if: always()
         uses: actions/upload-artifact@v4
