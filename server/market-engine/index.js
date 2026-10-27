@@ -259,6 +259,9 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quot
     evidence:result.evidence||[],
     candidates:result.candidates||[],
     failures,
+    // Preserve the guard's explicit decision so API consumers and historical
+    // replay diagnostics can distinguish a strategy rejection from a vetoed setup.
+    marketStructureGuard:result.marketStructureGuard||null,
     layers:layers.map(x=>({
       tf:x.tf,
       direction:x.structure.direction,
