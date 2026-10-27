@@ -1,5 +1,5 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,confirmationLevelBrokenAfterSignal,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
-import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
+import {evaluateStrategy,applyMarketStructureGuard,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,smcSweepStopBuffer,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest,topDownMinimumTargetDistance,topDownStopBuffer} from '../server/market-engine/topDown.js';
@@ -31,6 +31,20 @@ assert('Top-Down pause explains the evidence-based reason to the caller',()=>pau
 const researchTopDown=evaluateStrategy({strategy:'TOP_DOWN',layers:[],execution:{candles:[]},price:100,allowPausedResearch:true});
 assert('Top-Down research override is explicit and marked research-only',()=>researchTopDown.strategyStatus==='PAUSED_RESEARCH_ONLY'&&researchTopDown.researchOnly===true);
 assert('Research-only override does not change the production strategy status',()=>STRATEGIES.TOP_DOWN.status==='PAUSED');
+assert('Market-structure guard blocks a bullish candidate when a neutral layer records a recent bearish break',()=>{
+  const result=applyMarketStructureGuard({direction:'BULLISH',trade:{entry:100,stop:98,target:106},failures:[]},[
+    {tf:'4H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}},
+    {tf:'1H',structure:{direction:'NEUTRAL',rawDirection:'BULLISH',structureBreak:{direction:'BEARISH',age:2}}}
+  ]);
+  return result.trade===null&&result.marketStructureGuard?.reason==='TRANSITIONAL_STRUCTURE_CONFLICT';
+});
+assert('Market-structure guard treats a broken bullish protected trend as bearish transition evidence',()=>{
+  const result=applyMarketStructureGuard({direction:'BULLISH',trade:{entry:100,stop:98,target:106},failures:[]},[
+    {tf:'4H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}},
+    {tf:'1H',structure:{direction:'NEUTRAL',rawDirection:'BULLISH',structureBreak:null}}
+  ]);
+  return result.trade===null&&result.marketStructureGuard?.reason==='TRANSITIONAL_STRUCTURE_CONFLICT';
+});
 
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
