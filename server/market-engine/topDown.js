@@ -220,7 +220,11 @@ export function evaluateTopDown({candles,layers,price}){
   const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
-    if(distance>tolerance)continue;
+    // A completed retest can leave price well away from the level while the
+    // retest limit is still unfilled. Only reject price on the wrong side of
+    // the planned entry; distance alone must not suppress a valid pending limit.
+    const wrongSide=direction==='BULLISH'?price<entry-tolerance:price>entry+tolerance;
+    if(wrongSide)continue;
     diagnostics.distanceEligible++;
     const retestStarted=Date.now();
     const rt=findValidRetest(c,bos,direction,closeExtrema);
