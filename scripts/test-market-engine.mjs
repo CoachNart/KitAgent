@@ -148,6 +148,7 @@ assert('MSNR accepts a confirmation from the recent execution window',()=>recent
 const layers=['4H','2H','1H','LTF'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
 const msnrResult=evaluateMSNR({candles:vCc,layers,price:103.5});
 assert('MSNR strategy returns a result object',!!msnrResult&&Array.isArray(msnrResult.failures));
+assert('MSNR only publishes retest limit entries, never confirmation-close market chases',()=>!msnrResult.trade||msnrResult.trade.orderType==='LIMIT');
 assert('MSNR does not use the generic execution resolver',()=>{
   const direct=evaluateMSNR({candles:vCc,layers,price:103.5});
   const routed=evaluateStrategy({strategy:'MSNR',layers,execution:{candles:vCc},price:103.5});
