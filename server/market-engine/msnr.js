@@ -421,7 +421,7 @@ export function evaluateMSNR({candles,layers,price}){
       event,level,direction,context,entry,stop,target,rr,grade:g,
       trade:{
         entry,stop,target:target.level,risk,reward,rr,
-        orderType:direction==='BULLISH'?(price-entry<=Math.max(a*.35,Math.abs(entry)*.0015)?'MARKET':'LIMIT'):(entry-price<=Math.max(a*.35,Math.abs(entry)*.0015)?'MARKET':'LIMIT'),
+        orderType:'LIMIT',
         entryZone:{low:level.zoneLow,high:level.zoneHigh,source:'MSNR_CONFIRMED_LEVEL'},
         invalidationPrice:invalidation,
         marketEntry:price,
@@ -453,7 +453,7 @@ export function evaluateMSNR({candles,layers,price}){
     `MSNR ${best.event.type}: ${level.type} ${level.side} at ${level.level}`,
     `Freshness: ${best.event.freshBefore?'FRESH':'UNFRESH'} before confirmation`,
     `Confirmation: closed candle ${best.event.signalIndex} touched the level and kept its full body on the trade side`,
-    `Entry: live market price ${best.entry} immediately after the closed confirmation candle`,
+    `Entry: LIMIT at the confirmed MSNR zone; wait for a retest instead of chasing the confirmation close`,
     `Invalidation: ${best.trade.invalidation} from ${best.trade.invalidationSource}`,
     `Objective: next opposing MSNR level ${best.target.type} at ${best.target.level}`,
     `R:R: 1:${best.rr.toFixed(2)}`
