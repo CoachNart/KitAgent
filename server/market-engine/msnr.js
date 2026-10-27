@@ -248,7 +248,7 @@ function currentContext(layers,direction){
   return {aligned,opposing,dominant:htf.find(x=>x!=='NEUTRAL')||'NEUTRAL'};
 }
 
-function objective(levels,direction,entry,minDistance=0){
+export function objective(levels,direction,entry,minDistance=0){
   const opposing=direction==='BULLISH'
     ?levels.filter(x=>x.side==='RESISTANCE'&&x.level>entry)
     :levels.filter(x=>x.side==='SUPPORT'&&x.level<entry);
@@ -269,9 +269,12 @@ function objective(levels,direction,entry,minDistance=0){
     x.clusterCount=clusterCount;
     x.quality=strength+(x.fresh?18:0)+(x.flipCount>0?12:0)+(clusterCount>=3?24:clusterCount===2?14:0)+(x.tf?8:0);
   }
+  // Select the nearest eligible opposing level first. Ranking a distant,
+  // high-quality pool above the next executable obstacle can manufacture an
+  // attractive R:R while price is likely to hit nearer structure first.
   return candidates
-    .sort((a,b)=>b.quality-a.quality||Math.abs(a.level-entry)-Math.abs(b.level-entry))
-    .find(x=>x.level!==entry)||null;
+    .filter(x=>x.level!==entry)
+    .sort((a,b)=>Math.abs(a.level-entry)-Math.abs(b.level-entry)||b.quality-a.quality)[0]||null;
 }
 function gradeMSNR({level,event,context,target,rr}){
   const levelType=String(event?.type||'').replace('_CC','');
