@@ -235,10 +235,13 @@ for(const symbol of symbols){
         if(result.grade.grade==='A+')stat.gradeAplus++;
         const trade=result.trade;
         const fp=setupFingerprint(strategy,result,trade,result.direction),previous=seen.get(strategy+'|'+fp);
-        // MSNR can keep the same confirmed event eligible across many snapshots.
-        // Deduplicate that event for the entire replay window; other strategies
-        // retain the existing three-candle cooldown for identical trade geometry.
-        if(previous!=null&&(strategy==='MSNR'||cutoff-previous<DURATIONS[tf]*3))continue;
+        // A strategy can keep publishing the exact same entry/stop/target on
+        // consecutive snapshots. Counting those as separate trades double-counts
+        // one setup and understates portfolio concentration. Deduplicate identical
+        // trade geometry for the full symbol/timeframe replay window. MSNR's
+        // event-based fingerprint additionally catches a level event whose price
+        // geometry shifts slightly as the history window advances.
+        if(previous!=null)continue;
         seen.set(strategy+'|'+fp,cutoff);
         stat.tradeCandidates++;
         const future=exec.slice(exec.indexOf(candle)+1,windowEnd);
