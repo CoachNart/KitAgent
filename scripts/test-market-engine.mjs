@@ -370,6 +370,12 @@ const hierarchyLayers=[{tf:'4H',candles:hierarchyCandles,structure:{direction:'B
 const structuralTarget=selectStructuralTarget(hierarchyCandles,'BULLISH',100,{layers:hierarchyLayers,minDistance:1});
 assert('Target hierarchy never selects a target on the wrong side of entry',()=>!structuralTarget||structuralTarget.price>100);
 assert('Target hierarchy provides provenance for the selected objective',()=>!structuralTarget||typeof structuralTarget.source==='string');
+const nearestEligibleStructuralTarget=selectStructuralTarget(hierarchyCandles,'BULLISH',100,{
+  layers:hierarchyLayers,minDistance:0,asOf:hierarchyCandles.length-1,asOfTime:hierarchyCandles.at(-1)?.time
+});
+const nearestEligibleRR=nearestEligibleStructuralTarget
+  ?Math.abs(nearestEligibleStructuralTarget.price-100)/2
+  :null;
 const fartherStructuralTarget=selectMinimumRRStructuralTarget({
   trade:{entry:100,stop:98,target:102},
   direction:'BULLISH',
@@ -377,7 +383,11 @@ const fartherStructuralTarget=selectMinimumRRStructuralTarget({
   layers:hierarchyLayers,
   minimumRR:3
 });
-assert('3R recovery selects a real farther structural objective rather than fabricating a price',()=>!!fartherStructuralTarget&&fartherStructuralTarget.target>100&&fartherStructuralTarget.rr>=3&&typeof fartherStructuralTarget.targetSource==='string');
+assert('3R target recovery never jumps past a nearer eligible structural obstacle',()=>{
+  if(!nearestEligibleStructuralTarget)return fartherStructuralTarget===null;
+  if(nearestEligibleRR<3)return fartherStructuralTarget===null;
+  return !!fartherStructuralTarget&&fartherStructuralTarget.target===nearestEligibleStructuralTarget.price&&fartherStructuralTarget.rr>=3;
+});
 
 assert('Target hierarchy can prefer repeated/major structure over a single nearby pivot',()=>{
   if(!structuralTarget)return true;
