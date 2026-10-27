@@ -36,7 +36,7 @@ let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
 function bucket(strategy,tf){
   const key=keyOf(strategy,tf);
-  if(!stats.has(key))stats.set(key,{strategy,timeframe:tf,evaluated:0,withTrade:0,noTrade:0,gradeA:0,gradeAplus:0,gradeB:0,gradeC:0,rejectedGrade:0,tradeCandidates:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,grossR:0,netR:0,returns:[]});
+  if(!stats.has(key))stats.set(key,{strategy,timeframe:tf,evaluated:0,withTrade:0,noTrade:0,guardBlocked:0,guardAllowed:0,gradeA:0,gradeAplus:0,gradeB:0,gradeC:0,rejectedGrade:0,tradeCandidates:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,grossR:0,netR:0,returns:[]});
   return stats.get(key);
 }
 function rejection(strategy,tf,reason){
@@ -226,6 +226,8 @@ for(const symbol of symbols){
           if(rejectionDiagnostics)console.log('TOP_DOWN STAGE DIAGNOSTICS',symbol,tf,snapshotIndex+'/'+snapshots.length,JSON.stringify(rejectionDiagnostics));
         }
         const resultGrade=String(result.grade?.grade||'NO-TRADE');
+        if(result.marketStructureGuard?.allowed===false)stat.guardBlocked++;
+        else if(result.marketStructureGuard?.allowed===true)stat.guardAllowed++;
         if(result.trade)stat.withTrade++;
         else stat.noTrade++;
         if(resultGrade==='A')stat.gradeA++;
@@ -295,7 +297,7 @@ const rows=[...stats.values()].map(s=>{
   const mean=s.returns.length?s.netR/s.returns.length:0;
   let equity=0,peak=0,maxDrawdown=0;
   for(const r of [...s.returns].sort((a,b)=>a.exitTime-b.exitTime)){equity+=r.net;peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,peak-equity);}
-  return{strategy:s.strategy,timeframe:s.timeframe,evaluated:s.evaluated,withTrade:s.withTrade,noTrade:s.noTrade,gradeA:s.gradeA,gradeAplus:s.gradeAplus,gradeB:s.gradeB,gradeC:s.gradeC,rejectedGrade:s.rejectedGrade,candidates:s.tradeCandidates,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+mean.toFixed(3):null,ambiguous:s.ambiguous,missed:s.missed,unresolved:s.unresolved,maxDrawdownR:+maxDrawdown.toFixed(3)};
+  return{strategy:s.strategy,timeframe:s.timeframe,evaluated:s.evaluated,withTrade:s.withTrade,noTrade:s.noTrade,guardBlocked:s.guardBlocked,guardAllowed:s.guardAllowed,gradeA:s.gradeA,gradeAplus:s.gradeAplus,gradeB:s.gradeB,gradeC:s.gradeC,rejectedGrade:s.rejectedGrade,candidates:s.tradeCandidates,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+mean.toFixed(3):null,ambiguous:s.ambiguous,missed:s.missed,unresolved:s.unresolved,maxDrawdownR:+maxDrawdown.toFixed(3)};
 });
 console.table(rows);
 console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
