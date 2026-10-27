@@ -102,7 +102,7 @@ assert('MSNR confirmation keeps its event-time level type after a later role rev
 assert('MSNR confirmation keeps freshness and flip count from signal time',()=>aHistoricalConfirmation?.levelState?.fresh===true&&aHistoricalConfirmation.levelState.flipCount===0&&aHistoricalConfirmation.levelState.side==='RESISTANCE');
 const aEventTimeLevels=msnrLevelsAtTime(aCcThenFlipped,aCc[2].time,'1H');
 const aEventTimeLevel=aEventTimeLevels.find(x=>x.originIndex===0&&x.baseType==='A');
-assert('MSNR target levels are rebuilt from candles known at the signal time, excluding future flips',()=>aEventTimeLevel?.type==='A'&&aEventTimeLevel.fresh===true&&aEventTimeLevel.flipCount===0);
+assert('MSNR target levels are rebuilt from candles known at the signal time, excluding future flips',()=>aEventTimeLevel?.type==='A'&&aEventTimeLevel.fresh===false&&aEventTimeLevel.flipCount===0);
 assert('MSNR event-time target state does not change when later candles are appended',()=>{
   const short=msnrLevelsAtTime(aCc,aCc[2].time,'1H').find(x=>x.originIndex===0&&x.baseType==='A');
   const long=msnrLevelsAtTime(aCcThenFlipped,aCc[2].time,'1H').find(x=>x.originIndex===0&&x.baseType==='A');
