@@ -162,7 +162,7 @@ export function selectMinimumRRStructuralTarget({trade,direction,candles=[],laye
   };
 }
 
-export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quote=null){
+export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quote=null,options={}){
   const order=CHAIN[tf];
   let byTimeframe=analysisLayerCache.get(allCandles);
   if(!byTimeframe){
@@ -212,7 +212,8 @@ export async function analyzeOne(market,symbol,strategy,tf,allCandles,price,quot
     strategy,
     layers,
     execution,
-    price
+    price,
+    allowPausedResearch:options?.allowPausedResearch===true
   });
 
   let grade=result.grade||noTrade(result.failures||[]);
