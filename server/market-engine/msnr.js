@@ -333,14 +333,17 @@ export function evaluateMSNR({candles,layers,price}){
     // not a valid trade thesis and can make the reported target look better
     // than the structure that was available at entry time.
     const signalTime=event.signalCandle?.time??candles[event.signalIndex]?.time;
-    const allLevels=layers.flatMap(layer=>
-      buildMSNRLevels(layer.candles)
-        .filter(x=>{
-          const confirmedAt=layer.candles[x.confirmationIndex]?.time;
-          return Number.isFinite(signalTime)&&Number.isFinite(confirmedAt)&&confirmedAt<=signalTime;
-        })
-        .map(x=>({...x,tf:layer.tf}))
-    );
+    const allLevels=layers.flatMap(layer=>{
+      // Rebuild the level state using only candles available at signal time.
+      // Filtering levels after building them is insufficient: later candles
+      // can flip a formerly fresh level or alter its touch/quality state.
+      if(!Number.isFinite(signalTime))return [];
+      const knownCandles=layer.candles.filter(candle=>
+        Number.isFinite(candle.time)&&candle.time<=signalTime
+      );
+      return buildMSNRLevels(knownCandles)
+        .map(x=>({...x,tf:layer.tf}));
+    });
     const direction=event.direction;
     const context=currentContext(layers,direction);
     if(confirmationLevelBrokenAfterSignal(candles,event)){
