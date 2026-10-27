@@ -214,7 +214,7 @@ for(const symbol of symbols){
         const strategyStarted=Date.now();
         console.log('STRATEGY START',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy);
         let result;
-        try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close);}
+        try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close,null,{allowPausedResearch:true});}
         catch(error){
           console.error('STRATEGY ERROR',symbol,tf,snapshotIndex,strategy,Date.now()-strategyStarted+'ms',error?.stack||error);
           rejection(strategy,tf,'EXCEPTION: '+(error?.message||error));
