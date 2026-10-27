@@ -2,7 +2,7 @@ import {buildMSNRLevels,msnrLevelsAtTime,latestMSNRConfirmations,recentMSNRConfi
 import {evaluateStrategy,applyMarketStructureGuard,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,smcSweepStopBuffer,SMC_MODEL} from '../server/market-engine/smc.js';
-import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest,topDownMinimumTargetDistance,topDownStopBuffer} from '../server/market-engine/topDown.js';
+import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,topDownPriceSideEligible,findValidRetest,topDownMinimumTargetDistance,topDownStopBuffer} from '../server/market-engine/topDown.js';
 import {evaluatePullback,pullbackTouches,PULLBACK_MODEL,pullbackStopBuffer} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,levelCluster,preBreakRangeBoundary,breakoutStopBuffer,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
 import {evaluateCRT,CRT_MODEL,crtStopBuffer} from '../server/market-engine/crt.js';
@@ -237,6 +237,10 @@ assert('Top-Down uses live price to classify execution order',()=>{
     executionOrderType({direction:'BEARISH',entry:11.577,price:11.1725,tolerance:.01})==='LIMIT' &&
     executionOrderType({direction:'BEARISH',entry:11.577,price:12,tolerance:.01})===null;
 });
+assert('Top-Down keeps a valid unfilled bullish retest eligible when price has moved above the limit',()=>topDownPriceSideEligible({direction:'BULLISH',entry:100,price:104,tolerance:1}));
+assert('Top-Down keeps a valid unfilled bearish retest eligible when price has moved below the limit',()=>topDownPriceSideEligible({direction:'BEARISH',entry:100,price:96,tolerance:1}));
+assert('Top-Down rejects a bullish limit after price moves materially below entry',()=>!topDownPriceSideEligible({direction:'BULLISH',entry:100,price:96,tolerance:1}));
+assert('Top-Down rejects a bearish limit after price moves materially above entry',()=>!topDownPriceSideEligible({direction:'BEARISH',entry:100,price:104,tolerance:1}));
 assert('Top-Down routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'TOP_DOWN',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed.direction==='BULLISH'||routed.direction==='NEUTRAL';});
 
 // Top-Down scoring regression: direction is explicit input, never an undeclared global.
