@@ -409,8 +409,15 @@ export function evaluateMSNR({candles,layers,price}){
       continue;
     }
     const reward=Math.abs(target.level-entry),risk=Math.abs(entry-stop),rr=risk>0?reward/risk:0;
-    const distanceFromLevel=entry>level.zoneHigh?Math.abs(entry-level.zoneHigh):entry<level.zoneLow?Math.abs(level.zoneLow-entry):0;
-    const tooExtended=distanceFromLevel>Math.max(a*.2,Math.abs(entry)*.0035);
+    // Measure extension from the live quote to the confirmed zone. Measuring
+    // from the planned entry is ineffective because entry is itself set to the
+    // zone edge, making this distance zero by construction.
+    const distanceFromLevel=price>level.zoneHigh
+      ?Math.abs(price-level.zoneHigh)
+      :price<level.zoneLow
+        ?Math.abs(level.zoneLow-price)
+        :0;
+    const tooExtended=distanceFromLevel>Math.max(a*.2,Math.abs(price)*.0035);
     if(tooExtended){
       candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'Confirmation candle closed too far from the MSNR level; entry is extended.'});
       continue;
