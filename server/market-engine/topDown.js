@@ -131,6 +131,11 @@ export function findValidRetest(c,bos,direction,closeExtrema=null){
   return null;
 }
 
+export function topDownPriceSideEligible({direction,entry,price,tolerance}){
+  if(!['BULLISH','BEARISH'].includes(direction)||![entry,price,tolerance].every(Number.isFinite))return false;
+  return direction==='BULLISH'?price>=entry-tolerance:price<=entry+tolerance;
+}
+
 export function executionOrderType({direction,entry,price,tolerance}){
   const gap=Math.abs(price-entry);
   const near=gap<=tolerance;
@@ -223,8 +228,7 @@ export function evaluateTopDown({candles,layers,price}){
     // A completed retest can leave price well away from the level while the
     // retest limit is still unfilled. Only reject price on the wrong side of
     // the planned entry; distance alone must not suppress a valid pending limit.
-    const wrongSide=direction==='BULLISH'?price<entry-tolerance:price>entry+tolerance;
-    if(wrongSide)continue;
+    if(!topDownPriceSideEligible({direction,entry,price,tolerance}))continue;
     diagnostics.distanceEligible++;
     const retestStarted=Date.now();
     const rt=findValidRetest(c,bos,direction,closeExtrema);
