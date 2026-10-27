@@ -205,6 +205,17 @@ export function buildMSNRLevels(candles){
   return makeBaseLevels(candles).map(level=>trackLevel(level,candles));
 }
 
+// Return only the MSNR level state knowable at a historical signal timestamp.
+// Rebuilding from a candle prefix prevents future flips/touches changing target
+// eligibility for an earlier trade.
+export function msnrLevelsAtTime(candles,signalTime,tf){
+  if(!Array.isArray(candles)||!Number.isFinite(signalTime))return [];
+  const knownCandles=candles.filter(candle=>
+    Number.isFinite(candle.time)&&candle.time<=signalTime
+  );
+  return buildMSNRLevels(knownCandles).map(level=>({...level,tf}));
+}
+
 export function recentMSNRConfirmations(candles,maxAge=2,prebuiltLevels=null){
   const levels=Array.isArray(prebuiltLevels)?prebuiltLevels:buildMSNRLevels(candles);
   const lastIndex=candles.length-1;
@@ -333,17 +344,11 @@ export function evaluateMSNR({candles,layers,price}){
     // not a valid trade thesis and can make the reported target look better
     // than the structure that was available at entry time.
     const signalTime=event.signalCandle?.time??candles[event.signalIndex]?.time;
-    const allLevels=layers.flatMap(layer=>{
-      // Rebuild the level state using only candles available at signal time.
-      // Filtering levels after building them is insufficient: later candles
-      // can flip a formerly fresh level or alter its touch/quality state.
-      if(!Number.isFinite(signalTime))return [];
-      const knownCandles=layer.candles.filter(candle=>
-        Number.isFinite(candle.time)&&candle.time<=signalTime
-      );
-      return buildMSNRLevels(knownCandles)
-        .map(x=>({...x,tf:layer.tf}));
-    });
+    const allLevels=layers.flatMap(layer=>
+      // Filtering full-history levels is insufficient: future candles can
+      // change freshness, flips, and touches. Rebuild from the event-time prefix.
+      msnrLevelsAtTime(layer.candles,signalTime,layer.tf)
+    );
     const direction=event.direction;
     const context=currentContext(layers,direction);
     if(confirmationLevelBrokenAfterSignal(candles,event)){
