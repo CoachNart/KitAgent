@@ -22,6 +22,13 @@ const assert=(name,okOrFn,detail='')=>{
 };
 assert('Execution timeframe allowlist contains only 1H, 2H, and 4H',executionTimeframesAreCorrect);
 
+// Repeated negative Bybit expectancy is a release blocker, not a reason to keep
+// exposing a strategy while more tests are written. TOP_DOWN stays paused until
+// its entry model is rebuilt and independently revalidated.
+const pausedTopDown=evaluateStrategy({strategy:'TOP_DOWN',layers:[],execution:{candles:[]},price:100});
+assert('Top-Down negative-expectancy circuit breaker blocks trade publication',()=>pausedTopDown.strategyStatus==='PAUSED'&&pausedTopDown.trade===null&&pausedTopDown.direction==='NEUTRAL');
+assert('Top-Down pause explains the evidence-based reason to the caller',()=>pausedTopDown.failures?.some(x=>x.includes('negative expectancy'))&&pausedTopDown.grade?.grade==='NO-TRADE');
+
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
   open:o,high:h,low:l,close:c,volume:100
