@@ -1,4 +1,4 @@
-import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,objective as selectMSNRObjective,confirmationLevelBrokenAfterSignal,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
+import {buildMSNRLevels,msnrLevelsAtTime,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,objective as selectMSNRObjective,confirmationLevelBrokenAfterSignal,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,applyMarketStructureGuard,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,smcSweepStopBuffer,SMC_MODEL} from '../server/market-engine/smc.js';
@@ -100,6 +100,14 @@ const aFinalLevel=buildMSNRLevels(aCcThenFlipped)
   .find(x=>x.originIndex===0&&x.baseType==='A');
 assert('MSNR confirmation keeps its event-time level type after a later role reversal',()=>aHistoricalConfirmation?.levelState?.type==='A'&&aFinalLevel?.type==='RBS');
 assert('MSNR confirmation keeps freshness and flip count from signal time',()=>aHistoricalConfirmation?.levelState?.fresh===true&&aHistoricalConfirmation.levelState.flipCount===0&&aHistoricalConfirmation.levelState.side==='RESISTANCE');
+const aEventTimeLevels=msnrLevelsAtTime(aCcThenFlipped,aCc[2].time,'1H');
+const aEventTimeLevel=aEventTimeLevels.find(x=>x.originIndex===0&&x.baseType==='A');
+assert('MSNR target levels are rebuilt from candles known at the signal time, excluding future flips',()=>aEventTimeLevel?.type==='A'&&aEventTimeLevel.fresh===true&&aEventTimeLevel.flipCount===0);
+assert('MSNR event-time target state does not change when later candles are appended',()=>{
+  const short=msnrLevelsAtTime(aCc,aCc[2].time,'1H').find(x=>x.originIndex===0&&x.baseType==='A');
+  const long=msnrLevelsAtTime(aCcThenFlipped,aCc[2].time,'1H').find(x=>x.originIndex===0&&x.baseType==='A');
+  return !!short&&!!long&&short.type===long.type&&short.fresh===long.fresh&&short.flipCount===long.flipCount&&short.touches===long.touches;
+});
 assert('MSNR rejects a confirmation after its level is later body-broken',()=>!!aHistoricalConfirmation&&confirmationLevelBrokenAfterSignal(aCcThenFlipped,aHistoricalConfirmation));
 const aCcReturnedBelow=[...aCcThenFlipped,bar(4,99,100,96,97)];
 assert('MSNR cannot resurrect a broken level after price returns to the original side',()=>!!aHistoricalConfirmation&&confirmationLevelBrokenAfterSignal(aCcReturnedBelow,aHistoricalConfirmation));
