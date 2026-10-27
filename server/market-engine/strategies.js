@@ -101,9 +101,10 @@ export function applyMarketStructureGuard(result,layers=[]){
   };
 }
 
-export function evaluateStrategy({strategy,layers,execution,price}){
+export function evaluateStrategy({strategy,layers,execution,price,allowPausedResearch=false}){
   const config=STRATEGIES[strategy];
-  if(!config||config.status!=='READY'){
+  const researchOverride=allowPausedResearch===true&&config?.status==='PAUSED';
+  if(!config||(config.status!=='READY'&&!researchOverride)){
     const reason=config?.reason||`Strategy ${String(strategy||'UNKNOWN')} is not enabled for trade publication.`;
     return {
       direction:'NEUTRAL',
@@ -122,5 +123,6 @@ export function evaluateStrategy({strategy,layers,execution,price}){
   else if(strategy==='CRT')result=evaluateCRT({candles:execution.candles,layers,price});
   else result=evaluateMSNR({candles:execution.candles,layers,price});
 
-  return applyMarketStructureGuard(result,layers);
+  const guarded=applyMarketStructureGuard(result,layers);
+  return researchOverride?{...guarded,researchOnly:true,strategyStatus:'PAUSED_RESEARCH_ONLY'}:guarded;
 }
