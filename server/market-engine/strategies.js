@@ -18,25 +18,34 @@ const DIRECTIONS=new Set(['BULLISH','BEARISH']);
 
 function structureState(layer){
   const s=layer?.structure;
-  if(!s)return {tf:String(layer?.tf||'UNKNOWN'),direction:'NEUTRAL',transition:null};
-  // The structure engine can infer a temporary direction from a recent break
-  // while its HH/HL or LH/LL sequence is still neutral. That is not established
-  // trend bias, but it is important contrary evidence and must not be ignored.
+  const tf=String(layer?.tf||'UNKNOWN');
+  if(!s)return {tf,direction:'NEUTRAL',transition:null};
+  const direction=DIRECTIONS.has(s.direction)?s.direction:'NEUTRAL';
+  const rawDirection=DIRECTIONS.has(s.rawDirection)?s.rawDirection:'NEUTRAL';
+
+  // A confirmed HH/HL or LH/LL sequence is the established bias. If the
+  // structure engine has a directional state derived from a recent break while
+  // raw swing sequencing is neutral, keep that break as transitional evidence.
   if(Object.prototype.hasOwnProperty.call(s,'rawDirection')){
-    if(DIRECTIONS.has(s.rawDirection)&&s.direction!=='NEUTRAL'){
-      return {tf:String(layer?.tf||'UNKNOWN'),direction:s.rawDirection,transition:null};
+    if(rawDirection!=='NEUTRAL'&&direction!=='NEUTRAL'){
+      return {tf,direction:rawDirection,transition:null};
     }
-    return {
-      tf:String(layer?.tf||'UNKNOWN'),
-      direction:'NEUTRAL',
-      transition:s.rawDirection==='NEUTRAL'&&DIRECTIONS.has(s.direction)?s.direction:null
-    };
+    if(rawDirection==='NEUTRAL'&&direction!=='NEUTRAL'){
+      return {tf,direction:'NEUTRAL',transition:direction};
+    }
+    if(rawDirection!=='NEUTRAL'&&direction==='NEUTRAL'){
+      // Neutralized raw trend usually means its protected swing was invalidated.
+      // Prefer the actual recent break direction; otherwise treat invalidation
+      // as contrary evidence instead of silently ignoring the broken trend.
+      const recentBreak=s?.structureBreak;
+      const transition=DIRECTIONS.has(recentBreak?.direction)&&Number(recentBreak?.age)<=8
+        ?recentBreak.direction
+        :(rawDirection==='BULLISH'?'BEARISH':'BULLISH');
+      return {tf,direction:'NEUTRAL',transition};
+    }
+    return {tf,direction:'NEUTRAL',transition:null};
   }
-  return {
-    tf:String(layer?.tf||'UNKNOWN'),
-    direction:DIRECTIONS.has(s.direction)?s.direction:'NEUTRAL',
-    transition:null
-  };
+  return {tf,direction,transition:null};
 }
 
 /**
