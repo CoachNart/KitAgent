@@ -6,7 +6,7 @@ import {evaluateBreakout} from './breakout.js';
 import {evaluateCRT} from './crt.js';
 
 export const STRATEGIES={
-  TOP_DOWN:{name:'Top-Down',status:'READY'},
+  TOP_DOWN:{name:'Top-Down',status:'PAUSED',reason:'Historical Bybit replay has shown repeated negative expectancy across validation windows; blocked until entry logic is rebuilt and revalidated.'},
   PULLBACK:{name:'Pullback',status:'READY'},
   BREAKOUT:{name:'Breakout & Retest',status:'READY'},
   SMC:{name:'SMC',status:'READY'},
@@ -102,6 +102,18 @@ export function applyMarketStructureGuard(result,layers=[]){
 }
 
 export function evaluateStrategy({strategy,layers,execution,price}){
+  const config=STRATEGIES[strategy];
+  if(!config||config.status!=='READY'){
+    const reason=config?.reason||`Strategy ${String(strategy||'UNKNOWN')} is not enabled for trade publication.`;
+    return {
+      direction:'NEUTRAL',
+      trade:null,
+      grade:{grade:'NO-TRADE',score:0,hardFailures:[reason]},
+      failures:[reason],
+      evidence:[],
+      strategyStatus:config?.status||'UNAVAILABLE'
+    };
+  }
   let result;
   if(strategy==='TOP_DOWN')result=evaluateTopDown({candles:execution.candles,layers,price});
   else if(strategy==='SMC')result=evaluateSMC({candles:execution.candles,layers,price});
