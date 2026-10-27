@@ -28,6 +28,9 @@ assert('Execution timeframe allowlist contains only 1H, 2H, and 4H',executionTim
 const pausedTopDown=evaluateStrategy({strategy:'TOP_DOWN',layers:[],execution:{candles:[]},price:100});
 assert('Top-Down negative-expectancy circuit breaker blocks trade publication',()=>pausedTopDown.strategyStatus==='PAUSED'&&pausedTopDown.trade===null&&pausedTopDown.direction==='NEUTRAL');
 assert('Top-Down pause explains the evidence-based reason to the caller',()=>pausedTopDown.failures?.some(x=>x.includes('negative expectancy'))&&pausedTopDown.grade?.grade==='NO-TRADE');
+const researchTopDown=evaluateStrategy({strategy:'TOP_DOWN',layers:[],execution:{candles:[]},price:100,allowPausedResearch:true});
+assert('Top-Down research override is explicit and marked research-only',()=>researchTopDown.strategyStatus==='PAUSED_RESEARCH_ONLY'&&researchTopDown.researchOnly===true);
+assert('Research-only override does not change the production strategy status',()=>STRATEGIES.TOP_DOWN.status==='PAUSED');
 
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
