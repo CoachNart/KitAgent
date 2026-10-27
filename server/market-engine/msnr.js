@@ -325,13 +325,22 @@ export function evaluateMSNR({candles,layers,price}){
   }
 
   const candidates=[];
-  // Higher-timeframe MSNR levels depend only on the layer candles, not on the
-  // confirmation event being evaluated. Build them once per evaluation.
-  const allLevels=layers.flatMap(layer=>
-    buildMSNRLevels(layer.candles).map(x=>({...x,tf:layer.tf}))
-  );
   for(const event of events){
     const level=event.levelState;
+    // Target levels must have existed when this confirmation closed. Building
+    // levels from the latest full candle history and using all of them lets a
+    // later-created level become the objective for an earlier signal. That is
+    // not a valid trade thesis and can make the reported target look better
+    // than the structure that was available at entry time.
+    const signalTime=event.signalCandle?.time??candles[event.signalIndex]?.time;
+    const allLevels=layers.flatMap(layer=>
+      buildMSNRLevels(layer.candles)
+        .filter(x=>{
+          const confirmedAt=layer.candles[x.confirmationIndex]?.time;
+          return Number.isFinite(signalTime)&&Number.isFinite(confirmedAt)&&confirmedAt<=signalTime;
+        })
+        .map(x=>({...x,tf:layer.tf}))
+    );
     const direction=event.direction;
     const context=currentContext(layers,direction);
     if(confirmationLevelBrokenAfterSignal(candles,event)){
