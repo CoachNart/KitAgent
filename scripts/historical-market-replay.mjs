@@ -292,7 +292,17 @@ for(const symbol of symbols){
           targetSource:trade.targetSource||result.msnr?.target?.source||result.msnr?.target?.type||'',
           invalidationSource:trade.invalidationSource||'',
           msnrLevel:result.msnr?.level?.price??null,
-          msnrLevelType:result.msnr?.level?.type||''
+          msnrLevelType:result.msnr?.level?.type||'',
+          msnrConfirmationType:result.msnr?.confirmation?.type||'',
+          msnrFlipCount:Number.isFinite(result.msnr?.level?.flipCount)?result.msnr.level.flipCount:null,
+          msnrTouches:Number.isFinite(result.msnr?.level?.touches)?result.msnr.level.touches:null,
+          msnrLevelAge:Number.isInteger(result.msnr?.level?.originIndex)&&Array.isArray(result.layers?.at(-1)?.candles)
+            ?Math.max(0,result.layers.at(-1).candles.length-1-result.msnr.level.originIndex):null,
+          msnrContextAligned:Number.isFinite(result.msnr?.context?.aligned)?result.msnr.context.aligned:null,
+          msnrContextOpposing:Number.isFinite(result.msnr?.context?.opposing)?result.msnr.context.opposing:null,
+          msnrContextDominant:result.msnr?.context?.dominant||'',
+          msnrTargetType:result.msnr?.objective?.type||'',
+          msnrTargetTimeframe:result.msnr?.objective?.timeframe||''
         };
         const outcome=future.length?simulate(executableTrade,result.direction,trade.orderType,future,tf):{result:'unresolved'};
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({...auditMeta,symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
