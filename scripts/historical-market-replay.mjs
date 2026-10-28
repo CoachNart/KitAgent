@@ -12,6 +12,7 @@ const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGE
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
 const barsByTimeframe=Object.fromEntries(String(args['bars-by-timeframe']||'').split(',').map(part=>part.trim()).filter(Boolean).map(part=>{const [tf,value]=part.split(':');return [tf.trim().toUpperCase(),Math.max(5,Math.min(1000,Number(value)||bars))];}));
 const barsFor=tf=>barsByTimeframe[tf]??bars;
+const evaluationLookback=Math.max(80,Math.min(1000,Number(args['evaluation-lookback'])||300));
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
 const requestedStrategies=String(args.strategies||Object.keys(STRATEGIES).join(',')).split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
@@ -160,7 +161,7 @@ console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log(args['data-dir']?'Historical candle source: user-supplied Bybit CSV files only; no network exchange fallback.':'Historical candle source: Bybit v5 linear perpetual candles only. No other exchange is used as a fallback.');
 if(args['data-dir'])console.log('CSV input directory:',resolve(String(args['data-dir'])),'| required files: SYMBOL_TIMEFRAME.csv (for example BTCUSDT_1H.csv).');
 console.log('Decision window:',Number.isFinite(decisionStart)?new Date(decisionStart).toISOString():'history start','→',new Date(decisionEnd).toISOString());
-console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',JSON.stringify(Object.fromEntries(requested.map(tf=>[tf,barsFor(tf)]))),'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
+console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',JSON.stringify(Object.fromEntries(requested.map(tf=>[tf,barsFor(tf)]))),'| downloaded history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| strategy evaluation lookback:',evaluationLookback,'candles/timeframe (matches the live engine default of 300)','| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
   let history;
@@ -197,7 +198,13 @@ for(const symbol of symbols){
       const all={};
       for(const layerTf of [...EXECUTION_TIMEFRAMES,'1D']){
         const layerRows=history[layerTf]||[];
-        all[layerTf]=layerRows.slice(0,closedPrefixEnd(layerRows,layerTf,cutoff));
+        const layerEnd=closedPrefixEnd(layerRows,layerTf,cutoff);
+        // Keep the historical dataset long enough to cover the decision window,
+        // but give the strategy the same rolling candle depth used by the live
+        // engine (300 candles by default). Passing the entire archive changed
+        // live-vs-replay behavior and made MSNR's per-level tracking quadratic
+        // over thousands of candles for every decision.
+        all[layerTf]=layerRows.slice(Math.max(0,layerEnd-evaluationLookback),layerEnd);
         if(all[layerTf].some(x=>x.time+DURATIONS[layerTf]>cutoff)){
           throw new Error('LOOKAHEAD GUARD: future candle leaked into '+layerTf+' snapshot at '+new Date(cutoff).toISOString());
         }
