@@ -4,7 +4,14 @@ import {gradeSetup} from './grading.js';
 
 export const CRT_MODEL='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST';
 
+export function crtStopBuffer(c,mssIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(mssIndex)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  return a*.25;
+}
+
 const dirs=new Set(['BULLISH','BEARISH']);
+const TIMEFRAME_MS={'1H':3600000,'2H':7200000,'4H':14400000,'1D':86400000};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_RECLAIM_DEPTH_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
@@ -87,7 +94,11 @@ function htfSweep(range,direction,history){
 }
 
 function executionSweep(c,range,direction){
-  const start=range.following.time;
+  const htfDuration=TIMEFRAME_MS[range.tf];
+  if(!Number.isFinite(htfDuration))return null;
+  // The HTF sweep is not confirmed until its candle closes. Do not accept an
+  // execution-timeframe sweep from inside that same still-forming HTF candle.
+  const start=range.following.time+htfDuration;
   const eligible=c.filter(x=>x.time>=start);
   // Select the most recent sweep that is itself meaningful. A wick merely one
   // tick beyond the CRT boundary is not enough; it must show measurable
@@ -156,7 +167,8 @@ function retest(c,mss,direction){
 
 function target(range,direction,c,entry,mssIndex,layers=[]){
   const primary=direction==='BULLISH'?range.high:range.low;
-  const a=atr(c,14)||0;
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(mssIndex)+1)));
+  const a=atr(history,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
   if((direction==='BULLISH'&&primary>entry)||(direction==='BEARISH'&&primary<entry)){
     if(Math.abs(primary-entry)>=minDistance)
@@ -208,9 +220,10 @@ export function evaluateCRT({candles=[],layers=[],price}){
   // defended; the level itself is the price that defines the trade zone.
   const entry=mss.level;
   const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const stopBuffer=crtStopBuffer(candles,mss.index,entry);
   const stop=direction==='BULLISH'
-    ?sweep.extreme-a*.25
-    :sweep.extreme+a*.25;
+    ?sweep.extreme-stopBuffer
+    :sweep.extreme+stopBuffer;
   const risk=Math.abs(entry-stop);
   if(!(risk>0)){
     failures.push('CRT sweep invalidation produces non-positive risk.');

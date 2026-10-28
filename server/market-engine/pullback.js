@@ -4,6 +4,12 @@ import {gradeSetup} from './grading.js';
 
 export const PULLBACK_MODEL='HTF_TREND_IMPULSE_RETRACE_CONTINUATION';
 
+export function pullbackStopBuffer(c,confirmIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(confirmIndex)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  return Math.max(a*.5,Math.abs(entry)*.0005);
+}
+
 const validDir=d=>d==='BULLISH'||d==='BEARISH';
 const last=a=>a?.at(-1)||null;
 
@@ -48,7 +54,7 @@ function retracementZone(move,direction){
   return {low:move.end.price+size*.382,high:move.end.price+size*.618,depthLow:.382,depthHigh:.618};
 }
 
-function pullbackTouches(c,zone,from){
+export function pullbackTouches(c,zone,from){
   const touches=[];
   const end=Math.min(c.length-2,from+MAX_RETRACEMENT_BARS);
   for(let i=Math.max(from+1,0);i<=end;i++){
@@ -79,7 +85,8 @@ function confirmation(c,touch,direction){
 }
 
 function nextTarget(c,direction,entry,move,after,layers=[]){
-  const a=atr(c,14)||0;
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(after)+1)));
+  const a=atr(history,14)||0;
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
   const native=(direction==='BULLISH'&&move.end.price>entry)||(direction==='BEARISH'&&move.end.price<entry)
     ?{price:move.end.price,index:move.end.index,source:'IMPULSE_EXTREME'}
@@ -102,7 +109,10 @@ export function evaluatePullback({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
   const zone=retracementZone(move,direction);
-  const touches=pullbackTouches(candles,zone,move.end.index);
+  // A swing is only knowable after its confirmation bars close. Do not
+  // classify any candle between the swing point and confirmation as a valid
+  // post-impulse retracement.
+  const touches=pullbackTouches(candles,zone,move.end.confirmationIndex);
   let touch=null,confirm=null;
   for(const candidate of touches){
     const cfm=confirmation(candles,candidate,direction);
@@ -126,7 +136,8 @@ export function evaluatePullback({candles=[],layers=[],price}){
     return {direction,failures,evidence:[]};
   }
   const entry=confirm.level;
-  const a=atr(candles,14)||Math.max(Math.abs(entry)*.001,1e-9);
+  const eventHistory=candles.slice(0,Math.min(candles.length,confirm.index+1));
+  const a=atr(eventHistory,14)||Math.max(Math.abs(entry)*.001,1e-9);
   // Invalidation belongs beyond the actual retracement extreme. The impulse
   // origin remains a thesis-level invalidation check, not the executable stop.
   const pullbackCandles=candles.slice(touch.index,confirm.index+1);
@@ -134,7 +145,7 @@ export function evaluatePullback({candles=[],layers=[],price}){
   const pullbackHigh=Math.max(...pullbackCandles.map(x=>x.high));
   // Buffer the stop beyond the full retracement structure, not just the
   // touch candle. A quarter ATR is too vulnerable to routine execution noise.
-  const stopBuffer=Math.max(a*.5,Math.abs(entry)*.0005);
+  const stopBuffer=pullbackStopBuffer(candles,confirm.index,entry);
   const stop=direction==='BULLISH'
     ?pullbackLow-stopBuffer
     :pullbackHigh+stopBuffer;

@@ -10,8 +10,11 @@ const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
 const MIN_FVG_SIZE_ATR=.10;
 
-function sweepQuality(c,x,direction,level){
-  const a=atr(c,14);
+export function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
+  // Grade a historical sweep against volatility known at that candle, not ATR
+  // calculated from the later end of the series.
+  const end=Math.min(c.length-1,Math.max(0,Math.floor(Number(asOfIndex))));
+  const a=atr(c.slice(0,end+1),14);
   const r=x?.high-x?.low;
   if(!x||!a||!Number.isFinite(r)||r<=0)return null;
   const penetration=direction==='BULLISH'?level-x.low:x.high-level;
@@ -51,7 +54,7 @@ function findSweeps(c,direction){
   for(const p of pools)for(let i=p.confirmationIndex;i<c.length;i++){
     const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price,reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
     if(swept&&reclaimed){
-      const quality=sweepQuality(c,x,direction,p.price);
+      const quality=sweepQuality(c,x,direction,p.price,i);
       if(!quality)continue;
       const extreme=direction==='BULLISH'?x.low:x.high;
       const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
@@ -79,13 +82,23 @@ function freshFvg(c,fvg,asOf){
   }
   return true;
 }
+export function smcSweepStopBuffer(c,sweepIndex,price){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(sweepIndex)+1)));
+  const a=atr(history,14)||Math.max(Math.abs(price)*.001,1e-9);
+  return Math.max(a*.15,Math.abs(price)*.00035);
+}
+export function smcMinimumTargetDistance(c,asOfIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(asOfIndex)+1)));
+  const a=atr(history,14)||0;
+  return Math.max(a*1.5,Math.abs(entry)*.005);
+}
 function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
-  const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  const minDistance=smcMinimumTargetDistance(c,asOfIndex,entry);
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null})||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
-  const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
+  const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9);
+  const buffer=smcSweepStopBuffer(c,sweep.index,price);
   const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer,entry=fvg.midpoint,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
   if(!Number.isFinite(rr)||rr<=0)return null;
   if(direction==='BULLISH'&&price<sweep.extreme)return null;

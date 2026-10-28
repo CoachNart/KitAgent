@@ -1,11 +1,11 @@
-import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
-import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
+import {buildMSNRLevels,msnrLevelsAtTime,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,objective as selectMSNRObjective,confirmationLevelBrokenAfterSignal,selectMSNRConfirmationsForExecution,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
+import {evaluateStrategy,applyMarketStructureGuard,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,SMC_MODEL} from '../server/market-engine/smc.js';
-import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
-import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
-import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
-import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,smcSweepStopBuffer,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,topDownPriceSideEligible,findValidRetest,topDownMinimumTargetDistance,topDownStopBuffer} from '../server/market-engine/topDown.js';
+import {evaluatePullback,pullbackTouches,PULLBACK_MODEL,pullbackStopBuffer} from '../server/market-engine/pullback.js';
+import {evaluateBreakout,levelCluster,preBreakRangeBoundary,breakoutStopBuffer,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
+import {evaluateCRT,CRT_MODEL,crtStopBuffer} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
@@ -21,6 +21,30 @@ const assert=(name,okOrFn,detail='')=>{
   tests.push({name,ok,detail});
 };
 assert('Execution timeframe allowlist contains only 1H, 2H, and 4H',executionTimeframesAreCorrect);
+
+// Repeated negative Bybit expectancy is a release blocker, not a reason to keep
+// exposing a strategy while more tests are written. TOP_DOWN stays paused until
+// its entry model is rebuilt and independently revalidated.
+const pausedTopDown=evaluateStrategy({strategy:'TOP_DOWN',layers:[],execution:{candles:[]},price:100});
+assert('Top-Down negative-expectancy circuit breaker blocks trade publication',()=>pausedTopDown.strategyStatus==='PAUSED'&&pausedTopDown.trade===null&&pausedTopDown.direction==='NEUTRAL');
+assert('Top-Down pause explains the evidence-based reason to the caller',()=>pausedTopDown.failures?.some(x=>x.includes('negative expectancy'))&&pausedTopDown.grade?.grade==='NO-TRADE');
+const researchTopDown=evaluateStrategy({strategy:'TOP_DOWN',layers:[],execution:{candles:[]},price:100,allowPausedResearch:true});
+assert('Top-Down research override is explicit and marked research-only',()=>researchTopDown.strategyStatus==='PAUSED_RESEARCH_ONLY'&&researchTopDown.researchOnly===true);
+assert('Research-only override does not change the production strategy status',()=>STRATEGIES.TOP_DOWN.status==='PAUSED');
+assert('Market-structure guard blocks a bullish candidate when a neutral layer records a recent bearish break',()=>{
+  const result=applyMarketStructureGuard({direction:'BULLISH',trade:{entry:100,stop:98,target:106},failures:[]},[
+    {tf:'4H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}},
+    {tf:'1H',structure:{direction:'NEUTRAL',rawDirection:'BULLISH',structureBreak:{direction:'BEARISH',age:2}}}
+  ]);
+  return result.trade===null&&result.marketStructureGuard?.reason==='TRANSITIONAL_STRUCTURE_CONFLICT';
+});
+assert('Market-structure guard treats a broken bullish protected trend as bearish transition evidence',()=>{
+  const result=applyMarketStructureGuard({direction:'BULLISH',trade:{entry:100,stop:98,target:106},failures:[]},[
+    {tf:'4H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}},
+    {tf:'1H',structure:{direction:'NEUTRAL',rawDirection:'BULLISH',structureBreak:null}}
+  ]);
+  return result.trade===null&&result.marketStructureGuard?.reason==='TRANSITIONAL_STRUCTURE_CONFLICT';
+});
 
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
@@ -67,6 +91,28 @@ const aEvents=buildMSNRLevels(aCc).flatMap(x=>x.confirmations);
 assert('A CC requires the exact body confirmation sequence',aEvents.some(x=>x.type==='A_CC'&&x.direction==='BEARISH'&&x.signalIndex===2&&x.level===100));
 assert('A CC signal body remains below level',()=>{const e=aEvents.find(x=>x.type==='A_CC');return e&&e.signalCandle.open<e.level&&e.signalCandle.close<e.level});
 
+// Historical MSNR confirmations must retain the level state at signal time,
+// even if the same level is subsequently broken or role-reversed.
+const aCcThenFlipped=[...aCc,bar(3,101,103,100.5,102)];
+const aHistoricalConfirmation=recentMSNRConfirmations(aCcThenFlipped,5)
+  .find(x=>x.type==='A_CC'&&x.signalIndex===2);
+const aFinalLevel=buildMSNRLevels(aCcThenFlipped)
+  .find(x=>x.originIndex===0&&x.baseType==='A');
+assert('MSNR confirmation keeps its event-time level type after a later role reversal',()=>aHistoricalConfirmation?.levelState?.type==='A'&&aFinalLevel?.type==='RBS');
+assert('MSNR confirmation keeps freshness and flip count from signal time',()=>aHistoricalConfirmation?.levelState?.fresh===true&&aHistoricalConfirmation.levelState.flipCount===0&&aHistoricalConfirmation.levelState.side==='RESISTANCE');
+const aEventTimeLevels=msnrLevelsAtTime(aCcThenFlipped,aCc[2].time,'1H');
+const aEventTimeLevel=aEventTimeLevels.find(x=>x.originIndex===0&&x.baseType==='A');
+assert('MSNR target levels are rebuilt from candles known at the signal time, excluding future flips',()=>aEventTimeLevel?.type==='A'&&aEventTimeLevel.fresh===false&&aEventTimeLevel.flipCount===0);
+assert('MSNR event-time target state does not change when later candles are appended',()=>{
+  const short=msnrLevelsAtTime(aCc,aCc[2].time,'1H').find(x=>x.originIndex===0&&x.baseType==='A');
+  const long=msnrLevelsAtTime(aCcThenFlipped,aCc[2].time,'1H').find(x=>x.originIndex===0&&x.baseType==='A');
+  return !!short&&!!long&&short.type===long.type&&short.fresh===long.fresh&&short.flipCount===long.flipCount&&short.touches===long.touches;
+});
+assert('MSNR rejects a confirmation after its level is later body-broken',()=>!!aHistoricalConfirmation&&confirmationLevelBrokenAfterSignal(aCcThenFlipped,aHistoricalConfirmation));
+const aCcReturnedBelow=[...aCcThenFlipped,bar(4,99,100,96,97)];
+assert('MSNR cannot resurrect a broken level after price returns to the original side',()=>!!aHistoricalConfirmation&&confirmationLevelBrokenAfterSignal(aCcReturnedBelow,aHistoricalConfirmation));
+
+
 // RBS: body closes above resistance, then ONLY the next candle can confirm.
 const rbs=[
   bar(0,99,101,98,100),
@@ -110,6 +156,20 @@ assert('MSNR accepts a confirmation from the recent execution window',()=>recent
 const layers=['4H','2H','1H','LTF'].map(tf=>({tf,candles:vCc,structure:structure(vCc)}));
 const msnrResult=evaluateMSNR({candles:vCc,layers,price:103.5});
 assert('MSNR strategy returns a result object',!!msnrResult&&Array.isArray(msnrResult.failures));
+assert('MSNR only publishes retest limit entries, never confirmation-close market chases',()=>!msnrResult.trade||msnrResult.trade.orderType==='LIMIT');
+const msnrTargetFixture=[
+  {level:104,type:'A',side:'RESISTANCE',fresh:true,flipCount:0},
+  {level:112,type:'RBS',side:'RESISTANCE',fresh:true,flipCount:3}
+];
+assert('MSNR target selection respects the nearest eligible opposing structure before target quality',()=>selectMSNRObjective(msnrTargetFixture,'BULLISH',100,2)?.level===104);
+const mixedMSNREvents=[{id:'opposing',direction:'BEARISH'},{id:'aligned',direction:'BULLISH'}];
+assert('MSNR keeps an aligned confirmation when a separate recent event conflicts with execution structure',()=>{
+  const selected=selectMSNRConfirmationsForExecution(mixedMSNREvents,'BULLISH');
+  return selected.length===1&&selected[0]===mixedMSNREvents[1];
+});
+assert('MSNR excludes conflicting confirmations when no aligned event exists',()=>{
+  return selectMSNRConfirmationsForExecution([mixedMSNREvents[0]],'BULLISH').length===0;
+});
 assert('MSNR does not use the generic execution resolver',()=>{
   const direct=evaluateMSNR({candles:vCc,layers,price:103.5});
   const routed=evaluateStrategy({strategy:'MSNR',layers,execution:{candles:vCc},price:103.5});
@@ -138,6 +198,14 @@ smcCandles[43]=bar(43,106.0,106.4,105.2,105.6);
 smcCandles[44]=bar(44,105.6,108.8,105.4,108.5);
 smcCandles[45]=bar(45,108.5,109.2,108.4,108.9);
 const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}},{tf:'LTF',candles:smcCandles,structure:{direction:'BULLISH'}}];
+assert('SMC sweep quality is measured using ATR available at the sweep candle',()=>{
+  const history=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
+  history[20]=bar(20,100,102,98.5,101.2);
+  const futureVolatility=[...history,...Array.from({length:10},(_,i)=>bar(30+i,100,120,80,110))];
+  const prefix=sweepQuality(history,history[20],'BULLISH',99,20);
+  const extended=sweepQuality(futureVolatility,futureVolatility[20],'BULLISH',99,20);
+  return prefix!==null&&extended!==null&&Math.abs(prefix.rangeATR-extended.rangeATR)<1e-12&&Math.abs(prefix.penetrationATR-extended.penetrationATR)<1e-12;
+});
 assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG');
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
@@ -177,6 +245,10 @@ assert('Top-Down uses live price to classify execution order',()=>{
     executionOrderType({direction:'BEARISH',entry:11.577,price:11.1725,tolerance:.01})==='LIMIT' &&
     executionOrderType({direction:'BEARISH',entry:11.577,price:12,tolerance:.01})===null;
 });
+assert('Top-Down keeps a valid unfilled bullish retest eligible when price has moved above the limit',()=>topDownPriceSideEligible({direction:'BULLISH',entry:100,price:104,tolerance:1}));
+assert('Top-Down keeps a valid unfilled bearish retest eligible when price has moved below the limit',()=>topDownPriceSideEligible({direction:'BEARISH',entry:100,price:96,tolerance:1}));
+assert('Top-Down rejects a bullish limit after price moves materially below entry',()=>!topDownPriceSideEligible({direction:'BULLISH',entry:100,price:96,tolerance:1}));
+assert('Top-Down rejects a bearish limit after price moves materially above entry',()=>!topDownPriceSideEligible({direction:'BEARISH',entry:100,price:104,tolerance:1}));
 assert('Top-Down routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'TOP_DOWN',layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],execution:{candles:tdCandles},price:105});return routed.direction==='BULLISH'||routed.direction==='NEUTRAL';});
 
 // Top-Down scoring regression: direction is explicit input, never an undeclared global.
@@ -193,6 +265,21 @@ const topDownScore=scoreSetup({
 });
 assert('Top-Down score calculation receives directional context without runtime ReferenceError',()=>Number.isFinite(topDownScore.score)&&topDownScore.score>0);
 
+// Pullback chronology: a swing-point wick is not a usable impulse endpoint until its confirmation bars have closed.
+const pbTouchBars=[
+  bar(0,100,101,99,100),
+  bar(1,100,105,98,104), // impulse swing point
+  bar(2,103,104,99,100), // retracement-looking candle before swing confirmation
+  bar(3,100,102,99,101), // first eligible post-confirmation touch
+  bar(4,101,103,100,102),
+  bar(5,102,104,101,103)
+];
+const pbTouchZone={low:98.5,high:100.5};
+assert('Pullback ignores retracement touches before impulse swing confirmation',()=>{
+  const touches=pullbackTouches(pbTouchBars,pbTouchZone,2);
+  return touches.length===2&&touches.every(x=>x.index>=3);
+});
+
 // Pullback contract: aligned HTF trend -> confirmed impulse -> 38.2%-61.8% retracement -> closed continuation break.
 assert('Pullback uses a defined trend-retracement-continuation model',PULLBACK_MODEL==='HTF_TREND_IMPULSE_RETRACE_CONTINUATION');
 const pbConflict=evaluatePullback({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:105});
@@ -203,6 +290,29 @@ assert('Pullback routes through its own evaluator',()=>{const routed=evaluateStr
 
 // Breakout & Retest contract: defined level -> decisive close -> timely role-reversal retest -> continuation.
 assert('Breakout & Retest uses a defined breakout-retest model',BREAKOUT_MODEL==='DEFINED_LEVEL_DECISIVE_BREAK_RETEST_HOLD_CONTINUATION');
+const breakoutHistory=Array.from({length:28},(_,i)=>bar(i,100,101,99,100.2));
+breakoutHistory[3]=bar(3,101,105,100,104);
+breakoutHistory[7]=bar(7,101,105.2,100,104.5);
+breakoutHistory[18]=bar(18,110,118,109,117);
+breakoutHistory[22]=bar(22,111,117,110,116);
+const levelBeforeFutureSwing=levelCluster(breakoutHistory,'BULLISH',16);
+const rangeFixture=Array.from({length:24},(_,i)=>bar(i,100,101,99,100));
+rangeFixture[4]=bar(4,100,104,95,101);
+rangeFixture[7]=bar(7,100,103,97,101);
+rangeFixture[12]=bar(12,101,106,100,105);
+rangeFixture[15]=bar(15,104,107,102,106);
+const rangeLevel={level:105,touches:[{index:7,price:103},{index:12,price:106}]};
+const syntheticRangeSwings={highs:[],lows:[
+  {index:2,confirmationIndex:4,price:95},
+  {index:3,confirmationIndex:17,price:80}
+]};
+const rangeBoundaryBeforeFuturePivot=preBreakRangeBoundary(rangeFixture,'BULLISH',rangeLevel,16,syntheticRangeSwings);
+const rangeBoundaryAfterFuturePivot=preBreakRangeBoundary([...rangeFixture,bar(24,100,101,90,100)],'BULLISH',rangeLevel,16,syntheticRangeSwings);
+assert('Breakout pre-range excludes a visually earlier swing confirmed after the breakout',()=>rangeBoundaryBeforeFuturePivot===95&&rangeBoundaryAfterFuturePivot===95);
+const futureVolatilityHistory=[...breakoutHistory,...Array.from({length:8},(_,i)=>bar(28+i,100,125,75,112))];
+const levelWithFutureVolatility=levelCluster(futureVolatilityHistory,'BULLISH',16);
+assert('Breakout level builder excludes swings confirmed after the historical breakout event',()=>!!levelBeforeFutureSwing&&levelBeforeFutureSwing.touches.every(x=>x.confirmationIndex<16)&&levelBeforeFutureSwing.level<110);
+assert('Future volatility cannot change a historically available breakout level',()=>!!levelBeforeFutureSwing&&!!levelWithFutureVolatility&&Math.abs(levelBeforeFutureSwing.level-levelWithFutureVolatility.level)<1e-12&&Math.abs(levelBeforeFutureSwing.tolerance-levelWithFutureVolatility.tolerance)<1e-12);
 const brMismatch=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:105});
 assert('Breakout & Retest rejects conflicting higher-timeframe directions',()=>brMismatch.direction==='NEUTRAL'&&brMismatch.failures.some(x=>x.includes('aligned')));
 const brNoLevel=evaluateBreakout({candles:tdCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BULLISH'}}],price:105});
@@ -239,6 +349,16 @@ const crtLayers=[
 assert('CRT exposes the intended entry model',CRT_MODEL==='HTF_CANDLE_RANGE_SWEEP_RECLAIM_MSS_RETEST');
 const crtValid=evaluateCRT({candles:crtExecution,layers:crtLayers,price:103});
 assert('CRT accepts a valid low-sweep/reclaim setup',()=>crtValid.direction==='BULLISH'&&crtValid.tradeReady===true);
+assert('CRT rejects an execution sweep that occurs before the higher-timeframe sweep candle closes',()=>{
+  const earlySweep=crtExecution.map(x=>({...x}));
+  earlySweep[2]={...bar(2,104,105,98.5,101),time:crtExecution[2].time};
+  for(let i=16;i<=20;i++)earlySweep[i]={...bar(i,102,103,101,102.2),time:crtExecution[i].time};
+  const r=evaluateCRT({candles:earlySweep,layers:[
+    {tf:'4H',candles:crtHTF,structure:{direction:'BULLISH'}},
+    {tf:'LTF',candles:earlySweep,structure:{direction:'BULLISH'}}
+  ],price:103});
+  return !r.tradeReady&&r.failures.some(x=>x.includes('No recent completed CRT range'));
+});
 assert('CRT requires the HTF sweep to close back inside',()=>{
   const bad=[...crtHTF.slice(0,2),htfBar(2,108,117,98,117.2)];
   const result=evaluateCRT({candles:crtExecution,layers:[{tf:'4H',candles:bad,structure:{direction:'BULLISH'}},{tf:'LTF',candles:crtExecution,structure:{direction:'BULLISH'}}],price:103});
@@ -300,6 +420,12 @@ const hierarchyLayers=[{tf:'4H',candles:hierarchyCandles,structure:{direction:'B
 const structuralTarget=selectStructuralTarget(hierarchyCandles,'BULLISH',100,{layers:hierarchyLayers,minDistance:1});
 assert('Target hierarchy never selects a target on the wrong side of entry',()=>!structuralTarget||structuralTarget.price>100);
 assert('Target hierarchy provides provenance for the selected objective',()=>!structuralTarget||typeof structuralTarget.source==='string');
+const nearestEligibleStructuralTarget=selectStructuralTarget(hierarchyCandles,'BULLISH',100,{
+  layers:hierarchyLayers,minDistance:0,asOf:hierarchyCandles.length-1,asOfTime:hierarchyCandles.at(-1)?.time
+});
+const nearestEligibleRR=nearestEligibleStructuralTarget
+  ?Math.abs(nearestEligibleStructuralTarget.price-100)/2
+  :null;
 const fartherStructuralTarget=selectMinimumRRStructuralTarget({
   trade:{entry:100,stop:98,target:102},
   direction:'BULLISH',
@@ -307,7 +433,11 @@ const fartherStructuralTarget=selectMinimumRRStructuralTarget({
   layers:hierarchyLayers,
   minimumRR:3
 });
-assert('3R recovery selects a real farther structural objective rather than fabricating a price',()=>!!fartherStructuralTarget&&fartherStructuralTarget.target>100&&fartherStructuralTarget.rr>=3&&typeof fartherStructuralTarget.targetSource==='string');
+assert('3R target recovery never jumps past a nearer eligible structural obstacle',()=>{
+  if(!nearestEligibleStructuralTarget)return fartherStructuralTarget===null;
+  if(nearestEligibleRR<3)return fartherStructuralTarget===null;
+  return !!fartherStructuralTarget&&fartherStructuralTarget.target===nearestEligibleStructuralTarget.price&&fartherStructuralTarget.rr>=3;
+});
 
 assert('Target hierarchy can prefer repeated/major structure over a single nearby pivot',()=>{
   if(!structuralTarget)return true;
@@ -318,11 +448,41 @@ assert('Structural target ranking is not an RR gate',()=>{
   return structuralTarget.rr===undefined;
 });
 
+// Top-Down target-distance volatility must be frozen at the setup event.
+const tdVolatilityHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+const tdFutureVolatility=[...tdVolatilityHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,130,70,112))];
+const tdDistanceAtEvent=topDownMinimumTargetDistance(tdVolatilityHistory,18,100);
+const tdDistanceWithFutureBars=topDownMinimumTargetDistance(tdFutureVolatility,18,100);
+assert('Top-Down target distance ignores volatility that occurred after the setup event',()=>tdDistanceAtEvent===tdDistanceWithFutureBars);
+
+const breakoutRiskHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+const breakoutRiskWithFutureVolatility=[...breakoutRiskHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,130,70,112))];
+const breakoutStopBufferAtEvent=breakoutStopBuffer(breakoutRiskHistory,100,18);
+const breakoutStopBufferWithFuture=breakoutStopBuffer(breakoutRiskWithFutureVolatility,100,18);
+assert('Breakout stop buffer uses volatility available at confirmation, not later candles',()=>breakoutStopBufferAtEvent===breakoutStopBufferWithFuture);
+
+const smcVolatilityHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+const smcFutureVolatility=[...smcVolatilityHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,130,70,112))];
+assert('SMC target distance ignores volatility that occurred after its FVG event',()=>smcMinimumTargetDistance(smcVolatilityHistory,18,100)===smcMinimumTargetDistance(smcFutureVolatility,18,100));
+
 // Target lookahead guard: a structural target must not use a swing formed after the setup event.
 const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
 lookaheadCandles[24]=bar(24,100,150,99,101);
 const lookaheadTarget=selectStructuralTarget(lookaheadCandles,'BULLISH',100,{asOf:15,asOfTime:lookaheadCandles[15].time,minDistance:1});
 assert('Target selection cannot use post-event structure',()=>!lookaheadTarget||lookaheadTarget.index<=15);
+const targetVolatilityHistory=Array.from({length:24},(_,i)=>bar(i,100,101,99,100.2));
+targetVolatilityHistory[8]=bar(8,100,105,99,104);
+targetVolatilityHistory[12]=bar(12,104,106,103,105);
+const targetFutureVolatility=[...targetVolatilityHistory,...Array.from({length:10},(_,i)=>bar(24+i,100,150,50,112))];
+const targetAtEvent=selectStructuralTarget(targetVolatilityHistory,'BULLISH',100,{asOf:18,asOfTime:targetVolatilityHistory[18].time,minDistance:1});
+const targetWithFutureBars=selectStructuralTarget(targetFutureVolatility,'BULLISH',100,{asOf:18,asOfTime:targetFutureVolatility[18].time,minDistance:1});
+assert('Shared structural target ranking ignores volatility after the setup event',()=>JSON.stringify(targetAtEvent&&{price:targetAtEvent.price,source:targetAtEvent.source,index:targetAtEvent.index})===JSON.stringify(targetWithFutureBars&&{price:targetWithFutureBars.price,source:targetWithFutureBars.source,index:targetWithFutureBars.index}));
+assert('Top-Down stop buffer ignores volatility after the retest event',()=>topDownStopBuffer(targetVolatilityHistory,18,100)===topDownStopBuffer(targetFutureVolatility,18,100));
+assert('CRT stop buffer ignores volatility after the MSS event',()=>crtStopBuffer(targetVolatilityHistory,18,100)===crtStopBuffer(targetFutureVolatility,18,100));
+assert('Pullback stop buffer ignores volatility after the continuation event',()=>pullbackStopBuffer(targetVolatilityHistory,18,100)===pullbackStopBuffer(targetFutureVolatility,18,100));
+assert('SMC stop buffer ignores volatility after the sweep event',()=>smcSweepStopBuffer(targetVolatilityHistory,18,100)===smcSweepStopBuffer(targetFutureVolatility,18,100));
+
+
 
 // Active structural break validation: older levels must not produce a fresh BOS
 // after a newer confirmed swing has superseded them.
@@ -336,6 +496,22 @@ const confirmedBreaks=structuralBreakEvents(breakFixture,breakHighs,[],7);
 assert('A superseded lower swing cannot create a fresh BOS when price closes below the active higher swing',()=>staleBreaks.length===0);
 assert('A BOS is recorded when price closes through the latest confirmed active swing',()=>confirmedBreaks.length===1&&confirmedBreaks[0].direction==='BULLISH'&&confirmedBreaks[0].level===10&&confirmedBreaks[0].index===7);
 assert('Structural break events retain the swing confirmation index for auditability',()=>confirmedBreaks[0]?.confirmationIndex===4);
+const directionalBreakCandles=Array.from({length:8},(_,i)=>bar(i,6,11,3,[6,7,7,6,7,9,9,11][i]));
+const directionalHighs=[
+  {price:8,index:0,confirmationIndex:1,time:directionalBreakCandles[0].time},
+  {price:9,index:2,confirmationIndex:3,time:directionalBreakCandles[2].time},
+  {price:10,index:4,confirmationIndex:5,time:directionalBreakCandles[4].time}
+];
+const risingLows=[
+  {price:4,index:0,confirmationIndex:1,time:directionalBreakCandles[0].time},
+  {price:5,index:2,confirmationIndex:3,time:directionalBreakCandles[2].time}
+];
+const chronologicalBos=structuralBreakEvents(directionalBreakCandles,directionalHighs,risingLows,7);
+assert('A break in an already established HH/HL sequence is classified as BOS at event time',()=>chronologicalBos.at(-1)?.type==='BOS');
+const countertrendCandles=directionalBreakCandles.map((x,i)=>i===7?{...x,close:4,low:2}:x);
+const chronologicalChoch=structuralBreakEvents(countertrendCandles,directionalHighs,risingLows,7);
+assert('A break against the established HH/HL sequence is classified as CHoCH at event time',()=>chronologicalChoch.at(-1)?.type==='CHoCH');
+
 
 // Structure model validation: protected swings must be external structure, not
 // the latest internal wick.
@@ -346,6 +522,7 @@ assert('Protected structure is sourced from external swings',()=>(
 ) && (
   !structured.protectedHigh||structured.external.highs.some(x=>x.index===structured.protectedHigh.index)
 ));
+assert('Swing-only structure module does not mislabel a recent BOS/CHoCH as MSS',()=>structured.mss===null);
 
 // Confidence audit: score structural quality only after the strategy contract passes.
 const strongConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'HTF_MAJOR_SWING',quality:1,rr:2.5},confirmation:{quality:1},freshness:{quality:1}});

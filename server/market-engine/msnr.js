@@ -140,6 +140,9 @@ function trackLevel(seed,candles){
               freshBefore:true,
               signalCandle:signal,
               middleCandle:middle,
+              // Freeze the level state at confirmation time. Later touches or
+              // flips must not rewrite the historical setup's evidence.
+              levelState:{...seed,type:currentType,side,fresh,touches,flipCount,lastTouchIndex,lastFlipIndex},
               reason:'Fresh role-reversal level was body-broken, then the very next closed candle rejected the new side.'
             });
           }
@@ -170,6 +173,9 @@ function trackLevel(seed,candles){
             freshBefore:true,
             signalCandle:candle,
             middleCandle:previous,
+            // This event describes the level before the signal consumes its
+            // freshness; preserve that historical state independently.
+            levelState:{...seed,type:currentType,side,fresh,touches,flipCount,lastTouchIndex,lastFlipIndex},
             reason:'Fresh MSNR level was touched and rejected by a full-body confirmation candle.'
           });
         }
@@ -199,18 +205,45 @@ export function buildMSNRLevels(candles){
   return makeBaseLevels(candles).map(level=>trackLevel(level,candles));
 }
 
+// Return only the MSNR level state knowable at a historical signal timestamp.
+// Rebuilding from a candle prefix prevents future flips/touches changing target
+// eligibility for an earlier trade.
+export function msnrLevelsAtTime(candles,signalTime,tf){
+  if(!Array.isArray(candles)||!Number.isFinite(signalTime))return [];
+  const knownCandles=candles.filter(candle=>
+    Number.isFinite(candle.time)&&candle.time<=signalTime
+  );
+  return buildMSNRLevels(knownCandles).map(level=>({...level,tf}));
+}
+
 export function recentMSNRConfirmations(candles,maxAge=2,prebuiltLevels=null){
   const levels=Array.isArray(prebuiltLevels)?prebuiltLevels:buildMSNRLevels(candles);
   const lastIndex=candles.length-1;
   const floor=Math.max(0,lastIndex-Math.max(0,maxAge));
   return levels
-    .flatMap(level=>level.confirmations.map(event=>({...event,levelState:level})))
+    .flatMap(level=>level.confirmations.map(event=>({
+      ...event,
+      // Older/prebuilt level records may not have snapshots; prefer the
+      // event-time state whenever it exists.
+      levelState:event.levelState||level
+    })))
     .filter(event=>event.signalIndex>=floor&&event.signalIndex<=lastIndex)
     .sort((a,b)=>b.signalIndex-a.signalIndex||b.levelState.originIndex-a.levelState.originIndex);
 }
 
 export function latestMSNRConfirmations(candles){
   return recentMSNRConfirmations(candles,0);
+}
+
+// A confirmation is no longer executable if a later closed candle has
+// body-closed through the event-time level. Returning to the original side
+// later must not resurrect the invalidated setup.
+export function confirmationLevelBrokenAfterSignal(candles,event){
+  if(!Array.isArray(candles)||!event?.levelState||!Number.isInteger(event.signalIndex))return false;
+  const level=event.levelState;
+  return candles.slice(event.signalIndex+1).some(candle=>
+    breakThroughZone(candle,level.side,level)
+  );
 }
 
 function levelStrength(type){
@@ -226,7 +259,7 @@ function currentContext(layers,direction){
   return {aligned,opposing,dominant:htf.find(x=>x!=='NEUTRAL')||'NEUTRAL'};
 }
 
-function objective(levels,direction,entry,minDistance=0){
+export function objective(levels,direction,entry,minDistance=0){
   const opposing=direction==='BULLISH'
     ?levels.filter(x=>x.side==='RESISTANCE'&&x.level>entry)
     :levels.filter(x=>x.side==='SUPPORT'&&x.level<entry);
@@ -247,9 +280,12 @@ function objective(levels,direction,entry,minDistance=0){
     x.clusterCount=clusterCount;
     x.quality=strength+(x.fresh?18:0)+(x.flipCount>0?12:0)+(clusterCount>=3?24:clusterCount===2?14:0)+(x.tf?8:0);
   }
+  // Select the nearest eligible opposing level first. Ranking a distant,
+  // high-quality pool above the next executable obstacle can manufacture an
+  // attractive R:R while price is likely to hit nearer structure first.
   return candidates
-    .sort((a,b)=>b.quality-a.quality||Math.abs(a.level-entry)-Math.abs(b.level-entry))
-    .find(x=>x.level!==entry)||null;
+    .filter(x=>x.level!==entry)
+    .sort((a,b)=>Math.abs(a.level-entry)-Math.abs(b.level-entry)||b.quality-a.quality)[0]||null;
 }
 function gradeMSNR({level,event,context,target,rr}){
   const levelType=String(event?.type||'').replace('_CC','');
@@ -265,6 +301,12 @@ function gradeMSNR({level,event,context,target,rr}){
   });
 }
 
+export function selectMSNRConfirmationsForExecution(events=[],executionDirection='NEUTRAL'){
+  if(!Array.isArray(events))return [];
+  if(!['BULLISH','BEARISH'].includes(executionDirection))return events;
+  return events.filter(event=>event?.direction===executionDirection);
+}
+
 export function evaluateMSNR({candles,layers,price}){
   const levels=buildMSNRLevels(candles);
   // Reuse the already-built level state; rebuilding it here repeats the
@@ -273,18 +315,25 @@ export function evaluateMSNR({candles,layers,price}){
   const failures=[];
   if(!events.length)failures.push('No fresh MSNR confirmation candle at a live key level.');
   const liveExecutionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
-  const conflictingConfirmation=events.find(event=>liveExecutionDirection!=='NEUTRAL'&&event.direction!==liveExecutionDirection);
-  if(conflictingConfirmation)return{
-    direction:'NEUTRAL',
-    failures:[`MSNR direction ${conflictingConfirmation.direction} conflicts with execution structure ${liveExecutionDirection}.`],
-    evidence:[],
-    levels,
-    confirmations:events,
-    candidates:[]
-  };
-  if(events.length&&Number.isFinite(price)){
+  // A conflicting recent confirmation must not veto a separate aligned event.
+  // Keep the incompatible events only when there are no aligned events, so the
+  // per-event rejection below still explains why no trade was eligible.
+  const executableEvents=selectMSNRConfirmationsForExecution(events,liveExecutionDirection);
+  if(['BULLISH','BEARISH'].includes(liveExecutionDirection)&&events.length&&!executableEvents.length){
+    const conflictingConfirmation=events[0];
+    return{
+      direction:'NEUTRAL',
+      failures:[`MSNR direction ${conflictingConfirmation.direction} conflicts with execution structure ${liveExecutionDirection}.`],
+      evidence:[],
+      levels,
+      confirmations:events,
+      candidates:[]
+    };
+  }
+  const eventsToEvaluate=executableEvents.length?executableEvents:events;
+  if(eventsToEvaluate.length&&Number.isFinite(price)){
     const liveAtr=atr(candles,14)||Math.max(Math.abs(price)*.001,1e-9);
-    const allExtended=events.every(event=>{
+    const allExtended=eventsToEvaluate.every(event=>{
       const level=event.levelState;
       const distance=price>level.zoneHigh?Math.abs(price-level.zoneHigh):price<level.zoneLow?Math.abs(level.zoneLow-price):0;
       return distance>Math.max(liveAtr*.2,Math.abs(price)*.0035);
@@ -300,15 +349,25 @@ export function evaluateMSNR({candles,layers,price}){
   }
 
   const candidates=[];
-  // Higher-timeframe MSNR levels depend only on the layer candles, not on the
-  // confirmation event being evaluated. Build them once per evaluation.
-  const allLevels=layers.flatMap(layer=>
-    buildMSNRLevels(layer.candles).map(x=>({...x,tf:layer.tf}))
-  );
-  for(const event of events){
+  for(const event of eventsToEvaluate){
     const level=event.levelState;
+    // Target levels must have existed when this confirmation closed. Building
+    // levels from the latest full candle history and using all of them lets a
+    // later-created level become the objective for an earlier signal. That is
+    // not a valid trade thesis and can make the reported target look better
+    // than the structure that was available at entry time.
+    const signalTime=event.signalCandle?.time??candles[event.signalIndex]?.time;
+    const allLevels=layers.flatMap(layer=>
+      // Filtering full-history levels is insufficient: future candles can
+      // change freshness, flips, and touches. Rebuild from the event-time prefix.
+      msnrLevelsAtTime(layer.candles,signalTime,layer.tf)
+    );
     const direction=event.direction;
     const context=currentContext(layers,direction);
+    if(confirmationLevelBrokenAfterSignal(candles,event)){
+      candidates.push({event,level,direction,context,entry:price,stop:null,target:null,rr:0,grade:{grade:'NO-TRADE',score:0},failure:'MSNR level was body-broken after confirmation; the original setup is invalidated.'});
+      continue;
+    }
     const executionDirection=layers.at(-1)?.structure?.direction||'NEUTRAL';
     const opposingHigherTimeframe=layers.slice(0,-1)
       .map(x=>x.structure?.direction||'NEUTRAL')
@@ -371,8 +430,15 @@ export function evaluateMSNR({candles,layers,price}){
       continue;
     }
     const reward=Math.abs(target.level-entry),risk=Math.abs(entry-stop),rr=risk>0?reward/risk:0;
-    const distanceFromLevel=entry>level.zoneHigh?Math.abs(entry-level.zoneHigh):entry<level.zoneLow?Math.abs(level.zoneLow-entry):0;
-    const tooExtended=distanceFromLevel>Math.max(a*.2,Math.abs(entry)*.0035);
+    // Measure extension from the live quote to the confirmed zone. Measuring
+    // from the planned entry is ineffective because entry is itself set to the
+    // zone edge, making this distance zero by construction.
+    const distanceFromLevel=price>level.zoneHigh
+      ?Math.abs(price-level.zoneHigh)
+      :price<level.zoneLow
+        ?Math.abs(level.zoneLow-price)
+        :0;
+    const tooExtended=distanceFromLevel>Math.max(a*.2,Math.abs(price)*.0035);
     if(tooExtended){
       candidates.push({event,level,direction,context,entry,stop,target,rr,grade:{grade:'NO-TRADE',score:0},failure:'Confirmation candle closed too far from the MSNR level; entry is extended.'});
       continue;
@@ -395,7 +461,7 @@ export function evaluateMSNR({candles,layers,price}){
       event,level,direction,context,entry,stop,target,rr,grade:g,
       trade:{
         entry,stop,target:target.level,risk,reward,rr,
-        orderType:direction==='BULLISH'?(price-entry<=Math.max(a*.35,Math.abs(entry)*.0015)?'MARKET':'LIMIT'):(entry-price<=Math.max(a*.35,Math.abs(entry)*.0015)?'MARKET':'LIMIT'),
+        orderType:'LIMIT',
         entryZone:{low:level.zoneLow,high:level.zoneHigh,source:'MSNR_CONFIRMED_LEVEL'},
         invalidationPrice:invalidation,
         marketEntry:price,
@@ -427,7 +493,7 @@ export function evaluateMSNR({candles,layers,price}){
     `MSNR ${best.event.type}: ${level.type} ${level.side} at ${level.level}`,
     `Freshness: ${best.event.freshBefore?'FRESH':'UNFRESH'} before confirmation`,
     `Confirmation: closed candle ${best.event.signalIndex} touched the level and kept its full body on the trade side`,
-    `Entry: live market price ${best.entry} immediately after the closed confirmation candle`,
+    `Entry: LIMIT at the confirmed MSNR zone; wait for a retest instead of chasing the confirmation close`,
     `Invalidation: ${best.trade.invalidation} from ${best.trade.invalidationSource}`,
     `Objective: next opposing MSNR level ${best.target.type} at ${best.target.level}`,
     `R:R: 1:${best.rr.toFixed(2)}`

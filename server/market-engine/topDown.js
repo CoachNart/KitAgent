@@ -4,9 +4,16 @@ import {gradeSetup} from './grading.js';
 
 export const TOP_DOWN_MODEL='HTF_ALIGNMENT_EXECUTION_BOS_RETEST';
 
+export function topDownMinimumTargetDistance(c,afterIndex,entry){
+  // Historical setup geometry must use volatility available at the event time;
+  // later candles must not make a past target appear too close or too far.
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(afterIndex)+1)));
+  const a=atr(history,14)||0;
+  return Math.max(a*1.5,Math.abs(entry)*.005);
+}
+
 function nextTarget(c,direction,afterIndex,entry,layers=[]){
-  const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
+  const minDistance=topDownMinimumTargetDistance(c,afterIndex,entry);
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:afterIndex,asOfTime:c[afterIndex]?.time??null});
 }
 function htfBias(layers){
@@ -124,6 +131,11 @@ export function findValidRetest(c,bos,direction,closeExtrema=null){
   return null;
 }
 
+export function topDownPriceSideEligible({direction,entry,price,tolerance}){
+  if(!['BULLISH','BEARISH'].includes(direction)||![entry,price,tolerance].every(Number.isFinite))return false;
+  return direction==='BULLISH'?price>=entry-tolerance:price<=entry+tolerance;
+}
+
 export function executionOrderType({direction,entry,price,tolerance}){
   const gap=Math.abs(price-entry);
   const near=gap<=tolerance;
@@ -142,13 +154,19 @@ function structuralStop(c,retestPoint,direction){
   return highs.at(-1)||null;
 }
 
+export function topDownStopBuffer(c,retestIndex,entry){
+  const history=c.slice(0,Math.min(c.length,Math.max(0,Math.floor(retestIndex)+1)));
+  const a=atr(history,14)||0;
+  return Math.max(a*.12,Math.abs(entry)*.00025);
+}
+
 function trade({c,bos,retestPoint,direction,price,targetSwing}){
-  const a=atr(c,14);
+  const a=atr(c.slice(0,retestPoint.index+1),14);
   if(!a)return null;
   const entry=bos.level;
   const stopSwing=structuralStop(c,retestPoint,direction);
   if(!stopSwing)return null;
-  const buffer=Math.max(a*.12,Math.abs(entry)*.00025);
+  const buffer=topDownStopBuffer(c,retestPoint.index,entry);
   const stop=direction==='BULLISH'?stopSwing.price-buffer:stopSwing.price+buffer;
   const risk=Math.abs(entry-stop);
   const reward=Math.abs(targetSwing.price-entry);
@@ -207,7 +225,10 @@ export function evaluateTopDown({candles,layers,price}){
   const closeExtrema=retestCloseExtrema(c);
   for(const bos of bosCandidates.slice().reverse()){
     const entry=bos.level,tolerance=Math.max(a*.35,Math.abs(entry)*.0015),distance=Math.abs(price-entry);
-    if(distance>tolerance)continue;
+    // A completed retest can leave price well away from the level while the
+    // retest limit is still unfilled. Only reject price on the wrong side of
+    // the planned entry; distance alone must not suppress a valid pending limit.
+    if(!topDownPriceSideEligible({direction,entry,price,tolerance}))continue;
     diagnostics.distanceEligible++;
     const retestStarted=Date.now();
     const rt=findValidRetest(c,bos,direction,closeExtrema);

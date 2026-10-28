@@ -13,9 +13,11 @@
     "android:open": "npm run build && npx cap open android",
     "test:integrations": "node scripts/integration-smoke.mjs",
     "test:market-engine": "node scripts/test-market-engine.mjs",
+    "test:market-structure-guard": "node scripts/test-market-structure-guard.mjs",
     "test:signal-outcomes": "node scripts/test-signal-outcomes.mjs",
     "test:market-engine-live": "node scripts/live-market-engine-diagnostic.mjs",
-    "test:market-engine-replay": "node scripts/historical-market-replay.mjs"
+    "test:market-engine-replay": "node scripts/historical-market-replay.mjs",
+    "test:replay-bybit-csv": "node scripts/test-replay-bybit-csv.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.0.0",
