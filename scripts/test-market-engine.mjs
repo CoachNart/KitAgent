@@ -167,9 +167,8 @@ assert('MSNR keeps an aligned confirmation when a separate recent event conflict
   const selected=selectMSNRConfirmationsForExecution(mixedMSNREvents,'BULLISH');
   return selected.length===1&&selected[0]===mixedMSNREvents[1];
 });
-assert('MSNR preserves conflicting-event diagnostics when no aligned confirmation exists',()=>{
-  const selected=selectMSNRConfirmationsForExecution([mixedMSNREvents[0]],'BULLISH');
-  return selected.length===1&&selected[0]===mixedMSNREvents[0];
+assert('MSNR excludes conflicting confirmations when no aligned event exists',()=>{
+  return selectMSNRConfirmationsForExecution([mixedMSNREvents[0]],'BULLISH').length===0;
 });
 assert('MSNR does not use the generic execution resolver',()=>{
   const direct=evaluateMSNR({candles:vCc,layers,price:103.5});
