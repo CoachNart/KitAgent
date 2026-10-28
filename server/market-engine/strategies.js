@@ -28,7 +28,17 @@ function structureState(layer){
   // raw swing sequencing is neutral, keep that break as transitional evidence.
   if(Object.prototype.hasOwnProperty.call(s,'rawDirection')){
     if(rawDirection!=='NEUTRAL'&&direction!=='NEUTRAL'){
-      return {tf,direction:rawDirection,transition:null};
+      // The swing sequence can still show the old trend immediately after a
+      // confirmed CHoCH. Treat that recent opposing break as transitional
+      // evidence; otherwise the guard silently allows trades into the shift.
+      const recentBreak=s?.structureBreak;
+      const transition=recentBreak?.type==='CHoCH'
+        &&DIRECTIONS.has(recentBreak.direction)
+        &&recentBreak.direction!==rawDirection
+        &&Number(recentBreak.age)<=8
+        ?recentBreak.direction
+        :null;
+      return {tf,direction:rawDirection,transition};
     }
     if(rawDirection==='NEUTRAL'&&direction!=='NEUTRAL'){
       return {tf,direction:'NEUTRAL',transition:direction};
