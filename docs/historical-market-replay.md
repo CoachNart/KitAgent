@@ -8,6 +8,8 @@ GitHub-hosted runners may be blocked from Bybit's public API (HTTP 403). CSV mod
 
 ## Required files
 
+The replay downloads a long enough candle archive to cover each requested historical decision window, but each individual strategy evaluation uses a rolling lookback of 300 candles per timeframe by default, matching the live market engine's 300-candle Bybit fetch. Override with `--evaluation-lookback=...` (80–1,000) only when deliberately testing a different lookback. This also avoids allowing thousands of older candles to change live-vs-replay strategy behavior and keeps MSNR evaluation tractable.
+
 The replay always loads four timeframes for each requested symbol because strategies may use higher-timeframe context:
 
 - `SYMBOL_1H.csv`
