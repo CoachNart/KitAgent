@@ -304,8 +304,7 @@ function gradeMSNR({level,event,context,target,rr}){
 export function selectMSNRConfirmationsForExecution(events=[],executionDirection='NEUTRAL'){
   if(!Array.isArray(events))return [];
   if(!['BULLISH','BEARISH'].includes(executionDirection))return events;
-  const aligned=events.filter(event=>event?.direction===executionDirection);
-  return aligned.length?aligned:events;
+  return events.filter(event=>event?.direction===executionDirection);
 }
 
 export function evaluateMSNR({candles,layers,price}){
@@ -320,9 +319,21 @@ export function evaluateMSNR({candles,layers,price}){
   // Keep the incompatible events only when there are no aligned events, so the
   // per-event rejection below still explains why no trade was eligible.
   const executableEvents=selectMSNRConfirmationsForExecution(events,liveExecutionDirection);
-  if(executableEvents.length&&Number.isFinite(price)){
+  if(['BULLISH','BEARISH'].includes(liveExecutionDirection)&&events.length&&!executableEvents.length){
+    const conflictingConfirmation=events[0];
+    return{
+      direction:'NEUTRAL',
+      failures:[`MSNR direction ${conflictingConfirmation.direction} conflicts with execution structure ${liveExecutionDirection}.`],
+      evidence:[],
+      levels,
+      confirmations:events,
+      candidates:[]
+    };
+  }
+  const eventsToEvaluate=executableEvents.length?executableEvents:events;
+  if(eventsToEvaluate.length&&Number.isFinite(price)){
     const liveAtr=atr(candles,14)||Math.max(Math.abs(price)*.001,1e-9);
-    const allExtended=executableEvents.every(event=>{
+    const allExtended=eventsToEvaluate.every(event=>{
       const level=event.levelState;
       const distance=price>level.zoneHigh?Math.abs(price-level.zoneHigh):price<level.zoneLow?Math.abs(level.zoneLow-price):0;
       return distance>Math.max(liveAtr*.2,Math.abs(price)*.0035);
@@ -338,7 +349,7 @@ export function evaluateMSNR({candles,layers,price}){
   }
 
   const candidates=[];
-  for(const event of executableEvents){
+  for(const event of eventsToEvaluate){
     const level=event.levelState;
     // Target levels must have existed when this confirmation closed. Building
     // levels from the latest full candle history and using all of them lets a
