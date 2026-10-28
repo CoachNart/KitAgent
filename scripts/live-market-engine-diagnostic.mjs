@@ -23,7 +23,18 @@ function addStatus(strategy,tf,result){
   status.set(key,x);
 }
 
-const instruments=await bybitInstruments();
+let instruments;
+try{
+  instruments=await bybitInstruments();
+}catch(error){
+  const message=String(error?.message||error);
+  if(/HTTP (?:403|429)|fetch failed|network|timed? ?out|ECONNRESET|ENOTFOUND/i.test(message)){
+    console.warn('SKIP LIVE ENGINE DIAGNOSTIC: this runner cannot reach the public Bybit API; offline regression and archived-candle replay remain the validation sources.');
+    console.warn(message);
+    process.exit(0);
+  }
+  throw error;
+}
 const ranked=instruments
   .filter(x=>x.providerSymbol)
   .slice()
