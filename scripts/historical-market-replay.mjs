@@ -282,10 +282,22 @@ for(const symbol of symbols){
             }else if(['ambiguous','missed','unresolved'].includes(alt.result))b[alt.result]++;
           }
         }
+        const auditMeta={
+          grade:result.grade?.grade||'NO-TRADE',
+          gradeScore:Number.isFinite(result.grade?.score)?result.grade.score:null,
+          structureBias:(result.layers||[]).map(layer=>`${layer.tf}:${layer.direction||'NEUTRAL'}`).join(' > '),
+          guardDecision:result.marketStructureGuard?.allowed===true?'ALLOWED':result.marketStructureGuard?.reason||'NOT_VETOED',
+          rr:Number.isFinite(trade.rr)?+Number(trade.rr).toFixed(3):null,
+          stopDistancePct:Number.isFinite(Number(trade.entry))&&Number(trade.entry)>0?+(Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry))*100).toFixed(4):null,
+          targetSource:trade.targetSource||result.msnr?.target?.source||result.msnr?.target?.type||'',
+          invalidationSource:trade.invalidationSource||'',
+          msnrLevel:result.msnr?.level?.price??null,
+          msnrLevelType:result.msnr?.level?.type||''
+        };
         const outcome=future.length?simulate(executableTrade,result.direction,trade.orderType,future,tf):{result:'unresolved'};
-        if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
-        if(outcome.result==='missed'){stat.missed++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
-        if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
+        if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({...auditMeta,symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
+        if(outcome.result==='missed'){stat.missed++;tradeAudit.push({...auditMeta,symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
+        if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({...auditMeta,symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
         const filledEntry=executionEntry(executableTrade,trade.orderType);
         const gross=rMultiple(executableTrade,result.direction,outcome.exit,trade.orderType);
         const riskPct=Math.abs(filledEntry-Number(executableTrade.stop))/Math.abs(filledEntry);
@@ -293,7 +305,7 @@ for(const symbol of symbols){
         const net=gross-costR;
         if(outcome.result==='win')stat.wins++;else stat.losses++;
         stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
-        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:filledEntry,plannedEntry:trade.entry,signalClose:trade.marketEntry??'',marketEntry:filledEntry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),costR:+costR.toFixed(3),riskPct:+(riskPct*100).toFixed(4),netR:+net.toFixed(3),reason:outcome.reason||(outcome.result==='loss'?'Stop reached':'Target reached')});
+        tradeAudit.push({...auditMeta,symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:filledEntry,plannedEntry:trade.entry,signalClose:trade.marketEntry??'',marketEntry:filledEntry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),costR:+costR.toFixed(3),riskPct:+(riskPct*100).toFixed(4),netR:+net.toFixed(3),reason:outcome.reason||(outcome.result==='loss'?'Stop reached':'Target reached')});
       }
     }
   }
