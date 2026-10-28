@@ -59,6 +59,18 @@ const opposingTransition=applyMarketStructureGuard(candidate(),[
 ]);
 assert('An unresolved bearish break blocks a bullish setup against the higher-timeframe bias',opposingTransition.trade===null&&opposingTransition.marketStructureGuard?.reason==='TRANSITIONAL_STRUCTURE_CONFLICT');
 
+const recentChoch=applyMarketStructureGuard(candidate(),[
+  {tf:'4H',structure:{direction:'BULLISH',rawDirection:'BULLISH',structureBreak:{type:'CHoCH',direction:'BEARISH',age:2}}},
+  {tf:'2H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}}
+]);
+assert('A recent opposing CHoCH blocks an otherwise aligned setup until structure resolves',recentChoch.trade===null&&recentChoch.marketStructureGuard?.reason==='TRANSITIONAL_STRUCTURE_CONFLICT');
+
+const staleChoch=applyMarketStructureGuard(candidate(),[
+  {tf:'4H',structure:{direction:'BULLISH',rawDirection:'BULLISH',structureBreak:{type:'CHoCH',direction:'BEARISH',age:9}}},
+  {tf:'2H',structure:{direction:'BULLISH',rawDirection:'BULLISH'}}
+]);
+assert('A stale opposing CHoCH no longer blocks aligned structure',staleChoch.trade!==null&&staleChoch.marketStructureGuard?.allowed===true);
+
 const noCandidate=applyMarketStructureGuard({direction:'BULLISH',trade:null,failures:['No valid entry']},[
   layer('4H','BEARISH'),layer('2H','BEARISH'),layer('1H','BEARISH')
 ]);
