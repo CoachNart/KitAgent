@@ -1,4 +1,4 @@
-import {buildMSNRLevels,msnrLevelsAtTime,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,objective as selectMSNRObjective,confirmationLevelBrokenAfterSignal,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
+import {buildMSNRLevels,msnrLevelsAtTime,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,objective as selectMSNRObjective,confirmationLevelBrokenAfterSignal,selectMSNRConfirmationsForExecution,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,applyMarketStructureGuard,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,sweepQuality,smcMinimumTargetDistance,smcSweepStopBuffer,SMC_MODEL} from '../server/market-engine/smc.js';
@@ -162,6 +162,15 @@ const msnrTargetFixture=[
   {level:112,type:'RBS',side:'RESISTANCE',fresh:true,flipCount:3}
 ];
 assert('MSNR target selection respects the nearest eligible opposing structure before target quality',()=>selectMSNRObjective(msnrTargetFixture,'BULLISH',100,2)?.level===104);
+const mixedMSNREvents=[{id:'opposing',direction:'BEARISH'},{id:'aligned',direction:'BULLISH'}];
+assert('MSNR keeps an aligned confirmation when a separate recent event conflicts with execution structure',()=>{
+  const selected=selectMSNRConfirmationsForExecution(mixedMSNREvents,'BULLISH');
+  return selected.length===1&&selected[0]===mixedMSNREvents[1];
+});
+assert('MSNR preserves conflicting-event diagnostics when no aligned confirmation exists',()=>{
+  const selected=selectMSNRConfirmationsForExecution([mixedMSNREvents[0]],'BULLISH');
+  return selected.length===1&&selected[0]===mixedMSNREvents[0];
+});
 assert('MSNR does not use the generic execution resolver',()=>{
   const direct=evaluateMSNR({candles:vCc,layers,price:103.5});
   const routed=evaluateStrategy({strategy:'MSNR',layers,execution:{candles:vCc},price:103.5});
