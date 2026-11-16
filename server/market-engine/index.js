@@ -6,7 +6,7 @@ import {regime} from './regime.js';
 import {evaluateStrategy,STRATEGIES} from './strategies.js';
 import {noTrade,validateTradeGeometry,validateEntryExecution,executableTrade} from './grading.js';
 
-const BYBIT={'1H':'60','2H':'120','4H':'240','1D':'D'};
+const BYBIT={'1H':'60','4H':'240'};
 const analysisLayerCache=new WeakMap();
 const CHAIN={
   '1H':['4H','1H']
@@ -104,17 +104,12 @@ export async function fetchPrice(market,symbol){
 }
 
 const STRATEGY_REASONS={
-  TOP_DOWN:'HTF alignment → execution BOS → retest & hold → structural continuation target.',
-  PULLBACK:'HTF trend → confirmed impulse → 38.2–61.8% retracement → continuation break → structural target.',
-  BREAKOUT:'Multi-touch level → decisive closed breakout → retest hold → continuation → structural/range target.',
-  SMC:'HTF bias → liquidity sweep/reclaim → MSS + displacement → fresh FVG → FVG retracement entry → opposing liquidity.',
-  MSNR:'Fresh MSNR key level → exact candle confirmation → live non-extended entry → opposing MSNR level.',
-  CRT:'Completed CRT range → one-sided sweep/reclaim → lower-timeframe sweep → MSS/displacement → retest → opposite range/external target.'
+  SMC:'4H directional structure → 1H liquidity sweep and reclaim → market structure shift with displacement → fresh FVG retracement → opposing structural liquidity target.'
 };
 
 function plan(tf){
   if(tf==='AUTO')return EXECUTION_TIMEFRAMES;
-  if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 1H, 2H, 4H, or AUTO');
+  if(!EXECUTION_TIMEFRAMES.includes(tf))throw new Error('Execution timeframe must be 1H or AUTO');
   return CHAIN[tf];
 }
 
