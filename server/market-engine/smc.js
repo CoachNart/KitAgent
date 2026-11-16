@@ -67,8 +67,8 @@ function preSweepDealingRange(c,sweep){
   // structure and put a genuine sweep on the wrong side of equilibrium.
   const swings=confirmedSwings(c,2);
   const priorOpposing=sweep.direction==='BEARISH'
-    ?swings.lows.filter(x=>x.confirmationIndex<=sweep.index&&x.index<sweep.swingIndex&&x.index>=sweep.index-40).at(-1)
-    :swings.highs.filter(x=>x.confirmationIndex<=sweep.index&&x.index<sweep.swingIndex&&x.index>=sweep.index-40).at(-1);
+    ?swings.lows.filter(x=>x.confirmationIndex<=sweep.index&&x.index>=sweep.index-40).at(-1)
+    :swings.highs.filter(x=>x.confirmationIndex<=sweep.index&&x.index>=sweep.index-40).at(-1);
   if(!priorOpposing||!Number.isFinite(sweep.level))return null;
   const high=sweep.direction==='BEARISH'?sweep.level:priorOpposing.price;
   const low=sweep.direction==='BEARISH'?priorOpposing.price:sweep.level;
