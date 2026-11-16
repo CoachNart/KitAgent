@@ -121,7 +121,7 @@ export function evaluateSMC({candles,layers,price}){
   const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=16);
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0}]};}
 
-  const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0};
+  const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0};
   const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages});
   let selected=null;
   for(const sweepCandidate of sweeps.slice().reverse()){
@@ -141,7 +141,16 @@ export function evaluateSMC({candles,layers,price}){
     if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
     stages.freshFvgAndSize++;
     const rangeCandidate=dealingRange(c,mssCandidate.index);
-    if(!rangeCandidate||(direction==='BULLISH'?fvgCandidate.midpoint>rangeCandidate.equilibrium:fvgCandidate.midpoint<rangeCandidate.equilibrium))continue;
+    if(!rangeCandidate)continue;
+    const premiumDiscountDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
+    const rangeAtr=atr(c.slice(0,mssCandidate.index+1),14)||0;
+    if(rangeAtr>0){stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;stages.premiumDiscountDeltaSamples++;}
+    const inCorrectZone=direction==='BULLISH'?premiumDiscountDelta<=0:premiumDiscountDelta>=0;
+    if(!inCorrectZone){
+      if(direction==='BULLISH')stages.premiumDiscountBullishReject++;else stages.premiumDiscountBearishReject++;
+      continue;
+    }
+    if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     stages.premiumDiscount++;
     selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:rangeCandidate};
     break;
