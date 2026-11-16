@@ -126,11 +126,15 @@ export async function publishDailyBoard(){
         });
       }
       await writes.commit();
-      const old=await database.collection('marketSetups').where('status','in',['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY']).limit(450).get();
-      if(!old.empty){
-        const archiveBatch=database.batch();
-        old.docs.forEach(d=>archiveBatch.set(d.ref,{status:'ARCHIVED',archivedAt:new Date(now),statusReason:'The previous daily board has reset.'},{merge:true}));
-        await archiveBatch.commit();
+      if(reservation.previousPublicationId){
+        const old=await database.collection('marketSetups')
+          .where('publicationId','==',reservation.previousPublicationId)
+          .where('status','in',['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY']).limit(450).get();
+        if(!old.empty){
+          const archiveBatch=database.batch();
+          old.docs.forEach(d=>archiveBatch.set(d.ref,{status:'ARCHIVED',archivedAt:new Date(now),statusReason:'The previous daily board has reset.'},{merge:true}));
+          await archiveBatch.commit();
+        }
       }
       await metaRef.set({publicationId:reservation.publicationId,publishedAt:new Date(now),resetsAt:new Date(now+BOARD_WINDOW_MS),status:'PUBLISHED',scanningAt:null,setupCount:setups.length,scanUniverse:result.scanUniverse||0,diagnostics:result.diagnostics||null,updatedAt:new Date()},{merge:true});
       return{published:true,publicationId:reservation.publicationId,setupCount:setups.length,scanUniverse:result.scanUniverse||0};
