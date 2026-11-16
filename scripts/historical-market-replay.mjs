@@ -1,6 +1,5 @@
 import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
-import {STRATEGIES} from '../server/market-engine/strategies.js';
 
 const DURATIONS={'1H':60*60_000,'4H':4*60*60_000};
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
@@ -70,7 +69,7 @@ function fingerprint(t,direction){
 async function fetchReplayCandles(symbol,tf){
   // Bybit is the sole market-data source for both live analysis and historical replay.
   // Its v5 endpoint returns newest-first candles and accepts at most 1000 rows per request.
-  const intervals={'1H':'60','2H':'120','4H':'240','1D':'D'};
+  const intervals={'1H':'60','4H':'240'};
   const interval=intervals[tf];
   if(!interval)throw new Error('Unsupported Bybit replay timeframe: '+tf);
   const requestedLimit=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
