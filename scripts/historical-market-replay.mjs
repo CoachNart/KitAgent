@@ -261,23 +261,19 @@ console.table(premiumDiscountAudit.map(x=>({
   fvgLow:+x.fvgLow.toFixed(6),fvgMidpoint:+x.fvgMidpoint.toFixed(6),fvgHigh:+x.fvgHigh.toFixed(6),
   premiumDiscountReference:x.premiumDiscountReference,
   sweepExtreme:+x.sweepExtreme.toFixed(6),
-  rollingEquilibrium:+x.rollingEquilibrium.toFixed(6),
-  rollingSweepDeltaAtr:x.sweepDeltaAtr==null?null:+x.sweepDeltaAtr.toFixed(3),
-  anchoredEquilibrium:x.anchoredEquilibrium==null?null:+x.anchoredEquilibrium.toFixed(6),
-  anchoredSweepDeltaAtr:x.anchoredDeltaAtr==null?null:+x.anchoredDeltaAtr.toFixed(3),
-  anchoredHighIndex:x.anchoredHighIndex,
-  anchoredLowIndex:x.anchoredLowIndex
+  structuralEquilibrium:+x.structuralEquilibrium.toFixed(6),
+  sweepDeltaAtr:x.sweepDeltaAtr==null?null:+x.sweepDeltaAtr.toFixed(3),
+  structuralRangeHighIndex:x.anchoredHighIndex,
+  structuralRangeLowIndex:x.anchoredLowIndex
 })));
 for(const direction of ['BULLISH','BEARISH']){
   const subset=premiumDiscountAudit.filter(x=>x.direction===direction);
-  const rolling=subset.map(x=>x.sweepDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
-  const anchored=subset.map(x=>x.anchoredDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
+  const deltas=subset.map(x=>x.sweepDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
   const median=a=>a.length?a[Math.floor(a.length/2)]:null;
-  console.log('RANGE AUDIT SAMPLE SUMMARY',direction,JSON.stringify({
+  console.log('STRUCTURAL PREMIUM/DISCOUNT SUMMARY',direction,JSON.stringify({
     samples:subset.length,
-    activeReferenceSweepDeltaAtrMedian:median(rolling),
-    confirmedSwingRangeSweepDeltaAtrMedian:median(anchored),
-    confirmedSwingRangeComparableSamples:anchored.length
+    sweepDeltaAtrMedian:median(deltas),
+    confirmedStructuralRangeSamples:deltas.length
   }));
 }
 console.log('\nTOP REJECTIONS');
