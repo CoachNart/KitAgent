@@ -8,7 +8,7 @@ const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGE
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
-const strategies=Object.keys(STRATEGIES);
+const strategies=['SMC'];
 const stats=new Map();
 const failures=new Map();
 const tradeAudit=[];
