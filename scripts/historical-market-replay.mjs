@@ -11,7 +11,7 @@ const strategies=['SMC'];
 const stats=new Map();
 const failures=new Map();
 const tradeAudit=[];
-const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','structuralTarget','rrAtLeast3','executableEntry'];
+const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','premiumDiscountBullishPass','premiumDiscountBearishPass','premiumDiscountBullishReject','premiumDiscountBearishReject','premiumDiscountDeltaAtrSum','premiumDiscountDeltaSamples','structuralTarget','rrAtLeast3','executableEntry'];
 const stageTotals=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const stageSamples=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const replayNow=Date.now();
