@@ -78,7 +78,7 @@ async function fetchReplayCandles(symbol,tf){
   while(rows.length<requestedLimit){
     const pageLimit=Math.min(1000,requestedLimit-rows.length);
     let payload=null,lastError='Bybit historical candles unavailable';
-    for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+    for(const host of ['https://api.bybit.nl']){
       try{
         const url=new URL('/v5/market/kline',host);
         url.searchParams.set('category','linear');
