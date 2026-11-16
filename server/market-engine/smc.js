@@ -63,7 +63,20 @@ function findSweeps(c,direction){
 function dealingRange(c,asOf){
   const xs=c.slice(Math.max(0,asOf-40),asOf+1); if(!xs.length)return null;
   const high=Math.max(...xs.map(x=>x.high)),low=Math.min(...xs.map(x=>x.low));
-  return{high,low,equilibrium:(high+low)/2};
+  return{high,low,equilibrium:(high+low)/2,source:'ROLLING_40_CANDLES'};
+}
+function sweepAnchoredDealingRange(c,sweep){
+  // Diagnostic comparator only: anchor the range to the sweep extreme and
+  // the latest opposing swing that was already confirmed when the sweep formed.
+  const swings=confirmedSwings(c,2);
+  const prior=sweep.direction==='BULLISH'
+    ?swings.highs.filter(x=>x.index<sweep.index&&x.confirmationIndex<=sweep.index).at(-1)
+    :swings.lows.filter(x=>x.index<sweep.index&&x.confirmationIndex<=sweep.index).at(-1);
+  if(!prior)return null;
+  const high=sweep.direction==='BULLISH'?prior.price:sweep.extreme;
+  const low=sweep.direction==='BULLISH'?sweep.extreme:prior.price;
+  if(!Number.isFinite(high)||!Number.isFinite(low)||high<=low)return null;
+  return{high,low,equilibrium:(high+low)/2,source:'SWEEP_TO_PRIOR_OPPOSING_SWING',anchorSwingIndex:prior.index,anchorSwingConfirmationIndex:prior.confirmationIndex};
 }
 function freshFvg(c,fvg,asOf){
   if(!fvg)return false;
@@ -122,7 +135,8 @@ export function evaluateSMC({candles,layers,price}){
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0}]};}
 
   const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0};
-  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages});
+  const premiumDiscountAudit=[];
+  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,premiumDiscountAudit:premiumDiscountAudit.slice(-4)});
   let selected=null;
   for(const sweepCandidate of sweeps.slice().reverse()){
     const mssCandidate=swingBreakAfter(c,sweepCandidate.index,c.length-1,direction);
@@ -142,9 +156,25 @@ export function evaluateSMC({candles,layers,price}){
     stages.freshFvgAndSize++;
     const rangeCandidate=dealingRange(c,mssCandidate.index);
     if(!rangeCandidate)continue;
+    const anchoredRange=sweepAnchoredDealingRange(c,sweepCandidate);
     const premiumDiscountDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
     const rangeAtr=atr(c.slice(0,mssCandidate.index+1),14)||0;
-    if(rangeAtr>0){stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;stages.premiumDiscountDeltaSamples++;}
+    const anchoredDelta=anchoredRange?fvgCandidate.midpoint-anchoredRange.equilibrium:null;
+    if(rangeAtr>0){
+      stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;
+      stages.premiumDiscountDeltaSamples++;
+    }
+    premiumDiscountAudit.push({
+      direction,sweepIndex:sweepCandidate.index,sweepLevel:sweepCandidate.level,sweepExtreme:sweepCandidate.extreme,
+      mssIndex:mssCandidate.index,mssLevel:mssCandidate.level,fvgIndex:fvgCandidate.index,
+      fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
+      atr:rangeAtr,
+      rollingRangeHigh:rangeCandidate.high,rollingRangeLow:rangeCandidate.low,rollingEquilibrium:rangeCandidate.equilibrium,
+      rollingDeltaAtr:rangeAtr?premiumDiscountDelta/rangeAtr:null,
+      anchoredRangeHigh:anchoredRange?.high??null,anchoredRangeLow:anchoredRange?.low??null,
+      anchoredEquilibrium:anchoredRange?.equilibrium??null,anchoredSwingIndex:anchoredRange?.anchorSwingIndex??null,
+      anchoredDeltaAtr:anchoredRange&&rangeAtr?anchoredDelta/rangeAtr:null
+    });
     const inCorrectZone=direction==='BULLISH'?premiumDiscountDelta<=0:premiumDiscountDelta>=0;
     if(!inCorrectZone){
       if(direction==='BULLISH')stages.premiumDiscountBullishReject++;else stages.premiumDiscountBearishReject++;
