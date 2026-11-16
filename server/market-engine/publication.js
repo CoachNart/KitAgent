@@ -171,10 +171,10 @@ export async function tradesHandler(view,req,res){
   if(req.method!=='GET')return json(res,405,{ok:false,error:'Method not allowed.'});
   try{
     await authorized(req);
+    const refreshed=await refreshCurrentTrades();
     let rows=[];
     if(view==='active'){
-      const trades=await refreshCurrentTrades();
-      rows=trades.filter(x=>x.status==='ACTIVE');
+      rows=refreshed.filter(x=>x.status==='ACTIVE');
     }else{
       const snap=await db().collection('marketSetups').where('status','in',['TARGET_HIT','STOP_HIT']).limit(100).get();
       rows=snap.docs.map(d=>({id:d.id,...d.data()}));
