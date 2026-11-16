@@ -49,15 +49,15 @@ function isLong(s){return String(s.bias||'').toUpperCase()==='LONG';}
 function levels(s){return{entry:Number(s.entry),stop:Number(s.stopLoss),target:Number(s.takeProfit)};}
 async function refreshTrade(doc){
   const data=doc.data(),now=Date.now(),last=ms(data.lastCheckedAt);
-  if(last&&now-last<REFRESH_MS)return data;
+  if(last&&now-last<REFRESH_MS)return{...data,id:doc.id};
   const symbol=String(data.providerSymbol||'').replace(/[^A-Z0-9]/gi,'');
   const start=ms(data.publishedAt||data.createdAt);
-  if(!symbol||!start)return data;
+  if(!symbol||!start)return{...data,id:doc.id};
   const {entry,stop,target}=levels(data);
   if(![entry,stop,target].every(Number.isFinite))return data;
   const long=isLong(data),order=String(data.orderType||'MARKET').toUpperCase();
   const candles=await candlesSince(symbol,start);
-  if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return data;}
+  if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return{...data,id:doc.id};}
   let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null;
   if(order==='LIMIT'&&status==='PENDING_ENTRY'){
     for(const c of candles){
