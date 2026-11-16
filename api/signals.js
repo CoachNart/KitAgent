@@ -156,6 +156,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
 
 export default async function handler(req,res){
   if(!['GET','POST','DELETE'].includes(req.method))return json(res,405,{error:'Method not allowed.'});
+  if(req.method==='POST')return json(res,410,{error:'Individual signal creation is disabled. Setups are published centrally.'});
   try{
     const decoded=await authenticate(req);
     if(req.method==='POST')await requireActiveAccess(decoded.uid);
