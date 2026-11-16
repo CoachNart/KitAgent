@@ -154,12 +154,20 @@ export function evaluateSMC({candles,layers,price}){
     const fvgAtr=atr(c.slice(0,fvgCandidate.index+1),14);
     if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
     stages.freshFvgAndSize++;
-    const rangeCandidate=dealingRange(c,mssCandidate.index);
+    // Premium/discount is a context filter for the liquidity raid, not for
+    // the displacement FVG formed after the raid. Measuring the FVG midpoint
+    // against the range at MSS systematically labels bearish displacement
+    // gaps as discount (and bullish gaps as premium), rejecting the very
+    // retracement setups the model is designed to trade. Use the completed
+    // dealing range immediately BEFORE the sweep; this is known at sweep time
+    // and avoids using the post-sweep displacement to define its own location.
+    const rangeCandidate=dealingRange(c,sweepCandidate.index-1);
     if(!rangeCandidate)continue;
     const anchoredRange=sweepAnchoredDealingRange(c,sweepCandidate);
-    const premiumDiscountDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
-    const rangeAtr=atr(c.slice(0,mssCandidate.index+1),14)||0;
-    const anchoredDelta=anchoredRange?fvgCandidate.midpoint-anchoredRange.equilibrium:null;
+    const premiumDiscountDelta=sweepCandidate.extreme-rangeCandidate.equilibrium;
+    const fvgDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
+    const rangeAtr=atr(c.slice(0,sweepCandidate.index),14)||0;
+    const anchoredDelta=anchoredRange?sweepCandidate.extreme-anchoredRange.equilibrium:null;
     if(rangeAtr>0){
       stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;
       stages.premiumDiscountDeltaSamples++;
@@ -168,9 +176,11 @@ export function evaluateSMC({candles,layers,price}){
       direction,sweepIndex:sweepCandidate.index,sweepLevel:sweepCandidate.level,sweepExtreme:sweepCandidate.extreme,
       mssIndex:mssCandidate.index,mssLevel:mssCandidate.level,fvgIndex:fvgCandidate.index,
       fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
+      premiumDiscountReference:'PRE_SWEEP_EXTREME',
       atr:rangeAtr,
       rollingRangeHigh:rangeCandidate.high,rollingRangeLow:rangeCandidate.low,rollingEquilibrium:rangeCandidate.equilibrium,
-      rollingDeltaAtr:rangeAtr?premiumDiscountDelta/rangeAtr:null,
+      rollingDeltaAtr:rangeAtr?fvgDelta/rangeAtr:null,
+      sweepDeltaAtr:rangeAtr?premiumDiscountDelta/rangeAtr:null,
       anchoredRangeHigh:anchoredRange?.high??null,anchoredRangeLow:anchoredRange?.low??null,
       anchoredEquilibrium:anchoredRange?.equilibrium??null,anchoredSwingIndex:anchoredRange?.anchorSwingIndex??null,
       anchoredDeltaAtr:anchoredRange&&rangeAtr?anchoredDelta/rangeAtr:null
