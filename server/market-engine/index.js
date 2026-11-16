@@ -313,6 +313,9 @@ export default async function handler(req,res){
     }
   }
 
+  return json(res,410,{ok:false,error:'Manual market analysis has been retired. Use the shared Daily setups board.'});
+
+  /* Legacy manual-analysis handler retained below for reference; it is no longer reachable. */
   try{
     const auth=await authenticate(req);
     await requireActiveAccess(auth.uid);
