@@ -11,6 +11,9 @@ const strategies=['SMC'];
 const stats=new Map();
 const failures=new Map();
 const tradeAudit=[];
+const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','structuralTarget','rrAtLeast3','executableEntry'];
+const stageTotals=Object.fromEntries(stageKeys.map(key=>[key,0]));
+const stageSamples=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const replayNow=Date.now();
 let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
@@ -182,6 +185,13 @@ for(const symbol of symbols){
           continue;
         }
         console.log('STRATEGY DONE',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy,Date.now()-strategyStarted+'ms');
+        const stageDiagnostic=(result?.evidence||[]).find(x=>x?.type==='SMC_STAGE_DIAGNOSTICS');
+        if(stageDiagnostic){
+          for(const key of stageKeys){
+            const value=Number(stageDiagnostic[key]);
+            if(Number.isFinite(value)){stageTotals[key]+=value;stageSamples[key]++;}
+          }
+        }
         if(strategy==='TOP_DOWN'){
           const rejectionDiagnostics=(result?.evidence||[]).find(x=>x?.type==='TOP_DOWN_REJECTION_DIAGNOSTICS');
           if(rejectionDiagnostics)console.log('TOP_DOWN STAGE DIAGNOSTICS',symbol,tf,snapshotIndex+'/'+snapshots.length,JSON.stringify(rejectionDiagnostics));
@@ -229,6 +239,8 @@ const rows=[...stats.values()].map(s=>{
 console.table(rows);
 console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
 console.table(tradeAudit);
+console.log('\nSMC STAGE FUNNEL (counts are per evaluated snapshot; a later stage only increments after the prior conditions pass)');
+console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
 const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
