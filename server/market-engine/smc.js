@@ -172,12 +172,10 @@ export function evaluateSMC({candles,layers,price}){
       fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
       premiumDiscountReference:'PRE_SWEEP_CONFIRMED_SWING_RANGE',
       atr:rangeAtr,
-      rollingRangeHigh:rangeCandidate.high,rollingRangeLow:rangeCandidate.low,rollingEquilibrium:rangeCandidate.equilibrium,
-      rollingDeltaAtr:rangeAtr?fvgDelta/rangeAtr:null,
+      structuralRangeHigh:rangeCandidate.high,structuralRangeLow:rangeCandidate.low,
+      structuralEquilibrium:rangeCandidate.equilibrium,
       sweepDeltaAtr:rangeAtr?premiumDiscountDelta/rangeAtr:null,
-      anchoredRangeHigh:anchoredRange?.high??null,anchoredRangeLow:anchoredRange?.low??null,
-      anchoredEquilibrium:anchoredRange?.equilibrium??null,anchoredHighIndex:anchoredRange?.anchorHighIndex??null,anchoredLowIndex:anchoredRange?.anchorLowIndex??null,
-      anchoredDeltaAtr:anchoredRange&&rangeAtr?anchoredDelta/rangeAtr:null
+      anchoredHighIndex:rangeCandidate.anchorHighIndex,anchoredLowIndex:rangeCandidate.anchorLowIndex
     });
     const inCorrectZone=direction==='BULLISH'?premiumDiscountDelta<=0:premiumDiscountDelta>=0;
     if(!inCorrectZone){
