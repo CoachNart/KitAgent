@@ -114,7 +114,7 @@ export async function publishDailyBoard(){
         const id=database.collection('marketSetups').doc();
         writes.set(id,{
           publicationId:reservation.publicationId,sourceSetupId:cleanId(s.id),symbol:s.symbol,providerSymbol:s.providerSymbol,
-          strategy:s.strategy,strategyKey:s.strategyKey,bias:s.bias,timeframe:s.timeframe,grade:s.grade,qualityScore:s.score,
+          strategy:s.strategy,strategyKey:s.strategyKey,model:s.model||'LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG',analysisTimeframes:['4H','1H'],bias:s.bias,timeframe:s.timeframe,grade:s.grade,qualityScore:s.score,
           confidence:s.confidence,entry:Number(s.entry),plannedEntry:s.plannedEntry??null,orderType,
           marketEntry:Number(s.marketEntry),stopLoss:Number(s.stopLoss),takeProfit:Number(s.takeProfit),
           rr:Number(s.rr),regime:s.regime,evidence:s.evidence||[],layers:s.layers||[],targetSource:s.targetSource||null,
@@ -136,7 +136,7 @@ export async function publishDailyBoard(){
           await archiveBatch.commit();
         }
       }
-      await metaRef.set({publicationId:reservation.publicationId,publishedAt:new Date(now),resetsAt:new Date(now+BOARD_WINDOW_MS),status:'PUBLISHED',scanningAt:null,setupCount:setups.length,scanUniverse:result.scanUniverse||0,diagnostics:result.diagnostics||null,updatedAt:new Date()},{merge:true});
+      await metaRef.set({publicationId:reservation.publicationId,publishedAt:new Date(now),resetsAt:new Date(now+BOARD_WINDOW_MS),status:'PUBLISHED',scanningAt:null,setupCount:setups.length,scanUniverse:result.scanUniverse||0,model:result.model||'LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG',analysisTimeframes:['4H','1H'],diagnostics:result.diagnostics||null,updatedAt:new Date()},{merge:true});
       return{published:true,publicationId:reservation.publicationId,setupCount:setups.length,scanUniverse:result.scanUniverse||0};
     }catch(error){
       await metaRef.set({status:'FAILED',scanningAt:null,error:String(error?.message||error),updatedAt:new Date()},{merge:true});
@@ -168,7 +168,7 @@ export async function dailySetupsHandler(req,res){
     const boardRows=boardSnap?boardSnap.docs.map(d=>({id:d.id,...d.data()})):[];
     const current=boardRows.filter(x=>['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY'].includes(x.status));
     const recentChanges=boardRows.filter(x=>['ACTIVE','INVALIDATED','MISSED_ENTRY','TARGET_HIT','STOP_HIT'].includes(x.status));
-    return json(res,200,{ok:true,setups:current.sort((a,b)=>ms(b.publishedAt)-ms(a.publishedAt)),recentChanges,publicationId:meta.publicationId||null,publishedAt:meta.publishedAt||null,resetsAt:meta.resetsAt||null,setupCount:Number(meta.setupCount)||0,scanUniverse:Number(meta.scanUniverse)||0,source:'Bybit linear perpetuals',status:meta.status||'WAITING'});
+    return json(res,200,{ok:true,setups:current.sort((a,b)=>ms(b.publishedAt)-ms(a.publishedAt)),recentChanges,publicationId:meta.publicationId||null,publishedAt:meta.publishedAt||null,resetsAt:meta.resetsAt||null,setupCount:Number(meta.setupCount)||0,scanUniverse:Number(meta.scanUniverse)||0,source:'Bybit linear perpetuals',model:meta.model||'LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG',analysisTimeframes:meta.analysisTimeframes||['4H','1H'],status:meta.status||'WAITING'});
   }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Daily setups could not be loaded.'});}
 }
 export async function tradesHandler(view,req,res){
