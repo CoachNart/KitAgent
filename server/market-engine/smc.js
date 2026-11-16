@@ -61,19 +61,23 @@ function findSweeps(c,direction){
   return out.sort((a,b)=>a.index-b.index);
 }
 function preSweepDealingRange(c,sweep){
-  // Use the latest confirmed swing high and swing low that existed BEFORE
-  // the raid. A rolling candle midpoint can sit far outside the active
-  // structural dealing range after a directional expansion and misclassify
-  // valid liquidity raids. Never use pivots confirmed after the sweep.
+  // Anchor the dealing range to the exact liquidity pool that was raided.
+  // The opposite boundary is the latest confirmed opposing swing before
+  // the raid. Using the latest same-side pivot can select an unrelated
+  // structure and put a genuine sweep on the wrong side of equilibrium.
   const swings=confirmedSwings(c,2);
-  const priorHigh=swings.highs.filter(x=>x.confirmationIndex<=sweep.index&&x.index>=sweep.index-40).at(-1);
-  const priorLow=swings.lows.filter(x=>x.confirmationIndex<=sweep.index&&x.index>=sweep.index-40).at(-1);
-  if(!priorHigh||!priorLow||priorHigh.price<=priorLow.price)return null;
+  const priorOpposing=sweep.direction==='BEARISH'
+    ?swings.lows.filter(x=>x.confirmationIndex<=sweep.index&&x.index<sweep.swingIndex&&x.index>=sweep.index-40).at(-1)
+    :swings.highs.filter(x=>x.confirmationIndex<=sweep.index&&x.index<sweep.swingIndex&&x.index>=sweep.index-40).at(-1);
+  if(!priorOpposing||!Number.isFinite(sweep.level))return null;
+  const high=sweep.direction==='BEARISH'?sweep.level:priorOpposing.price;
+  const low=sweep.direction==='BEARISH'?priorOpposing.price:sweep.level;
+  if(!Number.isFinite(high)||!Number.isFinite(low)||high<=low)return null;
   return{
-    high:priorHigh.price,low:priorLow.price,
-    equilibrium:(priorHigh.price+priorLow.price)/2,
-    source:'PRE_SWEEP_CONFIRMED_SWING_RANGE',
-    anchorHighIndex:priorHigh.index,anchorLowIndex:priorLow.index
+    high,low,equilibrium:(high+low)/2,
+    source:'SWEPT_POOL_TO_PRIOR_OPPOSING_SWING',
+    anchorHighIndex:sweep.direction==='BEARISH'?sweep.swingIndex:priorOpposing.index,
+    anchorLowIndex:sweep.direction==='BEARISH'?priorOpposing.index:sweep.swingIndex
   };
 }
 function freshFvg(c,fvg,asOf){
