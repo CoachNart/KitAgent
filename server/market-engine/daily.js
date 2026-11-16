@@ -16,7 +16,7 @@ function json(res,status,payload){
 
 export async function topSymbols(){
   let lastError='Bybit market scanner unavailable';
-  for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+  for(const host of ['https://api.bybit.nl']){
     try{
       const url=new URL('/v5/market/tickers',host);
       url.searchParams.set('category','linear');
