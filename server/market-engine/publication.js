@@ -1,0 +1,168 @@
+import admin from 'firebase-admin';
+import fs from 'node:fs';
+import { authenticate, requireActiveAccess } from '../access.js';
+import { scanTopQuality } from './daily.js';
+
+const BOARD_DOC='daily',BOARD_WINDOW_MS=24*60*60*1000,REFRESH_MS=60*1000,CANDLE_MS=30*60*1000;
+function getAdmin(){
+  if(admin.apps.length)return admin;
+  const raw=process.env.FIREBASE_SERVICE_ACCOUNT_JSON,path=process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if(raw){admin.initializeApp({credential:admin.credential.cert(JSON.parse(raw.trim().replace(/^['"]|['"]$/g,'')))});return admin;}
+  if(path&&fs.existsSync(path)){admin.initializeApp({credential:admin.credential.cert(JSON.parse(fs.readFileSync(path,'utf8')))});return admin;}
+  throw Object.assign(new Error('Firebase Admin credentials are missing.'),{code:'FIREBASE_ADMIN_CREDENTIALS_MISSING'});
+}
+const db=()=>getAdmin().firestore();
+const ms=v=>v?.toMillis?v.toMillis():v?.toDate?v.toDate().getTime():typeof v==='number'?v:Date.parse(v||'')||0;
+const json=(res,status,body)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.end(JSON.stringify(body));};
+const cleanId=v=>String(v||'').replace(/[^A-Z0-9_-]/gi,'-').slice(0,140);
+async function candlesSince(symbol,startMs){
+  const all=[];let end=Date.now(),pages=0;
+  while(end>=startMs&&pages<12){
+    let lastError='';
+    let rows=null;
+    for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+      try{
+        const u=new URL('/v5/market/kline',host);
+        u.searchParams.set('category','linear');u.searchParams.set('symbol',symbol);
+        u.searchParams.set('interval','30');u.searchParams.set('start',String(startMs));
+        u.searchParams.set('end',String(end));u.searchParams.set('limit','1000');
+        const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
+        if(!r.ok){lastError='Bybit candles HTTP '+r.status;continue;}
+        const b=await r.json();
+        if(b?.retCode!==0){lastError='Bybit candles retCode '+b?.retCode;continue;}
+        rows=(b.result?.list||[]).slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
+          .filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));
+        break;
+      }catch(e){lastError=e?.message||String(e);}
+    }
+    if(!rows)throw new Error(lastError||'Bybit candles unavailable');
+    if(!rows.length)break;
+    all.push(...rows);
+    const oldest=rows[0].time;
+    if(oldest<=startMs||rows.length<1000)break;
+    end=oldest-1;pages++;
+  }
+  return [...new Map(all.map(x=>[x.time,x])).values()].filter(x=>x.time>=startMs).sort((a,b)=>a.time-b.time);
+}
+function touched(c,price){return c.low<=price&&c.high>=price;}
+function isLong(s){return String(s.bias||'').toUpperCase()==='LONG';}
+function levels(s){return{entry:Number(s.entry),stop:Number(s.stopLoss),target:Number(s.takeProfit)};}
+async function refreshTrade(doc){
+  const data=doc.data(),now=Date.now(),last=ms(data.lastCheckedAt);
+  if(last&&now-last<REFRESH_MS)return data;
+  const symbol=String(data.providerSymbol||'').replace(/[^A-Z0-9]/gi,'');
+  const start=ms(data.publishedAt||data.createdAt);
+  if(!symbol||!start)return data;
+  const {entry,stop,target}=levels(data);
+  if(![entry,stop,target].every(Number.isFinite))return data;
+  const long=isLong(data),order=String(data.orderType||'MARKET').toUpperCase();
+  const candles=await candlesSince(symbol,start);
+  if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return data;}
+  let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null;
+  if(order==='LIMIT'&&status==='PENDING_ENTRY'){
+    for(const c of candles){
+      const entryHit=touched(c,entry),stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
+      if(!entryHit&&stopHit){status='INVALIDATED';reason='The stop/invalidation level was reached before the limit entry filled.';break;}
+      if(!entryHit&&targetHit){status='MISSED_ENTRY';reason='Price reached the target area without filling the planned limit entry.';break;}
+      if(entryHit){
+        if(stopHit||targetHit){status='INVALIDATED';reason='Entry and an exit level were touched in the same 30-minute candle; execution order cannot be verified safely.';break;}
+        status='ACTIVE';activatedAt=c.time+CANDLE_MS;reason='Limit entry confirmed by a completed Bybit 30-minute candle.';break;
+      }
+    }
+    if(status==='PENDING_ENTRY'&&now-start>=BOARD_WINDOW_MS){status='MISSED_ENTRY';reason='The 24-hour setup window ended without a confirmed limit fill.';}
+  }
+  if(order==='MARKET'&&!['TARGET_HIT','STOP_HIT'].includes(status)){status='ACTIVE';activatedAt=activatedAt||start;}
+  if(status==='ACTIVE'){
+    for(const c of candles){
+      if(c.time<activatedAt)continue;
+      if(c.time===Math.floor(activatedAt/CANDLE_MS)*CANDLE_MS&&activatedAt>c.time)continue;
+      const stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
+      if(stopHit&&targetHit){reason='Both stop and target were touched in one candle. Outcome is ambiguous and will not be guessed.';break;}
+      if(stopHit){status='STOP_HIT';reason='Stop loss reached on Bybit 30-minute OHLC data.';break;}
+      if(targetHit){status='TARGET_HIT';reason='Take profit reached on Bybit 30-minute OHLC data.';break;}
+    }
+  }
+  const patch={status,statusReason:reason,lastCheckedAt:new Date(now),currentPrice:candles.at(-1).close};
+  if(activatedAt)patch.activatedAt=new Date(activatedAt);
+  if(['TARGET_HIT','STOP_HIT'].includes(status)){patch.closedAt=new Date(now);patch.outcomeEvidence={source:'bybit_30m_ohlc',event:status,candleResolution:'30m OHLC; ambiguous dual-touch candles are not classified'};}
+  await doc.ref.set(patch,{merge:true});
+  return{...data,...patch,id:doc.id};
+}
+export async function publishDailyBoard(){
+  const database=db(),metaRef=database.collection('marketPublications').doc(BOARD_DOC),now=Date.now();
+  return database.runTransaction(async tx=>{
+    const snap=await tx.get(metaRef),current=snap.exists?snap.data():null;
+    if(current&&ms(current.publishedAt)>0&&now-ms(current.publishedAt)<BOARD_WINDOW_MS)
+      return{published:false,reason:'BOARD_STILL_ACTIVE',publicationId:current.publicationId||null};
+    const publicationId=new Date(now).toISOString().slice(0,10)+'-'+String(now);
+    tx.set(metaRef,{publicationId,publishedAt:new Date(now),resetsAt:new Date(now+BOARD_WINDOW_MS),status:'SCANNING',source:'Bybit linear perpetuals',updatedAt:new Date(now)},{merge:true});
+    return{published:true,publicationId};
+  }).then(async reservation=>{
+    if(!reservation.published)return reservation;
+    const old=await database.collection('marketSetups').where('status','in',['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY']).limit(450).get();
+    let batch=database.batch();
+    old.docs.forEach(d=>batch.set(d.ref,{status:'ARCHIVED',archivedAt:new Date(now),statusReason:'The previous daily board has reset.'},{merge:true}));
+    if(!old.empty)await batch.commit();
+    try{
+      const result=await scanTopQuality();
+      const setups=(result.setups||[]).slice(0,5);
+      const writes=database.batch();
+      for(const s of setups){
+        const orderType=String(s.orderType||'MARKET').toUpperCase();
+        const id=database.collection('marketSetups').doc();
+        writes.set(id,{
+          publicationId:reservation.publicationId,sourceSetupId:cleanId(s.id),symbol:s.symbol,providerSymbol:s.providerSymbol,
+          strategy:s.strategy,strategyKey:s.strategyKey,bias:s.bias,timeframe:s.timeframe,grade:s.grade,qualityScore:s.score,
+          confidence:s.confidence,entry:Number(s.entry),plannedEntry:s.plannedEntry??null,orderType,
+          marketEntry:Number(s.marketEntry),stopLoss:Number(s.stopLoss),takeProfit:Number(s.takeProfit),
+          rr:Number(s.rr),regime:s.regime,evidence:s.evidence||[],layers:s.layers||[],targetSource:s.targetSource||null,
+          targetSelection:s.targetSelection||null,entryReason:s.entryReason||null,
+          status:orderType==='MARKET'?'ACTIVE':'PENDING_ENTRY',
+          statusReason:orderType==='MARKET'?'Market setup activated at publication.':'Waiting for a confirmed limit fill.',
+          publishedAt:new Date(now),createdAt:new Date(now),activatedAt:orderType==='MARKET'?new Date(now):null,
+          lastCheckedAt:null,source:'Bybit linear perpetuals',engineVersion:'market-engine-v7'
+        });
+      }
+      await writes.commit();
+      await metaRef.set({status:'PUBLISHED',setupCount:setups.length,scanUniverse:result.scanUniverse||0,diagnostics:result.diagnostics||null,updatedAt:new Date()},{merge:true});
+      return{published:true,publicationId:reservation.publicationId,setupCount:setups.length,scanUniverse:result.scanUniverse||0};
+    }catch(error){
+      await metaRef.set({status:'FAILED',error:String(error?.message||error),updatedAt:new Date()},{merge:true});
+      throw error;
+    }
+  });
+}
+async function refreshCurrentTrades(){
+  const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE']).limit(100).get();
+  const output=[];
+  for(const doc of snap.docs){try{output.push(await refreshTrade(doc));}catch(error){await doc.ref.set({lastCheckError:String(error?.message||error),lastCheckedAt:new Date()},{merge:true});output.push({...doc.data(),id:doc.id});}}
+  return output;
+}
+async function authorized(req){const user=await authenticate(req);const access=await requireActiveAccess(user.uid);return{user,access};}
+export async function dailySetupsHandler(req,res){
+  if(req.method!=='GET')return json(res,405,{ok:false,error:'Method not allowed. Daily publication is managed centrally.'});
+  try{
+    await authorized(req);
+    const trades=await refreshCurrentTrades();
+    const metaSnap=await db().collection('marketPublications').doc(BOARD_DOC).get(),meta=metaSnap.exists?metaSnap.data():{};
+    const current=trades.filter(x=>x.publicationId===meta.publicationId&&['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY'].includes(x.status));
+    return json(res,200,{ok:true,setups:current.sort((a,b)=>ms(b.publishedAt)-ms(a.publishedAt)),publicationId:meta.publicationId||null,publishedAt:meta.publishedAt||null,resetsAt:meta.resetsAt||null,setupCount:Number(meta.setupCount)||0,scanUniverse:Number(meta.scanUniverse)||0,source:'Bybit linear perpetuals',status:meta.status||'WAITING'});
+  }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Daily setups could not be loaded.'});}
+}
+export async function tradesHandler(view,req,res){
+  if(req.method!=='GET')return json(res,405,{ok:false,error:'Method not allowed.'});
+  try{
+    await authorized(req);
+    const trades=await refreshCurrentTrades();
+    const rows=view==='active'?trades.filter(x=>x.status==='ACTIVE'):trades.filter(x=>['TARGET_HIT','STOP_HIT'].includes(x.status));
+    rows.sort((a,b)=>ms(b.activatedAt||b.publishedAt)-ms(a.activatedAt||a.publishedAt));
+    return json(res,200,{ok:true,trades:rows,source:'Bybit linear perpetuals'});
+  }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Trade records could not be loaded.'});}
+}
+export async function cronHandler(req,res){
+  if(!['GET','POST'].includes(req.method))return json(res,405,{ok:false,error:'Method not allowed.'});
+  const secret=process.env.CRON_SECRET;
+  if(!secret||String(req.headers.authorization||'')!=='Bearer '+secret)return json(res,401,{ok:false,error:'Unauthorized cron request.'});
+  try{return json(res,200,{ok:true,...await publishDailyBoard()});}
+  catch(error){return json(res,500,{ok:false,error:error?.message||'Daily publication failed.'});}
+}
