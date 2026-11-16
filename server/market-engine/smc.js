@@ -65,18 +65,21 @@ function dealingRange(c,asOf){
   const high=Math.max(...xs.map(x=>x.high)),low=Math.min(...xs.map(x=>x.low));
   return{high,low,equilibrium:(high+low)/2,source:'ROLLING_40_CANDLES'};
 }
-function sweepAnchoredDealingRange(c,sweep){
-  // Diagnostic comparator only: anchor the range to the sweep extreme and
-  // the latest opposing swing that was already confirmed when the sweep formed.
+function preSweepDealingRange(c,sweep){
+  // Use the latest confirmed swing high and swing low that existed BEFORE
+  // the raid. A rolling candle midpoint can sit far outside the active
+  // structural dealing range after a directional expansion and misclassify
+  // valid liquidity raids. Never use pivots confirmed after the sweep.
   const swings=confirmedSwings(c,2);
-  const prior=sweep.direction==='BULLISH'
-    ?swings.highs.filter(x=>x.index<sweep.index&&x.confirmationIndex<=sweep.index).at(-1)
-    :swings.lows.filter(x=>x.index<sweep.index&&x.confirmationIndex<=sweep.index).at(-1);
-  if(!prior)return null;
-  const high=sweep.direction==='BULLISH'?prior.price:sweep.extreme;
-  const low=sweep.direction==='BULLISH'?sweep.extreme:prior.price;
-  if(!Number.isFinite(high)||!Number.isFinite(low)||high<=low)return null;
-  return{high,low,equilibrium:(high+low)/2,source:'SWEEP_TO_PRIOR_OPPOSING_SWING',anchorSwingIndex:prior.index,anchorSwingConfirmationIndex:prior.confirmationIndex};
+  const priorHigh=swings.highs.filter(x=>x.confirmationIndex<=sweep.index&&x.index>=sweep.index-40).at(-1);
+  const priorLow=swings.lows.filter(x=>x.confirmationIndex<=sweep.index&&x.index>=sweep.index-40).at(-1);
+  if(!priorHigh||!priorLow||priorHigh.price<=priorLow.price)return null;
+  return{
+    high:priorHigh.price,low:priorLow.price,
+    equilibrium:(priorHigh.price+priorLow.price)/2,
+    source:'PRE_SWEEP_CONFIRMED_SWING_RANGE',
+    anchorHighIndex:priorHigh.index,anchorLowIndex:priorLow.index
+  };
 }
 function freshFvg(c,fvg,asOf){
   if(!fvg)return false;
@@ -163,8 +166,8 @@ export function evaluateSMC({candles,layers,price}){
     // and avoids using the post-sweep displacement to define its own location.
     const rangeCandidate=dealingRange(c,sweepCandidate.index-1);
     if(!rangeCandidate)continue;
-    const anchoredRange=sweepAnchoredDealingRange(c,sweepCandidate);
-    const premiumDiscountDelta=sweepCandidate.extreme-rangeCandidate.equilibrium;
+    const anchoredRange=preSweepDealingRange(c,sweepCandidate);
+    const premiumDiscountDelta=sweepCandidate.extreme-(anchoredRange?.equilibrium??rangeCandidate.equilibrium);
     const fvgDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
     const rangeAtr=atr(c.slice(0,sweepCandidate.index),14)||0;
     const anchoredDelta=anchoredRange?sweepCandidate.extreme-anchoredRange.equilibrium:null;
@@ -176,13 +179,13 @@ export function evaluateSMC({candles,layers,price}){
       direction,sweepIndex:sweepCandidate.index,sweepLevel:sweepCandidate.level,sweepExtreme:sweepCandidate.extreme,
       mssIndex:mssCandidate.index,mssLevel:mssCandidate.level,fvgIndex:fvgCandidate.index,
       fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
-      premiumDiscountReference:'PRE_SWEEP_EXTREME',
+      premiumDiscountReference:anchoredRange?'PRE_SWEEP_CONFIRMED_SWING_RANGE':'ROLLING_40_FALLBACK',
       atr:rangeAtr,
       rollingRangeHigh:rangeCandidate.high,rollingRangeLow:rangeCandidate.low,rollingEquilibrium:rangeCandidate.equilibrium,
       rollingDeltaAtr:rangeAtr?fvgDelta/rangeAtr:null,
       sweepDeltaAtr:rangeAtr?premiumDiscountDelta/rangeAtr:null,
       anchoredRangeHigh:anchoredRange?.high??null,anchoredRangeLow:anchoredRange?.low??null,
-      anchoredEquilibrium:anchoredRange?.equilibrium??null,anchoredSwingIndex:anchoredRange?.anchorSwingIndex??null,
+      anchoredEquilibrium:anchoredRange?.equilibrium??null,anchoredHighIndex:anchoredRange?.anchorHighIndex??null,anchoredLowIndex:anchoredRange?.anchorLowIndex??null,
       anchoredDeltaAtr:anchoredRange&&rangeAtr?anchoredDelta/rangeAtr:null
     });
     const inCorrectZone=direction==='BULLISH'?premiumDiscountDelta<=0:premiumDiscountDelta>=0;
@@ -192,7 +195,7 @@ export function evaluateSMC({candles,layers,price}){
     }
     if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     stages.premiumDiscount++;
-    selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:rangeCandidate};
+    selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:anchoredRange||rangeCandidate};
     break;
   }
   if(!selected){
