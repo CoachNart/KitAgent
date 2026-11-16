@@ -12,7 +12,7 @@ import {EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
 import {topSymbols,candlesFor,scanSymbol,candidateScore} from '../server/market-engine/daily.js';
 
 const tests=[];
-const supportedExecutionTimeframes=['1H','2H','4H'];
+const supportedExecutionTimeframes=['1H'];
 const executionTimeframesAreCorrect=EXECUTION_TIMEFRAMES.length===supportedExecutionTimeframes.length&&supportedExecutionTimeframes.every(tf=>EXECUTION_TIMEFRAMES.includes(tf));
 
 const assert=(name,okOrFn,detail='')=>{
@@ -20,7 +20,7 @@ const assert=(name,okOrFn,detail='')=>{
   try{ok=typeof okOrFn==='function'?!!okOrFn():!!okOrFn}catch(e){detail=e.message}
   tests.push({name,ok,detail});
 };
-assert('Execution timeframe allowlist contains only 1H, 2H, and 4H',executionTimeframesAreCorrect);
+assert('Execution timeframe allowlist contains only the 1H execution timeframe',executionTimeframesAreCorrect);
 const eligibleThreeR={direction:'BULLISH',trade:{entry:100,stop:95,target:115,rr:3},grade:{grade:'A',score:84}};
 const ineligibleTwoR={...eligibleThreeR,trade:{...eligibleThreeR.trade,target:110,rr:2}};
 const weakGrade={...eligibleThreeR,grade:{grade:'B',score:83}};
@@ -419,11 +419,11 @@ try{
   const scannerUniverse=await topSymbols();
   assert('Scanner discovers the configured perpetual universe',()=>scannerUniverse.length===18&&scannerUniverse.every(x=>/USDT$/.test(x.symbol)&&x.turnover24h>0));
   const scannerCandles=await candlesFor('BTCUSDT');
-  assert('Scanner loads every supported execution timeframe plus 1D context',()=>['1H','2H','4H','1D'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40));
+  assert('Scanner loads only 4H context and 1H execution candles',()=>['1H','4H'].every(tf=>Array.isArray(scannerCandles[tf])&&scannerCandles[tf].length>=40)&&Object.keys(scannerCandles).length===2);
   const scannerSetups=await scanSymbol(scannerUniverse[0]);
-  assert('Scanner completes the six-strategy three-execution-timeframe sweep',()=>Array.isArray(scannerSetups));
+  assert('Scanner evaluates one unified model on one execution timeframe',()=>Array.isArray(scannerSetups));
   assert('Scanner never publishes invalid directional geometry',()=>scannerSetups.every(x=>(x.bias==='LONG'&&x.stopLoss<x.entry&&x.takeProfit>x.entry)||(x.bias==='SHORT'&&x.stopLoss>x.entry&&x.takeProfit<x.entry)));
-  assert('Scanner only publishes retained strategies and supported execution timeframes',()=>scannerSetups.every(x=>['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT'].includes(x.strategyKey)&&['1H','2H','4H'].includes(x.timeframe)));
+  assert('Scanner only publishes the unified model on 1H',()=>scannerSetups.every(x=>x.strategyKey==='SMC'&&x.timeframe==='1H'&&x.model===SMC_MODEL));
 }finally{globalThis.fetch=originalFetch;}
 // Structural trade audit: every retained strategy must publish an execution zone and
 // a numeric invalidation anchor so an SL cannot be generated from an arbitrary distance.
