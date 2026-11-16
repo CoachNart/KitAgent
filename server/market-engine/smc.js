@@ -161,7 +161,6 @@ export function evaluateSMC({candles,layers,price}){
     if(!rangeCandidate)continue;
     const premiumDiscountDelta=sweepCandidate.extreme-rangeCandidate.equilibrium;
     const rangeAtr=atr(c.slice(0,sweepCandidate.index),14)||0;
-    const anchoredDelta=premiumDiscountDelta;
     if(rangeAtr>0){
       stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;
       stages.premiumDiscountDeltaSamples++;
