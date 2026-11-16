@@ -3,7 +3,7 @@ import {auth} from './firebase.js';
 import {RefreshCw,TrendingDown,TrendingUp} from 'lucide-react';
 import './global-trades.css';
 const fmt=v=>{const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:n>=1000?2:n>=1?5:8}):'—'};
-const date=v=>{const d=v?.seconds?new Date(v.seconds*1000):new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})};
+const date=v=>{const d=v?.seconds?new Date(v.seconds*1000):v?._seconds?new Date(v._seconds*1000):new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})};
 export default function GlobalTradesPage({view='active'}){
  const [trades,setTrades]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const load=useCallback(async()=>{try{const user=auth?.currentUser;if(!user)throw new Error('Sign in to view shared trades.');const token=await user.getIdToken();const path=view==='active'?'/api/active-trades':'/api/trade-history';const r=await fetch(path,{headers:{Authorization:'Bearer '+token},cache:'no-store'});const body=await r.json().catch(()=>({}));if(!r.ok||!body.ok)throw new Error(body.error||'Trade records could not be loaded.');setTrades(body.trades||[]);setError('')}catch(e){setError(e.message||'Trade records could not be loaded.')}finally{setLoading(false)}},[view]);
