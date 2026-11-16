@@ -14,6 +14,8 @@ const tradeAudit=[];
 const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','premiumDiscountBullishPass','premiumDiscountBearishPass','premiumDiscountBullishReject','premiumDiscountBearishReject','premiumDiscountDeltaAtrSum','premiumDiscountDeltaSamples','structuralTarget','rrAtLeast3','executableEntry'];
 const stageTotals=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const stageSamples=Object.fromEntries(stageKeys.map(key=>[key,0]));
+const premiumDiscountAudit=[];
+const premiumDiscountAuditCounts=new Map();
 const replayNow=Date.now();
 let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
@@ -191,6 +193,14 @@ for(const symbol of symbols){
             const value=Number(stageDiagnostic[key]);
             if(Number.isFinite(value)){stageTotals[key]+=value;stageSamples[key]++;}
           }
+          for(const sample of stageDiagnostic.premiumDiscountAudit||[]){
+            const sampleKey=symbol+'|'+sample.direction;
+            const count=premiumDiscountAuditCounts.get(sampleKey)||0;
+            if(count<4){
+              premiumDiscountAuditCounts.set(sampleKey,count+1);
+              premiumDiscountAudit.push({symbol,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),...sample});
+            }
+          }
         }
         if(strategy==='TOP_DOWN'){
           const rejectionDiagnostics=(result?.evidence||[]).find(x=>x?.type==='TOP_DOWN_REJECTION_DIAGNOSTICS');
@@ -241,6 +251,29 @@ console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
+console.log('\nPREMIUM/DISCOUNT RANGE AUDIT (diagnostic samples; no trading rule changed)');
+console.table(premiumDiscountAudit.map(x=>({
+  symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,
+  sweepIndex:x.sweepIndex,mssIndex:x.mssIndex,fvgIndex:x.fvgIndex,
+  fvgMidpoint:+x.fvgMidpoint.toFixed(6),
+  rollingEquilibrium:+x.rollingEquilibrium.toFixed(6),
+  rollingDeltaAtr:x.rollingDeltaAtr==null?null:+x.rollingDeltaAtr.toFixed(3),
+  anchoredEquilibrium:x.anchoredEquilibrium==null?null:+x.anchoredEquilibrium.toFixed(6),
+  anchoredDeltaAtr:x.anchoredDeltaAtr==null?null:+x.anchoredDeltaAtr.toFixed(3),
+  anchoredSwingIndex:x.anchoredSwingIndex
+})));
+for(const direction of ['BULLISH','BEARISH']){
+  const subset=premiumDiscountAudit.filter(x=>x.direction===direction);
+  const rolling=subset.map(x=>x.rollingDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
+  const anchored=subset.map(x=>x.anchoredDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
+  const median=a=>a.length?a[Math.floor(a.length/2)]:null;
+  console.log('RANGE AUDIT SAMPLE SUMMARY',direction,JSON.stringify({
+    samples:subset.length,
+    rollingDeltaAtrMedian:median(rolling),
+    anchoredDeltaAtrMedian:median(anchored),
+    anchoredComparableSamples:anchored.length
+  }));
+}
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
 const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
