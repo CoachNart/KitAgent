@@ -2,7 +2,7 @@ import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market
 import {analyzeOne} from '../server/market-engine/index.js';
 import {STRATEGIES} from '../server/market-engine/strategies.js';
 
-const DURATIONS={'1H':60*60_000,'2H':2*60*60_000,'4H':4*60*60_000,'1D':24*60*60_000};
+const DURATIONS={'1H':60*60_000,'4H':4*60*60_000};
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,SUIUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
@@ -128,7 +128,7 @@ console.log('Method: each signal sees only candles closed at its decision timest
 for(const symbol of symbols){
   let history;
   try{
-    const tfs=[...EXECUTION_TIMEFRAMES,'1D'];
+    const tfs=[...new Set(['4H',...EXECUTION_TIMEFRAMES])];
     const rows=await Promise.all(tfs.map(async tf=>{
       const candles=closedCandles(await fetchReplayCandles(symbol,tf),tf,replayNow).filter(x=>x.time+DURATIONS[tf]<=replayNow);
       if(candles.length<80)throw new Error(tf+' has only '+candles.length+' closed candles; minimum 80 required');
@@ -157,7 +157,7 @@ for(const symbol of symbols){
       snapshotIndex++;
       const cutoff=candle.time+DURATIONS[tf];
       const all={};
-      for(const layerTf of [...EXECUTION_TIMEFRAMES,'1D']){
+      for(const layerTf of [...new Set(['4H',...EXECUTION_TIMEFRAMES])]){
         const layerRows=history[layerTf]||[];
         all[layerTf]=layerRows.slice(0,closedPrefixEnd(layerRows,layerTf,cutoff));
         if(all[layerTf].some(x=>x.time+DURATIONS[layerTf]>cutoff)){
