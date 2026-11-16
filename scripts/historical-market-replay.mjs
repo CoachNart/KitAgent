@@ -264,9 +264,9 @@ console.table(premiumDiscountAudit.map(x=>({
   rollingMidDeltaAtr:x.rollingDeltaAtr==null?null:+x.rollingDeltaAtr.toFixed(3),
   rollingHighEdgeDeltaAtr:x.atr?+((x.fvgHigh-x.rollingEquilibrium)/x.atr).toFixed(3):null,
   anchoredEquilibrium:x.anchoredEquilibrium==null?null:+x.anchoredEquilibrium.toFixed(6),
-  anchoredLowEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgLow-x.anchoredEquilibrium)/x.atr).toFixed(3):null,
+  anchoredLowEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgLow-x.anchoredEquilibrium)/x.atr).toFixed(3),
   anchoredMidDeltaAtr:x.anchoredDeltaAtr==null?null:+x.anchoredDeltaAtr.toFixed(3),
-  anchoredHighEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgHigh-x.anchoredEquilibrium)/x.atr).toFixed(3):null,
+  anchoredHighEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgHigh-x.anchoredEquilibrium)/x.atr).toFixed(3),
   anchoredSwingIndex:x.anchoredSwingIndex
 })));
 for(const direction of ['BULLISH','BEARISH']){
