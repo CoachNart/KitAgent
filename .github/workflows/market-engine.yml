@@ -2,7 +2,7 @@ name: Market Engine Regression
 
 on:
   push:
-    branches: [main]
+    branches: [main, work/daily-quality-setups-rebuild-20261116]
   pull_request:
     branches: [main]
 
