@@ -128,11 +128,11 @@ export async function publishDailyBoard(){
       await writes.commit();
       if(reservation.previousPublicationId){
         const old=await database.collection('marketSetups')
-          .where('publicationId','==',reservation.previousPublicationId)
-          .where('status','in',['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY']).limit(450).get();
-        if(!old.empty){
+          .where('publicationId','==',reservation.previousPublicationId).limit(450).get();
+        const archiveable=old.docs.filter(d=>['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY'].includes(d.data()?.status));
+        if(archiveable.length){
           const archiveBatch=database.batch();
-          old.docs.forEach(d=>archiveBatch.set(d.ref,{status:'ARCHIVED',archivedAt:new Date(now),statusReason:'The previous daily board has reset.'},{merge:true}));
+          archiveable.forEach(d=>archiveBatch.set(d.ref,{status:'ARCHIVED',archivedAt:new Date(now),statusReason:'The previous daily board has reset.'},{merge:true}));
           await archiveBatch.commit();
         }
       }
