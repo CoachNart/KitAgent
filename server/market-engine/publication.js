@@ -140,7 +140,14 @@ export async function publishDailyBoard(){
 async function refreshCurrentTrades(){
   const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE']).limit(500).get();
   const output=[];
-  for(const doc of snap.docs){try{output.push(await refreshTrade(doc));}catch(error){await doc.ref.set({lastCheckError:String(error?.message||error),lastCheckedAt:new Date()},{merge:true});output.push({...doc.data(),id:doc.id});}}
+  for(let i=0;i<snap.docs.length;i+=10){
+    const group=snap.docs.slice(i,i+10);
+    const resolved=await Promise.all(group.map(async doc=>{
+      try{return await refreshTrade(doc);}
+      catch(error){await doc.ref.set({lastCheckError:String(error?.message||error),lastCheckedAt:new Date()},{merge:true});return{...doc.data(),id:doc.id};}
+    }));
+    output.push(...resolved);
+  }
   return output;
 }
 async function authorized(req){const user=await authenticate(req);const access=await requireActiveAccess(user.uid);return{user,access};}
