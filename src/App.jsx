@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './kit-nav.css';
-import DailySetupsPage from './DailySetupsPage.jsx';
-import SignalHistory from './SignalHistory.jsx';
+import DailyBoardPage from './DailyBoardPage.jsx';
+import GlobalTradesPage from './GlobalTradesPage.jsx';
 import HomePage from './HomePage.jsx';
 import LessonDetail from './LessonDetail.jsx';
 import AccountPageComponent from './AccountPage.jsx';
 import AccessGateComponent from './AccessGate.jsx';
-import LiveMarketComponent from './LiveMarketPage.jsx';
+
 import SetupEducationPage from './SetupEducationPage.jsx';
 import NotificationCenter from './NotificationCenter.jsx';
 import CommunityPage from './CommunityPage.jsx';
@@ -15,11 +15,11 @@ import './ui-polish.css';
 import './header-polish.css';
 import { Activity, ArrowDownToLine, ArrowRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, Command, Copy, ExternalLink, Fuel, Gem, History, House, LockKeyhole, Menu, MessageCircle, Network, Rocket, ScanSearch, Search, Settings2, ShieldAlert, ShieldCheck, Terminal, CircleUserRound, X, Zap } from 'lucide-react';
 
-const nav=[['home','Home',House],['market','Market analysis',BarChart3],['setups','Setups',ScanSearch],['community','Community',MessageCircle],['history','History',History],['profile','Profile',CircleUserRound]];
+const nav=[['home','Home',House],['daily','Daily setups',ScanSearch],['active','Active trades',Activity],['community','Community',MessageCircle],['history','History',History],['profile','Profile',CircleUserRound]];
 const appSearchItems=nav.map(([id,label])=>({type:'workspace',label,meta:'Workspace',action:id}));
 
 export default function App({user}){
-  const [profileOverride,setProfileOverride]=useState(null),[headerTicker,setHeaderTicker]=useState({pair:'BTC/USDT',price:'—',change:0,move:'up'}),[page,setPage]=useState(()=>{try{const saved=sessionStorage.getItem('kitsetups:current-page');return saved==='defi'?'home':saved||'home'}catch{return 'home'}}),[lessonId,setLessonId]=useState(null),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(()=>{try{return !sessionStorage.getItem('kitsetups:entrance-seen')}catch{return true}}),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
+  const [profileOverride,setProfileOverride]=useState(null),[headerTicker,setHeaderTicker]=useState({pair:'BTC/USDT',price:'—',change:0,move:'up'}),[page,setPage]=useState(()=>{try{const saved=sessionStorage.getItem('kitsetups:current-page');return saved==='defi'?'home':(['market','setups'].includes(saved)?'daily':saved||'home')}catch{return 'home'}}),[lessonId,setLessonId]=useState(null),[command,setCommand]=useState(''),[messages,setMessages]=useState([]),[toast,setToast]=useState(''),[activity,setActivity]=useState([]),[showLoader,setShowLoader]=useState(()=>{try{return !sessionStorage.getItem('kitsetups:entrance-seen')}catch{return true}}),[appSearch,setAppSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false);
   useEffect(()=>{let cancelled=false;const symbols=['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','BNBUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','SUIUSDT'];const milestones={BTCUSDT:[86000,90000,95000,100000],ETHUSDT:[3000,3200,3500,4000],SOLUSDT:[200,220,250,300],XRPUSDT:[2,2.5,3,3.5],BNBUSDT:[1000,1100,1200],DOGEUSDT:[0.2,0.25,0.3,0.4],ADAUSDT:[1,1.25,1.5,2],AVAXUSDT:[30,40,50,60],LINKUSDT:[25,30,35,40],SUIUSDT:[4,5,6,7]};let i=0,lastPrices={},activeHeadline='',headlineUntil=0;const load=async()=>{try{const r=await fetch('/api/market?action=header',{cache:'no-store'}),j=await r.json(),rows=Array.isArray(j?.result)?j.result:[],data=new Map(rows.map(t=>[t.symbol,t]));if(!data.size||cancelled)return;const symbol=symbols[i],t=data.get(symbol);if(!t){i=(i+1)%symbols.length;return}const price=Number(t.lastPrice),change=Number(t.price24hPcnt)*100,prev=lastPrices[symbol];lastPrices[symbol]=price;const crossed=(milestones[symbol]||[]).find(level=>Number.isFinite(prev)&&((prev<level&&price>=level)||(prev>level&&price<=level)));if(crossed){activeHeadline=price>=crossed?'🚀 '+symbol.replace('USDT','/USDT')+' breaks $'+crossed.toLocaleString():'🔻 '+symbol.replace('USDT','/USDT')+' slips below $'+crossed.toLocaleString();headlineUntil=Date.now()+20000}const headline=Date.now()<headlineUntil?activeHeadline:'';setHeaderTicker({pair:symbol.replace('USDT','/USDT'),price:Number.isFinite(price)?price.toLocaleString(undefined,{maximumFractionDigits:price>=1000?0:price>=1?2:4}):'—',change:Number.isFinite(change)?change:0,move:change>=0?'up':'down',headline});i=(i+1)%symbols.length}catch{}};load();const timer=setInterval(load,5000);return()=>{cancelled=true;clearInterval(timer)}},[]);
   useEffect(()=>{const handler=e=>setProfileOverride(e.detail||null);window.addEventListener('kitsetups:profile-updated',handler);return()=>window.removeEventListener('kitsetups:profile-updated',handler)},[]);
   useEffect(()=>{const handler=()=>go('setup-guide');window.addEventListener('kitsetups-open-setup-guide',handler);return()=>window.removeEventListener('kitsetups-open-setup-guide',handler)},[]);
@@ -29,11 +29,11 @@ export default function App({user}){
   useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),3600);return()=>clearTimeout(t)},[toast]);
   useEffect(()=>{const handler=e=>{const item=e.detail||{};setToast((item.senderName?item.senderName+' mentioned you: ':'You were mentioned: ')+(item.text||'Open Community to view the message.'))};window.addEventListener('kitsetups:community-notification',handler);return()=>window.removeEventListener('kitsetups:community-notification',handler)},[]);
 
-  const go=p=>{setPage(p);setSearchOpen(false);setAppSearch('')}; const openLesson=id=>{setLessonId(id);setPage('lesson');setSearchOpen(false);setAppSearch('')};
+  const go=p=>{const next=['market','setups'].includes(p)?'daily':p;setPage(next);setSearchOpen(false);setAppSearch('')}; const openLesson=id=>{setLessonId(id);setPage('lesson');setSearchOpen(false);setAppSearch('')};
   const searchResults=appSearch.trim()?appSearchItems.filter(x=>`${x.label} ${x.meta}`.toLowerCase().includes(appSearch.trim().toLowerCase())).slice(0,7):[];
   const selectSearchResult=item=>{go(item.action);setAppSearch('');setSearchOpen(false)};
   const submitSearch=()=>{if(searchResults[0])selectSearchResult(searchResults[0])};
-  const runCommand=raw=>{const text=raw.trim();if(!text)return;setMessages(m=>[...m,{role:'user',text}]);setCommand('');const lower=text.toLowerCase();if(lower.includes('analyze')||lower.includes('market')||lower.includes('setup')){go('market');setMessages(m=>[...m,{role:'agent',text:'Open Market Analysis to choose a live perpetual and run one of the six current strategy models.'}]);return}setMessages(m=>[...m,{role:'agent',text:'I can help with market analysis and the KitSetups trading workspace.'}])};
+  const runCommand=raw=>{const text=raw.trim();if(!text)return;setMessages(m=>[...m,{role:'user',text}]);setCommand('');const lower=text.toLowerCase();if(lower.includes('analyze')||lower.includes('market')||lower.includes('setup')){go('daily');setMessages(m=>[...m,{role:'agent',text:'Open Daily setups to view the shared, centrally published high-quality trade board.'}]);return}setMessages(m=>[...m,{role:'agent',text:'I can help with market analysis and the KitSetups trading workspace.'}])};
   if(showLoader)return <LoaderScreen/>;
   return <div className="kit-shell"><KitNavigation page={page} go={go}/><main className="kit-main"><div className="app-sticky-rail" aria-label="App controls">
   <div className="app-sticky-brand"><img src="https://i.postimg.cc/B6bHVQnT/Kitsetsup-Logo-PNG.png" alt="KitSetups"/></div>
@@ -48,7 +48,7 @@ export default function App({user}){
     <div className="header-pulse" aria-label="System pulse"><i className="pulse-green"/><i className="pulse-red"/></div>
     <button type="button" className="profile-avatar" aria-label="Open profile" title="Profile" onClick={()=>go('profile')}><span className="profile-avatar-ring">{(displayUser?.photoURL||displayUser?.photoUrl||displayUser?.avatarUrl)?<img src={displayUser.photoURL||displayUser.photoUrl||displayUser.avatarUrl} alt="" referrerPolicy="no-referrer"/>:<span>{initials(displayUser?.displayName||displayUser?.email||'K')}</span>}</span><i className="profile-status"/></button>
   </div>
-</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}  {page==='market'&&<AccessGateComponent user={user}><LiveMarketComponent/></AccessGateComponent>} {page==='community'&&createPortal(<CommunityPage user={user}/>,document.body)} {page==='setup-guide'&&<SetupEducationPage onBack={()=>go('market')}/>} {page==='setups'&&<AccessGateComponent user={user}><DailySetupsPage/></AccessGateComponent>} {page==='history'&&<SignalHistory activity={activity}/>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
+</div><div className="content">{page==='home'&&<HomePage go={go} onLesson={openLesson}/>} {page==='lesson'&&<LessonDetail lessonId={lessonId} onBack={()=>go('home')}/>}   {page==='community'&&createPortal(<CommunityPage user={user}/>,document.body)} {page==='setup-guide'&&<SetupEducationPage onBack={()=>go('market')}/>} {page==='daily'&&<AccessGateComponent user={user}><DailyBoardPage/></AccessGateComponent>} {page==='active'&&<AccessGateComponent user={user}><GlobalTradesPage view="active"/></AccessGateComponent>} {page==='history'&&<AccessGateComponent user={user}><GlobalTradesPage view="history"/></AccessGateComponent>} {page==='profile'&&<AccountPageComponent user={user}/>}</div></main>{toast&&<div className="toast"><CheckCircle2 size={16}/><span>{toast}</span></div>}</div>;
 }
 
 function KitNavigation({page,go}){
