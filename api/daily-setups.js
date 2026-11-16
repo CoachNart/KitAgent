@@ -1,1 +1,1 @@
-export { default } from '../server/market-engine/daily.js';
+export { dailySetupsHandler as default } from '../server/market-engine/publication.js';
