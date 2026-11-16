@@ -99,15 +99,12 @@ export async function publishDailyBoard(){
     const snap=await tx.get(metaRef),current=snap.exists?snap.data():null;
     if(current&&current.status!=='FAILED'&&ms(current.publishedAt)>0&&now-ms(current.publishedAt)<BOARD_WINDOW_MS)
       return{published:false,reason:'BOARD_STILL_ACTIVE',publicationId:current.publicationId||null};
+    if(current?.scanningAt&&now-ms(current.scanningAt)<15*60*1000)return{published:false,reason:'SCAN_IN_PROGRESS',publicationId:current.publicationId||null};
     const publicationId=new Date(now).toISOString().slice(0,10)+'-'+String(now);
-    tx.set(metaRef,{publicationId,publishedAt:new Date(now),resetsAt:new Date(now+BOARD_WINDOW_MS),status:'SCANNING',source:'Bybit linear perpetuals',updatedAt:new Date(now)},{merge:true});
-    return{published:true,publicationId};
+    tx.set(metaRef,{status:'SCANNING',scanningAt:new Date(now),source:'Bybit linear perpetuals',updatedAt:new Date(now)},{merge:true});
+    return{published:true,publicationId,previousPublicationId:current?.publicationId||null};
   }).then(async reservation=>{
     if(!reservation.published)return reservation;
-    const old=await database.collection('marketSetups').where('status','in',['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY']).limit(450).get();
-    let batch=database.batch();
-    old.docs.forEach(d=>batch.set(d.ref,{status:'ARCHIVED',archivedAt:new Date(now),statusReason:'The previous daily board has reset.'},{merge:true}));
-    if(!old.empty)await batch.commit();
     try{
       const result=await scanTopQuality();
       const setups=(result.setups||[]).slice(0,5);
@@ -129,10 +126,16 @@ export async function publishDailyBoard(){
         });
       }
       await writes.commit();
-      await metaRef.set({status:'PUBLISHED',setupCount:setups.length,scanUniverse:result.scanUniverse||0,diagnostics:result.diagnostics||null,updatedAt:new Date()},{merge:true});
+      const old=await database.collection('marketSetups').where('status','in',['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY']).limit(450).get();
+      if(!old.empty){
+        const archiveBatch=database.batch();
+        old.docs.forEach(d=>archiveBatch.set(d.ref,{status:'ARCHIVED',archivedAt:new Date(now),statusReason:'The previous daily board has reset.'},{merge:true}));
+        await archiveBatch.commit();
+      }
+      await metaRef.set({publicationId:reservation.publicationId,publishedAt:new Date(now),resetsAt:new Date(now+BOARD_WINDOW_MS),status:'PUBLISHED',scanningAt:null,setupCount:setups.length,scanUniverse:result.scanUniverse||0,diagnostics:result.diagnostics||null,updatedAt:new Date()},{merge:true});
       return{published:true,publicationId:reservation.publicationId,setupCount:setups.length,scanUniverse:result.scanUniverse||0};
     }catch(error){
-      await metaRef.set({status:'FAILED',error:String(error?.message||error),updatedAt:new Date()},{merge:true});
+      await metaRef.set({status:'FAILED',scanningAt:null,error:String(error?.message||error),updatedAt:new Date()},{merge:true});
       throw error;
     }
   });
