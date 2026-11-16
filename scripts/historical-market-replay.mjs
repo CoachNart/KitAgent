@@ -239,7 +239,7 @@ const rows=[...stats.values()].map(s=>{
 console.table(rows);
 console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
 console.table(tradeAudit);
-console.log('\nSMC STAGE FUNNEL (counts are per evaluated snapshot; a later stage only increments after the prior conditions pass)');
+console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
 console.log('\nTOP REJECTIONS');
 console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
