@@ -42,7 +42,7 @@ async function candlesSince(symbol,startMs){
     if(oldest<=startMs||rows.length<1000)break;
     end=oldest-1;pages++;
   }
-  return [...new Map(all.map(x=>[x.time,x])).values()].filter(x=>x.time>=startMs).sort((a,b)=>a.time-b.time);
+  return [...new Map(all.map(x=>[x.time,x])).values()].filter(x=>x.time>=startMs&&x.time+CANDLE_MS<=Date.now()).sort((a,b)=>a.time-b.time);
 }
 function touched(c,price){return c.low<=price&&c.high>=price;}
 function isLong(s){return String(s.bias||'').toUpperCase()==='LONG';}
@@ -58,7 +58,7 @@ async function refreshTrade(doc){
   const long=isLong(data),order=String(data.orderType||'MARKET').toUpperCase();
   const candles=await candlesSince(symbol,start);
   if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return data;}
-  let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null;
+  let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null;
   if(order==='LIMIT'&&status==='PENDING_ENTRY'){
     for(const c of candles){
       const entryHit=touched(c,entry),stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
@@ -78,13 +78,18 @@ async function refreshTrade(doc){
       if(c.time===Math.floor(activatedAt/CANDLE_MS)*CANDLE_MS&&activatedAt>c.time)continue;
       const stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
       if(stopHit&&targetHit){reason='Both stop and target were touched in one candle. Outcome is ambiguous and will not be guessed.';break;}
-      if(stopHit){status='STOP_HIT';reason='Stop loss reached on Bybit 30-minute OHLC data.';break;}
-      if(targetHit){status='TARGET_HIT';reason='Take profit reached on Bybit 30-minute OHLC data.';break;}
+      if(stopHit){status='STOP_HIT';exitCandle=c;reason='Stop loss reached on Bybit 30-minute OHLC data.';break;}
+      if(targetHit){status='TARGET_HIT';exitCandle=c;reason='Take profit reached on Bybit 30-minute OHLC data.';break;}
     }
   }
   const patch={status,statusReason:reason,lastCheckedAt:new Date(now),currentPrice:candles.at(-1).close};
   if(activatedAt)patch.activatedAt=new Date(activatedAt);
-  if(['TARGET_HIT','STOP_HIT'].includes(status)){patch.closedAt=new Date(now);patch.outcomeEvidence={source:'bybit_30m_ohlc',event:status,candleResolution:'30m OHLC; ambiguous dual-touch candles are not classified'};}
+  if(['TARGET_HIT','STOP_HIT'].includes(status)&&exitCandle){
+    const exitPrice=status==='TARGET_HIT'?target:stop;
+    patch.closedAt=new Date(exitCandle.time+CANDLE_MS);patch.exitPrice=exitPrice;patch.result=status==='TARGET_HIT'?'win':'loss';
+    patch.pnlPercent=long?((exitPrice-entry)/entry)*100:((entry-exitPrice)/entry)*100;
+    patch.outcomeEvidence={source:'bybit_30m_ohlc',event:status,candleTime:new Date(exitCandle.time).toISOString(),candleResolution:'30m OHLC; ambiguous dual-touch candles are not classified'};
+  }
   await doc.ref.set(patch,{merge:true});
   return{...data,...patch,id:doc.id};
 }
@@ -133,7 +138,7 @@ export async function publishDailyBoard(){
   });
 }
 async function refreshCurrentTrades(){
-  const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE','INVALIDATED','MISSED_ENTRY']).limit(100).get();
+  const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE','INVALIDATED','MISSED_ENTRY']).limit(500).get();
   const output=[];
   for(const doc of snap.docs){try{output.push(await refreshTrade(doc));}catch(error){await doc.ref.set({lastCheckError:String(error?.message||error),lastCheckedAt:new Date()},{merge:true});output.push({...doc.data(),id:doc.id});}}
   return output;
