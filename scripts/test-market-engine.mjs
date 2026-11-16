@@ -9,7 +9,7 @@ import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
-import {topSymbols,candlesFor,scanSymbol} from '../server/market-engine/daily.js';
+import {topSymbols,candlesFor,scanSymbol,candidateScore} from '../server/market-engine/daily.js';
 
 const tests=[];
 const supportedExecutionTimeframes=['1H','2H','4H'];
@@ -21,6 +21,14 @@ const assert=(name,okOrFn,detail='')=>{
   tests.push({name,ok,detail});
 };
 assert('Execution timeframe allowlist contains only 1H, 2H, and 4H',executionTimeframesAreCorrect);
+const eligibleThreeR={direction:'BULLISH',trade:{entry:100,stop:95,target:115,rr:3},grade:{grade:'A',score:84}};
+const ineligibleTwoR={...eligibleThreeR,trade:{...eligibleThreeR.trade,target:110,rr:2}};
+const weakGrade={...eligibleThreeR,grade:{grade:'B',score:83}};
+assert('Daily publication rejects setups below 3R',candidateScore(ineligibleTwoR)<0);
+assert('Daily publication rejects structural scores below A-grade',candidateScore(weakGrade)<0);
+assert('Daily publication accepts A-grade setups at 3R or better',candidateScore(eligibleThreeR)>=0);
+const eligibleAplus={...eligibleThreeR,grade:{grade:'A+',score:94},trade:{...eligibleThreeR.trade,target:120,rr:4}};
+assert('Daily publication accepts qualified A+ setups with stronger structural RR',candidateScore(eligibleAplus)>candidateScore(eligibleThreeR));
 
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
