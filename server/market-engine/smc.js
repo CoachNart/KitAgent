@@ -121,34 +121,50 @@ export function evaluateSMC({candles,layers,price}){
   const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=16);
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[]};}
 
+  const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0};
+  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages});
   let selected=null;
   for(const sweepCandidate of sweeps.slice().reverse()){
     const mssCandidate=swingBreakAfter(c,sweepCandidate.index,c.length-1,direction);
     if(!mssCandidate||mssCandidate.index-sweepCandidate.index>10)continue;
+    stages.mssWithinWindow++;
     const displacementCandidate=meaningfulDisplacement(c,mssCandidate.index,direction);
     if(!displacementCandidate)continue;
+    stages.displacement++;
     const fvgCandidate=fvgAt(c,mssCandidate.index+1)?.direction===direction
       ?fvgAt(c,mssCandidate.index+1)
       :fvgAt(c,mssCandidate.index)?.direction===direction?fvgAt(c,mssCandidate.index):null;
-    if(!fvgCandidate||fvgCandidate.createdBy!==mssCandidate.index||!freshFvg(c,fvgCandidate,c.length-1))continue;
+    if(!fvgCandidate||fvgCandidate.createdBy!==mssCandidate.index)continue;
+    stages.fvgCreatedByMss++;
+    if(!freshFvg(c,fvgCandidate,c.length-1))continue;
     const fvgAtr=atr(c.slice(0,fvgCandidate.index+1),14);
     if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
+    stages.freshFvgAndSize++;
     const rangeCandidate=dealingRange(c,mssCandidate.index);
     if(!rangeCandidate||(direction==='BULLISH'?fvgCandidate.midpoint>rangeCandidate.equilibrium:fvgCandidate.midpoint<rangeCandidate.equilibrium))continue;
+    stages.premiumDiscount++;
     selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:rangeCandidate};
     break;
   }
   if(!selected){
     failures.push('No recent liquidity sweep completed the full MSS, displacement, and fresh FVG sequence.');
-    return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP_CANDIDATES',count:sweeps.length}]};
+    return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP_CANDIDATES',count:sweeps.length},stageEvidence()]};
   }
 
   const {sweep,mss,displacement,fvg,range}=selected;
   if(!Number.isFinite(price)||price<=0){failures.push('Live price is unavailable.');return{direction,failures,evidence:[]};}
   const target=nextLiquidityTarget(c,direction,fvg.midpoint,fvg.index,ordered);
-  if(!target||!Number.isFinite(target.price)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[]};}
+  if(!target||!Number.isFinite(target.price)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[stageEvidence()]};}
+  stages.structuralTarget++;
+  const stopBuffer=Math.max((atr(c,14)||Math.max(Math.abs(price)*.001,1e-9))*.15,Math.abs(price)*.00035);
+  const structuralStop=direction==='BULLISH'?sweep.extreme-stopBuffer:sweep.extreme+stopBuffer;
+  const structuralRisk=Math.abs(fvg.midpoint-structuralStop);
+  const structuralReward=Math.abs(target.price-fvg.midpoint);
+  const structuralRR=structuralRisk>0?structuralReward/structuralRisk:0;
+  if(structuralRR>=3)stages.rrAtLeast3++;
   const trade=buildTrade({c,price,direction,sweep,mss,displacement,fvg,target:target.price});
-  if(!trade){failures.push('FVG entry, structural invalidation, or meaningful liquidity objective is invalid.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg}]};}
+  if(!trade){failures.push('FVG entry, structural invalidation, or meaningful liquidity objective is invalid.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},stageEvidence()]};}
+  stages.executableEntry++;
   const grade=gradeSetup({
     strategy:'SMC',
     context:{aligned:true,trend:true},
@@ -158,5 +174,5 @@ export function evaluateSMC({candles,layers,price}){
     confirmation:{quality:Math.min(1,.5+(sweep.quality?.penetrationATR>=.35?.15:.08)+(displacement.atrMultiple>=1.35?.27:.12))},
     freshness:{quality:Math.min(1,.45+ageQuality(sweep.age,4,10)*.35+Math.min(1,displacement.atrMultiple/1.5)*.2)}
   });
-  return{direction,grade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium}],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
+  return{direction,grade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }
