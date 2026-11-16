@@ -156,6 +156,10 @@ assert('SMC rejects conflicting higher-timeframe bias',()=>smcConflict.direction
 const smcIncompleteCandles=Array.from({length:50},(_,i)=>bar(i,100+i*.15,100+i*.65,100+i*.05,100+i*.5));
 const smcNoSweep=evaluateSMC({candles:smcIncompleteCandles,layers:smcLayers,price:108.9});
 assert('SMC refuses a setup when the required sequence is incomplete',()=>Array.isArray(smcNoSweep.failures)&&smcNoSweep.direction==='BULLISH'&&!smcNoSweep.trade);
+assert('SMC reports zero-count stage diagnostics when no qualifying liquidity sweep exists',()=>{
+  const d=smcNoSweep.evidence?.find(x=>x.type==='SMC_STAGE_DIAGNOSTICS');
+  return !!d&&d.recentSweeps===0&&d.mssWithinWindow===0&&d.executableEntry===0;
+});
 assert('SMC routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'SMC',layers:smcLayers,execution:{candles:smcCandles},price:108.9});return routed&&routed.smc?.model==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG'||routed.failures?.length>0;});
 
 // Top-Down contract: aligned HTF direction -> execution BOS -> retest/hold -> structural target.
