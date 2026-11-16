@@ -254,7 +254,7 @@ console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
-console.log('\nPREMIUM/DISCOUNT RANGE AUDIT (diagnostic samples; no trading rule changed)');
+console.log('\nSTRUCTURAL PREMIUM/DISCOUNT AUDIT (pre-sweep confirmed swing range)');
 console.table(premiumDiscountAudit.map(x=>({
   symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,
   sweepIndex:x.sweepIndex,mssIndex:x.mssIndex,fvgIndex:x.fvgIndex,
