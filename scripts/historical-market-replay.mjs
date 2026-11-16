@@ -16,6 +16,7 @@ const stageTotals=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const stageSamples=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const premiumDiscountAudit=[];
 const premiumDiscountAuditCounts=new Map();
+const premiumDiscountAuditSeen=new Set();
 const replayNow=Date.now();
 let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
@@ -195,8 +196,10 @@ for(const symbol of symbols){
           }
           for(const sample of stageDiagnostic.premiumDiscountAudit||[]){
             const sampleKey=symbol+'|'+sample.direction;
+            const uniqueKey=[symbol,sample.direction,sample.sweepIndex,sample.mssIndex,sample.fvgIndex].join('|');
             const count=premiumDiscountAuditCounts.get(sampleKey)||0;
-            if(count<4){
+            if(count<12&&!premiumDiscountAuditSeen.has(uniqueKey)){
+              premiumDiscountAuditSeen.add(uniqueKey);
               premiumDiscountAuditCounts.set(sampleKey,count+1);
               premiumDiscountAudit.push({symbol,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),...sample});
             }
@@ -255,11 +258,15 @@ console.log('\nPREMIUM/DISCOUNT RANGE AUDIT (diagnostic samples; no trading rule
 console.table(premiumDiscountAudit.map(x=>({
   symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,
   sweepIndex:x.sweepIndex,mssIndex:x.mssIndex,fvgIndex:x.fvgIndex,
-  fvgMidpoint:+x.fvgMidpoint.toFixed(6),
+  fvgLow:+x.fvgLow.toFixed(6),fvgMidpoint:+x.fvgMidpoint.toFixed(6),fvgHigh:+x.fvgHigh.toFixed(6),
   rollingEquilibrium:+x.rollingEquilibrium.toFixed(6),
-  rollingDeltaAtr:x.rollingDeltaAtr==null?null:+x.rollingDeltaAtr.toFixed(3),
+  rollingLowEdgeDeltaAtr:x.atr?+((x.fvgLow-x.rollingEquilibrium)/x.atr).toFixed(3):null,
+  rollingMidDeltaAtr:x.rollingDeltaAtr==null?null:+x.rollingDeltaAtr.toFixed(3),
+  rollingHighEdgeDeltaAtr:x.atr?+((x.fvgHigh-x.rollingEquilibrium)/x.atr).toFixed(3):null,
   anchoredEquilibrium:x.anchoredEquilibrium==null?null:+x.anchoredEquilibrium.toFixed(6),
-  anchoredDeltaAtr:x.anchoredDeltaAtr==null?null:+x.anchoredDeltaAtr.toFixed(3),
+  anchoredLowEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgLow-x.anchoredEquilibrium)/x.atr).toFixed(3):null,
+  anchoredMidDeltaAtr:x.anchoredDeltaAtr==null?null:+x.anchoredDeltaAtr.toFixed(3),
+  anchoredHighEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgHigh-x.anchoredEquilibrium)/x.atr).toFixed(3):null,
   anchoredSwingIndex:x.anchoredSwingIndex
 })));
 for(const direction of ['BULLISH','BEARISH']){
