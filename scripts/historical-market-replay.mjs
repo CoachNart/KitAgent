@@ -259,26 +259,25 @@ console.table(premiumDiscountAudit.map(x=>({
   symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,
   sweepIndex:x.sweepIndex,mssIndex:x.mssIndex,fvgIndex:x.fvgIndex,
   fvgLow:+x.fvgLow.toFixed(6),fvgMidpoint:+x.fvgMidpoint.toFixed(6),fvgHigh:+x.fvgHigh.toFixed(6),
+  premiumDiscountReference:x.premiumDiscountReference,
+  sweepExtreme:+x.sweepExtreme.toFixed(6),
   rollingEquilibrium:+x.rollingEquilibrium.toFixed(6),
-  rollingLowEdgeDeltaAtr:x.atr?+((x.fvgLow-x.rollingEquilibrium)/x.atr).toFixed(3):null,
-  rollingMidDeltaAtr:x.rollingDeltaAtr==null?null:+x.rollingDeltaAtr.toFixed(3),
-  rollingHighEdgeDeltaAtr:x.atr?+((x.fvgHigh-x.rollingEquilibrium)/x.atr).toFixed(3):null,
+  rollingSweepDeltaAtr:x.sweepDeltaAtr==null?null:+x.sweepDeltaAtr.toFixed(3),
   anchoredEquilibrium:x.anchoredEquilibrium==null?null:+x.anchoredEquilibrium.toFixed(6),
-  anchoredLowEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgLow-x.anchoredEquilibrium)/x.atr).toFixed(3),
-  anchoredMidDeltaAtr:x.anchoredDeltaAtr==null?null:+x.anchoredDeltaAtr.toFixed(3),
-  anchoredHighEdgeDeltaAtr:x.anchoredEquilibrium==null||!x.atr?null:+((x.fvgHigh-x.anchoredEquilibrium)/x.atr).toFixed(3),
-  anchoredSwingIndex:x.anchoredSwingIndex
+  anchoredSweepDeltaAtr:x.anchoredDeltaAtr==null?null:+x.anchoredDeltaAtr.toFixed(3),
+  anchoredHighIndex:x.anchoredHighIndex,
+  anchoredLowIndex:x.anchoredLowIndex
 })));
 for(const direction of ['BULLISH','BEARISH']){
   const subset=premiumDiscountAudit.filter(x=>x.direction===direction);
-  const rolling=subset.map(x=>x.rollingDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
+  const rolling=subset.map(x=>x.sweepDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
   const anchored=subset.map(x=>x.anchoredDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
   const median=a=>a.length?a[Math.floor(a.length/2)]:null;
   console.log('RANGE AUDIT SAMPLE SUMMARY',direction,JSON.stringify({
     samples:subset.length,
-    rollingDeltaAtrMedian:median(rolling),
-    anchoredDeltaAtrMedian:median(anchored),
-    anchoredComparableSamples:anchored.length
+    activeReferenceSweepDeltaAtrMedian:median(rolling),
+    confirmedSwingRangeSweepDeltaAtrMedian:median(anchored),
+    confirmedSwingRangeComparableSamples:anchored.length
   }));
 }
 console.log('\nTOP REJECTIONS');
