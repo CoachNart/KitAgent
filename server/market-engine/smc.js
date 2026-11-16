@@ -60,11 +60,6 @@ function findSweeps(c,direction){
   }
   return out.sort((a,b)=>a.index-b.index);
 }
-function dealingRange(c,asOf){
-  const xs=c.slice(Math.max(0,asOf-40),asOf+1); if(!xs.length)return null;
-  const high=Math.max(...xs.map(x=>x.high)),low=Math.min(...xs.map(x=>x.low));
-  return{high,low,equilibrium:(high+low)/2,source:'ROLLING_40_CANDLES'};
-}
 function preSweepDealingRange(c,sweep){
   // Use the latest confirmed swing high and swing low that existed BEFORE
   // the raid. A rolling candle midpoint can sit far outside the active
@@ -157,20 +152,16 @@ export function evaluateSMC({candles,layers,price}){
     const fvgAtr=atr(c.slice(0,fvgCandidate.index+1),14);
     if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
     stages.freshFvgAndSize++;
-    // Premium/discount is a context filter for the liquidity raid, not for
-    // the displacement FVG formed after the raid. Measuring the FVG midpoint
-    // against the range at MSS systematically labels bearish displacement
-    // gaps as discount (and bullish gaps as premium), rejecting the very
-    // retracement setups the model is designed to trade. Use the completed
-    // dealing range immediately BEFORE the sweep; this is known at sweep time
-    // and avoids using the post-sweep displacement to define its own location.
-    const rangeCandidate=dealingRange(c,sweepCandidate.index-1);
+    // Premium/discount is measured against the latest confirmed structural
+    // swing high/low pair that existed before the raid. If that dealing range
+    // cannot be established, do not substitute a rolling candle midpoint:
+    // it can drift far from active structure after an expansion and reject
+    // valid raids or misclassify their location.
+    const rangeCandidate=preSweepDealingRange(c,sweepCandidate);
     if(!rangeCandidate)continue;
-    const anchoredRange=preSweepDealingRange(c,sweepCandidate);
-    const premiumDiscountDelta=sweepCandidate.extreme-(anchoredRange?.equilibrium??rangeCandidate.equilibrium);
-    const fvgDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
+    const premiumDiscountDelta=sweepCandidate.extreme-rangeCandidate.equilibrium;
     const rangeAtr=atr(c.slice(0,sweepCandidate.index),14)||0;
-    const anchoredDelta=anchoredRange?sweepCandidate.extreme-anchoredRange.equilibrium:null;
+    const anchoredDelta=premiumDiscountDelta;
     if(rangeAtr>0){
       stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;
       stages.premiumDiscountDeltaSamples++;
@@ -179,7 +170,7 @@ export function evaluateSMC({candles,layers,price}){
       direction,sweepIndex:sweepCandidate.index,sweepLevel:sweepCandidate.level,sweepExtreme:sweepCandidate.extreme,
       mssIndex:mssCandidate.index,mssLevel:mssCandidate.level,fvgIndex:fvgCandidate.index,
       fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
-      premiumDiscountReference:anchoredRange?'PRE_SWEEP_CONFIRMED_SWING_RANGE':'ROLLING_40_FALLBACK',
+      premiumDiscountReference:'PRE_SWEEP_CONFIRMED_SWING_RANGE',
       atr:rangeAtr,
       rollingRangeHigh:rangeCandidate.high,rollingRangeLow:rangeCandidate.low,rollingEquilibrium:rangeCandidate.equilibrium,
       rollingDeltaAtr:rangeAtr?fvgDelta/rangeAtr:null,
@@ -195,7 +186,7 @@ export function evaluateSMC({candles,layers,price}){
     }
     if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     stages.premiumDiscount++;
-    selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:anchoredRange||rangeCandidate};
+    selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:rangeCandidate};
     break;
   }
   if(!selected){
