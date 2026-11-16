@@ -122,7 +122,7 @@ export async function publishDailyBoard(){
           status:orderType==='MARKET'?'ACTIVE':'PENDING_ENTRY',
           statusReason:orderType==='MARKET'?'Market setup activated at publication.':'Waiting for a confirmed limit fill.',
           publishedAt:new Date(now),createdAt:new Date(now),updatedAt:new Date(now),activatedAt:orderType==='MARKET'?new Date(now):null,
-          lastCheckedAt:null,source:'Bybit linear perpetuals',engineVersion:'market-engine-v7'
+          lastCheckedAt:null,source:'Bybit linear perpetuals',engineVersion:'market-engine-v8-unified-4h-1h'
         });
       }
       await writes.commit();
