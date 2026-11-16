@@ -1,5 +1,6 @@
-import { bybitInstruments, fetchTf, fetchPrice, analyzeOne } from '../server/market-engine/index.js';
-import { closedCandles, validateCandles, EXECUTION_TIMEFRAMES } from '../server/market-engine/data.js';
+import { fetchTf, fetchPrice, analyzeOne } from '../server/market-engine/index.js';
+import { topSymbols } from '../server/market-engine/daily.js';
+import { closedCandles, validateCandles, EXECUTION_TIMEFRAMES, CONTEXT_CHAIN } from '../server/market-engine/data.js';
 import { STRATEGIES } from '../server/market-engine/strategies.js';
 
 const LIMIT=12;
@@ -23,12 +24,8 @@ function addStatus(strategy,tf,result){
   status.set(key,x);
 }
 
-const instruments=await bybitInstruments();
-const ranked=instruments
-  .filter(x=>x.providerSymbol)
-  .slice()
-  .sort((a,b)=>String(a.providerSymbol).localeCompare(String(b.providerSymbol)));
-const symbols=ranked.slice(0,LIMIT);
+const markets=await topSymbols();
+const symbols=markets.slice(0,LIMIT).map(x=>({providerSymbol:x.symbol,turnover24h:x.turnover24h}));
 if(!symbols.length)throw new Error('No Bybit perpetual instruments available');
 
 console.log('LIVE ENGINE DIAGNOSTIC');
@@ -42,7 +39,7 @@ for(const market of symbols){
     continue;
   }
   const all={};
-  for(const tf of [...new Set([...EXECUTION_TIMEFRAMES,'1D'])]){
+  for(const tf of [...new Set([...CONTEXT_CHAIN,...EXECUTION_TIMEFRAMES])]){
     try{
       all[tf]=closedCandles(await fetchTf('perpetual',symbol,tf),tf);
       const valid=validateCandles(all[tf],tf);
