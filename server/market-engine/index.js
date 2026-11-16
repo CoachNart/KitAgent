@@ -9,9 +9,7 @@ import {noTrade,validateTradeGeometry,validateEntryExecution,executableTrade} fr
 const BYBIT={'1H':'60','2H':'120','4H':'240','1D':'D'};
 const analysisLayerCache=new WeakMap();
 const CHAIN={
-  '1H':['4H','2H','1H'],
-  '2H':['4H','2H'],
-  '4H':['1D','4H']
+  '1H':['4H','1H']
 };
 
 function json(res,status,p){
