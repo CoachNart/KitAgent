@@ -92,7 +92,7 @@ export async function publishDailyBoard(){
   const database=db(),metaRef=database.collection('marketPublications').doc(BOARD_DOC),now=Date.now();
   return database.runTransaction(async tx=>{
     const snap=await tx.get(metaRef),current=snap.exists?snap.data():null;
-    if(current&&ms(current.publishedAt)>0&&now-ms(current.publishedAt)<BOARD_WINDOW_MS)
+    if(current&&current.status!=='FAILED'&&ms(current.publishedAt)>0&&now-ms(current.publishedAt)<BOARD_WINDOW_MS)
       return{published:false,reason:'BOARD_STILL_ACTIVE',publicationId:current.publicationId||null};
     const publicationId=new Date(now).toISOString().slice(0,10)+'-'+String(now);
     tx.set(metaRef,{publicationId,publishedAt:new Date(now),resetsAt:new Date(now+BOARD_WINDOW_MS),status:'SCANNING',source:'Bybit linear perpetuals',updatedAt:new Date(now)},{merge:true});
@@ -133,7 +133,7 @@ export async function publishDailyBoard(){
   });
 }
 async function refreshCurrentTrades(){
-  const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE']).limit(100).get();
+  const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE','INVALIDATED','MISSED_ENTRY']).limit(100).get();
   const output=[];
   for(const doc of snap.docs){try{output.push(await refreshTrade(doc));}catch(error){await doc.ref.set({lastCheckError:String(error?.message||error),lastCheckedAt:new Date()},{merge:true});output.push({...doc.data(),id:doc.id});}}
   return output;
@@ -146,15 +146,22 @@ export async function dailySetupsHandler(req,res){
     const trades=await refreshCurrentTrades();
     const metaSnap=await db().collection('marketPublications').doc(BOARD_DOC).get(),meta=metaSnap.exists?metaSnap.data():{};
     const current=trades.filter(x=>x.publicationId===meta.publicationId&&['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY'].includes(x.status));
-    return json(res,200,{ok:true,setups:current.sort((a,b)=>ms(b.publishedAt)-ms(a.publishedAt)),publicationId:meta.publicationId||null,publishedAt:meta.publishedAt||null,resetsAt:meta.resetsAt||null,setupCount:Number(meta.setupCount)||0,scanUniverse:Number(meta.scanUniverse)||0,source:'Bybit linear perpetuals',status:meta.status||'WAITING'});
+    const recentChanges=trades.filter(x=>x.publicationId===meta.publicationId&&['ACTIVE','INVALIDATED','MISSED_ENTRY'].includes(x.status));
+    return json(res,200,{ok:true,setups:current.sort((a,b)=>ms(b.publishedAt)-ms(a.publishedAt)),recentChanges,publicationId:meta.publicationId||null,publishedAt:meta.publishedAt||null,resetsAt:meta.resetsAt||null,setupCount:Number(meta.setupCount)||0,scanUniverse:Number(meta.scanUniverse)||0,source:'Bybit linear perpetuals',status:meta.status||'WAITING'});
   }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Daily setups could not be loaded.'});}
 }
 export async function tradesHandler(view,req,res){
   if(req.method!=='GET')return json(res,405,{ok:false,error:'Method not allowed.'});
   try{
     await authorized(req);
-    const trades=await refreshCurrentTrades();
-    const rows=view==='active'?trades.filter(x=>x.status==='ACTIVE'):trades.filter(x=>['TARGET_HIT','STOP_HIT'].includes(x.status));
+    let rows=[];
+    if(view==='active'){
+      const trades=await refreshCurrentTrades();
+      rows=trades.filter(x=>x.status==='ACTIVE');
+    }else{
+      const snap=await db().collection('marketSetups').where('status','in',['TARGET_HIT','STOP_HIT']).limit(100).get();
+      rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+    }
     rows.sort((a,b)=>ms(b.activatedAt||b.publishedAt)-ms(a.activatedAt||a.publishedAt));
     return json(res,200,{ok:true,trades:rows,source:'Bybit linear perpetuals'});
   }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Trade records could not be loaded.'});}
