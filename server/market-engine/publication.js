@@ -82,7 +82,7 @@ async function refreshTrade(doc){
       if(targetHit){status='TARGET_HIT';exitCandle=c;reason='Take profit reached on Bybit 30-minute OHLC data.';break;}
     }
   }
-  const patch={status,statusReason:reason,lastCheckedAt:new Date(now),currentPrice:candles.at(-1).close};
+  const patch={status,statusReason:reason,lastCheckedAt:new Date(now),updatedAt:new Date(now),currentPrice:candles.at(-1).close};
   if(activatedAt)patch.activatedAt=new Date(activatedAt);
   if(['TARGET_HIT','STOP_HIT'].includes(status)&&exitCandle){
     const exitPrice=status==='TARGET_HIT'?target:stop;
@@ -124,7 +124,7 @@ export async function publishDailyBoard(){
           targetSelection:s.targetSelection||null,entryReason:s.entryReason||null,
           status:orderType==='MARKET'?'ACTIVE':'PENDING_ENTRY',
           statusReason:orderType==='MARKET'?'Market setup activated at publication.':'Waiting for a confirmed limit fill.',
-          publishedAt:new Date(now),createdAt:new Date(now),activatedAt:orderType==='MARKET'?new Date(now):null,
+          publishedAt:new Date(now),createdAt:new Date(now),updatedAt:new Date(now),activatedAt:orderType==='MARKET'?new Date(now):null,
           lastCheckedAt:null,source:'Bybit linear perpetuals',engineVersion:'market-engine-v7'
         });
       }
@@ -151,7 +151,8 @@ export async function dailySetupsHandler(req,res){
     const trades=await refreshCurrentTrades();
     const metaSnap=await db().collection('marketPublications').doc(BOARD_DOC).get(),meta=metaSnap.exists?metaSnap.data():{};
     const current=trades.filter(x=>x.publicationId===meta.publicationId&&['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY'].includes(x.status));
-    const recentChanges=trades.filter(x=>x.publicationId===meta.publicationId&&['ACTIVE','INVALIDATED','MISSED_ENTRY'].includes(x.status));
+    const boardSnap=meta.publicationId?await db().collection('marketSetups').where('publicationId','==',meta.publicationId).limit(10).get():null;
+    const recentChanges=boardSnap?boardSnap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>['ACTIVE','INVALIDATED','MISSED_ENTRY','TARGET_HIT','STOP_HIT'].includes(x.status)):[];
     return json(res,200,{ok:true,setups:current.sort((a,b)=>ms(b.publishedAt)-ms(a.publishedAt)),recentChanges,publicationId:meta.publicationId||null,publishedAt:meta.publishedAt||null,resetsAt:meta.resetsAt||null,setupCount:Number(meta.setupCount)||0,scanUniverse:Number(meta.scanUniverse)||0,source:'Bybit linear perpetuals',status:meta.status||'WAITING'});
   }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Daily setups could not be loaded.'});}
 }
@@ -168,7 +169,9 @@ export async function tradesHandler(view,req,res){
       rows=snap.docs.map(d=>({id:d.id,...d.data()}));
     }
     rows.sort((a,b)=>ms(b.activatedAt||b.publishedAt)-ms(a.activatedAt||a.publishedAt));
-    return json(res,200,{ok:true,trades:rows,source:'Bybit linear perpetuals'});
+    const recentSnap=await db().collection('marketSetups').where('updatedAt','>=',new Date(Date.now()-BOARD_WINDOW_MS)).limit(100).get();
+    const recentChanges=recentSnap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>['ACTIVE','INVALIDATED','MISSED_ENTRY','TARGET_HIT','STOP_HIT'].includes(x.status));
+    return json(res,200,{ok:true,trades:rows,recentChanges,source:'Bybit linear perpetuals'});
   }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Trade records could not be loaded.'});}
 }
 export async function cronHandler(req,res){
