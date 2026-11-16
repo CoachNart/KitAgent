@@ -136,7 +136,7 @@ export function evaluateSMC({candles,layers,price}){
 
   const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0};
   const premiumDiscountAudit=[];
-  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,premiumDiscountAudit:premiumDiscountAudit.slice(-4)});
+  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
   let selected=null;
   for(const sweepCandidate of sweeps.slice().reverse()){
     const mssCandidate=swingBreakAfter(c,sweepCandidate.index,c.length-1,direction);
