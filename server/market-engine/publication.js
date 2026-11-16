@@ -138,7 +138,7 @@ export async function publishDailyBoard(){
   });
 }
 async function refreshCurrentTrades(){
-  const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE','INVALIDATED','MISSED_ENTRY']).limit(500).get();
+  const snap=await db().collection('marketSetups').where('status','in',['PENDING_ENTRY','ACTIVE']).limit(500).get();
   const output=[];
   for(const doc of snap.docs){try{output.push(await refreshTrade(doc));}catch(error){await doc.ref.set({lastCheckError:String(error?.message||error),lastCheckedAt:new Date()},{merge:true});output.push({...doc.data(),id:doc.id});}}
   return output;
@@ -148,11 +148,12 @@ export async function dailySetupsHandler(req,res){
   if(req.method!=='GET')return json(res,405,{ok:false,error:'Method not allowed. Daily publication is managed centrally.'});
   try{
     await authorized(req);
-    const trades=await refreshCurrentTrades();
+    await refreshCurrentTrades();
     const metaSnap=await db().collection('marketPublications').doc(BOARD_DOC).get(),meta=metaSnap.exists?metaSnap.data():{};
-    const current=trades.filter(x=>x.publicationId===meta.publicationId&&['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY'].includes(x.status));
     const boardSnap=meta.publicationId?await db().collection('marketSetups').where('publicationId','==',meta.publicationId).limit(10).get():null;
-    const recentChanges=boardSnap?boardSnap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>['ACTIVE','INVALIDATED','MISSED_ENTRY','TARGET_HIT','STOP_HIT'].includes(x.status)):[];
+    const boardRows=boardSnap?boardSnap.docs.map(d=>({id:d.id,...d.data()})):[];
+    const current=boardRows.filter(x=>['PENDING_ENTRY','INVALIDATED','MISSED_ENTRY'].includes(x.status));
+    const recentChanges=boardRows.filter(x=>['ACTIVE','INVALIDATED','MISSED_ENTRY','TARGET_HIT','STOP_HIT'].includes(x.status));
     return json(res,200,{ok:true,setups:current.sort((a,b)=>ms(b.publishedAt)-ms(a.publishedAt)),recentChanges,publicationId:meta.publicationId||null,publishedAt:meta.publishedAt||null,resetsAt:meta.resetsAt||null,setupCount:Number(meta.setupCount)||0,scanUniverse:Number(meta.scanUniverse)||0,source:'Bybit linear perpetuals',status:meta.status||'WAITING'});
   }catch(error){const status=error?.code==='AUTH_REQUIRED'||error?.code==='AUTH_INVALID'?401:error?.code==='ACCESS_EXPIRED'?403:500;return json(res,status,{ok:false,error:error?.message||'Daily setups could not be loaded.'});}
 }
