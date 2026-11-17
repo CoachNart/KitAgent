@@ -291,9 +291,19 @@ assert('CRT rejects a wick-only retest candle',()=>{
   return !r.tradeReady&&r.failures.length>0;
 });
 assert('SMC rejects a market entry when the last closed candle has not interacted with the FVG',()=>{
-  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
-  const trade=buildTrade({c,price:100.2,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104});
-  return trade===null;
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
+  const trade=buildTrade({c,price:100.2,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104,diagnostics});
+  return trade===null&&diagnostics.marketRetestNotConfirmed===1;
+});
+assert('SMC diagnostics distinguish a pending limit on the wrong side of price',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
+  const trade=buildTrade({c,price:99,direction:'BULLISH',sweep:{extreme:80},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104,diagnostics});
+  return trade===null&&diagnostics.pendingLimitWrongSide===1;
+});
+assert('SMC diagnostics distinguish a pending limit that is too far from price',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
+  const trade=buildTrade({c,price:90,direction:'BULLISH',sweep:{extreme:80},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104,diagnostics});
+  return trade===null&&diagnostics.pendingLimitTooFar===1;
 });
 assert('SMC permits a market entry after a closed candle touches and holds the FVG',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
