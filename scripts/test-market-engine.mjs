@@ -303,7 +303,11 @@ assert('SMC diagnostics distinguish a pending limit on the wrong side of price',
 assert('SMC diagnostics distinguish a pending limit that is too far from price',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
   const trade=buildTrade({c,price:110,direction:'BULLISH',sweep:{extreme:80},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:120,diagnostics});
-  return trade===null&&diagnostics.pendingLimitTooFar===1;
+  const sample=diagnostics.pendingLimitAudit?.[0];
+  return trade===null&&diagnostics.pendingLimitTooFar===1&&
+    sample?.direction==='BULLISH'&&sample.price===110&&sample.entryMidpoint===100&&
+    sample.distance===10&&sample.allowedDistance>0&&sample.distanceAtr>sample.allowedDistanceAtr&&
+    sample.fvgAgeBars===1;
 });
 assert('SMC permits a market entry after a closed candle touches and holds the FVG',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
