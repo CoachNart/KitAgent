@@ -110,12 +110,13 @@ function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
   const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
   return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null})||null;
 }
-function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
+function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnostics=null}){
+  const reject=reason=>{if(diagnostics)diagnostics[reason]=(diagnostics[reason]||0)+1;return null;};
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
   const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer,entry=fvg.midpoint,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
-  if(!Number.isFinite(rr)||rr<=0)return null;
-  if(direction==='BULLISH'&&price<sweep.extreme)return null;
-  if(direction==='BEARISH'&&price>sweep.extreme)return null;
+  if(!Number.isFinite(rr)||rr<=0)return reject('invalidRiskReward');
+  if(direction==='BULLISH'&&price<sweep.extreme)return reject('sweepInvalidated');
+  if(direction==='BEARISH'&&price>sweep.extreme)return reject('sweepInvalidated');
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const near=Math.abs(price-entry)<=tolerance;
   const pendingDistance=Math.abs(price-entry);
@@ -128,9 +129,11 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target}){
   // A MARKET entry requires a closed candle to actually interact with and
   // hold the FVG. Without that, proximity to the midpoint is only a pending
   // limit opportunity, not confirmation to enter immediately.
-  if(near&&!marketCandleQuality)return null;
-  const orderType=near?'MARKET':direction==='BULLISH'?(price>entry&&pendingDistance<=pendingMax?'LIMIT':null):(price<entry&&pendingDistance<=pendingMax?'LIMIT':null);
-  if(!orderType)return null;
+  if(near&&!marketCandleQuality)return reject('marketRetestNotConfirmed');
+  const correctPendingSide=direction==='BULLISH'?price>entry:price<entry;
+  if(!near&&!correctPendingSide)return reject('pendingLimitWrongSide');
+  if(!near&&pendingDistance>pendingMax)return reject('pendingLimitTooFar');
+  const orderType=near?'MARKET':'LIMIT';
   return{entry,marketEntry:price,stop,target,rr,orderType,
     entryZone:{low:fvg.low,high:fvg.high,source:'FVG_RETEST_ZONE'},
     invalidationPrice:sweep.extreme,entryReason:'Retrace into the unmitigated FVG created by the displacement that caused the MSS.',invalidation:'Beyond the liquidity-sweep extreme with volatility buffer.',invalidationSource:'liquidity_sweep_extreme',sweepLevel:sweep.level,sweepExtreme:sweep.extreme,mssLevel:mss.level,displacementIndex:displacement.index,fvg:{low:fvg.low,high:fvg.high,midpoint:fvg.midpoint,index:fvg.index}};
@@ -145,11 +148,13 @@ export function evaluateSMC({candles,layers,price}){
     return{direction:'NEUTRAL',failures,evidence:[]};
   }
   const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=16);
-  if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0}]};}
+  if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,executionRejections:{invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0},geometryFailureReasons:{}}]};}
 
   const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0};
+  const executionRejections={invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0};
+  const geometryFailureReasons={};
   const premiumDiscountAudit=[];
-  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
+  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,executionRejections:{...executionRejections},geometryFailureReasons:{...geometryFailureReasons},premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
   let selected=null;
   if(!Number.isFinite(price)||price<=0){
     failures.push('Live price is unavailable.');
@@ -230,11 +235,17 @@ export function evaluateSMC({candles,layers,price}){
     stages.rrAtLeast3++;
     const tradeCandidate=buildTrade({
       c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
-      displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price
+      displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price,diagnostics:executionRejections
     });
     if(!tradeCandidate)continue;
     const geometry=validateTradeGeometry({trade:tradeCandidate,direction,candles:c});
-    if(!geometry.valid)continue;
+    if(!geometry.valid){
+      executionRejections.geometryRejected++;
+      if(geometry.failures.some(x=>x.includes('below the 3R minimum')))executionRejections.geometryRejectedBelow3R++;
+      else executionRejections.geometryRejectedOther++;
+      for(const reason of geometry.failures)geometryFailureReasons[reason]=(geometryFailureReasons[reason]||0)+1;
+      continue;
+    }
     stages.executableEntry++;
     selected={
       sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,
