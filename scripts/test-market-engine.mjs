@@ -1,7 +1,7 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -162,6 +162,18 @@ assert('SMC consumes a bullish FVG once its planned midpoint entry has already b
 const untouchedMidpointCandles=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
 untouchedMidpointCandles[39]=bar(39,102.2,102.8,101.5,102.4);
 assert('SMC keeps a bullish FVG fresh when price has only entered the near edge, not reached its midpoint entry',()=>freshFvg(untouchedMidpointCandles,{direction:'BULLISH',index:38,low:100,high:102,midpoint:101},39));
+const bullishTargetFixture=Array.from({length:50},(_,i)=>bar(i,100,101,99,100));
+bullishTargetFixture[25]=bar(25,104,110,103,105);
+const bullishAheadTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,105,2,49,[]);
+const bullishAlreadyPassedTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,111,2,49,[]);
+assert('SMC bullish target must remain beyond the live quote and preserve at least 3R',()=>bullishAheadTarget?.price>105&&Math.abs(bullishAheadTarget.price-100)>=6);
+assert('SMC rejects a bullish structural target already passed by live price',()=>bullishAlreadyPassedTarget===null);
+const bearishTargetFixture=Array.from({length:50},(_,i)=>bar(i,100,101,99,100));
+bearishTargetFixture[25]=bar(25,96,97,90,95);
+const bearishAheadTarget=nextLiquidityTarget(bearishTargetFixture,'BEARISH',100,95,2,49,[]);
+const bearishAlreadyPassedTarget=nextLiquidityTarget(bearishTargetFixture,'BEARISH',100,89,2,49,[]);
+assert('SMC bearish target must remain beyond the live quote and preserve at least 3R',()=>bearishAheadTarget?.price<95&&Math.abs(100-bearishAheadTarget.price)>=6);
+assert('SMC rejects a bearish structural target already passed by live price',()=>bearishAlreadyPassedTarget===null);
 const touchedBearishCandles=Array.from({length:40},(_,i)=>bar(i,98,99,97,98));
 touchedBearishCandles[39]=bar(39,98,101.5,97.5,99);
 assert('SMC consumes a bearish FVG once its planned midpoint entry has already been traded',()=>!freshFvg(touchedBearishCandles,{direction:'BEARISH',index:38,low:100,high:102,midpoint:101},39));
