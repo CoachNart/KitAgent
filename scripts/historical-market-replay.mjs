@@ -291,7 +291,8 @@ const rows=[...stats.values()].map(s=>{
   return{strategy:s.strategy,timeframe:s.timeframe,evaluated:s.evaluated,gradeA:s.gradeA,gradeAplus:s.gradeAplus,candidates:s.tradeCandidates,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+mean.toFixed(3):null,ambiguous:s.ambiguous,missed:s.missed,unresolved:s.unresolved,maxDrawdownR:+maxDrawdown.toFixed(3)};
 });
 console.table(rows);
-console.log('\nTRADE-LEVEL AUDIT (qualified candidates only)');
+console.log('\nREPEATED SMC SETUPS SUPPRESSED',duplicateSetupsSuppressed);
+console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events only)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
