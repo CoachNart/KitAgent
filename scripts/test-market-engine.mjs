@@ -8,7 +8,7 @@ import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
-import {EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
+import {EXECUTION_TIMEFRAMES,atr} from '../server/market-engine/data.js';
 import {topSymbols,candlesFor,scanSymbol,candidateScore} from '../server/market-engine/daily.js';
 
 const tests=[];
@@ -163,6 +163,8 @@ const freshPoolCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
 freshPoolCandles[40]=bar(40,100,101,98,100);
 freshPoolCandles[45]=bar(45,99,101,97,100);
 assert('SMC still accepts a recent first-touch sweep with a decisive reclaim',()=>findSweeps(freshPoolCandles,'BULLISH').some(x=>x.swingIndex===40&&x.index===45));
+const freshSweepAudit=findSweeps(freshPoolCandles,'BULLISH').find(x=>x.swingIndex===40&&x.index===45);
+assert('SMC normalizes historical sweep quality using ATR available at the sweep candle',()=>!!freshSweepAudit&&Math.abs(freshSweepAudit.quality.penetrationATR-1/atr(freshPoolCandles.slice(0,46),14))<1e-9);
 const smcConflict=evaluateSMC({candles:smcCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:108.9});
 assert('SMC rejects conflicting higher-timeframe bias',()=>smcConflict.direction==='NEUTRAL'&&smcConflict.failures.some(x=>x.includes('conflicts')));
 
