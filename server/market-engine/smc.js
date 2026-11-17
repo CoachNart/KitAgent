@@ -119,10 +119,19 @@ function freshFvg(c,fvg,asOf){
   }
   return true;
 }
-function nextLiquidityTarget(c,direction,entry,asOfIndex,layers=[]){
+export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layers=[]){
+  if(!Number.isFinite(entry)||!Number.isFinite(price)||!(risk>0))return null;
   const a=atr(c,14)||0;
-  const minDistance=Math.max(a*1.5,Math.abs(entry)*.005);
-  return selectStructuralTarget(c,direction,entry,{layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null})||null;
+  // A pending limit must not carry a target that price has already reached
+  // before the entry fills. Select the objective beyond the live executable
+  // quote, while keeping it at least 3R from the planned FVG entry.
+  const minimumRewardDistance=direction==='BULLISH'
+    ?entry+risk*3-price
+    :price-(entry-risk*3);
+  const minDistance=Math.max(0,minimumRewardDistance,a*1.5,Math.abs(price)*.005);
+  return selectStructuralTarget(c,direction,price,{
+    layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null
+  })||null;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnostics=null}){
   const reject=reason=>{if(diagnostics)diagnostics[reason]=(diagnostics[reason]||0)+1;return null;};
@@ -233,33 +242,23 @@ export function evaluateSMC({candles,layers,price}){
     if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     stages.premiumDiscount++;
 
-    // Targets must be selected from structure available at the decision
-    // candle, not frozen at the earlier FVG-creation candle.
-    let targetCandidate=nextLiquidityTarget(c,direction,fvgCandidate.midpoint,c.length-1,ordered);
-    if(!targetCandidate||!Number.isFinite(targetCandidate.price))continue;
-    stages.structuralTarget++;
+    // Build structural invalidation first so target selection can enforce
+    // both the 3R floor and the live-quote boundary in one pass.
     const stopBuffer=Math.max((atr(c,14)||Math.max(Math.abs(price)*.001,1e-9))*.15,Math.abs(price)*.00035);
     const structuralStop=direction==='BULLISH'?sweepCandidate.extreme-stopBuffer:sweepCandidate.extreme+stopBuffer;
     const structuralRisk=Math.abs(fvgCandidate.midpoint-structuralStop);
     if(!(structuralRisk>0))continue;
-    let structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
-    let structuralRR=structuralReward/structuralRisk;
-    // If the nearest genuine objective is short of 3R, look for another
-    // confirmed structural objective at or beyond 3R. Never extend a price
-    // mathematically; selectStructuralTarget only returns existing structure.
-    if(structuralRR<3){
-      const fartherTarget=selectStructuralTarget(c,direction,fvgCandidate.midpoint,{
-        layers:ordered,minDistance:structuralRisk*3,
-        asOf:c.length-1,asOfTime:c.at(-1)?.time??null
-      });
-      if(fartherTarget){
-        targetCandidate=fartherTarget;
-        structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
-        structuralRR=structuralReward/structuralRisk;
-      }
-    }
+    // Targets must be real confirmed structure beyond the current executable
+    // quote, not merely beyond the planned FVG entry. Otherwise a LIMIT can
+    // be published after its take-profit has already traded.
+    const targetCandidate=nextLiquidityTarget(
+      c,direction,fvgCandidate.midpoint,price,structuralRisk,c.length-1,ordered
+    );
+    if(!targetCandidate||!Number.isFinite(targetCandidate.price))continue;
+    stages.structuralTarget++;
+    const structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
+    const structuralRR=structuralReward/structuralRisk;
     if(structuralRR<3)continue;
-    stages.rrAtLeast3++;
     const tradeCandidate=buildTrade({
       c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
       displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price,diagnostics:executionRejections
