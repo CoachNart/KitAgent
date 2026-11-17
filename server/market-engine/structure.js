@@ -235,10 +235,13 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
     candidate.quality=candidate.strength+(candidate.clusterCount>=3?24:candidate.clusterCount===2?14:0)+(candidate.tf!=='EXECUTION'?8:0)+(candidate.native?20:0);
   }
 
+  // Keep every qualified objective until the execution selector applies its
+  // reachability and nearest-structure rules. Truncating by quality here can
+  // discard a closer valid target before selectStructuralTarget sees it,
+  // artificially starving otherwise executable 3R setups.
   return candidates
     .filter(x=>x.quality>=90 || x.clusterCount>=2 || x.native)
-    .sort((a,b)=>b.quality-a.quality||Math.abs(a.price-entry)-Math.abs(b.price-entry))
-    .slice(0,12);
+    .sort((a,b)=>Math.abs(a.price-entry)-Math.abs(b.price-entry)||b.quality-a.quality);
 }
 
 export function selectStructuralTarget(c,direction,entry,options={}){
