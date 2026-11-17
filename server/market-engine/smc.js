@@ -259,6 +259,7 @@ export function evaluateSMC({candles,layers,price}){
     const structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
     const structuralRR=structuralReward/structuralRisk;
     if(structuralRR<3)continue;
+    stages.rrAtLeast3++;
     const tradeCandidate=buildTrade({
       c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
       displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price,diagnostics:executionRejections
