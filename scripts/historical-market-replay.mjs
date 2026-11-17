@@ -18,6 +18,8 @@ const stageSamples=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const executionRejectionTotals=new Map();
 const geometryFailureTotals=new Map();
 const premiumDiscountAudit=[];
+const pendingLimitAudit=[];
+const pendingLimitAuditSeen=new Set();
 const premiumDiscountAuditCounts=new Map();
 const premiumDiscountAuditSeen=new Set();
 const replayNow=Date.now();
@@ -213,6 +215,13 @@ for(const symbol of symbols){
           for(const [reason,count] of Object.entries(stageDiagnostic.geometryFailureReasons||{})){
             if(Number.isFinite(Number(count)))geometryFailureTotals.set(reason,(geometryFailureTotals.get(reason)||0)+Number(count));
           }
+          for(const sample of stageDiagnostic.pendingLimitAudit||[]){
+            const uniqueKey=[symbol,tf,sample.direction,sample.decisionTime,sample.fvgIndex].join('|');
+            if(pendingLimitAudit.length<80&&!pendingLimitAuditSeen.has(uniqueKey)){
+              pendingLimitAuditSeen.add(uniqueKey);
+              pendingLimitAudit.push({symbol,timeframe:tf,...sample});
+            }
+          }
           for(const sample of stageDiagnostic.premiumDiscountAudit||[]){
             const sampleKey=symbol+'|'+sample.direction;
             const uniqueKey=[symbol,sample.direction,sample.sweepIndex,sample.mssIndex,sample.fvgIndex].join('|');
@@ -275,6 +284,8 @@ console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increm
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
 console.log('\nEXECUTION REJECTION DIAGNOSTICS (per sweep path)');
 console.table([...executionRejectionTotals.entries()].sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})));
+console.log('\nPENDING LIMIT DISTANCE AUDIT (sampled rejected paths)');
+console.table(pendingLimitAudit.map(x=>({symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,price:+x.price.toPrecision(8),fvgMidpoint:+x.entryMidpoint.toPrecision(8),distance:+x.distance.toPrecision(8),distanceAtr:x.distanceAtr==null?null:+x.distanceAtr.toFixed(3),allowedDistance:+x.allowedDistance.toPrecision(8),allowedDistanceAtr:x.allowedDistanceAtr==null?null:+x.allowedDistanceAtr.toFixed(3),fvgAgeBars:x.fvgAgeBars,fvgIndex:x.fvgIndex,atr:+x.atr.toPrecision(8)})));
 console.log('\nTRADE GEOMETRY FAILURE DETAILS');
 console.table([...geometryFailureTotals.entries()].sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})));
 console.log('\nSTRUCTURAL PREMIUM/DISCOUNT AUDIT (pre-sweep confirmed swing range)');
