@@ -76,8 +76,16 @@ function findSweeps(c,direction){
       if(reclaimed){
         const quality=sweepQuality(c,x,direction,p.price,i);
         const extreme=direction==='BULLISH'?x.low:x.high;
-        const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
-        if(quality&&stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i,quality});
+        // The trade is invalidated by a stop-price wick, not only by a candle
+        // close beyond the sweep extreme. Replay and live execution both use
+        // wick-based stop fills, so allowing a later wick through the stop
+        // would publish a setup whose invalidation had already happened.
+        const decisionPrice=Number(c.at(-1)?.close);
+        const decisionAtr=atr(c,14)||Math.max(Math.abs(decisionPrice)*.001,1e-9);
+        const stopBuffer=Math.max(decisionAtr*.15,Math.abs(decisionPrice)*.00035);
+        const stopPrice=direction==='BULLISH'?extreme-stopBuffer:extreme+stopBuffer;
+        const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.low>stopPrice:z.high<stopPrice);
+        if(quality&&stillValid)out.push({direction,index:i,level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-i,quality});
       }
       // The first wick through the pool consumes it, whether it reclaims or
       // closes beyond the level. Never accept a later breach as a new sweep.
@@ -138,8 +146,8 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
   const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer,entry=fvg.midpoint,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
   if(!Number.isFinite(rr)||rr<=0)return reject('invalidRiskReward');
-  if(direction==='BULLISH'&&price<sweep.extreme)return reject('sweepInvalidated');
-  if(direction==='BEARISH'&&price>sweep.extreme)return reject('sweepInvalidated');
+  if(direction==='BULLISH'&&price<=stop)return reject('sweepInvalidated');
+  if(direction==='BEARISH'&&price>=stop)return reject('sweepInvalidated');
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const near=Math.abs(price-entry)<=tolerance;
   const pendingDistance=Math.abs(price-entry);
