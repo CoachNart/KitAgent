@@ -154,12 +154,22 @@ for(const symbol of symbols){
   }
   for(const tf of requested){
     const exec=history[tf]||[];
-    const start=Math.max(40,exec.length-bars);
-    const snapshots=exec.slice(start);
+    // Sample decision points across the available history, not only the
+    // newest N candles. Each sampled setup then has the remaining historical
+    // candles available for forward outcome simulation.
+    const firstIndex=Math.max(80,Math.min(exec.length-2,Number(args['warmup-bars'])||80));
+    const lastIndex=exec.length-2;
+    if(lastIndex<firstIndex)continue;
+    const sampleCount=Math.min(bars,lastIndex-firstIndex+1);
+    const snapshotIndices=sampleCount===1
+      ?[lastIndex]
+      :Array.from({length:sampleCount},(_,i)=>Math.round(firstIndex+(lastIndex-firstIndex)*i/(sampleCount-1)));
+    const snapshots=snapshotIndices.map(index=>({index,candle:exec[index]}));
     const seen=new Map();
     let snapshotIndex=0;
-    for(const candle of snapshots){
+    for(const snapshot of snapshots){
       snapshotIndex++;
+      const {index:candleIndex,candle}=snapshot;
       const cutoff=candle.time+DURATIONS[tf];
       const all={};
       for(const layerTf of [...new Set(['4H',...EXECUTION_TIMEFRAMES])]){
@@ -222,7 +232,7 @@ for(const symbol of symbols){
         if(previous!=null&&cutoff-previous<DURATIONS[tf]*3)continue;
         seen.set(strategy+'|'+fp,cutoff);
         stat.tradeCandidates++;
-        const future=exec.slice(start+snapshotIndex);
+        const future=exec.slice(candleIndex+1);
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
