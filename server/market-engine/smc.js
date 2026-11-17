@@ -132,7 +132,19 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   if(near&&!marketCandleQuality)return reject('marketRetestNotConfirmed');
   const correctPendingSide=direction==='BULLISH'?price>entry:price<entry;
   if(!near&&!correctPendingSide)return reject('pendingLimitWrongSide');
-  if(!near&&pendingDistance>pendingMax)return reject('pendingLimitTooFar');
+  if(!near&&pendingDistance>pendingMax){
+    if(diagnostics){
+      diagnostics.pendingLimitAudit=diagnostics.pendingLimitAudit||[];
+      if(diagnostics.pendingLimitAudit.length<100)diagnostics.pendingLimitAudit.push({
+        direction,decisionTime:last?.time??null,price,entryMidpoint:entry,
+        distance:pendingDistance,distanceAtr:a>0?pendingDistance/a:null,
+        allowedDistance:pendingMax,allowedDistanceAtr:a>0?pendingMax/a:null,
+        atr:a,fvgIndex:fvg.index,fvgAgeBars:c.length-1-fvg.index,
+        fvgLow:fvg.low,fvgHigh:fvg.high,lastCandleClose:last?.close??null
+      });
+    }
+    return reject('pendingLimitTooFar');
+  }
   const orderType=near?'MARKET':'LIMIT';
   return{entry,marketEntry:price,stop,target,rr,orderType,
     entryZone:{low:fvg.low,high:fvg.high,source:'FVG_RETEST_ZONE'},
@@ -148,13 +160,14 @@ export function evaluateSMC({candles,layers,price}){
     return{direction:'NEUTRAL',failures,evidence:[]};
   }
   const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=16);
-  if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,executionRejections:{invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0},geometryFailureReasons:{}}]};}
+  if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,executionRejections:{invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0},geometryFailureReasons:{},pendingLimitAudit:[]}]};}
 
   const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishReject:0,premiumDiscountBearishReject:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0};
   const executionRejections={invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0};
   const geometryFailureReasons={};
+  const pendingLimitAudit=[];
   const premiumDiscountAudit=[];
-  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,executionRejections:{...executionRejections},geometryFailureReasons:{...geometryFailureReasons},premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
+  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,executionRejections:{...executionRejections},geometryFailureReasons:{...geometryFailureReasons},pendingLimitAudit:pendingLimitAudit.slice(-100),premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
   let selected=null;
   if(!Number.isFinite(price)||price<=0){
     failures.push('Live price is unavailable.');
@@ -237,6 +250,9 @@ export function evaluateSMC({candles,layers,price}){
       c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
       displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price,diagnostics:executionRejections
     });
+    if(executionRejections.pendingLimitAudit?.length){
+      pendingLimitAudit.push(...executionRejections.pendingLimitAudit.splice(0,100-pendingLimitAudit.length));
+    }
     if(!tradeCandidate)continue;
     const geometry=validateTradeGeometry({trade:tradeCandidate,direction,candles:c});
     if(!geometry.valid){
