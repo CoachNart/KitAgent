@@ -140,6 +140,13 @@ export function evaluateSMC({candles,layers,price}){
   const premiumDiscountAudit=[];
   const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
   let selected=null;
+  if(!Number.isFinite(price)||price<=0){
+    failures.push('Live price is unavailable.');
+    return{direction,failures,evidence:[]};
+  }
+  // Evaluate each qualifying sweep all the way through target and entry
+  // construction. A newer sweep that has no usable objective or executable
+  // FVG retest must not hide an older, otherwise valid setup.
   for(const sweepCandidate of sweeps.slice().reverse()){
     const mssCandidate=swingBreakAfter(c,sweepCandidate.index,c.length-1,direction);
     if(!mssCandidate||mssCandidate.index-sweepCandidate.index>10)continue;
@@ -156,11 +163,6 @@ export function evaluateSMC({candles,layers,price}){
     const fvgAtr=atr(c.slice(0,fvgCandidate.index+1),14);
     if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
     stages.freshFvgAndSize++;
-    // Premium/discount is measured against the latest confirmed structural
-    // swing high/low pair that existed before the raid. If that dealing range
-    // cannot be established, do not substitute a rolling candle midpoint:
-    // it can drift far from active structure after an expansion and reject
-    // valid raids or misclassify their location.
     const rangeCandidate=preSweepDealingRange(c,sweepCandidate);
     if(!rangeCandidate)continue;
     const premiumDiscountDelta=sweepCandidate.extreme-rangeCandidate.equilibrium;
@@ -187,28 +189,34 @@ export function evaluateSMC({candles,layers,price}){
     }
     if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     stages.premiumDiscount++;
-    selected={sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,fvg:fvgCandidate,range:rangeCandidate};
+
+    const targetCandidate=nextLiquidityTarget(c,direction,fvgCandidate.midpoint,fvgCandidate.index,ordered);
+    if(!targetCandidate||!Number.isFinite(targetCandidate.price))continue;
+    stages.structuralTarget++;
+    const stopBuffer=Math.max((atr(c,14)||Math.max(Math.abs(price)*.001,1e-9))*.15,Math.abs(price)*.00035);
+    const structuralStop=direction==='BULLISH'?sweepCandidate.extreme-stopBuffer:sweepCandidate.extreme+stopBuffer;
+    const structuralRisk=Math.abs(fvgCandidate.midpoint-structuralStop);
+    const structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
+    const structuralRR=structuralRisk>0?structuralReward/structuralRisk:0;
+    if(structuralRR>=3)stages.rrAtLeast3++;
+    const tradeCandidate=buildTrade({
+      c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
+      displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price
+    });
+    if(!tradeCandidate)continue;
+    stages.executableEntry++;
+    selected={
+      sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,
+      fvg:fvgCandidate,range:rangeCandidate,target:targetCandidate,trade:tradeCandidate
+    };
     break;
   }
   if(!selected){
-    failures.push('No recent liquidity sweep completed the full MSS, displacement, and fresh FVG sequence.');
+    failures.push('No recent sweep completed the full SMC sequence with a valid structural target and executable FVG entry.');
     return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP_CANDIDATES',count:sweeps.length},stageEvidence()]};
   }
 
-  const {sweep,mss,displacement,fvg,range}=selected;
-  if(!Number.isFinite(price)||price<=0){failures.push('Live price is unavailable.');return{direction,failures,evidence:[]};}
-  const target=nextLiquidityTarget(c,direction,fvg.midpoint,fvg.index,ordered);
-  if(!target||!Number.isFinite(target.price)){failures.push('No opposing liquidity objective is available.');return{direction,failures,evidence:[stageEvidence()]};}
-  stages.structuralTarget++;
-  const stopBuffer=Math.max((atr(c,14)||Math.max(Math.abs(price)*.001,1e-9))*.15,Math.abs(price)*.00035);
-  const structuralStop=direction==='BULLISH'?sweep.extreme-stopBuffer:sweep.extreme+stopBuffer;
-  const structuralRisk=Math.abs(fvg.midpoint-structuralStop);
-  const structuralReward=Math.abs(target.price-fvg.midpoint);
-  const structuralRR=structuralRisk>0?structuralReward/structuralRisk:0;
-  if(structuralRR>=3)stages.rrAtLeast3++;
-  const trade=buildTrade({c,price,direction,sweep,mss,displacement,fvg,target:target.price});
-  if(!trade){failures.push('FVG entry, structural invalidation, or meaningful liquidity objective is invalid.');return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},stageEvidence()]};}
-  stages.executableEntry++;
+  const {sweep,mss,displacement,fvg,range,target,trade}=selected;
   const grade=gradeSetup({
     strategy:'SMC',
     context:{aligned:true,trend:true},
