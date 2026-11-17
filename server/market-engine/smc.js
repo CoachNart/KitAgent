@@ -11,8 +11,8 @@ const MIN_SWEEP_RANGE_ATR=.60;
 const MAX_LIQUIDITY_POOL_AGE=40;
 const MIN_FVG_SIZE_ATR=.10;
 
-function sweepQuality(c,x,direction,level){
-  const a=atr(c,14);
+function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
+  const a=atr(c.slice(0,asOfIndex+1),14);
   const r=x?.high-x?.low;
   if(!x||!a||!Number.isFinite(r)||r<=0)return null;
   const penetration=direction==='BULLISH'?level-x.low:x.high-level;
@@ -59,7 +59,7 @@ function findSweeps(c,direction){
       if(!swept)continue;
       const reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
       if(reclaimed){
-        const quality=sweepQuality(c,x,direction,p.price);
+        const quality=sweepQuality(c,x,direction,p.price,i);
         const extreme=direction==='BULLISH'?x.low:x.high;
         const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
         if(quality&&stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i,quality});
