@@ -1,6 +1,6 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
-import {structure,selectStructuralTarget,structuralBreakEvents} from '../server/market-engine/structure.js';
+import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
@@ -385,6 +385,26 @@ assert('Structural target ranking is not an RR gate',()=>{
   if(!structuralTarget)return true;
   return structuralTarget.rr===undefined;
 });
+
+// A crowded higher-timeframe target list must not crowd out a nearer valid
+// execution-timeframe objective before the final reachability selector runs.
+const crowdedExecution=Array.from({length:80},(_,i)=>bar(i,100,101,99,100.2));
+crowdedExecution[20]=bar(20,100,105,99,104);
+const crowdedHTF=Array.from({length:110},(_,i)=>({
+  time:Date.UTC(2026,0,1)+i*14400000,open:100,high:101,low:99,close:100.2,volume:100
+}));
+for(let i=0;i<13;i++){
+  const pivotIndex=8+i*7;
+  crowdedHTF[pivotIndex]={...crowdedHTF[pivotIndex],high:110+i};
+}
+const crowdedTargets=rankStructuralTargets(crowdedExecution,'BULLISH',100,{
+  layers:[{tf:'4H',candles:crowdedHTF}]
+});
+const nearestCrowdedTarget=selectStructuralTarget(crowdedExecution,'BULLISH',100,{
+  layers:[{tf:'4H',candles:crowdedHTF}]
+});
+assert('Structural target ranking retains more than twelve qualified objectives',()=>crowdedTargets.length>12);
+assert('A nearer valid execution swing is not discarded by higher-timeframe target ranking',()=>nearestCrowdedTarget?.price===105);
 
 // Target lookahead guard: a structural target must not use a swing formed after the setup event.
 const lookaheadCandles=Array.from({length:30},(_,i)=>bar(i,100,101,99,100.2));
