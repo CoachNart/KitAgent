@@ -5,6 +5,7 @@ const DURATIONS={'1H':60*60_000,'4H':4*60*60_000};
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,SUIUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
+const forwardBars=Math.max(1,Math.min(1000,Number(args['forward-bars'])||168));
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
 const strategies=['SMC'];
@@ -128,7 +129,7 @@ async function fetchReplayCandles(symbol,tf){
 
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log('Historical candle source: Bybit v5 linear perpetual candles (same exchange as live market data).');
-console.log('Symbols:',symbols.join(', '),'| snapshots per timeframe:',bars,'| history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
+console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
   let history;
@@ -158,7 +159,7 @@ for(const symbol of symbols){
     // newest N candles. Each sampled setup then has the remaining historical
     // candles available for forward outcome simulation.
     const firstIndex=Math.max(80,Math.min(exec.length-2,Number(args['warmup-bars'])||80));
-    const lastIndex=exec.length-2;
+    const lastIndex=exec.length-forwardBars-1;
     if(lastIndex<firstIndex)continue;
     const sampleCount=Math.min(bars,lastIndex-firstIndex+1);
     const snapshotIndices=sampleCount===1
@@ -232,7 +233,7 @@ for(const symbol of symbols){
         if(previous!=null&&cutoff-previous<DURATIONS[tf]*3)continue;
         seen.set(strategy+'|'+fp,cutoff);
         stat.tradeCandidates++;
-        const future=exec.slice(candleIndex+1);
+        const future=exec.slice(candleIndex+1,candleIndex+1+forwardBars);
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
@@ -294,7 +295,7 @@ const totalLosses=rows.reduce((n,x)=>n+x.losses,0);
 const totalNetR=[...stats.values()].reduce((n,x)=>n+x.netR,0);
 const averageNetR=totalResolved?totalNetR/totalResolved:null;
 console.log('\nSUMMARY',JSON.stringify({
-  symbols,requestedTimeframes:requested,barsPerTimeframe:bars,roundTripCostBps,
+  symbols,requestedTimeframes:requested,decisionSnapshotsPerTimeframe:bars,forwardBars,roundTripCostBps,
   evaluated:rows.reduce((n,x)=>n+x.evaluated,0),
   candidates:rows.reduce((n,x)=>n+x.candidates,0),
   resolved:totalResolved,wins:totalWins,losses:totalLosses,
