@@ -1,6 +1,6 @@
 import {atr,bodyRatio} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
-import {gradeSetup} from './grading.js';
+import {gradeSetup,validateTradeGeometry} from './grading.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
@@ -190,20 +190,40 @@ export function evaluateSMC({candles,layers,price}){
     if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     stages.premiumDiscount++;
 
-    const targetCandidate=nextLiquidityTarget(c,direction,fvgCandidate.midpoint,fvgCandidate.index,ordered);
+    // Targets must be selected from structure available at the decision
+    // candle, not frozen at the earlier FVG-creation candle.
+    let targetCandidate=nextLiquidityTarget(c,direction,fvgCandidate.midpoint,c.length-1,ordered);
     if(!targetCandidate||!Number.isFinite(targetCandidate.price))continue;
     stages.structuralTarget++;
     const stopBuffer=Math.max((atr(c,14)||Math.max(Math.abs(price)*.001,1e-9))*.15,Math.abs(price)*.00035);
     const structuralStop=direction==='BULLISH'?sweepCandidate.extreme-stopBuffer:sweepCandidate.extreme+stopBuffer;
     const structuralRisk=Math.abs(fvgCandidate.midpoint-structuralStop);
-    const structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
-    const structuralRR=structuralRisk>0?structuralReward/structuralRisk:0;
-    if(structuralRR>=3)stages.rrAtLeast3++;
+    if(!(structuralRisk>0))continue;
+    let structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
+    let structuralRR=structuralReward/structuralRisk;
+    // If the nearest genuine objective is short of 3R, look for another
+    // confirmed structural objective at or beyond 3R. Never extend a price
+    // mathematically; selectStructuralTarget only returns existing structure.
+    if(structuralRR<3){
+      const fartherTarget=selectStructuralTarget(c,direction,fvgCandidate.midpoint,{
+        layers:ordered,minDistance:structuralRisk*3,
+        asOf:c.length-1,asOfTime:c.at(-1)?.time??null
+      });
+      if(fartherTarget){
+        targetCandidate=fartherTarget;
+        structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
+        structuralRR=structuralReward/structuralRisk;
+      }
+    }
+    if(structuralRR<3)continue;
+    stages.rrAtLeast3++;
     const tradeCandidate=buildTrade({
       c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
       displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price
     });
     if(!tradeCandidate)continue;
+    const geometry=validateTradeGeometry({trade:tradeCandidate,direction,candles:c});
+    if(!geometry.valid)continue;
     stages.executableEntry++;
     selected={
       sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,
