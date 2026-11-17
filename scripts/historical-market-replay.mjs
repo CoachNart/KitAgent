@@ -12,6 +12,7 @@ const strategies=['SMC'];
 const stats=new Map();
 const failures=new Map();
 const tradeAudit=[];
+let duplicateSetupsSuppressed=0;
 const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','premiumDiscountBullishPass','premiumDiscountBearishPass','premiumDiscountBullishReject','premiumDiscountBearishReject','premiumDiscountDeltaAtrSum','premiumDiscountDeltaSamples','structuralTarget','rrAtLeast3','executableEntry'];
 const stageTotals=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const stageSamples=Object.fromEntries(stageKeys.map(key=>[key,0]));
@@ -73,7 +74,16 @@ function rMultiple(trade,direction,exit){
   if(!(risk>0))return 0;
   return (direction==='BULLISH'?exit-Number(trade.entry):Number(trade.entry)-exit)/risk;
 }
-function fingerprint(t,direction){
+function fingerprint(t,direction,smc=null){
+  // Count one historical trade per underlying MSS/FVG event, not once per
+  // sampled snapshot or whenever a live quote slightly changes the levels.
+  // Candle indices are stable within this symbol/timeframe replay.
+  const mssIndex=Number(smc?.mss?.index);
+  const fvgIndex=Number(smc?.fvg?.index);
+  if(Number.isInteger(mssIndex)&&Number.isInteger(fvgIndex)){
+    return ['SMC_EVENT',direction,mssIndex,fvgIndex].join('|');
+  }
+  // Defensive fallback for non-SMC strategies or older result shapes.
   return [direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
 }
 
@@ -246,9 +256,12 @@ for(const symbol of symbols){
         if(result.grade.grade==='A')stat.gradeA++;
         if(result.grade.grade==='A+')stat.gradeAplus++;
         const trade=result.trade;
-        const fp=fingerprint(trade,result.direction),previous=seen.get(strategy+'|'+fp);
-        if(previous!=null&&cutoff-previous<DURATIONS[tf]*3)continue;
-        seen.set(strategy+'|'+fp,cutoff);
+        const fp=fingerprint(trade,result.direction,result.smc),seenKey=strategy+'|'+fp;
+        if(seen.has(seenKey)){
+          duplicateSetupsSuppressed++;
+          continue;
+        }
+        seen.set(seenKey,cutoff);
         stat.tradeCandidates++;
         const future=exec.slice(candleIndex+1,candleIndex+1+forwardBars);
         if(future.some(x=>x.time<cutoff)){
