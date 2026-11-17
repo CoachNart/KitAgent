@@ -150,6 +150,19 @@ assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQ
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
 assert('SMC liquidity sweep detector only accepts sweep plus reclaim',()=>findSweeps(smcCandles,'BULLISH').every(x=>smcCandles[x.index].low<x.level&&smcCandles[x.index].close>x.level));
+const stalePoolCandles=Array.from({length:70},(_,i)=>bar(i,100,101,99,100));
+stalePoolCandles[5]=bar(5,100,101,98,100);
+stalePoolCandles[60]=bar(60,100,102,97,100);
+assert('SMC rejects a liquidity pool older than the 40-candle structural window',()=>!findSweeps(stalePoolCandles,'BULLISH').some(x=>x.swingIndex===5));
+const consumedPoolCandles=Array.from({length:40},(_,i)=>bar(i,100,101,99,100));
+consumedPoolCandles[5]=bar(5,100,101,98,100);
+consumedPoolCandles[10]=bar(10,98,99,97,97.5); // First breach closes below the pool.
+consumedPoolCandles[20]=bar(20,99,101,96,100); // Later reclaim must not revive it.
+assert('SMC consumes a liquidity pool on its first breach even without a reclaim',()=>!findSweeps(consumedPoolCandles,'BULLISH').some(x=>x.swingIndex===5));
+const freshPoolCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
+freshPoolCandles[40]=bar(40,100,101,98,100);
+freshPoolCandles[45]=bar(45,99,101,97,100);
+assert('SMC still accepts a recent first-touch sweep with a decisive reclaim',()=>findSweeps(freshPoolCandles,'BULLISH').some(x=>x.swingIndex===40&&x.index===45));
 const smcConflict=evaluateSMC({candles:smcCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:108.9});
 assert('SMC rejects conflicting higher-timeframe bias',()=>smcConflict.direction==='NEUTRAL'&&smcConflict.failures.some(x=>x.includes('conflicts')));
 
