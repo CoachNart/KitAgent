@@ -4,7 +4,7 @@ import {gradeSetup,validateTradeGeometry} from './grading.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
-export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade};
+export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade, swingBreakAfter, freshFvg};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
@@ -38,12 +38,27 @@ function meaningfulDisplacement(c,i,direction){
 }
 function swingBreakAfter(c,start,end,direction){
   const s=confirmedSwings(c,1);
-  if(direction==='BULLISH'){
-    const candidates=s.highs.filter(x=>x.index>start&&x.confirmationIndex<=end);
-    for(const sw of candidates.slice().reverse())for(let i=Math.max(sw.confirmationIndex,start+1);i<=end;i++)if(c[i].close>sw.price)return{index:i,level:sw.price,swingIndex:sw.index};
-  }else{
-    const candidates=s.lows.filter(x=>x.index>start&&x.confirmationIndex<=end);
-    for(const sw of candidates.slice().reverse())for(let i=Math.max(sw.confirmationIndex,start+1);i<=end;i++)if(c[i].close<sw.price)return{index:i,level:sw.price,swingIndex:sw.index};
+  // MSS must break the opposing internal swing that existed BEFORE the
+  // liquidity raid. A pivot created after the sweep is not the structure
+  // whose failure confirms the shift; using one delays confirmation and
+  // can label continuation structure as MSS.
+  const swings=direction==='BULLISH'?s.highs:s.lows;
+  const prior=swings.filter(x=>x.index<start&&x.confirmationIndex<=start).at(-1);
+  if(!prior)return null;
+  const crossed=direction==='BULLISH'
+    ?close=>close>prior.price
+    :close=>close<prior.price;
+  // If the active opposing swing was already broken before the raid, it
+  // cannot serve as fresh post-sweep MSS confirmation.
+  for(let i=prior.confirmationIndex;i<=start;i++){
+    const close=Number(c[i]?.close);
+    if(Number.isFinite(close)&&crossed(close))return null;
+  }
+  for(let i=start+1;i<=end;i++){
+    const close=Number(c[i]?.close);
+    if(Number.isFinite(close)&&crossed(close)){
+      return{index:i,level:prior.price,swingIndex:prior.index,confirmationIndex:prior.confirmationIndex};
+    }
   }
   return null;
 }
@@ -92,16 +107,15 @@ function preSweepDealingRange(c,sweep){
   };
 }
 function freshFvg(c,fvg,asOf){
-  if(!fvg)return false;
-  // A valid FVG entry is expected to be the first controlled return into the
-  // gap. Treating any wick into the gap as "mitigated" made the entry contract
-  // self-contradictory: the strategy required a fresh FVG and then required
-  // price to enter that same FVG. The gap is invalidated only when price closes
-  // through its far boundary.
+  if(!fvg||!Number.isFinite(fvg.midpoint))return false;
+  // The planned execution price is the FVG midpoint. Once price has traded
+  // through that midpoint, a pending order there would already have filled;
+  // the gap cannot be advertised as a fresh, unfilled opportunity again.
   for(let i=fvg.index+1;i<=asOf;i++){
     const x=c[i];
-    if(fvg.direction==='BULLISH'&&x.close<=fvg.low)return false;
-    if(fvg.direction==='BEARISH'&&x.close>=fvg.high)return false;
+    if(!x)continue;
+    if(fvg.direction==='BULLISH'&&x.low<=fvg.midpoint)return false;
+    if(fvg.direction==='BEARISH'&&x.high>=fvg.midpoint)return false;
   }
   return true;
 }
