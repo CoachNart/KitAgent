@@ -74,17 +74,17 @@ function rMultiple(trade,direction,exit){
   if(!(risk>0))return 0;
   return (direction==='BULLISH'?exit-Number(trade.entry):Number(trade.entry)-exit)/risk;
 }
-function fingerprint(t,direction,smc=null){
-  // Count one historical trade per underlying MSS/FVG event, not once per
-  // sampled snapshot or whenever a live quote slightly changes the levels.
-  // Candle indices are stable within this symbol/timeframe replay.
+function fingerprint(t,direction,smc=null,symbol=''){
+  // A setup is one symbol-specific sweep -> MSS -> FVG event. Include the
+  // sweep index so distinct liquidity raids sharing one later FVG stay distinct.
+  const sweepIndex=Number(smc?.sweep?.index);
   const mssIndex=Number(smc?.mss?.index);
   const fvgIndex=Number(smc?.fvg?.index);
-  if(Number.isInteger(mssIndex)&&Number.isInteger(fvgIndex)){
-    return ['SMC_EVENT',direction,mssIndex,fvgIndex].join('|');
+  if(Number.isInteger(sweepIndex)&&Number.isInteger(mssIndex)&&Number.isInteger(fvgIndex)){
+    return ['SMC_EVENT',symbol,direction,sweepIndex,mssIndex,fvgIndex].join('|');
   }
   // Defensive fallback for non-SMC strategies or older result shapes.
-  return [direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
+  return [symbol,direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
 }
 
 async function fetchReplayCandles(symbol,tf){
@@ -256,7 +256,7 @@ for(const symbol of symbols){
         if(result.grade.grade==='A')stat.gradeA++;
         if(result.grade.grade==='A+')stat.gradeAplus++;
         const trade=result.trade;
-        const fp=fingerprint(trade,result.direction,result.smc),seenKey=strategy+'|'+fp;
+        const fp=fingerprint(trade,result.direction,result.smc,symbol),seenKey=strategy+'|'+fp;
         if(seen.has(seenKey)){
           duplicateSetupsSuppressed++;
           continue;
