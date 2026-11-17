@@ -8,6 +8,7 @@ export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
+const MAX_LIQUIDITY_POOL_AGE=40;
 const MIN_FVG_SIZE_ATR=.10;
 
 function sweepQuality(c,x,direction,level){
@@ -48,14 +49,24 @@ function swingBreakAfter(c,start,end,direction){
 }
 function findSweeps(c,direction){
   const s=confirmedSwings(c,2),pools=direction==='BULLISH'?s.lows:s.highs,out=[];
-  for(const p of pools)for(let i=p.confirmationIndex;i<c.length;i++){
-    const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price,reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
-    if(swept&&reclaimed){
-      const quality=sweepQuality(c,x,direction,p.price);
-      if(!quality)continue;
-      const extreme=direction==='BULLISH'?x.low:x.high;
-      const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
-      if(stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i,quality});
+  for(const p of pools){
+    // A liquidity pool must still be structurally recent when it is raided.
+    // Once price first trades through a confirmed pool, that pool is consumed:
+    // a later revisit cannot be relabelled as a fresh sweep of the same level.
+    for(let i=p.confirmationIndex;i<c.length;i++){
+      if(i-p.index>MAX_LIQUIDITY_POOL_AGE)break;
+      const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price;
+      if(!swept)continue;
+      const reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
+      if(reclaimed){
+        const quality=sweepQuality(c,x,direction,p.price);
+        const extreme=direction==='BULLISH'?x.low:x.high;
+        const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.close>=extreme:z.close<=extreme);
+        if(quality&&stillValid)out.push({direction,index:i,level:p.price,extreme,swingIndex:p.index,age:c.length-1-i,quality});
+      }
+      // The first wick through the pool consumes it, whether it reclaims or
+      // closes beyond the level. Never accept a later breach as a new sweep.
+      break;
     }
   }
   return out.sort((a,b)=>a.index-b.index);
