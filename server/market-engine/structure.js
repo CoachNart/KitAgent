@@ -164,10 +164,11 @@ export function structure(c,asOf=c.length-1){
   };
 }
 
-export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0,nativeTargets=[],asOf=null,asOfTime=null}={}){
+export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0,nativeTargets=[],asOf=null,asOfTime=null,minimumDistanceFloor=null}={}){
   if(!Array.isArray(c)||!c.length||!Number.isFinite(entry)||!['BULLISH','BEARISH'].includes(direction))return [];
   const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
-  const distanceFloor=Math.max(minDistance,a*1.5,Math.abs(entry)*.005);
+  const defaultDistanceFloor=Math.max(a*1.5,Math.abs(entry)*.005);
+  const distanceFloor=Math.max(minDistance,Number.isFinite(minimumDistanceFloor)?minimumDistanceFloor:defaultDistanceFloor);
   const clusterTolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const candidates=[];
 
