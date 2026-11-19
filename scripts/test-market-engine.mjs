@@ -168,6 +168,10 @@ const bullishAheadTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,
 const bullishAlreadyPassedTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,111,2,49,[]);
 assert('SMC bullish target must remain beyond the live quote and preserve at least 3R',()=>bullishAheadTarget?.price>105&&Math.abs(bullishAheadTarget.price-100)>=6);
 assert('SMC rejects a bullish structural target already passed by live price',()=>bullishAlreadyPassedTarget===null);
+const obstructedBullishTarget=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
+obstructedBullishTarget[15]=bar(15,100,104,99,100.5); // Nearest opposing swing is less than 3R.
+obstructedBullishTarget[30]=bar(30,104,110,103,105); // Farther swing would misleadingly offer 3R+.
+assert('SMC rejects a farther bullish target when nearer opposing structure blocks the 3R path',()=>nextLiquidityTarget(obstructedBullishTarget,'BULLISH',100,100,2,59,[])===null);
 const bearishTargetFixture=Array.from({length:50},(_,i)=>bar(i,100,101,99,100));
 bearishTargetFixture[25]=bar(25,96,97,90,95);
 const bearishAheadTarget=nextLiquidityTarget(bearishTargetFixture,'BEARISH',100,95,2,49,[]);
