@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {liquidityMap} from '../server/market-engine/liquidity.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -29,6 +29,8 @@ assert('A is capped at B when the sweep is older than eight 1H bars',()=>enforce
 assert('A-grade freshness gate prevents a 15-bar-old sweep from publication',()=>enforceFreshnessGrade(freshA,15).grade==='B');
 assert('Freshness gate does not upgrade an already lower grade',()=>enforceFreshnessGrade({grade:'C',score:70},15).grade==='C');
 assert('Execution timeframe allowlist contains only the 1H execution timeframe',executionTimeframesAreCorrect);
+assert('Confirmed 4H HH/HL or LH/LL trend keeps full context quality despite a countertrend CHoCH',()=>hasConfirmedContextTrend({direction:'BULLISH',rawDirection:'BULLISH',choch:{direction:'BEARISH'}},'BULLISH'));
+assert('A transitional direction inferred from a recent break is not scored as an established trend',()=>!hasConfirmedContextTrend({direction:'BULLISH',rawDirection:'NEUTRAL',bos:{direction:'BULLISH'}},'BULLISH'));
 const eligibleThreeR={direction:'BULLISH',trade:{entry:100,stop:95,target:115,rr:3},grade:{grade:'A',score:84}};
 const ineligibleTwoR={...eligibleThreeR,trade:{...eligibleThreeR.trade,target:110,rr:2}};
 const weakGrade={...eligibleThreeR,grade:{grade:'B',score:83}};
