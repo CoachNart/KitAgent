@@ -144,7 +144,11 @@ export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layer
   // Do not hide a nearer liquidity level merely because it cannot offer 3R:
   // doing so creates an artificial target beyond an unaddressed obstacle.
   const target=selectStructuralTarget(c,direction,entry,{
-    layers,minDistance:0,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null
+    layers,minDistance:0,
+    // Include close but meaningful major/pool levels in the path check. The
+    // generic selector keeps a wider noise buffer for other legacy strategies.
+    minimumDistanceFloor:Math.max(a*.5,Math.abs(entry)*.0015),
+    asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null
   });
   if(!target||!Number.isFinite(target.price))return null;
   const stillAhead=direction==='BULLISH'?target.price>price:target.price<price;
