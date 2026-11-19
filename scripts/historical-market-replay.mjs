@@ -1,7 +1,9 @@
 import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
+import {isCandleWithinWindow} from '../server/market-engine/execution-window.js';
 
 const DURATIONS={'1H':60*60_000,'4H':4*60*60_000};
+const PENDING_ENTRY_WINDOW_MS=24*60*60_000;
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,SUIUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
@@ -45,11 +47,15 @@ function closedPrefixEnd(rows,tf,cutoff){
   }
   return lo;
 }
-function simulate(trade,direction,orderType,future,tf){
+function simulate(trade,direction,orderType,future,tf,decisionTime){
   const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
   let active=String(orderType).toUpperCase()==='MARKET';
   for(const c of future){
+    if(!active&&!isCandleWithinWindow(c.time,decisionTime,DURATIONS[tf],PENDING_ENTRY_WINDOW_MS)){
+      if(c.time>=decisionTime+PENDING_ENTRY_WINDOW_MS)return{result:'missed',reason:'Limit entry expired after the 24-hour publication window'};
+      continue;
+    }
     if(!active){
       const entryTouched=hit(c,entry);
       const invalidated=direction==='BULLISH'?c.low<=stop:c.high>=stop;
@@ -144,7 +150,7 @@ async function fetchReplayCandles(symbol,tf){
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log('Historical candle source: Bybit v5 linear perpetual candles (same exchange as live market data).');
 console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
-console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Intrabar TP/SL ambiguity is not guessed.');
+console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Pending LIMIT entries expire after 24 hours, matching the live board. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
   let history;
   try{
@@ -267,7 +273,7 @@ for(const symbol of symbols){
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
-        const outcome=simulate(trade,result.direction,trade.orderType,future,tf);
+        const outcome=simulate(trade,result.direction,trade.orderType,future,tf,cutoff);
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
         if(outcome.result==='missed'){stat.missed++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
         if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
