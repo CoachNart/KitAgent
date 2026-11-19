@@ -322,7 +322,7 @@ export function evaluateSMC({candles,layers,price}){
   const riskAtr=(atr(c,14)||0)>0?Math.abs(trade.entry-trade.stop)/atr(c,14):0;
   const invalidationQuality=Math.max(.35,Math.min(1,1-Math.abs(riskAtr-1.25)/2.5));
   const geometryQuality=Math.max(.35,Math.min(1,1-Math.max(0,riskAtr-1)/2));
-  const grade=gradeSetup({
+  const baseGrade=gradeSetup({
     strategy:'SMC',
     context:{aligned:contextStructure.direction===direction,trend:contextBreak},
     entry:{anchorQuality:fvgStrength,executionQuality},
