@@ -182,7 +182,14 @@ const obstructedBullishTarget=Array.from({length:60},(_,i)=>bar(i,100,101,99,100
 obstructedBullishTarget[8]=bar(8,100,102.5,99,101); // Close major swing, inside the generic 1.5 ATR noise floor.
 obstructedBullishTarget[15]=bar(15,100,104,99,100.5); // Next opposing swing is also less than 3R.
 obstructedBullishTarget[30]=bar(30,104,110,103,105); // Farther swing would misleadingly offer 3R+.
-assert('SMC rejects a farther bullish target when nearer opposing structure blocks the 3R path',()=>nextLiquidityTarget(obstructedBullishTarget,'BULLISH',100,100,2,59,[])===null);
+const targetBeyondConsumedBullishLevels=nextLiquidityTarget(obstructedBullishTarget,'BULLISH',100,100,2,59,[]);
+assert('SMC ignores already-consumed nearer bullish swing levels and selects the next untouched 3R objective',()=>targetBeyondConsumedBullishLevels?.price===110&&targetBeyondConsumedBullishLevels.rr===undefined);
+const consumedBearishTargetCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
+consumedBearishTargetCandles[8]=bar(8,100,101,97.5,99);
+consumedBearishTargetCandles[15]=bar(15,98,101,96,99);
+consumedBearishTargetCandles[30]=bar(30,95,101,90,100);
+const targetBeyondConsumedBearishLevels=nextLiquidityTarget(consumedBearishTargetCandles,'BEARISH',100,100,2,59,[]);
+assert('SMC ignores already-consumed nearer bearish swing levels and selects the next untouched 3R objective',()=>targetBeyondConsumedBearishLevels?.price===90);
 const bearishTargetFixture=Array.from({length:50},(_,i)=>bar(i,100,101,99,100));
 bearishTargetFixture[25]=bar(25,96,97,90,95);
 const bearishAheadTarget=nextLiquidityTarget(bearishTargetFixture,'BEARISH',100,95,2,49,[]);
