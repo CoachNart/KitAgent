@@ -2,7 +2,7 @@ import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market
 import {analyzeOne} from '../server/market-engine/index.js';
 import {isCandleWithinWindow} from '../server/market-engine/execution-window.js';
 
-const DURATIONS={'1H':60*60_000,'4H':4*60*60_000};
+const DURATIONS={'30m':30*60_000,'1H':60*60_000,'4H':4*60*60_000};
 const PENDING_ENTRY_WINDOW_MS=24*60*60_000;
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,SUIUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
@@ -46,6 +46,15 @@ function closedPrefixEnd(rows,tf,cutoff){
   while(lo<hi){
     const mid=(lo+hi)>>>1;
     if(rows[mid].time+DURATIONS[tf]<=cutoff)lo=mid+1;
+    else hi=mid;
+  }
+  return lo;
+}
+function firstCandleAtOrAfter(rows,time){
+  let lo=0,hi=rows.length;
+  while(lo<hi){
+    const mid=(lo+hi)>>>1;
+    if(rows[mid].time<time)lo=mid+1;
     else hi=mid;
   }
   return lo;
@@ -102,10 +111,13 @@ function fingerprint(t,direction,smc=null,symbol=''){
 async function fetchReplayCandles(symbol,tf){
   // Bybit is the sole market-data source for both live analysis and historical replay.
   // Its v5 endpoint returns newest-first candles and accepts at most 1000 rows per request.
-  const intervals={'1H':'60','4H':'240'};
+  const intervals={'30m':'30','1H':'60','4H':'240'};
   const interval=intervals[tf];
   if(!interval)throw new Error('Unsupported Bybit replay timeframe: '+tf);
-  const requestedLimit=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
+  const historyRequest=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
+  // 30m monitoring needs twice as many candles to cover the same calendar
+  // history as the 1H decision series.
+  const requestedLimit=Math.min(10000,tf==='30m'?historyRequest*2:historyRequest);
   const rows=[];
   let end;
   while(rows.length<requestedLimit){
@@ -180,11 +192,11 @@ async function fetchReplayCandles(symbol,tf){
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log('Historical candle source: Bybit v5 linear perpetual candles (same exchange as live market data).');
 console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
-console.log('Method: each signal sees only candles closed at its decision timestamp; outcome uses only later candles. Pending LIMIT entries expire after 24 hours, matching the live board. Intrabar TP/SL ambiguity is not guessed.');
+console.log('Method: signals use only closed 4H/1H candles; fills and TP/SL outcomes use later closed 30m candles, matching the live board. Pending LIMIT entries expire after 24 hours. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
   let history;
   try{
-    const tfs=[...new Set(['4H',...EXECUTION_TIMEFRAMES])];
+    const tfs=[...new Set(['4H',...EXECUTION_TIMEFRAMES,'30m'])];
     const rows=await Promise.all(tfs.map(async tf=>{
       const candles=closedCandles(await fetchReplayCandles(symbol,tf),tf,replayNow).filter(x=>x.time+DURATIONS[tf]<=replayNow);
       if(candles.length<80)throw new Error(tf+' has only '+candles.length+' closed candles; minimum 80 required');
@@ -336,7 +348,9 @@ for(const symbol of symbols){
         }
         seen.set(seenKey,cutoff);
         stat.tradeCandidates++;
-        const future=exec.slice(candleIndex+1,candleIndex+1+forwardBars);
+        const monitor=history['30m']||[];
+        const monitorStart=firstCandleAtOrAfter(monitor,cutoff);
+        const future=monitor.slice(monitorStart,monitorStart+forwardBars*2);
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
@@ -352,7 +366,7 @@ for(const symbol of symbols){
           targetSource:result.smc?.target?.source||trade.targetSource||null,
           targetQuality:result.smc?.target?.quality??trade.targetSelection?.quality??null,
           targetPool:result.smc?.target?.pool||trade.targetSelection?.pool||null};
-        const outcome=simulate(trade,result.direction,trade.orderType,future,tf,cutoff);
+        const outcome=simulate(trade,result.direction,trade.orderType,future,'30m',cutoff);
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
         if(outcome.result==='missed'){stat.missed++;tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
         if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({...auditBase,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
