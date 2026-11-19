@@ -64,8 +64,8 @@ async function refreshTrade(doc){
   let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null;
   if(order==='LIMIT'&&status==='PENDING_ENTRY'){
     for(const c of candles){
-      if(!isCandleWithinWindow(c.time,start,CANDLE_MS,BOARD_WINDOW_MS)){
-        if(c.time>=start+BOARD_WINDOW_MS)break;
+      if(!isCandleWithinWindow(c.time,start,CANDLE_MS,pendingWindowMs)){
+        if(c.time>=pendingExpiresAt)break;
         continue;
       }
       const entryHit=touched(c,entry),stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
