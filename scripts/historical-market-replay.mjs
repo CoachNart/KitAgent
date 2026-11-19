@@ -217,9 +217,8 @@ for(const symbol of symbols){
   }
   for(const tf of requested){
     const exec=history[tf]||[];
-    // Sample decision points across the available history, not only the
-    // newest N candles. Each sampled setup then has the remaining historical
-    // candles available for forward outcome simulation.
+    // Evaluate a continuous recent window of hourly decisions. Each decision
+    // is paired with subsequent 30m monitor candles for fill and outcome replay.
     const lastIndex=exec.length-forwardBars-1;
     if(lastIndex<80)continue;
     // Evaluate consecutive 1H decision candles. Spreading a fixed number of
