@@ -208,6 +208,14 @@ assert('SMC reports zero-count stage diagnostics when no qualifying liquidity sw
   return !!d&&d.recentSweeps===0&&d.mssWithinWindow===0&&d.executableEntry===0;
 });
 assert('SMC routes through its own evaluator',()=>{const routed=evaluateStrategy({strategy:'SMC',layers:smcLayers,execution:{candles:smcCandles},price:108.9});return routed&&routed.smc?.model==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG'||routed.failures?.length>0;});
+const smcGradeProbe=evaluateSMC({candles:smcCandles,layers:smcLayers,price:108.9});
+assert('SMC does not award perfect context, entry, and risk scores by default',()=>{
+  const components=smcGradeProbe.grade?.confidenceEvidence||[];
+  const entry=components.find(x=>x.type==='CONFIDENCE_ENTRY');
+  const risk=components.find(x=>x.type==='CONFIDENCE_RISK');
+  const context=components.find(x=>x.type==='CONFIDENCE_CONTEXT');
+  return !smcGradeProbe.grade||[entry,risk,context].every(x=>!x||x.score<x.max);
+});
 
 // Top-Down contract: aligned HTF direction -> execution BOS -> retest/hold -> structural target.
 const tdCandles=Array.from({length:50},(_,i)=>bar(i,100+i*.1,101+i*.1,99+i*.1,100.5+i*.1));
