@@ -12,7 +12,10 @@ function equalPools(c,asOf=c.length-1){
   const swings=s[side].filter(x=>x.confirmationIndex<=asOf);
   for(let i=0;i<swings.length;i++)for(let j=i+1;j<swings.length;j++){
    const x=swings[i],y=swings[j];
-   if(Math.abs(x.price-y.price)<=tol)out.push({type:side==='highs'?'EQUAL_HIGHS':'EQUAL_LOWS',level:(x.price+y.price)/2,first:x.index,second:y.index,age:asOf-y.index});
+   if(Math.abs(x.price-y.price)<=tol){
+    const confirmationIndex=Math.max(x.confirmationIndex,y.confirmationIndex);
+    out.push({type:side==='highs'?'EQUAL_HIGHS':'EQUAL_LOWS',level:(x.price+y.price)/2,first:x.index,second:y.index,confirmationIndex,time:c[confirmationIndex]?.time??null,age:asOf-y.index});
+   }
   }
  }
  return out;
@@ -37,5 +40,5 @@ export function liquidityMap(c,asOf=c.length-1){
  recentSweep.sort((a,b)=>a.age-b.age);
  return {buySide:highs.slice(-8).map(x=>x.price),sellSide:lows.slice(-8).map(x=>x.price),pools,recentSweep,a};
 }
-function poolsFor(arr,side){return arr.slice(-10).map(x=>({type:side==='high'?'SWING_HIGH':'SWING_LOW',level:x.price,index:x.index,age:x.confirmationIndex}));}
+function poolsFor(arr,side){return arr.slice(-10).map(x=>({type:side==='high'?'SWING_HIGH':'SWING_LOW',level:x.price,index:x.index,confirmationIndex:x.confirmationIndex,time:x.time,age:x.confirmationIndex}));}
 export function latestSweep(map,direction,maxAge=6){return map.recentSweep.find(x=>x.age<=maxAge&&(direction==='BULLISH'?x.side==='SELL_SIDE':x.side==='BUY_SIDE'))||null;}
