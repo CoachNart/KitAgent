@@ -387,7 +387,7 @@ assert('SMC rejects a market entry when the candle only touches the outer FVG ed
 });
 assert('SMC accepts a bearish market entry only after a bearish midpoint rejection close',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
-  c[39]=bar(100.8,101,99.5,99.7,99.7);
+  c[39]=bar(39,100.8,101,99.5,99.7);
   const trade=buildTrade({c,price:100.2,direction:'BEARISH',sweep:{extreme:101.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BEARISH',index:38,low:99.5,high:100.5,midpoint:100},target:96});
   return trade?.orderType==='MARKET'&&trade.entry===100;
 });
