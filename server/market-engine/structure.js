@@ -261,7 +261,9 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
 
 export function selectStructuralTarget(c,direction,entry,options={}){
   const candidates=rankStructuralTargets(c,direction,entry,options);
-  if(!candidates.length)return null;
+  const audit=options?.audit&&typeof options.audit==='object'?options.audit:null;
+  if(audit)audit.qualifiedCandidates=candidates.length;
+  if(!candidates.length){if(audit)audit.reason='NO_QUALIFIED_OPPOSING_STRUCTURE';return null;}
   const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
   // Do not choose a distant high-scoring HTF pool merely because its quality
   // number outranks a nearer executable objective. Targets beyond this range
