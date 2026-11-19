@@ -365,6 +365,19 @@ assert('SMC keeps a correctly sided unmitigated FVG limit valid beyond one ATR',
   return trade?.orderType==='LIMIT'&&trade.entry===100&&trade.target===116&&
     diagnostics.pendingLimitTooFar===undefined&&diagnostics.pendingLimitWrongSide===undefined;
 });
+assert('SMC fresh FVG check allows a midpoint touch only on the current confirmation candle',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
+  c[39]=bar(39,100,101,99.5,100.8);
+  const fvg={direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100};
+  return !freshFvg(c,fvg,39)&&freshFvg(c,fvg,39,true);
+});
+assert('SMC fresh FVG check still rejects a midpoint mitigated before the current candle',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
+  c[38]=bar(38,100,101,99.5,100.8);
+  c[39]=bar(39,101,102,100.5,101.5);
+  const fvg={direction:'BULLISH',index:37,low:99.5,high:100.5,midpoint:100};
+  return !freshFvg(c,fvg,39,true);
+});
 assert('SMC permits a market entry after a closed candle touches and holds the FVG',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
   c[39]=bar(39,100,101,99.5,100.8);
