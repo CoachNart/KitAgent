@@ -22,6 +22,16 @@ function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
 }
 function ageQuality(age,fresh,recent){if(!Number.isFinite(age))return 0;if(age<=fresh)return 1;if(age<=recent)return .7;if(age<=16)return .35;return 0;}
 
+// Pending-order quality is based on executable proximity to the planned FVG
+// midpoint. Sweep age is scored separately as setup freshness, so it must not
+// be counted a second time as entry execution quality.
+export function limitEntryQuality(entry,price,atrValue){
+  if(!Number.isFinite(entry)||!Number.isFinite(price)||!(atrValue>0))return .45;
+  const allowance=Math.max(atrValue,Math.abs(entry)*.003);
+  const proximity=1-Math.min(1,Math.abs(price-entry)/allowance);
+  return .45+.25*proximity;
+}
+
 function fvgAt(c,i){
   if(i<2||!c[i-2]||!c[i-1]||!c[i])return null;
   const a=c[i-2],d=c[i];
@@ -277,6 +287,12 @@ export function evaluateSMC({candles,layers,price}){
       pendingLimitAudit.push(...executionRejections.pendingLimitAudit.splice(0,100-pendingLimitAudit.length));
     }
     if(!tradeCandidate)continue;
+    tradeCandidate.targetSource=targetCandidate.source||'STRUCTURAL_TARGET';
+    tradeCandidate.targetSelection={
+      price:targetCandidate.price,source:targetCandidate.source||'STRUCTURAL_TARGET',
+      quality:targetCandidate.quality??null,pool:targetCandidate.pool??null,
+      clusterCount:targetCandidate.clusterCount??null
+    };
     const geometry=validateTradeGeometry({trade:tradeCandidate,direction,candles:c});
     if(!geometry.valid){
       executionRejections.geometryRejected++;
@@ -307,7 +323,7 @@ export function evaluateSMC({candles,layers,price}){
   const executionBody=executionCandle?bodyRatio(executionCandle):0;
   const executionQuality=trade.orderType==='MARKET'
     ?Math.max(.45,Math.min(1,executionBody))
-    :Math.max(.45,Math.min(.7,.45+ageQuality(sweep.age,2,8)*.25));
+    :limitEntryQuality(trade.entry,price,atr(c,14)||0);
   const riskAtr=(atr(c,14)||0)>0?Math.abs(trade.entry-trade.stop)/atr(c,14):0;
   const invalidationQuality=Math.max(.35,Math.min(1,1-Math.abs(riskAtr-1.25)/2.5));
   const geometryQuality=Math.max(.35,Math.min(1,1-Math.max(0,riskAtr-1)/2));
