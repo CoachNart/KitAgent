@@ -177,12 +177,20 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   const near=Math.abs(price-entry)<=tolerance;
   const last=c.at(-1);
   const lastRange=last?.high-last?.low;
-  const fvgTouched=!!last&&last.low<=fvg.high&&last.high>=fvg.low;
+  // A market retest must trade through the actual planned midpoint, reject it
+  // in the HTF direction, and close with directional intent. Merely touching
+  // an outer edge of the FVG (or closing on the correct side with a counter-
+  // directional candle) is not enough evidence to cross the spread immediately.
+  const midpointTouched=!!last&&last.low<=fvg.midpoint&&last.high>=fvg.midpoint;
+  const directionalCandle=direction==='BULLISH'
+    ?last?.close>last?.open&&last?.close>=last.low+lastRange*.65
+    :last?.close<last?.open&&last?.close<=last.low+lastRange*.35;
   const fvgHeld=direction==='BULLISH'?last?.close>fvg.midpoint:last?.close<fvg.midpoint;
-  const marketCandleQuality=!!last&&lastRange>0&&fvgTouched&&bodyRatio(last)>=.35&&fvgHeld;
-  // A MARKET entry requires a closed candle to actually interact with and
-  // hold the FVG. Without that, proximity to the midpoint is only a pending
-  // limit opportunity, not confirmation to enter immediately.
+  const marketCandleQuality=!!last&&lastRange>0&&midpointTouched&&
+    bodyRatio(last)>=.45&&directionalCandle&&fvgHeld;
+  // A MARKET entry requires a completed midpoint retest with a directional
+  // rejection close. Otherwise the setup is rejected rather than entering on
+  // proximity alone; untouched, correctly-sided FVGs remain LIMIT candidates.
   if(near&&!marketCandleQuality)return reject('marketRetestNotConfirmed');
   const correctPendingSide=direction==='BULLISH'?price>entry:price<entry;
   if(!near&&!correctPendingSide)return reject('pendingLimitWrongSide');
