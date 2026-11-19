@@ -261,6 +261,13 @@ for(const symbol of symbols){
           for(const [reason,count] of Object.entries(stageDiagnostic.geometryFailureReasons||{})){
             if(Number.isFinite(Number(count)))geometryFailureTotals.set(reason,(geometryFailureTotals.get(reason)||0)+Number(count));
           }
+          for(const sample of stageDiagnostic.targetRejectionAudit||[]){
+            const uniqueKey=[symbol,tf,sample.direction,sample.sweepIndex,sample.mssIndex,sample.fvgIndex].join('|');
+            if(targetRejectionAudit.length<120&&!targetRejectionAuditSeen.has(uniqueKey)){
+              targetRejectionAuditSeen.add(uniqueKey);
+              targetRejectionAudit.push({symbol,timeframe:tf,...sample});
+            }
+          }
           for(const sample of stageDiagnostic.pendingLimitAudit||[]){
             const uniqueKey=[symbol,tf,sample.direction,sample.decisionTime,sample.fvgIndex].join('|');
             if(pendingLimitAudit.length<80&&!pendingLimitAuditSeen.has(uniqueKey)){
