@@ -281,7 +281,10 @@ for(const symbol of symbols){
           grade:result.grade?.grade||null,gradeScore:result.grade?.score??null,...gradeParts,
           htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
           displacementAtr:result.smc?.displacement?.atrMultiple??null,
-          fvgSize:result.smc?.fvg?.size??null};
+          fvgSize:result.smc?.fvg?.size??null,
+          targetSource:result.smc?.target?.source||trade.targetSource||null,
+          targetQuality:result.smc?.target?.quality??trade.targetSelection?.quality??null,
+          targetPool:result.smc?.target?.pool||trade.targetSelection?.pool||null};
         const outcome=simulate(trade,result.direction,trade.orderType,future,tf,cutoff);
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
         if(outcome.result==='missed'){stat.missed++;tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
