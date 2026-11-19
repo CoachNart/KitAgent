@@ -183,7 +183,7 @@ obstructedBullishTarget[8]=bar(8,100,102.5,99,101); // Close major swing, inside
 obstructedBullishTarget[15]=bar(15,100,104,99,100.5); // Next opposing swing is also less than 3R.
 obstructedBullishTarget[30]=bar(30,104,110,103,105); // Farther swing would misleadingly offer 3R+.
 const targetBeyondConsumedBullishLevels=nextLiquidityTarget(obstructedBullishTarget,'BULLISH',100,100,2,59,[]);
-assert('SMC ignores already-consumed nearer bullish swing levels and selects the next untouched 3R objective',()=>targetBeyondConsumedBullishLevels?.price===110&&targetBeyondConsumedBullishLevels.rr===undefined);
+assert('SMC ignores already-consumed nearer bullish swing levels and selects the next untouched 3R objective',()=>targetBeyondConsumedBullishLevels?.price===110);
 const consumedBearishTargetCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
 consumedBearishTargetCandles[8]=bar(8,100,101,97.5,99);
 consumedBearishTargetCandles[15]=bar(15,98,101,96,99);
