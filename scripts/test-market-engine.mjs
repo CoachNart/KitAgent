@@ -398,6 +398,13 @@ assert('Structural target ranking is not an RR gate',()=>{
   return structuralTarget.rr===undefined;
 });
 
+// A nearer opposing swing already behind the live quote has been cleared;
+// target selection must continue to the next confirmed objective ahead.
+const targetAfterClearedLevel=nextLiquidityTarget(
+  hierarchyCandles,'BULLISH',100,106,2,hierarchyCandles.length-1,hierarchyLayers
+);
+assert('SMC selects the next structural target ahead of price after a nearer level is cleared',()=>!!targetAfterClearedLevel&&targetAfterClearedLevel.price>106&&targetAfterClearedLevel.price-100>=6);
+
 // A crowded higher-timeframe target list must not crowd out a nearer valid
 // execution-timeframe objective before the final reachability selector runs.
 const crowdedExecution=Array.from({length:80},(_,i)=>bar(i,100,101,99,100.2));
