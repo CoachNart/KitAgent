@@ -167,8 +167,6 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   if(direction==='BEARISH'&&price>=stop)return reject('sweepInvalidated');
   const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const near=Math.abs(price-entry)<=tolerance;
-  const pendingDistance=Math.abs(price-entry);
-  const pendingMax=Math.max(a,Math.abs(entry)*.003);
   const last=c.at(-1);
   const lastRange=last?.high-last?.low;
   const fvgTouched=!!last&&last.low<=fvg.high&&last.high>=fvg.low;
@@ -180,19 +178,10 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   if(near&&!marketCandleQuality)return reject('marketRetestNotConfirmed');
   const correctPendingSide=direction==='BULLISH'?price>entry:price<entry;
   if(!near&&!correctPendingSide)return reject('pendingLimitWrongSide');
-  if(!near&&pendingDistance>pendingMax){
-    if(diagnostics){
-      diagnostics.pendingLimitAudit=diagnostics.pendingLimitAudit||[];
-      if(diagnostics.pendingLimitAudit.length<100)diagnostics.pendingLimitAudit.push({
-        direction,decisionTime:last?.time??null,price,entryMidpoint:entry,
-        distance:pendingDistance,distanceAtr:a>0?pendingDistance/a:null,
-        allowedDistance:pendingMax,allowedDistanceAtr:a>0?pendingMax/a:null,
-        atr:a,fvgIndex:fvg.index,fvgAgeBars:c.length-1-fvg.index,
-        fvgLow:fvg.low,fvgHigh:fvg.high,lastCandleClose:last?.close??null
-      });
-    }
-    return reject('pendingLimitTooFar');
-  }
+  // Do not impose an arbitrary ATR-distance ceiling on an untouched FVG.
+  // A correctly sided limit remains valid while the FVG is unmitigated;
+  // the shared 24-hour pending-entry lifecycle expires it if price never
+  // returns. Distance alone does not invalidate the structural setup.
   const orderType=near?'MARKET':'LIMIT';
   return{entry,marketEntry:price,stop,target,rr,orderType,
     entryZone:{low:fvg.low,high:fvg.high,source:'FVG_RETEST_ZONE'},
