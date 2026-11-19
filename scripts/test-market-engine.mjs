@@ -9,7 +9,7 @@ import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade,enforceFreshnessGrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
-import {EXECUTION_TIMEFRAMES,atr} from '../server/market-engine/data.js';
+import {EXECUTION_TIMEFRAMES,atr,validateCandles} from '../server/market-engine/data.js';
 import {topSymbols,candlesFor,scanSymbol,candidateScore} from '../server/market-engine/daily.js';
 
 const tests=[];
@@ -42,6 +42,9 @@ const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
   open:o,high:h,low:l,close:c,volume:100
 });
+const monitorCandles=Array.from({length:80},(_,i)=>bar(i,100,101,99,100.2));
+assert('30m candles are valid for trade outcome monitoring',()=>validateCandles(monitorCandles,'30m').valid);
+assert('30m monitoring does not enter the signal-generation timeframe allowlist',()=>!EXECUTION_TIMEFRAMES.includes('30m'));
 
 // A/V/GAP level construction is body/close based, never swing/wick based.
 // CI verification marker: MSNR 27-test suite.
