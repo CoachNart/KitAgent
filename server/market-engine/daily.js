@@ -141,7 +141,7 @@ export async function scanTopQuality(){
   // without firing every candle request simultaneously. Bounded batches avoid
   // turning a broader scan into a burst of provider rate-limit failures.
   const scanned=[];
-  const batchSize=6;
+  const batchSize=18;
   for(let offset=0;offset<markets.length;offset+=batchSize){
     const batch=markets.slice(offset,offset+batchSize);
     scanned.push(...await Promise.all(batch.map(market=>scanSymbol(market,diagnostics))));
