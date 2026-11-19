@@ -321,7 +321,10 @@ export function evaluateSMC({candles,layers,price}){
   const {sweep,mss,displacement,fvg,range,target,trade}=selected;
   const contextLayer=ordered[0];
   const contextStructure=contextLayer?.structure||{};
-  const contextBreak=contextStructure.bos?.direction===direction||contextStructure.mss?.direction===direction;
+  // A confirmed HH/HL or LH/LL sequence is a directional trend even when
+  // the latest recorded break is a countertrend CHoCH. Only transitional
+  // direction inferred from a recent break receives the reduced trend score.
+  const confirmedContextTrend=contextStructure.rawDirection===direction;
   const fvgAtr=atr(c.slice(0,fvg.index+1),14)||0;
   const fvgStrength=fvgAtr>0?Math.max(.35,Math.min(1,fvg.size/(fvgAtr*.75))):0;
   const executionCandle=c.at(-1);
@@ -334,7 +337,7 @@ export function evaluateSMC({candles,layers,price}){
   const geometryQuality=Math.max(.35,Math.min(1,1-Math.max(0,riskAtr-1)/2));
   const baseGrade=gradeSetup({
     strategy:'SMC',
-    context:{aligned:contextStructure.direction===direction,trend:contextBreak},
+    context:{aligned:contextStructure.direction===direction,trend:confirmedContextTrend},
     entry:{anchorQuality:fvgStrength,executionQuality},
     risk:{invalidationQuality,geometryQuality},
     target,
