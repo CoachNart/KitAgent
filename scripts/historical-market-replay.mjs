@@ -383,6 +383,8 @@ console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increm
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
 console.log('\nEXECUTION REJECTION DIAGNOSTICS (per sweep path)');
 console.table([...executionRejectionTotals.entries()].sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})));
+console.log('\nSTRUCTURAL TARGET REJECTION AUDIT (nearest opposing structure; no RR relaxation)');
+console.table(targetRejectionAudit);
 console.log('\nPENDING LIMIT DISTANCE AUDIT (sampled rejected paths)');
 console.table(pendingLimitAudit.map(x=>({symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,price:+x.price.toPrecision(8),fvgMidpoint:+x.entryMidpoint.toPrecision(8),distance:+x.distance.toPrecision(8),distanceAtr:x.distanceAtr==null?null:+x.distanceAtr.toFixed(3),allowedDistance:+x.allowedDistance.toPrecision(8),allowedDistanceAtr:x.allowedDistanceAtr==null?null:+x.allowedDistanceAtr.toFixed(3),fvgAgeBars:x.fvgAgeBars,fvgIndex:x.fvgIndex,atr:+x.atr.toPrecision(8)})));
 console.log('\nTRADE GEOMETRY FAILURE DETAILS');
