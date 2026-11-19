@@ -164,6 +164,18 @@ export function structure(c,asOf=c.length-1){
   };
 }
 
+function levelWasConsumed(c,direction,price,confirmationIndex,asOfIndex){
+  if(!Array.isArray(c)||!c.length||!Number.isFinite(price)||!Number.isFinite(confirmationIndex))return false;
+  const start=Math.max(0,Math.floor(confirmationIndex)+1);
+  const end=Math.min(c.length-1,Number.isFinite(asOfIndex)?Math.floor(asOfIndex):c.length-1);
+  for(let i=start;i<=end;i++){
+    const candle=c[i];
+    if(direction==='BULLISH'&&Number(candle?.high)>=price)return true;
+    if(direction==='BEARISH'&&Number(candle?.low)<=price)return true;
+  }
+  return false;
+}
+
 export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0,nativeTargets=[],asOf=null,asOfTime=null,minimumDistanceFloor=null}={}){
   if(!Array.isArray(c)||!c.length||!Number.isFinite(entry)||!['BULLISH','BEARISH'].includes(direction))return [];
   const a=atr(c,14)||Math.max(Math.abs(entry)*.001,1e-9);
@@ -172,7 +184,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
   const clusterTolerance=Math.max(a*.35,Math.abs(entry)*.0015);
   const candidates=[];
 
-  const add=(price,source,index=-1,tf='EXECUTION',strength=0,meta={})=>{
+  const add=(price,source,index=-1,tf='EXECUTION',strength=0,meta={},sourceCandles=null,sourceAsOf=null)=>{
     if(!Number.isFinite(price))return;
     if(asOf!==null&&tf==='EXECUTION'&&Number.isFinite(index)&&index>=0&&index>asOf)return;
     // A swing is not usable until its right-side candles confirm it. Filtering
@@ -180,6 +192,9 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
     // into historical decisions, because the pivot itself predates confirmation.
     if(asOf!==null&&tf==='EXECUTION'&&Number.isFinite(meta?.confirmationIndex)&&meta.confirmationIndex>asOf)return;
     if(asOfTime!==null&&Number.isFinite(meta?.time)&&meta.time>asOfTime)return;
+    // A confirmed swing stops being an available liquidity objective after a later candle trades through it.
+    // Historical pivots must not remain as artificial near-target obstructions after they have been taken.
+    if(!meta?.native&&sourceCandles&&levelWasConsumed(sourceCandles,direction,price,meta?.confirmationIndex,sourceAsOf))return;
     const beyond=direction==='BULLISH'?price>entry:price<entry;
     if(!beyond||Math.abs(price-entry)<distanceFloor)return;
     candidates.push({price,source,index,tf,strength,...meta});
@@ -200,7 +215,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
       add(x.price,k===4?'EXECUTION_MAJOR_SWING':'EXECUTION_EXTERNAL_SWING',x.index,'EXECUTION',k===4?95:78,{
         confirmationIndex:x.confirmationIndex,
         time:c[x.confirmationIndex]?.time??x.time
-      });
+      },c,asOf??c.length-1);
     }
   }
 
@@ -209,6 +224,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
   for(const layer of layers||[]){
     const lc=layer?.candles;
     if(!Array.isArray(lc)||lc.length<20)continue;
+    const layerAsOf=asOfTime===null?lc.length-1:lc.reduce((last,x,i)=>Number.isFinite(x?.time)&&x.time<=asOfTime?i:last,-1);
     for(const k of [4,3]){
       const s=confirmedSwings(lc,k);
       const points=direction==='BULLISH'?s.highs:s.lows;
@@ -231,7 +247,7 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
       add(pool.level,'HTF_'+poolType,pool.second??pool.index??-1,layer.tf||'HTF',105,{
         confirmationIndex:pool.confirmationIndex,
         time:pool.time??(Number.isFinite(pool.confirmationIndex)?lc[pool.confirmationIndex]?.time:null)
-      });
+      },lc,layerAsOf);
     }
   }
 
