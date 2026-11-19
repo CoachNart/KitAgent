@@ -281,7 +281,7 @@ for(const symbol of symbols){
           grade:result.grade?.grade||null,gradeScore:result.grade?.score??null,...gradeParts,
           htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
           displacementAtr:result.smc?.displacement?.atrMultiple??null,
-          fvgSizeAtr:(()=>{const size=Number(result.smc?.fvg?.size),a=Number(result.smc?.fvg?.atr);return Number.isFinite(size)&&Number.isFinite(a)&&a>0?+(size/a).toFixed(3):null;})()};
+          fvgSize:result.smc?.fvg?.size??null};
         const outcome=simulate(trade,result.direction,trade.orderType,future,tf,cutoff);
         if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
         if(outcome.result==='missed'){stat.missed++;tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
