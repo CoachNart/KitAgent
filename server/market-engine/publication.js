@@ -76,7 +76,7 @@ async function refreshTrade(doc){
         status='ACTIVE';activatedAt=c.time+CANDLE_MS;reason='Limit entry confirmed by a completed Bybit 30-minute candle.';break;
       }
     }
-    if(status==='PENDING_ENTRY'&&now-start>=BOARD_WINDOW_MS){status='MISSED_ENTRY';reason='The 24-hour setup window ended without a confirmed limit fill.';}
+    if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt){status='MISSED_ENTRY';reason='The 24-hour window from the original liquidity sweep ended without a confirmed limit fill.';}
   }
   if(order==='MARKET'&&!['TARGET_HIT','STOP_HIT'].includes(status)){status='ACTIVE';activatedAt=activatedAt||start;}
   if(status==='ACTIVE'){
