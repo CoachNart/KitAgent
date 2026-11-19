@@ -270,7 +270,8 @@ export function selectStructuralTarget(c,direction,entry,options={}){
   // are not valid execution-timeframe take-profits.
   const maxDistance=Math.max(a*12,Math.abs(entry)*.05);
   const plausible=candidates.filter(x=>Math.abs(x.price-entry)<=maxDistance);
-  if(!plausible.length)return null;
+  if(audit){audit.reachableCandidates=plausible.length;audit.nearestCandidate=plausible[0]?{price:plausible[0].price,source:plausible[0].source,quality:plausible[0].quality,pool:plausible[0].pool}:null;}
+  if(!plausible.length){if(audit)audit.reason='QUALIFIED_TARGETS_OUTSIDE_EXECUTION_REACH';return null;}
   // Preserve strategy-native objectives when they are realistically reachable;
   // otherwise choose the nearest meaningful structural objective. Quality only
   // breaks ties between similarly distant levels, not at the expense of target
