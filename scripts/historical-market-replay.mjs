@@ -303,9 +303,22 @@ for(const symbol of symbols){
           const rejectionDiagnostics=(result?.evidence||[]).find(x=>x?.type==='TOP_DOWN_REJECTION_DIAGNOSTICS');
           if(rejectionDiagnostics)console.log('TOP_DOWN STAGE DIAGNOSTICS',symbol,tf,snapshotIndex+'/'+snapshots.length,JSON.stringify(rejectionDiagnostics));
         }
-        // Separate structural executability from publication eligibility.
+        // Count each sweep -> MSS -> FVG event once, before grade accounting.
+        // Hourly snapshots can observe the same still-fresh event repeatedly;
+        // counting those observations as separate setups inflated executable
+        // and grade totals. The first eligible observation is the freshest.
+        const trade=result.trade;
+        const eventFingerprint=trade?fingerprint(trade,result.direction,result.smc,symbol):null;
+        const eventKey=trade?strategy+'|'+eventFingerprint:null;
+        if(trade&&seen.has(eventKey)){
+          duplicateSetupsSuppressed++;
+          continue;
+        }
+        if(trade)seen.set(eventKey,cutoff);
+
+        // Separate unique structural events from publication eligibility.
         // Only A/A+ proceed to outcome simulation; lower grades remain auditable.
-        if(result.trade){
+        if(trade){
           stat.executableSetups++;
           const grade=String(result.grade?.grade||'NO-GRADE');
           const score=Number.isFinite(Number(result.grade?.score))?Number(result.grade.score):null;
@@ -339,13 +352,6 @@ for(const symbol of symbols){
           for(const reason of (result.failures||[]).slice(0,2))rejection(strategy,tf,reason);
           continue;
         }
-        const trade=result.trade;
-        const fp=fingerprint(trade,result.direction,result.smc,symbol),seenKey=strategy+'|'+fp;
-        if(seen.has(seenKey)){
-          duplicateSetupsSuppressed++;
-          continue;
-        }
-        seen.set(seenKey,cutoff);
         stat.tradeCandidates++;
         const monitor=history['30m']||[];
         const monitorStart=firstCandleAtOrAfter(monitor,cutoff);
