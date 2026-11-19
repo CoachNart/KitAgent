@@ -2,6 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../access.js';
 import { scanTopQuality } from './daily.js';
+import { isCandleWithinWindow } from './execution-window.js';
 
 const BOARD_DOC='daily',BOARD_WINDOW_MS=24*60*60*1000,REFRESH_MS=60*1000,CANDLE_MS=30*60*1000;
 function getAdmin(){
@@ -61,6 +62,10 @@ async function refreshTrade(doc){
   let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null;
   if(order==='LIMIT'&&status==='PENDING_ENTRY'){
     for(const c of candles){
+      if(!isCandleWithinWindow(c.time,start,CANDLE_MS,BOARD_WINDOW_MS)){
+        if(c.time>=start+BOARD_WINDOW_MS)break;
+        continue;
+      }
       const entryHit=touched(c,entry),stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
       if(!entryHit&&stopHit){status='INVALIDATED';reason='The stop/invalidation level was reached before the limit entry filled.';break;}
       if(!entryHit&&targetHit){status='MISSED_ENTRY';reason='Price reached the target area without filling the planned limit entry.';break;}
