@@ -447,7 +447,9 @@ const crowdedHTF=Array.from({length:110},(_,i)=>({
 }));
 for(let i=0;i<13;i++){
   const pivotIndex=8+i*7;
-  crowdedHTF[pivotIndex]={...crowdedHTF[pivotIndex],high:110+i};
+  // Descending unconsumed highs keep every prior objective valid: later
+  // candles never trade back through an earlier, higher swing.
+  crowdedHTF[pivotIndex]={...crowdedHTF[pivotIndex],high:130-i};
 }
 const crowdedTargets=rankStructuralTargets(crowdedExecution,'BULLISH',100,{
   layers:[{tf:'4H',candles:crowdedHTF}]
