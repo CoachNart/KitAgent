@@ -268,10 +268,17 @@ export function evaluateSMC({candles,layers,price}){
     // Targets must be real confirmed structure beyond the current executable
     // quote, not merely beyond the planned FVG entry. Otherwise a LIMIT can
     // be published after its take-profit has already traded.
+    const targetAudit={symbol:null,direction,sweepIndex:sweepCandidate.index,mssIndex:mssCandidate.index,fvgIndex:fvgCandidate.index};
     const targetCandidate=nextLiquidityTarget(
-      c,direction,fvgCandidate.midpoint,price,structuralRisk,c.length-1,ordered
+      c,direction,fvgCandidate.midpoint,price,structuralRisk,c.length-1,ordered,targetAudit
     );
-    if(!targetCandidate||!Number.isFinite(targetCandidate.price))continue;
+    if(!targetCandidate||!Number.isFinite(targetCandidate.price)){
+      if(targetAudit.reason==='NO_QUALIFIED_OPPOSING_STRUCTURE')stages.targetNoQualifiedStructure++;
+      else if(targetAudit.reason==='QUALIFIED_TARGETS_OUTSIDE_EXECUTION_REACH')stages.targetOutOfReach++;
+      else if(targetAudit.reason==='NEAREST_TARGET_BELOW_3R')stages.nearestTargetBelow3R++;
+      if(targetRejectionAudit.length<30)targetRejectionAudit.push({...targetAudit,decisionTime:c.at(-1)?.time??null});
+      continue;
+    }
     stages.structuralTarget++;
     const structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
     const structuralRR=structuralReward/structuralRisk;
