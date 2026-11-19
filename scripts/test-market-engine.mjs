@@ -371,6 +371,26 @@ assert('SMC permits a market entry after a closed candle touches and holds the F
   const trade=buildTrade({c,price:100.2,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104});
   return trade?.orderType==='MARKET'&&trade.entry===100;
 });
+assert('SMC rejects a bullish market entry when the FVG midpoint is touched but the retest candle closes against the long bias',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
+  c[39]=bar(39,99.7,100.5,99.5,99.8);
+  const diagnostics={};
+  const trade=buildTrade({c,price:100.2,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104,diagnostics});
+  return trade===null&&diagnostics.marketRetestNotConfirmed===1;
+});
+assert('SMC rejects a market entry when the candle only touches the outer FVG edge, not the planned midpoint',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
+  c[39]=bar(39,100.15,100.5,100.1,100.4);
+  const diagnostics={};
+  const trade=buildTrade({c,price:100.2,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:104,diagnostics});
+  return trade===null&&diagnostics.marketRetestNotConfirmed===1;
+});
+assert('SMC accepts a bearish market entry only after a bearish midpoint rejection close',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
+  c[39]=bar(100.8,101,99.5,99.7,99.7);
+  const trade=buildTrade({c,price:100.2,direction:'BEARISH',sweep:{extreme:101.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BEARISH',index:38,low:99.5,high:100.5,midpoint:100},target:96});
+  return trade?.orderType==='MARKET'&&trade.entry===100;
+});
 assert('CRT stop is beyond its actual sweep extreme',()=>crtValid.trade.stop<crtValid.crt.executionSweep.extreme);
 assert('CRT targets the meaningful opposite CRT extreme with positive structural reward',()=>crtValid.trade.target===116&&crtValid.trade.rr>0);
 assert('CRT routes through its own evaluator',()=>{
