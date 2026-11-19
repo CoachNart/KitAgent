@@ -155,7 +155,9 @@ export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layer
   if(!target||!Number.isFinite(target.price))return null;
   const stillAhead=direction==='BULLISH'?target.price>price:target.price<price;
   const reward=Math.abs(target.price-entry);
-  if(!stillAhead||reward<risk*3)return null;
+  if(!stillAhead){if(audit)audit.reason='TARGET_NOT_AHEAD_OF_LIVE_PRICE';return null;}
+  if(reward<risk*3){if(audit){audit.reason='NEAREST_TARGET_BELOW_3R';audit.nearestTargetRR=+(reward/risk).toFixed(3);audit.requiredReward=+(risk*3).toPrecision(10);}return null;}
+  if(audit)audit.reason='SELECTED';
   return target;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnostics=null}){
