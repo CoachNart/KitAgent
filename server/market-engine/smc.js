@@ -150,7 +150,7 @@ export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layer
     // Include close but meaningful major/pool levels in the path check. The
     // generic selector keeps a wider noise buffer for other legacy strategies.
     minimumDistanceFloor:Math.max(a*.5,Math.abs(price)*.0015),
-    asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null
+    asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null,audit
   });
   if(!target||!Number.isFinite(target.price))return null;
   const stillAhead=direction==='BULLISH'?target.price>price:target.price<price;
