@@ -208,13 +208,15 @@ for(const symbol of symbols){
     // Sample decision points across the available history, not only the
     // newest N candles. Each sampled setup then has the remaining historical
     // candles available for forward outcome simulation.
-    const firstIndex=Math.max(80,Math.min(exec.length-2,Number(args['warmup-bars'])||80));
     const lastIndex=exec.length-forwardBars-1;
-    if(lastIndex<firstIndex)continue;
-    const sampleCount=Math.min(bars,lastIndex-firstIndex+1);
-    const snapshotIndices=sampleCount===1
-      ?[lastIndex]
-      :Array.from({length:sampleCount},(_,i)=>Math.round(firstIndex+(lastIndex-firstIndex)*i/(sampleCount-1)));
+    if(lastIndex<80)continue;
+    // Evaluate consecutive 1H decision candles. Spreading a fixed number of
+    // snapshots across the entire history silently skipped several hourly
+    // decisions between samples, understating both setup frequency and fills.
+    // Keep the requested sample count, but make it a continuous recent window.
+    const sampleCount=Math.min(bars,lastIndex-80+1);
+    const firstIndex=lastIndex-sampleCount+1;
+    const snapshotIndices=Array.from({length:sampleCount},(_,i)=>firstIndex+i);
     const snapshots=snapshotIndices.map(index=>({index,candle:exec[index]}));
     const seen=new Map();
     let snapshotIndex=0;
