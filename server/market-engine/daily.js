@@ -82,6 +82,8 @@ function toSetup(market,result,price){
     takeProfit:trade.target,
     targetSource:trade.targetSource||null,
     targetSelection:trade.targetSelection||null,
+    sweepAgeBars:Number.isFinite(trade.sweepAgeBars)?trade.sweepAgeBars:null,
+    sweepTime:Number.isFinite(trade.sweepTime)?trade.sweepTime:null,
     rr:Number(trade.rr.toFixed(2)),
     regime:result.regime,
     evidence:result.evidence||[],
