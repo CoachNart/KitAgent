@@ -1,6 +1,7 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents} from '../server/market-engine/structure.js';
+import {liquidityMap} from '../server/market-engine/liquidity.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
@@ -404,6 +405,24 @@ const targetAfterClearedLevel=nextLiquidityTarget(
   hierarchyCandles,'BULLISH',100,106,2,hierarchyCandles.length-1,hierarchyLayers
 );
 assert('SMC selects the next structural target ahead of price after a nearer level is cleared',()=>!!targetAfterClearedLevel&&targetAfterClearedLevel.price>106&&targetAfterClearedLevel.price-100>=6);
+ 
+// The liquidity layer already detects equal highs/lows. SMC target ranking
+// must consume those confirmed pools rather than relying only on isolated
+// external swing pivots.
+const poolExecution=Array.from({length:50},(_,i)=>bar(i,100,101,99,100.2));
+const poolContext=Array.from({length:50},(_,i)=>bar(i,100,101,99,100.2));
+const equalHighPool={
+  type:'EQUAL_HIGHS',level:105,first:10,second:20,
+  confirmationIndex:22,time:poolContext[22].time
+};
+const poolTarget=selectStructuralTarget(poolExecution,'BULLISH',100,{
+  layers:[{tf:'4H',candles:poolContext,liquidity:{pools:[equalHighPool]}}],
+  minDistance:1
+});
+assert('SMC can select a confirmed equal-high liquidity pool as its opposing target',()=>poolTarget?.price===105&&poolTarget.source==='HTF_EQUAL_HIGHS');
+const detectedPools=liquidityMap(poolContext).pools.filter(x=>x.type==='EQUAL_HIGHS');
+assert('Liquidity map exposes equal-high pool confirmation time for target lookahead checks',()=>detectedPools.length>0&&detectedPools.every(x=>Number.isFinite(x.confirmationIndex)&&Number.isFinite(x.time)));
+
 
 // A crowded higher-timeframe target list must not crowd out a nearer valid
 // execution-timeframe objective before the final reachability selector runs.
