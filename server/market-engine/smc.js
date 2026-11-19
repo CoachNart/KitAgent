@@ -20,7 +20,7 @@ function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
   if(penetration<a*MIN_SWEEP_PENETRATION_ATR||reclaim<a*MIN_SWEEP_RECLAIM_ATR||r<a*MIN_SWEEP_RANGE_ATR)return null;
   return {penetration,penetrationATR:penetration/a,reclaimDepth:reclaim,reclaimDepthATR:reclaim/a,range:r,rangeATR:r/a};
 }
-function ageQuality(age,fresh,recent){if(!Number.isFinite(age))return 0;if(age<=fresh)return 1;if(age<=recent)return .7;if(age<=16)return .35;return 0;}
+function ageQuality(age,fresh,recent){if(!Number.isFinite(age))return 0;if(age<=fresh)return 1;if(age<=recent)return .7;if(age<=8)return .35;return 0;}
 
 // Pending-order quality is based on executable proximity to the planned FVG
 // midpoint. Sweep age is scored separately as setup freshness, so it must not
