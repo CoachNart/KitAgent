@@ -52,9 +52,12 @@ function simulate(trade,direction,orderType,future,tf,decisionTime){
   const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
   let active=String(orderType).toUpperCase()==='MARKET';
+  const sweepTime=Number(trade.sweepTime);
+  const pendingExpiresAt=Number.isFinite(sweepTime)&&sweepTime>0?sweepTime+PENDING_ENTRY_WINDOW_MS:decisionTime+PENDING_ENTRY_WINDOW_MS;
+  const pendingWindowMs=Math.max(0,pendingExpiresAt-decisionTime);
   for(const c of future){
-    if(!active&&!isCandleWithinWindow(c.time,decisionTime,DURATIONS[tf],PENDING_ENTRY_WINDOW_MS)){
-      if(c.time>=decisionTime+PENDING_ENTRY_WINDOW_MS)return{result:'missed',reason:'Limit entry expired after the 24-hour publication window'};
+    if(!active&&!isCandleWithinWindow(c.time,decisionTime,DURATIONS[tf],pendingWindowMs)){
+      if(c.time>=pendingExpiresAt)return{result:'missed',reason:'Limit entry expired 24 hours after the original liquidity sweep'};
       continue;
     }
     if(!active){
