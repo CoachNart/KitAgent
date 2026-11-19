@@ -219,6 +219,20 @@ export function rankStructuralTargets(c,direction,entry,{layers=[],minDistance=0
         });
       }
     }
+
+    // The liquidity map already identifies equal-high/equal-low pools, but
+    // structural target ranking previously ignored them and only considered
+    // isolated k=3/k=4 pivots. Include confirmed opposing-side pools as real
+    // objectives so a valid liquidity draw is not lost merely because its
+    // constituent pivots are too close to qualify independently.
+    const poolType=direction==='BULLISH'?'EQUAL_HIGHS':'EQUAL_LOWS';
+    for(const pool of layer?.liquidity?.pools||[]){
+      if(pool?.type!==poolType||!Number.isFinite(pool.level))continue;
+      add(pool.level,'HTF_'+poolType,pool.second??pool.index??-1,layer.tf||'HTF',105,{
+        confirmationIndex:pool.confirmationIndex,
+        time:pool.time??(Number.isFinite(pool.confirmationIndex)?lc[pool.confirmationIndex]?.time:null)
+      });
+    }
   }
 
   // Collapse repeated highs/lows into liquidity/structure pools. A level
