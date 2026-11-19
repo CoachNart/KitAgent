@@ -127,7 +127,7 @@ export async function publishDailyBoard(){
           rr:Number(s.rr),regime:s.regime,evidence:s.evidence||[],layers:s.layers||[],targetSource:s.targetSource||null,
           targetSelection:s.targetSelection||null,entryReason:s.entryReason||null,
           sweepAgeBars:s.sweepAgeBars??null,sweepTime:s.sweepTime??null,
-          pendingExpiresAt:orderType==='LIMIT'&&Number.isFinite(Number(s.sweepTime))?new Date(Number(s.sweepTime)+BOARD_WINDOW_MS):new Date(now+BOARD_WINDOW_MS),
+          pendingExpiresAt:orderType==='LIMIT'&&s.sweepTime!=null&&Number.isFinite(Number(s.sweepTime))?new Date(Number(s.sweepTime)+BOARD_WINDOW_MS):new Date(now+BOARD_WINDOW_MS),
           status:orderType==='MARKET'?'ACTIVE':'PENDING_ENTRY',
           statusReason:orderType==='MARKET'?'Market setup activated at publication.':'Waiting for a confirmed limit fill.',
           publishedAt:new Date(now),createdAt:new Date(now),updatedAt:new Date(now),activatedAt:orderType==='MARKET'?new Date(now):null,
