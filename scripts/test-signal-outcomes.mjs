@@ -1,10 +1,16 @@
 import {resolveStatus} from '../api/signals.js';
+import {isCandleWithinWindow} from '../server/market-engine/execution-window.js';
 
 const assert=(name,condition)=>{
   if(!condition)throw new Error('FAIL: '+name);
   console.log('PASS: '+name);
 };
 const originalFetch=globalThis.fetch;
+const pendingStart=Date.UTC(2026,0,1);
+assert('Pending limit entry accepts a 30-minute candle fully inside the 24-hour window',isCandleWithinWindow(pendingStart+23.5*60*60*1000,pendingStart,30*60*1000,24*60*60*1000));
+assert('Pending limit entry rejects a candle that closes after the 24-hour deadline',!isCandleWithinWindow(pendingStart+24*60*60*1000,pendingStart,30*60*1000,24*60*60*1000));
+assert('Historical 1H replay accepts the final fully-contained hour of the live window',isCandleWithinWindow(pendingStart+23*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
+assert('Historical 1H replay rejects an entry candle beginning at the 24-hour deadline',!isCandleWithinWindow(pendingStart+24*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
 const candleStart=Math.floor((Date.now()-2*60*60*1000)/1800000)*1800000;
 const nextCandle=candleStart+30*60000;
 const generatedAt=new Date(candleStart).toISOString();
