@@ -343,10 +343,20 @@ export function evaluateSMC({candles,layers,price}){
   const fvgStrength=fvgAtr>0?Math.max(.35,Math.min(1,fvg.size/(fvgAtr*.75))):0;
   const executionCandle=c.at(-1);
   const executionBody=executionCandle?bodyRatio(executionCandle):0;
+  const executionRange=executionCandle?executionCandle.high-executionCandle.low:0;
+  const closePosition=executionRange>0
+    ?direction==='BULLISH'
+      ?(executionCandle.close-executionCandle.low)/executionRange
+      :(executionCandle.high-executionCandle.close)/executionRange
+    :0;
   const executionQuality=trade.orderType==='MARKET'
-    ?Math.max(.45,Math.min(1,executionBody))
+    ?Math.max(.45,Math.min(1,executionBody*.65+closePosition*.35))
     :limitEntryQuality(trade.entry,price,atr(c,14)||0);
-  const riskAtr=(atr(c,14)||0)>0?Math.abs(trade.entry-trade.stop)/atr(c,14):0;
+  // Grade market-entry risk at the live decision quote, not the FVG midpoint.
+  // The shared execution layer may move a MARKET fill to bid/ask; it then
+  // validates final geometry again before publication.
+  const gradeEntryPrice=trade.orderType==='MARKET'?price:trade.entry;
+  const riskAtr=(atr(c,14)||0)>0?Math.abs(gradeEntryPrice-trade.stop)/atr(c,14):0;
   const invalidationQuality=Math.max(.35,Math.min(1,1-Math.abs(riskAtr-1.25)/2.5));
   const geometryQuality=Math.max(.35,Math.min(1,1-Math.max(0,riskAtr-1)/2));
   const baseGrade=gradeSetup({
