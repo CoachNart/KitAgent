@@ -2,7 +2,7 @@ import { closedCandles, validateCandles } from './data.js';
 import { analyzeOne, fetchPrice, fetchTf } from './index.js';
 import { SMC_MODEL } from './smc.js';
 
-const SCAN_LIMIT=18;
+const SCAN_LIMIT=60;
 const MAX_PUBLISHED=5;
 const MODEL_KEY='SMC';
 const MODEL_NAME='Unified Liquidity & Displacement';
@@ -137,7 +137,15 @@ export async function scanSymbol(market,diagnostics=null){
 export async function scanTopQuality(){
   const diagnostics={evaluations:0,tradeCandidates:0,marketDataFailures:0,rejections:[]};
   const markets=await topSymbols();
-  const scanned=await Promise.all(markets.map(market=>scanSymbol(market,diagnostics)));
+  // Expand opportunity coverage across the liquid Bybit USDT-perpetual universe
+  // without firing every candle request simultaneously. Bounded batches avoid
+  // turning a broader scan into a burst of provider rate-limit failures.
+  const scanned=[];
+  const batchSize=6;
+  for(let offset=0;offset<markets.length;offset+=batchSize){
+    const batch=markets.slice(offset,offset+batchSize);
+    scanned.push(...await Promise.all(batch.map(market=>scanSymbol(market,diagnostics))));
+  }
   const setups=scanned.flat().sort((a,b)=>b.rankScore-a.rankScore).slice(0,MAX_PUBLISHED);
   const topRejections=diagnostics.rejections.slice(0,25);
   return {
