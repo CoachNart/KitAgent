@@ -130,16 +130,17 @@ function freshFvg(c,fvg,asOf){
 export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layers=[]){
   if(!Number.isFinite(entry)||!Number.isFinite(price)||!(risk>0))return null;
   const a=atr(c,14)||0;
-  // A pending limit must not carry a target that price has already reached
-  // before the entry fills. Select the objective beyond the live executable
-  // quote, while keeping it at least 3R from the planned FVG entry.
-  const minimumRewardDistance=direction==='BULLISH'
-    ?entry+risk*3-price
-    :price-(entry-risk*3);
-  const minDistance=Math.max(0,minimumRewardDistance,a*1.5,Math.abs(price)*.005);
-  return selectStructuralTarget(c,direction,price,{
-    layers,minDistance,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null
-  })||null;
+  // Select the nearest meaningful opposing structural objective FIRST.
+  // Do not hide a nearer liquidity level merely because it cannot offer 3R:
+  // doing so creates an artificial target beyond an unaddressed obstacle.
+  const target=selectStructuralTarget(c,direction,entry,{
+    layers,minDistance:0,asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null
+  });
+  if(!target||!Number.isFinite(target.price))return null;
+  const stillAhead=direction==='BULLISH'?target.price>price:target.price<price;
+  const reward=Math.abs(target.price-entry);
+  if(!stillAhead||reward<risk*3)return null;
+  return target;
 }
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnostics=null}){
   const reject=reason=>{if(diagnostics)diagnostics[reason]=(diagnostics[reason]||0)+1;return null;};
