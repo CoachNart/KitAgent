@@ -1,7 +1,7 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents} from '../server/market-engine/structure.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -168,6 +168,8 @@ const bullishAheadTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,
 const bullishAlreadyPassedTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,111,2,49,[]);
 assert('SMC bullish target must remain beyond the live quote and preserve at least 3R',()=>bullishAheadTarget?.price>105&&Math.abs(bullishAheadTarget.price-100)>=6);
 assert('SMC rejects a bullish structural target already passed by live price',()=>bullishAlreadyPassedTarget===null);
+assert('SMC pending-limit execution quality improves as the quote approaches the planned FVG midpoint',()=>limitEntryQuality(100,100,2)>limitEntryQuality(100,102,2));
+assert('SMC pending-limit execution quality is capped when the order is at maximum allowed distance',()=>Math.abs(limitEntryQuality(100,102,2)-.45)<1e-9);
 const obstructedBullishTarget=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
 obstructedBullishTarget[15]=bar(15,100,104,99,100.5); // Nearest opposing swing is less than 3R.
 obstructedBullishTarget[30]=bar(30,104,110,103,105); // Farther swing would misleadingly offer 3R+.
