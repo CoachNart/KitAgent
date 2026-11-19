@@ -140,14 +140,16 @@ function freshFvg(c,fvg,asOf){
 export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layers=[]){
   if(!Number.isFinite(entry)||!Number.isFinite(price)||!(risk>0))return null;
   const a=atr(c,14)||0;
-  // Select the nearest meaningful opposing structural objective FIRST.
-  // Do not hide a nearer liquidity level merely because it cannot offer 3R:
-  // doing so creates an artificial target beyond an unaddressed obstacle.
-  const target=selectStructuralTarget(c,direction,entry,{
+  // Select the nearest meaningful opposing objective that is STILL AHEAD
+  // of the live quote. A nearer level between the planned entry and current
+  // price has already been cleared; treating it as an obstruction incorrectly
+  // rejects the next valid liquidity objective. The 3R calculation below
+  // remains anchored to the planned entry, never the live quote.
+  const target=selectStructuralTarget(c,direction,price,{
     layers,minDistance:0,
     // Include close but meaningful major/pool levels in the path check. The
     // generic selector keeps a wider noise buffer for other legacy strategies.
-    minimumDistanceFloor:Math.max(a*.5,Math.abs(entry)*.0015),
+    minimumDistanceFloor:Math.max(a*.5,Math.abs(price)*.0015),
     asOf:asOfIndex,asOfTime:c[asOfIndex]?.time??null
   });
   if(!target||!Number.isFinite(target.price))return null;
