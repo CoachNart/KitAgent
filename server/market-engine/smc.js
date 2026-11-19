@@ -4,6 +4,12 @@ import {gradeSetup,validateTradeGeometry,enforceFreshnessGrade} from './grading.
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
+// A confirmed HH/HL or LH/LL sequence is an established HTF trend;
+// a direction inferred only from a recent break is transitional context.
+export function hasConfirmedContextTrend(contextStructure,direction){
+  return contextStructure?.rawDirection===direction;
+}
+
 export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade, swingBreakAfter, freshFvg};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_SWEEP_RECLAIM_ATR=.10;
@@ -324,7 +330,7 @@ export function evaluateSMC({candles,layers,price}){
   // A confirmed HH/HL or LH/LL sequence is a directional trend even when
   // the latest recorded break is a countertrend CHoCH. Only transitional
   // direction inferred from a recent break receives the reduced trend score.
-  const confirmedContextTrend=contextStructure.rawDirection===direction;
+  const confirmedContextTrend=hasConfirmedContextTrend(contextStructure,direction);
   const fvgAtr=atr(c.slice(0,fvg.index+1),14)||0;
   const fvgStrength=fvgAtr>0?Math.max(.35,Math.min(1,fvg.size/(fvgAtr*.75))):0;
   const executionCandle=c.at(-1);
