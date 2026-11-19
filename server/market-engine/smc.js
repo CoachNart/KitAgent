@@ -137,7 +137,7 @@ function freshFvg(c,fvg,asOf){
   }
   return true;
 }
-export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layers=[]){
+export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layers=[],audit=null){
   if(!Number.isFinite(entry)||!Number.isFinite(price)||!(risk>0))return null;
   const a=atr(c,14)||0;
   // Select the nearest meaningful opposing objective that is STILL AHEAD
