@@ -206,7 +206,8 @@ export function evaluateSMC({candles,layers,price}){
   const geometryFailureReasons={};
   const pendingLimitAudit=[];
   const premiumDiscountAudit=[];
-  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,executionRejections:{...executionRejections},geometryFailureReasons:{...geometryFailureReasons},pendingLimitAudit:pendingLimitAudit.slice(-100),premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
+  const targetRejectionAudit=[];
+  const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,targetRejectionAudit:targetRejectionAudit.slice(-30),executionRejections:{...executionRejections},geometryFailureReasons:{...geometryFailureReasons},pendingLimitAudit:pendingLimitAudit.slice(-100),premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
   let selected=null;
   if(!Number.isFinite(price)||price<=0){
     failures.push('Live price is unavailable.');
