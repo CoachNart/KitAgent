@@ -57,6 +57,8 @@ async function refreshTrade(doc){
   const {entry,stop,target}=levels(data);
   if(![entry,stop,target].every(Number.isFinite))return data;
   const long=isLong(data),order=String(data.orderType||'MARKET').toUpperCase();
+  const pendingExpiresAt=ms(data.pendingExpiresAt)||start+BOARD_WINDOW_MS;
+  const pendingWindowMs=Math.max(0,pendingExpiresAt-start);
   const candles=await candlesSince(symbol,start);
   if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return{...data,id:doc.id};}
   let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null;
