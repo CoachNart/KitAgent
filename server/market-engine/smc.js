@@ -331,5 +331,8 @@ export function evaluateSMC({candles,layers,price}){
     confirmation:{quality:Math.min(1,.35+(sweep.quality?.penetrationATR>=.35?.15:.08)+(sweep.quality?.reclaimDepthATR>=.2?.12:.05)+(displacement.atrMultiple>=1.35?.28:.15))},
     freshness:{quality:Math.min(1,.35+ageQuality(sweep.age,2,8)*.4+Math.min(1,displacement.atrMultiple/1.5)*.25)}
   });
+  const grade=enforceFreshnessGrade(baseGrade,sweep.age);
+  trade.sweepAgeBars=sweep.age;
+  trade.sweepTime=sweep.time??c[sweep.index]?.time??null;
   return{direction,grade,trade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }
