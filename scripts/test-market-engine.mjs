@@ -171,7 +171,8 @@ assert('SMC rejects a bullish structural target already passed by live price',()
 assert('SMC pending-limit execution quality improves as the quote approaches the planned FVG midpoint',()=>limitEntryQuality(100,100,2)>limitEntryQuality(100,102,2));
 assert('SMC pending-limit execution quality is capped when the order is at maximum allowed distance',()=>Math.abs(limitEntryQuality(100,102,2)-.45)<1e-9);
 const obstructedBullishTarget=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
-obstructedBullishTarget[15]=bar(15,100,104,99,100.5); // Nearest opposing swing is less than 3R.
+obstructedBullishTarget[8]=bar(8,100,102.5,99,101); // Close major swing, inside the generic 1.5 ATR noise floor.
+obstructedBullishTarget[15]=bar(15,100,104,99,100.5); // Next opposing swing is also less than 3R.
 obstructedBullishTarget[30]=bar(30,104,110,103,105); // Farther swing would misleadingly offer 3R+.
 assert('SMC rejects a farther bullish target when nearer opposing structure blocks the 3R path',()=>nextLiquidityTarget(obstructedBullishTarget,'BULLISH',100,100,2,59,[])===null);
 const bearishTargetFixture=Array.from({length:50},(_,i)=>bar(i,100,101,99,100));
