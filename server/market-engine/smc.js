@@ -95,7 +95,7 @@ function findSweeps(c,direction){
         const stopBuffer=Math.max(decisionAtr*.15,Math.abs(decisionPrice)*.00035);
         const stopPrice=direction==='BULLISH'?extreme-stopBuffer:extreme+stopBuffer;
         const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.low>stopPrice:z.high<stopPrice);
-        if(quality&&stillValid)out.push({direction,index:i,time:x.time,level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-i,quality});
+        if(quality&&stillValid)out.push({direction,index:i,time:Number.isFinite(x.time)?x.time+60*60_000:x.time,level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-i,quality});
       }
       // The first wick through the pool consumes it, whether it reclaims or
       // closes beyond the level. Never accept a later breach as a new sweep.
