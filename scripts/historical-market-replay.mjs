@@ -273,17 +273,26 @@ for(const symbol of symbols){
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
+        const gradeParts=Object.fromEntries((result.grade?.confidenceEvidence||[])
+          .filter(x=>String(x.type||'').startsWith('CONFIDENCE_')&&x.type!=='CONFIDENCE_MODEL')
+          .map(x=>[x.type.replace('CONFIDENCE_','').toLowerCase()+'Score',x.score]));
+        const auditBase={symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),
+          direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,
+          grade:result.grade?.grade||null,gradeScore:result.grade?.score??null,...gradeParts,
+          htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
+          displacementAtr:result.smc?.displacement?.atrMultiple??null,
+          fvgSizeAtr:(()=>{const size=Number(result.smc?.fvg?.size),a=Number(result.smc?.fvg?.atr);return Number.isFinite(size)&&Number.isFinite(a)&&a>0?+(size/a).toFixed(3):null;})()};
         const outcome=simulate(trade,result.direction,trade.orderType,future,tf,cutoff);
-        if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
-        if(outcome.result==='missed'){stat.missed++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
-        if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
+        if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
+        if(outcome.result==='missed'){stat.missed++;tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
+        if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({...auditBase,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
         const gross=rMultiple(trade,result.direction,outcome.exit);
         const riskPct=Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry));
         const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
         const net=gross-costR;
         if(outcome.result==='win')stat.wins++;else stat.losses++;
         stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
-        tradeAudit.push({symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
+        tradeAudit.push({...auditBase,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
       }
     }
   }
