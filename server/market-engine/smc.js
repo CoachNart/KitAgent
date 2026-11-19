@@ -1,6 +1,6 @@
 import {atr,bodyRatio} from './data.js';
 import {confirmedSwings,selectStructuralTarget} from './structure.js';
-import {gradeSetup,validateTradeGeometry} from './grading.js';
+import {gradeSetup,validateTradeGeometry,enforceFreshnessGrade} from './grading.js';
 
 export const SMC_MODEL='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG';
 
