@@ -5,7 +5,8 @@ import {isCandleWithinWindow} from '../server/market-engine/execution-window.js'
 const DURATIONS={'30m':30*60_000,'1H':60*60_000,'4H':4*60*60_000};
 const PENDING_ENTRY_WINDOW_MS=24*60*60_000;
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
-const symbols=String(args.symbols||'BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT,LINKUSDT,SUIUSDT').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+const requestedSymbols=String(args.symbols||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+let symbols=requestedSymbols;
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
 const forwardBars=Math.max(1,Math.min(1000,Number(args['forward-bars'])||168));
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
@@ -108,6 +109,25 @@ function fingerprint(t,direction,smc=null,symbol=''){
   return [symbol,direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
 }
 
+async function resolveReplaySymbols(){
+  if(requestedSymbols.length)return requestedSymbols;
+  // Match the live scanner's Bybit linear-perpetual universe instead of
+  // silently evaluating only a fixed ten-symbol shortlist.
+  const url=new URL('/v5/market/tickers','https://api.bybit.nl');
+  url.searchParams.set('category','linear');
+  const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+  if(!response.ok)throw new Error('Bybit ticker universe HTTP '+response.status);
+  const payload=await response.json();
+  if(payload.retCode!==0)throw new Error('Bybit ticker universe retCode '+payload.retCode+': '+(payload.retMsg||'unknown error'));
+  const universe=(payload.result?.list||[])
+    .filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
+    .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h))
+    .slice(0,60)
+    .map(x=>x.symbol);
+  if(!universe.length)throw new Error('Bybit returned no eligible USDT perpetual symbols for replay');
+  return universe;
+}
+
 async function fetchReplayCandles(symbol,tf){
   // Bybit is the sole market-data source for both live analysis and historical replay.
   // Its v5 endpoint returns newest-first candles and accepts at most 1000 rows per request.
@@ -189,8 +209,10 @@ async function fetchReplayCandles(symbol,tf){
   return normalized;
 }
 
+symbols=await resolveReplaySymbols();
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log('Historical candle source: Bybit v5 linear perpetual candles (same exchange as live market data).');
+console.log('Universe:',requestedSymbols.length?'explicit symbol override':'top 60 Bybit USDT perpetuals by 24h turnover');
 console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: signals use only closed 4H/1H candles; fills and TP/SL outcomes use later closed 30m candles, matching the live board. Pending LIMIT entries expire after 24 hours. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
