@@ -106,21 +106,45 @@ async function fetchReplayCandles(symbol,tf){
     const pageLimit=Math.min(1000,requestedLimit-rows.length);
     let payload=null,lastError='Bybit historical candles unavailable';
     for(const host of ['https://api.bybit.nl']){
-      try{
-        const url=new URL('/v5/market/kline',host);
-        url.searchParams.set('category','linear');
-        url.searchParams.set('symbol',symbol);
-        url.searchParams.set('interval',interval);
-        url.searchParams.set('limit',String(pageLimit));
-        if(end!=null)url.searchParams.set('end',String(end));
-        const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
-        if(!response.ok){lastError='Bybit historical candles HTTP '+response.status+' '+response.statusText+' ('+host+')';continue;}
-        const candidate=await response.json();
-        if(candidate.retCode!==0){lastError='Bybit historical candles retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown provider error');continue;}
-        if(!Array.isArray(candidate.result?.list)||!candidate.result.list.length){lastError='Bybit returned no historical candles ('+host+')';continue;}
-        payload=candidate;
-        break;
-      }catch(error){lastError='Bybit historical candles request failed ('+host+'): '+(error?.message||error);}
+      const url=new URL('/v5/market/kline',host);
+      url.searchParams.set('category','linear');
+      url.searchParams.set('symbol',symbol);
+      url.searchParams.set('interval',interval);
+      url.searchParams.set('limit',String(pageLimit));
+      if(end!=null)url.searchParams.set('end',String(end));
+      // Historical replay can involve many paginated requests. Retry transient
+      // network failures, rate limits and provider 5xx responses instead of
+      // abandoning an otherwise healthy Bybit history after one dropped page.
+      for(let attempt=1;attempt<=3;attempt++){
+        try{
+          const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+          if(!response.ok){
+            lastError='Bybit historical candles HTTP '+response.status+' '+response.statusText+' ('+host+')';
+            if(response.status===429||response.status>=500){
+              if(attempt<3){await new Promise(resolve=>setTimeout(resolve,750*attempt));continue;}
+            }
+            break;
+          }
+          const candidate=await response.json();
+          if(candidate.retCode!==0){
+            lastError='Bybit historical candles retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown provider error');
+            if(candidate.retCode===10006&&attempt<3){await new Promise(resolve=>setTimeout(resolve,1000*attempt));continue;}
+            break;
+          }
+          if(!Array.isArray(candidate.result?.list)||!candidate.result.list.length){
+            lastError='Bybit returned no historical candles ('+host+')';
+            break;
+          }
+          payload=candidate;
+          break;
+        }catch(error){
+          const cause=error?.cause;
+          const detail=[error?.message,cause?.code,cause?.message].filter(Boolean).join(' | ');
+          lastError='Bybit historical candles request failed ('+host+', attempt '+attempt+'/3): '+(detail||String(error));
+          if(attempt<3)await new Promise(resolve=>setTimeout(resolve,750*attempt));
+        }
+      }
+      if(payload)break;
     }
     if(!payload){
       const partial=rows.length?(' after loading '+rows.length+' raw candles; refusing partial history. '):' ';
