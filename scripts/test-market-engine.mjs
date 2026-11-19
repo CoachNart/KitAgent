@@ -420,7 +420,10 @@ const poolTarget=selectStructuralTarget(poolExecution,'BULLISH',100,{
   minDistance:1
 });
 assert('SMC can select a confirmed equal-high liquidity pool as its opposing target',()=>poolTarget?.price===105&&poolTarget.source==='HTF_EQUAL_HIGHS');
-const detectedPools=liquidityMap(poolContext).pools.filter(x=>x.type==='EQUAL_HIGHS');
+const poolDetectionCandles=Array.from({length:50},(_,i)=>bar(i,100,101,99,100.2));
+ poolDetectionCandles[10]=bar(10,100,105,99,100.2);
+ poolDetectionCandles[20]=bar(20,100,105,99,100.2);
+const detectedPools=liquidityMap(poolDetectionCandles).pools.filter(x=>x.type==='EQUAL_HIGHS');
 assert('Liquidity map exposes equal-high pool confirmation time for target lookahead checks',()=>detectedPools.length>0&&detectedPools.every(x=>Number.isFinite(x.confirmationIndex)&&Number.isFinite(x.time)));
 
 
