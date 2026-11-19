@@ -14,6 +14,7 @@ const strategies=['SMC'];
 const stats=new Map();
 const failures=new Map();
 const tradeAudit=[];
+const gradeRejectionAudit=[];
 let duplicateSetupsSuppressed=0;
 const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','premiumDiscountBullishPass','premiumDiscountBearishPass','premiumDiscountBullishReject','premiumDiscountBearishReject','premiumDiscountDeltaAtrSum','premiumDiscountDeltaSamples','structuralTarget','rrAtLeast3','executableEntry'];
 const stageTotals=Object.fromEntries(stageKeys.map(key=>[key,0]));
@@ -30,7 +31,7 @@ let loadedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
 function bucket(strategy,tf){
   const key=keyOf(strategy,tf);
-  if(!stats.has(key))stats.set(key,{strategy,timeframe:tf,evaluated:0,gradeA:0,gradeAplus:0,tradeCandidates:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,grossR:0,netR:0,returns:[]});
+  if(!stats.has(key))stats.set(key,{strategy,timeframe:tf,evaluated:0,executableSetups:0,gradeA:0,gradeAplus:0,gradeB:0,gradeC:0,gradeOther:0,gradeRejected:0,tradeCandidates:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,grossR:0,netR:0,returns:[]});
   return stats.get(key);
 }
 function rejection(strategy,tf,reason){
@@ -277,14 +278,42 @@ for(const symbol of symbols){
           const rejectionDiagnostics=(result?.evidence||[]).find(x=>x?.type==='TOP_DOWN_REJECTION_DIAGNOSTICS');
           if(rejectionDiagnostics)console.log('TOP_DOWN STAGE DIAGNOSTICS',symbol,tf,snapshotIndex+'/'+snapshots.length,JSON.stringify(rejectionDiagnostics));
         }
+        // Separate structural executability from publication eligibility.
+        // Only A/A+ proceed to outcome simulation; lower grades remain auditable.
+        if(result.trade){
+          stat.executableSetups++;
+          const grade=String(result.grade?.grade||'NO-GRADE');
+          const score=Number.isFinite(Number(result.grade?.score))?Number(result.grade.score):null;
+          if(grade==='A')stat.gradeA++;
+          else if(grade==='A+')stat.gradeAplus++;
+          else{
+            stat.gradeRejected++;
+            if(grade==='B')stat.gradeB++;
+            else if(grade==='C')stat.gradeC++;
+            else stat.gradeOther++;
+            rejection(strategy,tf,'EXECUTABLE SETUP BELOW PUBLICATION GRADE: '+grade+(score===null?'':' ('+score+'/100)'));
+            if(gradeRejectionAudit.length<120){
+              const parts=Object.fromEntries((result.grade?.confidenceEvidence||[])
+                .filter(x=>String(x.type||'').startsWith('CONFIDENCE_')&&x.type!=='CONFIDENCE_MODEL')
+                .map(x=>[x.type.replace('CONFIDENCE_','').toLowerCase(),{score:x.score,max:x.max}]));
+              gradeRejectionAudit.push({
+                symbol,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),
+                direction:result.direction,grade,score,gradeParts:parts,
+                orderType:result.trade.orderType,entry:result.trade.entry,
+                stop:result.trade.stop,target:result.trade.target,rr:result.trade.rr,
+                htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
+                displacementAtr:result.smc?.displacement?.atrMultiple??null,
+                fvgSize:result.smc?.fvg?.size??null,
+                targetSource:result.smc?.target?.source||result.trade.targetSource||null,
+                targetQuality:result.smc?.target?.quality??result.trade.targetSelection?.quality??null
+              });
+            }
+          }
+        }
         if(!result.trade||!['A','A+'].includes(result.grade?.grade)){
           for(const reason of (result.failures||[]).slice(0,2))rejection(strategy,tf,reason);
-          if(result.trade&&result.grade?.grade==='A')stat.gradeA++;
-          if(result.trade&&result.grade?.grade==='A+')stat.gradeAplus++;
           continue;
         }
-        if(result.grade.grade==='A')stat.gradeA++;
-        if(result.grade.grade==='A+')stat.gradeAplus++;
         const trade=result.trade;
         const fp=fingerprint(trade,result.direction,result.smc,symbol),seenKey=strategy+'|'+fp;
         if(seen.has(seenKey)){
@@ -330,11 +359,13 @@ const rows=[...stats.values()].map(s=>{
   const mean=s.returns.length?s.netR/s.returns.length:0;
   let equity=0,peak=0,maxDrawdown=0;
   for(const r of [...s.returns].sort((a,b)=>a.exitTime-b.exitTime)){equity+=r.net;peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,peak-equity);}
-  return{strategy:s.strategy,timeframe:s.timeframe,evaluated:s.evaluated,gradeA:s.gradeA,gradeAplus:s.gradeAplus,candidates:s.tradeCandidates,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+mean.toFixed(3):null,ambiguous:s.ambiguous,missed:s.missed,unresolved:s.unresolved,maxDrawdownR:+maxDrawdown.toFixed(3)};
+  return{strategy:s.strategy,timeframe:s.timeframe,evaluated:s.evaluated,executableSetups:s.executableSetups,gradeA:s.gradeA,gradeAplus:s.gradeAplus,gradeB:s.gradeB,gradeC:s.gradeC,gradeRejected:s.gradeRejected,candidates:s.tradeCandidates,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+mean.toFixed(3):null,ambiguous:s.ambiguous,missed:s.missed,unresolved:s.unresolved,maxDrawdownR:+maxDrawdown.toFixed(3)};
 });
 console.table(rows);
 console.log('\nREPEATED SMC SETUPS SUPPRESSED',duplicateSetupsSuppressed);
-console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events only)');
+console.log('\nEXECUTABLE SETUPS REJECTED BY PUBLICATION GRADE (sampled; not outcome-simulated)');
+console.table(gradeRejectionAudit);
+console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events only; A/A+ publications only)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
@@ -376,6 +407,8 @@ const averageNetR=totalResolved?totalNetR/totalResolved:null;
 console.log('\nSUMMARY',JSON.stringify({
   symbols,requestedTimeframes:requested,decisionSnapshotsPerTimeframe:bars,forwardBars,roundTripCostBps,
   evaluated:rows.reduce((n,x)=>n+x.evaluated,0),
+  executableSetups:rows.reduce((n,x)=>n+x.executableSetups,0),
+  gradeRejected:rows.reduce((n,x)=>n+x.gradeRejected,0),
   candidates:rows.reduce((n,x)=>n+x.candidates,0),
   resolved:totalResolved,wins:totalWins,losses:totalLosses,
   winRatePct:totalResolved?+(100*totalWins/totalResolved).toFixed(2):null,
