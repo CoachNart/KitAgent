@@ -130,12 +130,13 @@ function preSweepDealingRange(c,sweep){
     anchorLowIndex:sweep.direction==='BEARISH'?priorOpposing.index:sweep.swingIndex
   };
 }
-function freshFvg(c,fvg,asOf){
+function freshFvg(c,fvg,asOf,allowCurrentRetest=false){
   if(!fvg||!Number.isFinite(fvg.midpoint))return false;
   // The planned execution price is the FVG midpoint. Once price has traded
   // through that midpoint, a pending order there would already have filled;
   // the gap cannot be advertised as a fresh, unfilled opportunity again.
-  for(let i=fvg.index+1;i<=asOf;i++){
+  const lastPriorBar=allowCurrentRetest?asOf-1:asOf;
+  for(let i=fvg.index+1;i<=lastPriorBar;i++){
     const x=c[i];
     if(!x)continue;
     if(fvg.direction==='BULLISH'&&x.low<=fvg.midpoint)return false;
@@ -191,6 +192,7 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   // A MARKET entry requires a completed midpoint retest with a directional
   // rejection close. Otherwise the setup is rejected rather than entering on
   // proximity alone; untouched, correctly-sided FVGs remain LIMIT candidates.
+  if(midpointTouched&&!near)return reject('fvgRetestAlreadyPassed');
   if(near&&!marketCandleQuality)return reject('marketRetestNotConfirmed');
   const correctPendingSide=direction==='BULLISH'?price>entry:price<entry;
   if(!near&&!correctPendingSide)return reject('pendingLimitWrongSide');
@@ -242,7 +244,10 @@ export function evaluateSMC({candles,layers,price}){
       :fvgAt(c,mssCandidate.index)?.direction===direction?fvgAt(c,mssCandidate.index):null;
     if(!fvgCandidate||fvgCandidate.createdBy!==mssCandidate.index)continue;
     stages.fvgCreatedByMss++;
-    if(!freshFvg(c,fvgCandidate,c.length-1))continue;
+    // The current closed candle may be the confirming midpoint retest. Earlier
+    // midpoint mitigation still invalidates the FVG; buildTrade below decides
+    // whether this final-candle touch is a valid MARKET confirmation or stale.
+    if(!freshFvg(c,fvgCandidate,c.length-1,true))continue;
     const fvgAtr=atr(c.slice(0,fvgCandidate.index+1),14);
     if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
     stages.freshFvgAndSize++;
