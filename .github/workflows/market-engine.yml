@@ -37,8 +37,16 @@ jobs:
           fi
       - name: Live strategy rejection matrix
         if: always()
-        continue-on-error: true
-        run: npm run test:market-engine-live
+        run: |
+          set +e
+          npm run test:market-engine-live
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo "Live Bybit diagnostic skipped because the hosted runner is geo-blocked; no live-market conclusion was produced."
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
       - name: Production build
         if: always()
         run: npm run build
