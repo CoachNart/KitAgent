@@ -9,7 +9,7 @@ on:
 jobs:
   market-engine:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,10 +23,10 @@ jobs:
         run: npm run test:signal-outcomes
       - name: Historical market replay (OKX test data; live execution remains Bybit)
         # OKX is isolated to historical replay because GitHub-hosted runners are
-        # geo-blocked by Bybit. Use a broader 1H sample and deeper history so the
-        # replay can measure enough real SMC events rather than silently sampling
-        # only a short recent window. The 3R and expectancy gates remain intact.
-        run: npm run test:market-engine-replay -- --universe-limit=15 --bars=4000 --forward-bars=168 --history-candles=5000 --round-trip-cost-bps=10
+        # geo-blocked by Bybit. Use a broader crypto-only 1H universe and deeper history so the
+        # replay measures genuine SMC events across more liquid crypto markets.
+        # The 3R and expectancy gates remain intact; no equity/commodity tokens.
+        run: npm run test:market-engine-replay -- --universe-limit=30 --bars=4000 --forward-bars=168 --history-candles=5000 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
         run: |
