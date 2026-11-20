@@ -1,4 +1,4 @@
-import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES} from '../server/market-engine/data.js';
+import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES,atr} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {isCandleWithinWindow} from '../server/market-engine/execution-window.js';
 import {isSupportedCryptoBase} from '../server/market-engine/crypto-universe.js';
@@ -447,6 +447,7 @@ for(const symbol of symbols){
           .map(x=>[x.type.replace('CONFIDENCE_','').toLowerCase()+'Score',x.score]));
         const auditBase={symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),
           direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,
+          entryDistanceAtr:(()=>{const value=atr(all[tf],14);return value>0?+(Math.abs(Number(trade.marketEntry??candle.close)-Number(trade.entry))/value).toFixed(4):null;})(),
           grade,gradeScore:result.grade?.score??null,...gradeParts,
           htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
           displacementAtr:result.smc?.displacement?.atrMultiple??null,
@@ -505,6 +506,14 @@ console.log('\nOUTCOME BY STRUCTURAL GRADE (all unique executable events; diagno
 console.table([...gradeStats.values()].map(s=>{
   const resolved=s.wins+s.losses;
   return{grade:s.grade,events:s.events,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+(s.netR/resolved).toFixed(3):null,missed:s.missed,ambiguous:s.ambiguous,unresolved:s.unresolved};
+}));
+console.log('\\nA/A+ LIMIT DISTANCE SENSITIVITY (diagnostic only; no publication rule changed)');
+console.table([0.5,0.75,1,1.25,1.5,2,3,Infinity].map(maxDistanceAtr=>{
+  const selected=tradeAudit.filter(x=>['A','A+'].includes(x.grade)&&Number.isFinite(x.entryDistanceAtr)&&x.entryDistanceAtr<=maxDistanceAtr);
+  const wins=selected.filter(x=>x.outcome==='win').length;
+  const losses=selected.filter(x=>x.outcome==='loss').length;
+  const resolved=wins+losses;
+  return{maxEntryDistanceAtr:Number.isFinite(maxDistanceAtr)?maxDistanceAtr:'ALL',candidates:selected.length,resolved,wins,losses,winRatePct:resolved?+(100*wins/resolved).toFixed(2):null,missed:selected.filter(x=>x.outcome==='missed').length,ambiguous:selected.filter(x=>x.outcome==='ambiguous').length,unresolved:selected.filter(x=>x.outcome==='unresolved').length};
 }));
 console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events; all executable grades)');
 console.table(tradeAudit);
