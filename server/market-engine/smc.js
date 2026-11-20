@@ -55,6 +55,16 @@ function meaningfulDisplacement(c,i,direction){
   if(direction==='BEARISH'&&(x.close>=x.open||x.close>x.low+r*.25))return null;
   return{index:i,range:r,body,atrMultiple:r/a,bodyRatio:body/r};
 }
+export function displacementFvgForMss(c,sweepIndex,mssIndex,direction){
+  for(let displacementIndex=mssIndex;displacementIndex>sweepIndex;displacementIndex--){
+    const displacement=meaningfulDisplacement(c,displacementIndex,direction);
+    if(!displacement)continue;
+    const fvg=fvgAt(c,displacementIndex+1);
+    if(fvg&&fvg.direction===direction&&fvg.createdBy===displacementIndex)
+      return{displacement,fvg};
+  }
+  return null;
+}
 function swingBreakAfter(c,start,end,direction){
   const s=confirmedSwings(c,1);
   // MSS must break the opposing internal swing that existed BEFORE the
@@ -244,17 +254,9 @@ export function evaluateSMC({candles,layers,price}){
     // candle discarded valid sweep -> displacement/FVG -> structure-break
     // sequences. Search backward from the MSS, but never before the sweep;
     // the displacement candle itself must create the directional FVG.
-    let displacementCandidate=null;
-    let fvgCandidate=null;
-    for(let displacementIndex=mssCandidate.index;displacementIndex>sweepCandidate.index;displacementIndex--){
-      const candidate=meaningfulDisplacement(c,displacementIndex,direction);
-      if(!candidate)continue;
-      const candidateFvg=fvgAt(c,displacementIndex+1);
-      if(!candidateFvg||candidateFvg.direction!==direction||candidateFvg.createdBy!==displacementIndex)continue;
-      displacementCandidate=candidate;
-      fvgCandidate=candidateFvg;
-      break;
-    }
+    const impulseSequence=displacementFvgForMss(c,sweepCandidate.index,mssCandidate.index,direction);
+    const displacementCandidate=impulseSequence?.displacement||null;
+    const fvgCandidate=impulseSequence?.fvg||null;
     if(!displacementCandidate||!fvgCandidate)continue;
     stages.displacement++;
     stages.fvgCreatedByMss++;
