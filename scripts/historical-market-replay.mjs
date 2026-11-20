@@ -123,7 +123,7 @@ async function resolveReplaySymbols(){
   // Match the live scanner's Bybit linear-perpetual universe instead of
   // silently evaluating only a fixed ten-symbol shortlist.
   let payload=null,lastError='Bybit ticker universe unavailable';
-  for(const host of ['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl']){
+  for(const host of ['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']){
     try{
       const url=new URL('/v5/market/tickers',host);
       url.searchParams.set('category','linear');
@@ -159,7 +159,7 @@ async function fetchReplayCandles(symbol,tf){
   while(rows.length<requestedLimit){
     const pageLimit=Math.min(1000,requestedLimit-rows.length);
     let payload=null,lastError='Bybit historical candles unavailable';
-    for(const host of ['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl']){
+    for(const host of ['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']){
       const url=new URL('/v5/market/kline',host);
       url.searchParams.set('category','linear');
       url.searchParams.set('symbol',symbol);
