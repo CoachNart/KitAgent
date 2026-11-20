@@ -34,6 +34,7 @@ const premiumDiscountAuditCounts=new Map();
 const premiumDiscountAuditSeen=new Set();
 const replayNow=Date.now();
 let loadedSymbols=0;
+let providerBlockedSymbols=0;
 const keyOf=(strategy,tf)=>strategy+'|'+tf;
 function bucket(strategy,tf){
   const key=keyOf(strategy,tf);
@@ -249,6 +250,7 @@ for(const symbol of symbols){
     loadedSymbols++;
     console.log('DATA OK',symbol,...tfs.map(tf=>tf+':'+history[tf].length+' candles ('+new Date(history[tf][0].time).toISOString()+' → '+new Date(history[tf].at(-1).time+DURATIONS[tf]).toISOString()+')'));
   }catch(error){
+    if(/HTTP 403 Forbidden/i.test(String(error?.message||error)))providerBlockedSymbols++;
     console.error('DATA ERROR',symbol,error?.message||error);
     continue;
   }
@@ -465,7 +467,7 @@ console.table([...gradeStats.values()].map(s=>{
   const resolved=s.wins+s.losses;
   return{grade:s.grade,events:s.events,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+(s.netR/resolved).toFixed(3):null,missed:s.missed,ambiguous:s.ambiguous,unresolved:s.unresolved};
 }));
-console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events only; A/A+ publications only)');
+console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events; all executable grades)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
@@ -515,9 +517,13 @@ console.log('\nSUMMARY',JSON.stringify({
   resolved:totalResolved,wins:totalWins,losses:totalLosses,
   winRatePct:totalResolved?+(100*totalWins/totalResolved).toFixed(2):null,
   averageNetR:averageNetR===null?null:+averageNetR.toFixed(3),
+  providerBlockedSymbols,
   note:'Exploratory Bybit historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and account-specific fee tiers. Drawdown is sorted by simulated exit time across symbols; overlapping positions are not portfolio-simulated.'
 },null,2));
-if(loadedSymbols===0){
+if(loadedSymbols===0&&providerBlockedSymbols===symbols.length&&symbols.length>0){
+  console.error('REPLAY SKIPPED: Bybit returned HTTP 403 for every requested symbol from this runner region; no performance conclusion is possible.');
+  process.exitCode=2;
+}else if(loadedSymbols===0){
   console.error('REPLAY FAILED: no historical candle data was loaded; refusing to report an empty replay as a successful test.');
   process.exitCode=1;
 }else if(totalResolved<30){
