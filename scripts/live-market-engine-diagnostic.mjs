@@ -24,7 +24,17 @@ function addStatus(strategy,tf,result){
   status.set(key,x);
 }
 
-const markets=await topSymbols();
+let markets;
+try{
+  markets=await topSymbols();
+}catch(error){
+  const message=String(error?.message||error);
+  if(/HTTP 403 Forbidden/i.test(message)){
+    console.error('LIVE DIAGNOSTIC SKIPPED: Bybit blocked every configured API host from this runner region; no live-market conclusion is possible.');
+    process.exit(2);
+  }
+  throw error;
+}
 const symbols=markets.slice(0,LIMIT).map(x=>({providerSymbol:x.symbol,turnover24h:x.turnover24h}));
 if(!symbols.length)throw new Error('No Bybit perpetual instruments available');
 
