@@ -13,6 +13,9 @@ const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps'
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
 const strategies=['SMC'];
 const stats=new Map();
+// Outcome-simulate every unique executable event, including rejected grades.
+// This is diagnostic calibration data; only A/A+ remains eligible for publication.
+const gradeStats=new Map();
 const failures=new Map();
 const tradeAudit=[];
 const gradeRejectionAudit=[];
@@ -36,6 +39,11 @@ function bucket(strategy,tf){
   const key=keyOf(strategy,tf);
   if(!stats.has(key))stats.set(key,{strategy,timeframe:tf,evaluated:0,executableSetups:0,gradeA:0,gradeAplus:0,gradeB:0,gradeC:0,gradeOther:0,gradeRejected:0,tradeCandidates:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,grossR:0,netR:0,returns:[]});
   return stats.get(key);
+}
+function gradeBucket(grade){
+  const key=String(grade||'NO-GRADE');
+  if(!gradeStats.has(key))gradeStats.set(key,{grade:key,events:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,grossR:0,netR:0,returns:[]});
+  return gradeStats.get(key);
 }
 function rejection(strategy,tf,reason){
   const key=strategy+'|'+tf+'|'+String(reason||'No executable setup').slice(0,180);
@@ -377,23 +385,28 @@ for(const symbol of symbols){
             }
           }
         }
-        if(!result.trade||!['A','A+'].includes(result.grade?.grade)){
+        if(!result.trade){
           for(const reason of (result.failures||[]).slice(0,2))rejection(strategy,tf,reason);
           continue;
         }
-        stat.tradeCandidates++;
+
+        // Simulate every unique executable setup, not only A/A+ publications.
+        // Otherwise the grading model cannot be calibrated against actual outcomes.
         const monitor=history['30m']||[];
         const monitorStart=firstCandleAtOrAfter(monitor,cutoff);
         const future=monitor.slice(monitorStart,monitorStart+forwardBars*2);
         if(future.some(x=>x.time<cutoff)){
           throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
         }
+        const grade=String(result.grade?.grade||'NO-GRADE');
+        const gradeStat=gradeBucket(grade);
+        gradeStat.events++;
         const gradeParts=Object.fromEntries((result.grade?.confidenceEvidence||[])
           .filter(x=>String(x.type||'').startsWith('CONFIDENCE_')&&x.type!=='CONFIDENCE_MODEL')
           .map(x=>[x.type.replace('CONFIDENCE_','').toLowerCase()+'Score',x.score]));
         const auditBase={symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),
           direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,
-          grade:result.grade?.grade||null,gradeScore:result.grade?.score??null,...gradeParts,
+          grade,gradeScore:result.grade?.score??null,...gradeParts,
           htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
           displacementAtr:result.smc?.displacement?.atrMultiple??null,
           fvgSize:result.smc?.fvg?.size??null,
@@ -401,16 +414,36 @@ for(const symbol of symbols){
           targetQuality:result.smc?.target?.quality??trade.targetSelection?.quality??null,
           targetPool:result.smc?.target?.pool||trade.targetSelection?.pool||null};
         const outcome=simulate(trade,result.direction,trade.orderType,future,'30m',cutoff);
-        if(outcome.result==='ambiguous'){stat.ambiguous++;tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});continue;}
-        if(outcome.result==='missed'){stat.missed++;tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});continue;}
-        if(outcome.result==='unresolved'){stat.unresolved++;tradeAudit.push({...auditBase,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});continue;}
-        const gross=rMultiple(trade,result.direction,outcome.exit);
-        const riskPct=Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry));
-        const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
-        const net=gross-costR;
-        if(outcome.result==='win')stat.wins++;else stat.losses++;
-        stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
-        tradeAudit.push({...auditBase,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
+        if(outcome.result==='ambiguous'){
+          gradeStat.ambiguous++;
+          if(['A','A+'].includes(grade))stat.ambiguous++;
+          tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});
+        }else if(outcome.result==='missed'){
+          gradeStat.missed++;
+          if(['A','A+'].includes(grade))stat.missed++;
+          tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});
+        }else if(outcome.result==='unresolved'){
+          gradeStat.unresolved++;
+          if(['A','A+'].includes(grade))stat.unresolved++;
+          tradeAudit.push({...auditBase,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});
+        }else{
+          const gross=rMultiple(trade,result.direction,outcome.exit);
+          const riskPct=Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry));
+          const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
+          const net=gross-costR;
+          gradeStat[outcome.result==='win'?'wins':'losses']++;
+          gradeStat.grossR+=gross;gradeStat.netR+=net;
+          gradeStat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
+          if(['A','A+'].includes(grade)){
+            if(outcome.result==='win')stat.wins++;else stat.losses++;
+            stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
+          }
+          tradeAudit.push({...auditBase,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
+        }
+
+        // The live publication contract remains unchanged: A/A+ only.
+        if(!['A','A+'].includes(grade))continue;
+        stat.tradeCandidates++;
       }
     }
   }
@@ -425,8 +458,13 @@ const rows=[...stats.values()].map(s=>{
 });
 console.table(rows);
 console.log('\nREPEATED SMC SETUPS SUPPRESSED',duplicateSetupsSuppressed);
-console.log('\nEXECUTABLE SETUPS REJECTED BY PUBLICATION GRADE (sampled; not outcome-simulated)');
+console.log('\nEXECUTABLE SETUPS REJECTED BY PUBLICATION GRADE (sampled; all are now outcome-simulated)');
 console.table(gradeRejectionAudit);
+console.log('\nOUTCOME BY STRUCTURAL GRADE (all unique executable events; diagnostic calibration only)');
+console.table([...gradeStats.values()].map(s=>{
+  const resolved=s.wins+s.losses;
+  return{grade:s.grade,events:s.events,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+(s.netR/resolved).toFixed(3):null,missed:s.missed,ambiguous:s.ambiguous,unresolved:s.unresolved};
+}));
 console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events only; A/A+ publications only)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
