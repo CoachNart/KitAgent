@@ -4,13 +4,13 @@ import {isCandleWithinWindow} from '../server/market-engine/execution-window.js'
 
 const DURATIONS={'30m':30*60_000,'1H':60*60_000,'4H':4*60*60_000};
 const PENDING_ENTRY_WINDOW_MS=24*60*60_000;
-const exchange=String(args.exchange||process.env.REPLAY_EXCHANGE||'okx').toLowerCase();
-if(!['okx','bybit'].includes(exchange))throw new Error('Unsupported replay exchange: '+exchange+' (use okx or bybit)');
 const BYBIT_API_HOSTS=process.env.BYBIT_API_REGION==='eea'
   ?['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']
   :['https://api.bybit.com','https://api.bytick.com'];
 const OKX_API_HOST='https://www.okx.com';
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
+const exchange=String(args.exchange||process.env.REPLAY_EXCHANGE||'okx').toLowerCase();
+if(!['okx','bybit'].includes(exchange))throw new Error('Unsupported replay exchange: '+exchange+' (use okx or bybit)');
 const requestedSymbols=String(args.symbols||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 let symbols=requestedSymbols;
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
