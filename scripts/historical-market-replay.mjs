@@ -14,7 +14,9 @@ if(!['okx','bybit'].includes(exchange))throw new Error('Unsupported replay excha
 const requestedSymbols=String(args.symbols||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 const universeLimit=Math.max(1,Math.min(60,Number(args['universe-limit'])||60));
 let symbols=requestedSymbols;
-const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
+// The replay workflow requests 4,000 consecutive 1H decisions. Keep the CLI cap
+// high enough to honor that request instead of silently truncating the sample to 1,000.
+const bars=Math.max(5,Math.min(4000,Number(args.bars)||20));
 const forwardBars=Math.max(1,Math.min(1000,Number(args['forward-bars'])||168));
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
