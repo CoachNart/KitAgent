@@ -11,6 +11,7 @@ import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade,
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {EXECUTION_TIMEFRAMES,atr,validateCandles} from '../server/market-engine/data.js';
 import {topSymbols,candlesFor,scanSymbol,candidateScore} from '../server/market-engine/daily.js';
+import {isSupportedCryptoBase,isSupportedCryptoPerpetualSymbol} from '../server/market-engine/crypto-universe.js';
 
 const tests=[];
 const supportedExecutionTimeframes=['1H'];
@@ -29,6 +30,9 @@ assert('A is capped at B when the sweep is older than eight 1H bars',()=>enforce
 assert('A-grade freshness gate prevents a 15-bar-old sweep from publication',()=>enforceFreshnessGrade(freshA,15).grade==='B');
 assert('Freshness gate does not upgrade an already lower grade',()=>enforceFreshnessGrade({grade:'C',score:70},15).grade==='C');
 assert('Execution timeframe allowlist contains only the 1H execution timeframe',executionTimeframesAreCorrect);
+assert('Crypto universe includes major USDT perpetual markets',()=>isSupportedCryptoPerpetualSymbol('BTCUSDT')&&isSupportedCryptoPerpetualSymbol('SOLUSDT'));
+assert('Crypto universe excludes tokenized equities and commodity contracts',()=>!isSupportedCryptoPerpetualSymbol('SOXLUSDT')&&!isSupportedCryptoPerpetualSymbol('SNDKUSDT')&&!isSupportedCryptoPerpetualSymbol('XAGUSDT'));
+assert('Crypto universe includes supported newer crypto perpetuals',()=>isSupportedCryptoBase('HYPE')&&isSupportedCryptoBase('VIRTUAL'));
 assert('Confirmed 4H HH/HL or LH/LL trend keeps full context quality despite a countertrend CHoCH',()=>hasConfirmedContextTrend({direction:'BULLISH',rawDirection:'BULLISH',choch:{direction:'BEARISH'}},'BULLISH'));
 assert('A transitional direction inferred from a recent break is not scored as an established trend',()=>!hasConfirmedContextTrend({direction:'BULLISH',rawDirection:'NEUTRAL',bos:{direction:'BULLISH'}},'BULLISH'));
 const eligibleThreeR={direction:'BULLISH',trade:{entry:100,stop:95,target:115,rr:3},grade:{grade:'A',score:84}};
