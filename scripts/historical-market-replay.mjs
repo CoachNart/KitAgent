@@ -42,6 +42,28 @@ const targetRejectionAudit=[];
 const targetRejectionAuditSeen=new Set();
 const premiumDiscountAuditCounts=new Map();
 const premiumDiscountAuditSeen=new Set();
+// Serialize OKX history requests across symbols/timeframes to stay below the
+// public API's per-instrument request ceiling. Retry-After is honored on 429s.
+let okxRequestQueue=Promise.resolve();
+let lastOkxRequestAt=0;
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function okxFetch(url){
+  const request=okxRequestQueue.then(async()=>{
+    const wait=Math.max(0,125-(Date.now()-lastOkxRequestAt));
+    if(wait)await sleep(wait);
+    lastOkxRequestAt=Date.now();
+    return fetch(url,{signal:AbortSignal.timeout(30000)});
+  });
+  okxRequestQueue=request.then(()=>undefined,()=>undefined);
+  return request;
+}
+function retryDelay(response,attempt){
+  const raw=response?.headers?.get?.('retry-after');
+  const seconds=Number(raw);
+  const dateDelay=raw&&!Number.isFinite(seconds)?Date.parse(raw)-Date.now():0;
+  const requested=Number.isFinite(seconds)&&seconds>0?seconds*1000:dateDelay>0?dateDelay:750*2**(attempt-1);
+  return Math.min(15000,Math.max(750,requested));
+}
 const replayNow=Date.now();
 let loadedSymbols=0;
 let providerBlockedSymbols=0;
@@ -132,8 +154,8 @@ async function resolveReplaySymbols(){
   if(requestedSymbols.length)return exchange==='okx'?requestedSymbols.map(x=>x.includes('-')?x:x.endsWith('USDT')?x.slice(0,-4)+'-USDT-SWAP':x):requestedSymbols;
   if(exchange==='okx'){
     const [instrumentsResponse,tickersResponse]=await Promise.all([
-      fetch(new URL('/api/v5/public/instruments?instType=SWAP',OKX_API_HOST),{signal:AbortSignal.timeout(30000)}),
-      fetch(new URL('/api/v5/market/tickers?instType=SWAP',OKX_API_HOST),{signal:AbortSignal.timeout(30000)})
+      okxFetch(new URL('/api/v5/public/instruments?instType=SWAP',OKX_API_HOST)),
+      okxFetch(new URL('/api/v5/market/tickers?instType=SWAP',OKX_API_HOST))
     ]);
     if(!instrumentsResponse.ok||!tickersResponse.ok)throw new Error('OKX swap universe HTTP '+instrumentsResponse.status+'/'+tickersResponse.status);
     const [instruments,tickers]=await Promise.all([instrumentsResponse.json(),tickersResponse.json()]);
@@ -147,7 +169,7 @@ async function resolveReplaySymbols(){
   for(const host of BYBIT_API_HOSTS){
     try{
       const url=new URL('/v5/market/tickers',host);url.searchParams.set('category','linear');
-      const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+      const response=await okxFetch(url);
       if(!response.ok){lastError='Bybit ticker universe HTTP '+response.status+' ('+host+')';continue;}
       const candidate=await response.json();
       if(candidate.retCode!==0){lastError='Bybit ticker universe retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown error');continue;}
@@ -174,19 +196,19 @@ async function resolveReplaySymbols(){
       url.searchParams.set('instId',symbol);url.searchParams.set('bar',interval);url.searchParams.set('limit',String(pageLimit));
       if(after!=null)url.searchParams.set('after',String(after));
       let payload=null,lastError='OKX historical candles unavailable';
-      for(let attempt=1;attempt<=3;attempt++){
+      for(let attempt=1;attempt<=5;attempt++){
         try{
           const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
           if(!response.ok){lastError='OKX historical candles HTTP '+response.status+' '+response.statusText;
-            if((response.status===429||response.status>=500)&&attempt<3){await new Promise(r=>setTimeout(r,750*attempt));continue;}
+            if((response.status===429||response.status>=500)&&attempt<5){await sleep(retryDelay(response,attempt));continue;}
             break;}
           const candidate=await response.json();
           if(candidate.code!=='0'){lastError='OKX historical candles code '+candidate.code+': '+(candidate.msg||'unknown');
-            if(attempt<3){await new Promise(r=>setTimeout(r,750*attempt));continue;}break;}
+            if(attempt<5){await sleep(retryDelay(response,attempt));continue;}break;}
           if(!Array.isArray(candidate.data)||!candidate.data.length){lastError='OKX returned no historical candles';break;}
           payload=candidate;break;
         }catch(error){lastError='OKX historical candles request failed: '+(error?.message||error);
-          if(attempt<3)await new Promise(r=>setTimeout(r,750*attempt));}
+          if(attempt<5)await sleep(retryDelay(null,attempt));}
       }
       if(!payload)throw new Error('OKX historical pagination failed'+(rows.length?' after loading '+rows.length+' candles; refusing partial history. ':' ')+lastError);
       const page=payload.data;
