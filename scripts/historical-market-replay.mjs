@@ -238,3 +238,312 @@ async function resolveReplaySymbols(){
   if(normalized.length<80)throw new Error('Insufficient '+exchange.toUpperCase()+' history for '+symbol+' '+tf+': received '+normalized.length+' normalized candles (minimum 80)');
   return normalized;
 }
+
+symbols=await resolveReplaySymbols();
+console.log('KITAGENT HISTORICAL MARKET REPLAY');
+console.log('Historical candle source:',exchange.toUpperCase(),'public perpetual candles (replay-only adapter; live execution remains Bybit).');
+console.log('Universe:',requestedSymbols.length?'explicit symbol override':'top 60 '+exchange.toUpperCase()+' USDT linear perpetuals by 24h turnover');
+console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
+console.log('Method: signals use only closed 4H/1H candles; fills and TP/SL outcomes use later closed 30m candles, matching the live board. Pending LIMIT entries expire after 24 hours. Intrabar TP/SL ambiguity is not guessed.');
+for(const symbol of symbols){
+  let history;
+  try{
+    const tfs=[...new Set(['4H',...EXECUTION_TIMEFRAMES,'30m'])];
+    const rows=await Promise.all(tfs.map(async tf=>{
+      const candles=closedCandles(await fetchReplayCandles(symbol,tf),tf,replayNow).filter(x=>x.time+DURATIONS[tf]<=replayNow);
+      if(candles.length<80)throw new Error(tf+' has only '+candles.length+' closed candles; minimum 80 required');
+      const interval=DURATIONS[tf];
+      for(let i=1;i<candles.length;i++){
+        if(candles[i].time-candles[i-1].time!==interval){
+          throw new Error(tf+' history has a missing/irregular candle between '+new Date(candles[i-1].time).toISOString()+' and '+new Date(candles[i].time).toISOString()+'; refusing an unreliable replay');
+        }
+      }
+      return [tf,candles];
+    }));
+    history=Object.fromEntries(rows);
+    loadedSymbols++;
+    console.log('DATA OK',symbol,...tfs.map(tf=>tf+':'+history[tf].length+' candles ('+new Date(history[tf][0].time).toISOString()+' → '+new Date(history[tf].at(-1).time+DURATIONS[tf]).toISOString()+')'));
+  }catch(error){
+    if(/HTTP 403 Forbidden/i.test(String(error?.message||error)))providerBlockedSymbols++;
+    console.error('DATA ERROR',symbol,error?.message||error);
+    continue;
+  }
+  for(const tf of requested){
+    const exec=history[tf]||[];
+    // Evaluate a continuous recent window of hourly decisions. Each decision
+    // is paired with subsequent 30m monitor candles for fill and outcome replay.
+    const lastIndex=exec.length-forwardBars-1;
+    if(lastIndex<80)continue;
+    // Evaluate consecutive 1H decision candles. Spreading a fixed number of
+    // snapshots across the entire history silently skipped several hourly
+    // decisions between samples, understating both setup frequency and fills.
+    // Keep the requested sample count, but make it a continuous recent window.
+    const sampleCount=Math.min(bars,lastIndex-80+1);
+    const firstIndex=lastIndex-sampleCount+1;
+    const snapshotIndices=Array.from({length:sampleCount},(_,i)=>firstIndex+i);
+    const snapshots=snapshotIndices.map(index=>({index,candle:exec[index]}));
+    const seen=new Map();
+    let snapshotIndex=0;
+    for(const snapshot of snapshots){
+      snapshotIndex++;
+      const {index:candleIndex,candle}=snapshot;
+      const cutoff=candle.time+DURATIONS[tf];
+      const all={};
+      for(const layerTf of [...new Set(['4H',...EXECUTION_TIMEFRAMES])]){
+        const layerRows=history[layerTf]||[];
+        all[layerTf]=layerRows.slice(0,closedPrefixEnd(layerRows,layerTf,cutoff));
+        if(all[layerTf].some(x=>x.time+DURATIONS[layerTf]>cutoff)){
+          throw new Error('LOOKAHEAD GUARD: future candle leaked into '+layerTf+' snapshot at '+new Date(cutoff).toISOString());
+        }
+      }
+      if(!all[tf]||all[tf].length<40)continue;
+      if(all[tf].at(-1)?.time!==candle.time){
+        throw new Error('HISTORICAL SNAPSHOT GUARD: latest '+tf+' candle does not match the decision candle at '+new Date(cutoff).toISOString());
+      }
+      if(snapshotIndex===1||snapshotIndex===snapshots.length||snapshotIndex%25===0){
+        console.log('REPLAY PROGRESS',symbol,tf,snapshotIndex+'/'+snapshots.length,new Date(cutoff).toISOString());
+      }
+      for(const strategy of strategies){
+        const stat=bucket(strategy,tf);stat.evaluated++;
+        const strategyStarted=Date.now();
+        console.log('STRATEGY START',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy);
+        let result;
+        try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close);}
+        catch(error){
+          console.error('STRATEGY ERROR',symbol,tf,snapshotIndex,strategy,Date.now()-strategyStarted+'ms',error?.stack||error);
+          rejection(strategy,tf,'EXCEPTION: '+(error?.message||error));
+          continue;
+        }
+        console.log('STRATEGY DONE',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy,Date.now()-strategyStarted+'ms');
+        const stageDiagnostic=(result?.evidence||[]).find(x=>x?.type==='SMC_STAGE_DIAGNOSTICS');
+        if(stageDiagnostic){
+          for(const key of stageKeys){
+            const value=Number(stageDiagnostic[key]);
+            if(Number.isFinite(value)){stageTotals[key]+=value;stageSamples[key]++;}
+          }
+          for(const [reason,count] of Object.entries(stageDiagnostic.executionRejections||{})){
+            if(Number.isFinite(Number(count)))executionRejectionTotals.set(reason,(executionRejectionTotals.get(reason)||0)+Number(count));
+          }
+          for(const [reason,count] of Object.entries(stageDiagnostic.geometryFailureReasons||{})){
+            if(Number.isFinite(Number(count)))geometryFailureTotals.set(reason,(geometryFailureTotals.get(reason)||0)+Number(count));
+          }
+          for(const sample of stageDiagnostic.targetRejectionAudit||[]){
+            const uniqueKey=[symbol,tf,sample.direction,sample.sweepIndex,sample.mssIndex,sample.fvgIndex].join('|');
+            if(targetRejectionAudit.length<120&&!targetRejectionAuditSeen.has(uniqueKey)){
+              targetRejectionAuditSeen.add(uniqueKey);
+              targetRejectionAudit.push({symbol,timeframe:tf,...sample});
+            }
+          }
+          for(const sample of stageDiagnostic.pendingLimitAudit||[]){
+            const uniqueKey=[symbol,tf,sample.direction,sample.decisionTime,sample.fvgIndex].join('|');
+            if(pendingLimitAudit.length<80&&!pendingLimitAuditSeen.has(uniqueKey)){
+              pendingLimitAuditSeen.add(uniqueKey);
+              pendingLimitAudit.push({symbol,timeframe:tf,...sample});
+            }
+          }
+          for(const sample of stageDiagnostic.premiumDiscountAudit||[]){
+            const sampleKey=symbol+'|'+sample.direction;
+            const uniqueKey=[symbol,sample.direction,sample.sweepIndex,sample.mssIndex,sample.fvgIndex].join('|');
+            const count=premiumDiscountAuditCounts.get(sampleKey)||0;
+            if(count<12&&!premiumDiscountAuditSeen.has(uniqueKey)){
+              premiumDiscountAuditSeen.add(uniqueKey);
+              premiumDiscountAuditCounts.set(sampleKey,count+1);
+              premiumDiscountAudit.push({symbol,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),...sample});
+            }
+          }
+        }
+        if(strategy==='TOP_DOWN'){
+          const rejectionDiagnostics=(result?.evidence||[]).find(x=>x?.type==='TOP_DOWN_REJECTION_DIAGNOSTICS');
+          if(rejectionDiagnostics)console.log('TOP_DOWN STAGE DIAGNOSTICS',symbol,tf,snapshotIndex+'/'+snapshots.length,JSON.stringify(rejectionDiagnostics));
+        }
+        // Count each sweep -> MSS -> FVG event once, before grade accounting.
+        // Hourly snapshots can observe the same still-fresh event repeatedly;
+        // counting those observations as separate setups inflated executable
+        // and grade totals. The first eligible observation is the freshest.
+        const trade=result.trade;
+        const eventFingerprint=trade?fingerprint(trade,result.direction,result.smc,symbol):null;
+        const eventKey=trade?strategy+'|'+eventFingerprint:null;
+        if(trade&&seen.has(eventKey)){
+          duplicateSetupsSuppressed++;
+          continue;
+        }
+        if(trade)seen.set(eventKey,cutoff);
+
+        // Separate unique structural events from publication eligibility.
+        // All executable grades are outcome-simulated; only A/A+ remain publishable.
+        if(trade){
+          stat.executableSetups++;
+          const grade=String(result.grade?.grade||'NO-GRADE');
+          const score=Number.isFinite(Number(result.grade?.score))?Number(result.grade.score):null;
+          if(grade==='A')stat.gradeA++;
+          else if(grade==='A+')stat.gradeAplus++;
+          else{
+            stat.gradeRejected++;
+            if(grade==='B')stat.gradeB++;
+            else if(grade==='C')stat.gradeC++;
+            else stat.gradeOther++;
+            rejection(strategy,tf,'EXECUTABLE SETUP BELOW PUBLICATION GRADE: '+grade+(score===null?'':' ('+score+'/100)'));
+            if(gradeRejectionAudit.length<120){
+              const parts=Object.fromEntries((result.grade?.confidenceEvidence||[])
+                .filter(x=>String(x.type||'').startsWith('CONFIDENCE_')&&x.type!=='CONFIDENCE_MODEL')
+                .map(x=>[x.type.replace('CONFIDENCE_','').toLowerCase(),{score:x.score,max:x.max}]));
+              gradeRejectionAudit.push({
+                symbol,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),
+                direction:result.direction,grade,score,gradeParts:parts,
+                orderType:result.trade.orderType,entry:result.trade.entry,
+                stop:result.trade.stop,target:result.trade.target,rr:result.trade.rr,
+                htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
+                displacementAtr:result.smc?.displacement?.atrMultiple??null,
+                fvgSize:result.smc?.fvg?.size??null,
+                targetSource:result.smc?.target?.source||result.trade.targetSource||null,
+                targetQuality:result.smc?.target?.quality??result.trade.targetSelection?.quality??null
+              });
+            }
+          }
+        }
+        if(!result.trade){
+          for(const reason of (result.failures||[]).slice(0,2))rejection(strategy,tf,reason);
+          continue;
+        }
+
+        // Simulate every unique executable setup, not only A/A+ publications.
+        // Otherwise the grading model cannot be calibrated against actual outcomes.
+        const monitor=history['30m']||[];
+        const monitorStart=firstCandleAtOrAfter(monitor,cutoff);
+        const future=monitor.slice(monitorStart,monitorStart+forwardBars*2);
+        if(future.some(x=>x.time<cutoff)){
+          throw new Error('OUTCOME GUARD: pre-decision candle found in forward simulation at '+new Date(cutoff).toISOString());
+        }
+        const grade=String(result.grade?.grade||'NO-GRADE');
+        const gradeStat=gradeBucket(grade);
+        gradeStat.events++;
+        const gradeParts=Object.fromEntries((result.grade?.confidenceEvidence||[])
+          .filter(x=>String(x.type||'').startsWith('CONFIDENCE_')&&x.type!=='CONFIDENCE_MODEL')
+          .map(x=>[x.type.replace('CONFIDENCE_','').toLowerCase()+'Score',x.score]));
+        const auditBase={symbol,strategy,timeframe:tf,decisionTime:new Date(cutoff).toISOString(),
+          direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,
+          grade,gradeScore:result.grade?.score??null,...gradeParts,
+          htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
+          displacementAtr:result.smc?.displacement?.atrMultiple??null,
+          fvgSize:result.smc?.fvg?.size??null,
+          targetSource:result.smc?.target?.source||trade.targetSource||null,
+          targetQuality:result.smc?.target?.quality??trade.targetSelection?.quality??null,
+          targetPool:result.smc?.target?.pool||trade.targetSelection?.pool||null};
+        const outcome=simulate(trade,result.direction,trade.orderType,future,'30m',cutoff);
+        if(outcome.result==='ambiguous'){
+          gradeStat.ambiguous++;
+          if(['A','A+'].includes(grade))stat.ambiguous++;
+          tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});
+        }else if(outcome.result==='missed'){
+          gradeStat.missed++;
+          if(['A','A+'].includes(grade))stat.missed++;
+          tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});
+        }else if(outcome.result==='unresolved'){
+          gradeStat.unresolved++;
+          if(['A','A+'].includes(grade))stat.unresolved++;
+          tradeAudit.push({...auditBase,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});
+        }else{
+          const gross=rMultiple(trade,result.direction,outcome.exit);
+          const riskPct=Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry));
+          const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
+          const net=gross-costR;
+          gradeStat[outcome.result==='win'?'wins':'losses']++;
+          gradeStat.grossR+=gross;gradeStat.netR+=net;
+          gradeStat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
+          if(['A','A+'].includes(grade)){
+            if(outcome.result==='win')stat.wins++;else stat.losses++;
+            stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
+          }
+          tradeAudit.push({...auditBase,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
+        }
+
+        // The live publication contract remains unchanged: A/A+ only.
+        if(!['A','A+'].includes(grade))continue;
+        stat.tradeCandidates++;
+      }
+    }
+  }
+}
+
+const rows=[...stats.values()].map(s=>{
+  const resolved=s.wins+s.losses;
+  const mean=s.returns.length?s.netR/s.returns.length:0;
+  let equity=0,peak=0,maxDrawdown=0;
+  for(const r of [...s.returns].sort((a,b)=>a.exitTime-b.exitTime)){equity+=r.net;peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,peak-equity);}
+  return{strategy:s.strategy,timeframe:s.timeframe,evaluated:s.evaluated,executableSetups:s.executableSetups,gradeA:s.gradeA,gradeAplus:s.gradeAplus,gradeB:s.gradeB,gradeC:s.gradeC,gradeRejected:s.gradeRejected,candidates:s.tradeCandidates,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+mean.toFixed(3):null,ambiguous:s.ambiguous,missed:s.missed,unresolved:s.unresolved,maxDrawdownR:+maxDrawdown.toFixed(3)};
+});
+console.table(rows);
+console.log('\nREPEATED SMC SETUPS SUPPRESSED',duplicateSetupsSuppressed);
+console.log('\nEXECUTABLE SETUPS REJECTED BY PUBLICATION GRADE (sampled; all are now outcome-simulated)');
+console.table(gradeRejectionAudit);
+console.log('\nOUTCOME BY STRUCTURAL GRADE (all unique executable events; diagnostic calibration only)');
+console.table([...gradeStats.values()].map(s=>{
+  const resolved=s.wins+s.losses;
+  return{grade:s.grade,events:s.events,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+(s.netR/resolved).toFixed(3):null,missed:s.missed,ambiguous:s.ambiguous,unresolved:s.unresolved};
+}));
+console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events; all executable grades)');
+console.table(tradeAudit);
+console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
+console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
+console.log('\nEXECUTION REJECTION DIAGNOSTICS (per sweep path)');
+console.table([...executionRejectionTotals.entries()].sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})));
+console.log('\nSTRUCTURAL TARGET REJECTION AUDIT (nearest opposing structure; no RR relaxation)');
+console.table(targetRejectionAudit);
+console.log('\nPENDING LIMIT DISTANCE AUDIT (sampled rejected paths)');
+console.table(pendingLimitAudit.map(x=>({symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,price:+x.price.toPrecision(8),fvgMidpoint:+x.entryMidpoint.toPrecision(8),distance:+x.distance.toPrecision(8),distanceAtr:x.distanceAtr==null?null:+x.distanceAtr.toFixed(3),allowedDistance:+x.allowedDistance.toPrecision(8),allowedDistanceAtr:x.allowedDistanceAtr==null?null:+x.allowedDistanceAtr.toFixed(3),fvgAgeBars:x.fvgAgeBars,fvgIndex:x.fvgIndex,atr:+x.atr.toPrecision(8)})));
+console.log('\nTRADE GEOMETRY FAILURE DETAILS');
+console.table([...geometryFailureTotals.entries()].sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})));
+console.log('\nSTRUCTURAL PREMIUM/DISCOUNT AUDIT (pre-sweep confirmed swing range)');
+console.table(premiumDiscountAudit.map(x=>({
+  symbol:x.symbol,direction:x.direction,decisionTime:x.decisionTime,
+  sweepIndex:x.sweepIndex,mssIndex:x.mssIndex,fvgIndex:x.fvgIndex,
+  fvgLow:+x.fvgLow.toFixed(6),fvgMidpoint:+x.fvgMidpoint.toFixed(6),fvgHigh:+x.fvgHigh.toFixed(6),
+  premiumDiscountReference:x.premiumDiscountReference,
+  sweepExtreme:+x.sweepExtreme.toFixed(6),
+  structuralEquilibrium:+x.structuralEquilibrium.toFixed(6),
+  sweepDeltaAtr:x.sweepDeltaAtr==null?null:+x.sweepDeltaAtr.toFixed(3),
+  structuralRangeHighIndex:x.anchoredHighIndex,
+  structuralRangeLowIndex:x.anchoredLowIndex
+})));
+for(const direction of ['BULLISH','BEARISH']){
+  const subset=premiumDiscountAudit.filter(x=>x.direction===direction);
+  const deltas=subset.map(x=>x.sweepDeltaAtr).filter(Number.isFinite).sort((a,b)=>a-b);
+  const median=a=>a.length?a[Math.floor(a.length/2)]:null;
+  console.log('STRUCTURAL PREMIUM/DISCOUNT SUMMARY',direction,JSON.stringify({
+    samples:subset.length,
+    sweepDeltaAtrMedian:median(deltas),
+    confirmedStructuralRangeSamples:deltas.length
+  }));
+}
+console.log('\nTOP REJECTIONS');
+console.table([...failures.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([reason,count])=>({count,reason})));
+const totalResolved=rows.reduce((n,x)=>n+x.resolved,0);
+const totalWins=rows.reduce((n,x)=>n+x.wins,0);
+const totalLosses=rows.reduce((n,x)=>n+x.losses,0);
+const totalNetR=[...stats.values()].reduce((n,x)=>n+x.netR,0);
+const averageNetR=totalResolved?totalNetR/totalResolved:null;
+console.log('\nSUMMARY',JSON.stringify({
+  symbols,requestedTimeframes:requested,decisionSnapshotsPerTimeframe:bars,forwardBars,roundTripCostBps,
+  evaluated:rows.reduce((n,x)=>n+x.evaluated,0),
+  executableSetups:rows.reduce((n,x)=>n+x.executableSetups,0),
+  gradeRejected:rows.reduce((n,x)=>n+x.gradeRejected,0),
+  candidates:rows.reduce((n,x)=>n+x.candidates,0),
+  resolved:totalResolved,wins:totalWins,losses:totalLosses,
+  winRatePct:totalResolved?+(100*totalWins/totalResolved).toFixed(2):null,
+  averageNetR:averageNetR===null?null:+averageNetR.toFixed(3),
+  providerBlockedSymbols,
+  note:'Exploratory Bybit historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and account-specific fee tiers. Drawdown is sorted by simulated exit time across symbols; overlapping positions are not portfolio-simulated.'
+},null,2));
+if(loadedSymbols===0&&providerBlockedSymbols===symbols.length&&symbols.length>0){
+  console.error('REPLAY SKIPPED: Bybit returned HTTP 403 for every requested symbol from this runner region; no performance conclusion is possible.');
+  process.exitCode=2;
+}else if(loadedSymbols===0){
+  console.error('REPLAY FAILED: no historical candle data was loaded; refusing to report an empty replay as a successful test.');
+  process.exitCode=1;
+}else if(totalResolved<30){
+  console.error('REPLAY NOT VALIDATED: fewer than 30 unambiguous resolved trades; insufficient evidence to call the engine ready.');
+  process.exitCode=1;
+}else if(averageNetR<=0){
+  console.error('REPLAY FAILED: net expectancy after the configured round-trip cost is not positive; do not treat the current setup engine as ready.');
+  process.exitCode=1;
+}
