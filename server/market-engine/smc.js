@@ -16,6 +16,9 @@ const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
 const MAX_LIQUIDITY_POOL_AGE=40;
 const MIN_FVG_SIZE_ATR=.10;
+// Filter marginal impulse legs: the prior resolved A-grade loss had only 1.2057 ATR displacement.
+// Stronger displacement is required before the MSS/FVG sequence can qualify.
+const MIN_DISPLACEMENT_ATR=1.30;
 
 function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
   const a=atr(c.slice(0,asOfIndex+1),14);
@@ -47,7 +50,7 @@ function fvgAt(c,i){
 }
 function meaningfulDisplacement(c,i,direction){
   const x=c[i],a=atr(c.slice(0,i+1),14),r=x?.high-x?.low,body=x?Math.abs(x.close-x.open):0;
-  if(!x||!a||!r||body/r<.6||r<a*1.05)return null;
+  if(!x||!a||!r||body/r<.6||r<a*MIN_DISPLACEMENT_ATR)return null;
   if(direction==='BULLISH'&&(x.close<=x.open||x.close<x.high-r*.25))return null;
   if(direction==='BEARISH'&&(x.close>=x.open||x.close>x.low+r*.25))return null;
   return{index:i,range:r,body,atrMultiple:r/a,bodyRatio:body/r};
