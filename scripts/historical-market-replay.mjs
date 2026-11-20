@@ -113,12 +113,19 @@ async function resolveReplaySymbols(){
   if(requestedSymbols.length)return requestedSymbols;
   // Match the live scanner's Bybit linear-perpetual universe instead of
   // silently evaluating only a fixed ten-symbol shortlist.
-  const url=new URL('/v5/market/tickers','https://api.bybit.nl');
-  url.searchParams.set('category','linear');
-  const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
-  if(!response.ok)throw new Error('Bybit ticker universe HTTP '+response.status);
-  const payload=await response.json();
-  if(payload.retCode!==0)throw new Error('Bybit ticker universe retCode '+payload.retCode+': '+(payload.retMsg||'unknown error'));
+  let payload=null,lastError='Bybit ticker universe unavailable';
+  for(const host of ['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl']){
+    try{
+      const url=new URL('/v5/market/tickers',host);
+      url.searchParams.set('category','linear');
+      const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+      if(!response.ok){lastError='Bybit ticker universe HTTP '+response.status+' ('+host+')';continue;}
+      const candidate=await response.json();
+      if(candidate.retCode!==0){lastError='Bybit ticker universe retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown error');continue;}
+      payload=candidate;break;
+    }catch(error){lastError='Bybit ticker universe request failed ('+host+'): '+(error?.message||error);}
+  }
+  if(!payload)throw new Error(lastError);
   const universe=(payload.result?.list||[])
     .filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
     .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h))
@@ -143,7 +150,7 @@ async function fetchReplayCandles(symbol,tf){
   while(rows.length<requestedLimit){
     const pageLimit=Math.min(1000,requestedLimit-rows.length);
     let payload=null,lastError='Bybit historical candles unavailable';
-    for(const host of ['https://api.bybit.nl']){
+    for(const host of ['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl']){
       const url=new URL('/v5/market/kline',host);
       url.searchParams.set('category','linear');
       url.searchParams.set('symbol',symbol);
