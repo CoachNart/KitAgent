@@ -169,7 +169,7 @@ async function resolveReplaySymbols(){
   for(const host of BYBIT_API_HOSTS){
     try{
       const url=new URL('/v5/market/tickers',host);url.searchParams.set('category','linear');
-      const response=await okxFetch(url);
+      const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
       if(!response.ok){lastError='Bybit ticker universe HTTP '+response.status+' ('+host+')';continue;}
       const candidate=await response.json();
       if(candidate.retCode!==0){lastError='Bybit ticker universe retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown error');continue;}
@@ -177,7 +177,7 @@ async function resolveReplaySymbols(){
     }catch(error){lastError='Bybit ticker universe request failed ('+host+'): '+(error?.message||error);}
   }
   if(!payload)throw new Error(lastError);
-  const universe=(payload.result?.list||[]).filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
+  const universe=(payload.result?.list||[]).filter(x=>isSupportedCryptoBase(String(x.symbol||'').replace(/USDT$/,''))&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
     .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h)).slice(0,universeLimit).map(x=>x.symbol);
   if(!universe.length)throw new Error('Bybit returned no eligible USDT perpetual symbols for replay');
   return universe;
@@ -198,7 +198,7 @@ async function resolveReplaySymbols(){
       let payload=null,lastError='OKX historical candles unavailable';
       for(let attempt=1;attempt<=5;attempt++){
         try{
-          const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+          const response=await okxFetch(url);
           if(!response.ok){lastError='OKX historical candles HTTP '+response.status+' '+response.statusText;
             if((response.status===429||response.status>=500)&&attempt<5){await sleep(retryDelay(response,attempt));continue;}
             break;}
