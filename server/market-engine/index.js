@@ -7,6 +7,7 @@ import {evaluateStrategy,STRATEGIES} from './strategies.js';
 import {noTrade,validateTradeGeometry,validateEntryExecution,executableTrade} from './grading.js';
 
 const BYBIT={'1H':'60','4H':'240'};
+const BYBIT_HOSTS=['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl'];
 const analysisLayerCache=new WeakMap();
 const CHAIN={
   '1H':['4H','1H']
@@ -22,7 +23,7 @@ function json(res,status,p){
 export async function bybitCandles(symbol,tf){
   const clean=symbol.replace(/[^A-Z0-9]/gi,'');
   let lastError='Bybit candles unavailable';
-  for(const host of ['https://api.bybit.nl']){
+  for(const host of BYBIT_HOSTS){
     try{
       const u=new URL('/v5/market/kline',host);
       u.searchParams.set('category','linear');
@@ -43,7 +44,7 @@ export async function bybitCandles(symbol,tf){
 
 export async function bybitInstruments(){
   let lastError='Bybit instruments unavailable';
-  for(const host of ['https://api.bybit.nl']){
+  for(const host of BYBIT_HOSTS){
     try{
       const u=new URL('/v5/market/instruments-info',host);
       u.searchParams.set('category','linear');
@@ -79,7 +80,7 @@ export async function fetchPrice(market,symbol){
   if(market!=='perpetual')throw new Error('KitSetups supports Crypto Perpetuals only');
   const clean=symbol.replace(/[^A-Z0-9]/gi,'');
   let lastError='Bybit live price unavailable';
-  for(const host of ['https://api.bybit.nl']){
+  for(const host of BYBIT_HOSTS){
     try{
       const u=new URL('/v5/market/tickers',host);
       u.searchParams.set('category','linear');
@@ -291,7 +292,7 @@ export default async function handler(req,res){
       const rows=[];
       for(const symbol of symbols){
         try{
-          const u=new URL('https://api.bybit.nl/v5/market/tickers');
+          const u=new URL(BYBIT_HOSTS[0]+'/v5/market/tickers');
           u.searchParams.set('category','linear');
           u.searchParams.set('symbol',symbol);
           const r=await fetch(u);
