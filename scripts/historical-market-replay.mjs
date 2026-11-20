@@ -12,6 +12,7 @@ const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=
 const exchange=String(args.exchange||process.env.REPLAY_EXCHANGE||'okx').toLowerCase();
 if(!['okx','bybit'].includes(exchange))throw new Error('Unsupported replay exchange: '+exchange+' (use okx or bybit)');
 const requestedSymbols=String(args.symbols||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+const universeLimit=Math.max(1,Math.min(60,Number(args['universe-limit'])||60));
 let symbols=requestedSymbols;
 const bars=Math.max(5,Math.min(1000,Number(args.bars)||20));
 const forwardBars=Math.max(1,Math.min(1000,Number(args['forward-bars'])||168));
@@ -137,7 +138,7 @@ async function resolveReplaySymbols(){
     const live=new Set((instruments.data||[]).filter(x=>x.state==='live'&&x.settleCcy==='USDT'&&x.ctType==='linear').map(x=>x.instId));
     return (tickers.data||[]).filter(x=>live.has(x.instId)&&Number(x.last)>0&&Number(x.volCcy24h)>0)
       .sort((a,b)=>(Number(b.volCcy24h)*Number(b.last))-(Number(a.volCcy24h)*Number(a.last)))
-      .slice(0,60).map(x=>x.instId);
+      .slice(0,universeLimit).map(x=>x.instId);
   }
   let payload=null,lastError='Bybit ticker universe unavailable';
   for(const host of BYBIT_API_HOSTS){
@@ -152,7 +153,7 @@ async function resolveReplaySymbols(){
   }
   if(!payload)throw new Error(lastError);
   const universe=(payload.result?.list||[]).filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
-    .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h)).slice(0,60).map(x=>x.symbol);
+    .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h)).slice(0,universeLimit).map(x=>x.symbol);
   if(!universe.length)throw new Error('Bybit returned no eligible USDT perpetual symbols for replay');
   return universe;
 }async function fetchReplayCandles(symbol,tf){
@@ -242,7 +243,7 @@ async function resolveReplaySymbols(){
 symbols=await resolveReplaySymbols();
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
 console.log('Historical candle source:',exchange.toUpperCase(),'public perpetual candles (replay-only adapter; live execution remains Bybit).');
-console.log('Universe:',requestedSymbols.length?'explicit symbol override':'top 60 '+exchange.toUpperCase()+' USDT linear perpetuals by 24h turnover');
+console.log('Universe:',requestedSymbols.length?'explicit symbol override':'top '+universeLimit+' '+exchange.toUpperCase()+' USDT linear perpetuals by 24h turnover');
 console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: signals use only closed 4H/1H candles; fills and TP/SL outcomes use later closed 30m candles, matching the live board. Pending LIMIT entries expire after 24 hours. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
