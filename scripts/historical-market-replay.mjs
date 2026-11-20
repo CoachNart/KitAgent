@@ -356,7 +356,7 @@ for(const symbol of symbols){
         if(trade)seen.set(eventKey,cutoff);
 
         // Separate unique structural events from publication eligibility.
-        // Only A/A+ proceed to outcome simulation; lower grades remain auditable.
+        // All executable grades are outcome-simulated; only A/A+ remain publishable.
         if(trade){
           stat.executableSetups++;
           const grade=String(result.grade?.grade||'NO-GRADE');
