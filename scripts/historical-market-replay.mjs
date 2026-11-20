@@ -125,7 +125,7 @@ function fingerprint(t,direction,smc=null,symbol=''){
 }
 
 async function resolveReplaySymbols(){
-  if(requestedSymbols.length)return requestedSymbols;
+  if(requestedSymbols.length)return exchange==='okx'?requestedSymbols.map(x=>x.includes('-')?x:x.endsWith('USDT')?x.slice(0,-4)+'-USDT-SWAP':x):requestedSymbols;
   if(exchange==='okx'){
     const [instrumentsResponse,tickersResponse]=await Promise.all([
       fetch(new URL('/api/v5/public/instruments?instType=SWAP',OKX_API_HOST),{signal:AbortSignal.timeout(30000)}),
