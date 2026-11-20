@@ -239,13 +239,24 @@ export function evaluateSMC({candles,layers,price}){
     const mssCandidate=swingBreakAfter(c,sweepCandidate.index,c.length-1,direction);
     if(!mssCandidate||mssCandidate.index-sweepCandidate.index>10)continue;
     stages.mssWithinWindow++;
-    const displacementCandidate=meaningfulDisplacement(c,mssCandidate.index,direction);
-    if(!displacementCandidate)continue;
+    // The impulse that creates the FVG may precede the confirming MSS
+    // close. Requiring displacement, FVG creation, and MSS on one exact
+    // candle discarded valid sweep -> displacement/FVG -> structure-break
+    // sequences. Search backward from the MSS, but never before the sweep;
+    // the displacement candle itself must create the directional FVG.
+    let displacementCandidate=null;
+    let fvgCandidate=null;
+    for(let displacementIndex=mssCandidate.index;displacementIndex>sweepCandidate.index;displacementIndex--){
+      const candidate=meaningfulDisplacement(c,displacementIndex,direction);
+      if(!candidate)continue;
+      const candidateFvg=fvgAt(c,displacementIndex+1);
+      if(!candidateFvg||candidateFvg.direction!==direction||candidateFvg.createdBy!==displacementIndex)continue;
+      displacementCandidate=candidate;
+      fvgCandidate=candidateFvg;
+      break;
+    }
+    if(!displacementCandidate||!fvgCandidate)continue;
     stages.displacement++;
-    const fvgCandidate=fvgAt(c,mssCandidate.index+1)?.direction===direction
-      ?fvgAt(c,mssCandidate.index+1)
-      :fvgAt(c,mssCandidate.index)?.direction===direction?fvgAt(c,mssCandidate.index):null;
-    if(!fvgCandidate||fvgCandidate.createdBy!==mssCandidate.index)continue;
     stages.fvgCreatedByMss++;
     // The current closed candle may be the confirming midpoint retest. Earlier
     // midpoint mitigation still invalidates the FVG; buildTrade below decides
