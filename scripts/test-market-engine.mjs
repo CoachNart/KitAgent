@@ -589,7 +589,8 @@ assert('Structural target selection rejects distant objectives when a nearer val
 // Scanner smoke: run the real scanner helpers against deterministic Bybit-shaped
 // public responses. This keeps CI independent of external API availability.
 const originalFetch=globalThis.fetch;
-const mockTicker=(symbol='')=>({retCode:0,result:{list:symbol?[{symbol,lastPrice:'100',bid1Price:'99.9',ask1Price:'100.1',turnover24h:'1000000',time:String(Date.now())}]:Array.from({length:18},(_,i)=>({symbol:`MOCK${i}USDT`,lastPrice:'100',turnover24h:String(1000000-i)}))}});
+const mockSymbols=['BTC','ETH','SOL','XRP','BNB','DOGE','ADA','TRX','LINK','AVAX','BCH','DOT','LTC','UNI','NEAR','APT','SUI','ARB'];
+const mockTicker=(symbol='')=>({retCode:0,result:{list:symbol?[{symbol,lastPrice:'100',bid1Price:'99.9',ask1Price:'100.1',turnover24h:'1000000',time:String(Date.now())}]:mockSymbols.map((base,i)=>({symbol:`${base}USDT`,lastPrice:'100',turnover24h:String(1000000-i)}))}});
 const mockKlines=interval=>{const step=({30:1800000,60:3600000,120:7200000,240:14400000,D:86400000})[interval]||1800000;return{retCode:0,result:{list:Array.from({length:300},(_,i)=>{const t=Date.UTC(2025,0,1)+i*step;const p=100+i*.01;return[String(t),String(p-.1),String(p+.5),String(p-.5),String(p+.1),'1000']}).reverse()}}};
 globalThis.fetch=async input=>{const u=new URL(String(input));if(u.pathname.endsWith('/market/tickers'))return{ok:true,json:async()=>mockTicker(u.searchParams.get('symbol')||'')};if(u.pathname.endsWith('/market/kline'))return{ok:true,json:async()=>mockKlines(u.searchParams.get('interval'))};throw new Error('Unexpected scanner test URL');};
 try{
