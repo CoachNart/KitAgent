@@ -309,7 +309,6 @@ for(const symbol of symbols){
       for(const strategy of strategies){
         const stat=bucket(strategy,tf);stat.evaluated++;
         const strategyStarted=Date.now();
-        console.log('STRATEGY START',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy);
         let result;
         try{result=await analyzeOne('perpetual',symbol,strategy,tf,all,candle.close);}
         catch(error){
@@ -317,7 +316,6 @@ for(const symbol of symbols){
           rejection(strategy,tf,'EXCEPTION: '+(error?.message||error));
           continue;
         }
-        console.log('STRATEGY DONE',symbol,tf,snapshotIndex+'/'+snapshots.length,strategy,Date.now()-strategyStarted+'ms');
         const stageDiagnostic=(result?.evidence||[]).find(x=>x?.type==='SMC_STAGE_DIAGNOSTICS');
         if(stageDiagnostic){
           for(const key of stageKeys){
@@ -535,7 +533,7 @@ console.log('\nSUMMARY',JSON.stringify({
   winRatePct:totalResolved?+(100*totalWins/totalResolved).toFixed(2):null,
   averageNetR:averageNetR===null?null:+averageNetR.toFixed(3),
   providerBlockedSymbols,
-  note:'Exploratory Bybit historical replay, not a profitability guarantee. Excludes funding, partial fills, spread-specific bid/ask fills, and account-specific fee tiers. Drawdown is sorted by simulated exit time across symbols; overlapping positions are not portfolio-simulated.'
+  note:`Exploratory ${exchange.toUpperCase()} historical replay, not a profitability guarantee; live execution remains Bybit. Excludes funding, partial fills, spread-specific bid/ask fills, and account-specific fee tiers. Drawdown is sorted by simulated exit time across symbols; overlapping positions are not portfolio-simulated.`
 },null,2));
 if(loadedSymbols===0&&providerBlockedSymbols===symbols.length&&symbols.length>0){
   console.error('REPLAY SKIPPED: Bybit returned HTTP 403 for every requested symbol from this runner region; no performance conclusion is possible.');
