@@ -1,6 +1,7 @@
 import { closedCandles, validateCandles } from './data.js';
 import { analyzeOne, fetchPrice, fetchTf } from './index.js';
 import { SMC_MODEL } from './smc.js';
+import { isSupportedCryptoPerpetualSymbol } from './crypto-universe.js';
 
 const SCAN_LIMIT=60;
 const MAX_PUBLISHED=5;
@@ -25,7 +26,7 @@ export async function topSymbols(){
       const body=await response.json();
       if(body.retCode!==0){lastError='Bybit market scanner retCode '+body.retCode+': '+(body.retMsg||'unknown provider error');continue;}
       const symbols=(body.result?.list||[])
-        .filter(x=>/USDT$/.test(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
+        .filter(x=>isSupportedCryptoPerpetualSymbol(x.symbol)&&Number(x.lastPrice)>0&&Number(x.turnover24h)>0)
         .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h))
         .slice(0,SCAN_LIMIT)
         .map(x=>({symbol:x.symbol,turnover24h:Number(x.turnover24h)}));
