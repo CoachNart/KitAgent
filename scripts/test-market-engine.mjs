@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {liquidityMap} from '../server/market-engine/liquidity.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -167,6 +167,12 @@ assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQ
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
 assert('SMC displacement rejects marginal impulses below 1.30 ATR',()=>{const c=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));c[19]=bar(19,100,100.24,99.98,100.22);return meaningfulDisplacement(c,19,'BULLISH')===null;});
+const preMssImpulse=Array.from({length:46},(_,i)=>bar(i,100,101,99,100));
+preMssImpulse[43]=bar(43,100,103.2,100,103);
+preMssImpulse[44]=bar(44,103.7,104.2,103.5,104);
+preMssImpulse[45]=bar(45,104,106,103.8,105.8);
+const preMssSequence=displacementFvgForMss(preMssImpulse,40,45,'BULLISH');
+assert('SMC accepts a qualifying displacement-created FVG before the confirming MSS candle',()=>preMssSequence?.displacement.index===43&&preMssSequence.fvg.createdBy===43&&meaningfulDisplacement(preMssImpulse,45,'BULLISH')===null);
 assert('SMC liquidity sweep detector only accepts sweep plus reclaim',()=>findSweeps(smcCandles,'BULLISH').every(x=>smcCandles[x.index].low<x.level&&smcCandles[x.index].close>x.level));
 const mssFixture=Array.from({length:12},(_,i)=>bar(i,100,104,96,100));
 mssFixture[3]=bar(3,103,110,99,105);
