@@ -4,6 +4,9 @@ import {isCandleWithinWindow} from '../server/market-engine/execution-window.js'
 
 const DURATIONS={'30m':30*60_000,'1H':60*60_000,'4H':4*60*60_000};
 const PENDING_ENTRY_WINDOW_MS=24*60*60_000;
+const BYBIT_API_HOSTS=process.env.BYBIT_API_REGION==='eea'
+  ?['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']
+  :['https://api.bybit.com','https://api.bytick.com'];
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const requestedSymbols=String(args.symbols||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 let symbols=requestedSymbols;
@@ -123,7 +126,7 @@ async function resolveReplaySymbols(){
   // Match the live scanner's Bybit linear-perpetual universe instead of
   // silently evaluating only a fixed ten-symbol shortlist.
   let payload=null,lastError='Bybit ticker universe unavailable';
-  for(const host of ['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']){
+  for(const host of BYBIT_API_HOSTS){
     try{
       const url=new URL('/v5/market/tickers',host);
       url.searchParams.set('category','linear');
@@ -159,7 +162,7 @@ async function fetchReplayCandles(symbol,tf){
   while(rows.length<requestedLimit){
     const pageLimit=Math.min(1000,requestedLimit-rows.length);
     let payload=null,lastError='Bybit historical candles unavailable';
-    for(const host of ['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']){
+    for(const host of BYBIT_API_HOSTS){
       const url=new URL('/v5/market/kline',host);
       url.searchParams.set('category','linear');
       url.searchParams.set('symbol',symbol);
