@@ -8,6 +8,22 @@ const BYBIT_API_HOSTS=process.env.BYBIT_API_REGION==='eea'
   ?['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']
   :['https://api.bybit.com','https://api.bytick.com'];
 const OKX_API_HOST='https://www.okx.com';
+// Keep replay discovery aligned to crypto perpetuals. OKX also lists tokenized
+// equities, inverse equity products and commodity contracts as linear USDT
+// swaps; those are not part of KitSetups' crypto market universe.
+const CRYPTO_REPLAY_BASES=new Set([
+  'BTC','ETH','SOL','XRP','BNB','DOGE','ADA','TRX','LINK','AVAX','BCH','DOT',
+  'LTC','UNI','NEAR','APT','SUI','ARB','OP','FIL','ETC','XLM','TON','ATOM',
+  'INJ','SEI','TIA','WLD','PEPE','SHIB','BONK','WIF','FET','RENDER','TAO',
+  'JUP','PYTH','HBAR','ICP','AAVE','MKR','CRV','LDO','ENA','ONDO','PENDLE',
+  'EIGEN','ZK','ZRO','STRK','IMX','GRT','STX','KAS','XMR','HYPE','POL',
+  'VET','ALGO','FTM','SAND','MANA','AXS','GALA','RUNE','THETA','EGLD',
+  'FLOW','CHZ','COMP','SNX','DYDX','GMX','ORDI','SATS','BOME','FLOKI',
+  '1000PEPE','1000SHIB','1000BONK','1000FLOKI','1000SATS','JTO','JASMY',
+  'QNT','RAY','MNT','MANTA','BLUR','ENS','MINA','ROSE','ZEC','DASH',
+  'KAVA','CELO','IOTA','XTZ','EOS','NEO','W','TURBO','NOT','CATI',
+  'MEW','BRETT','POPCAT','TRUMP','VIRTUAL','AI16Z','FARTCOIN','KAITO'
+]);
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
 const exchange=String(args.exchange||process.env.REPLAY_EXCHANGE||'okx').toLowerCase();
 if(!['okx','bybit'].includes(exchange))throw new Error('Unsupported replay exchange: '+exchange+' (use okx or bybit)');
@@ -137,7 +153,7 @@ async function resolveReplaySymbols(){
     if(!instrumentsResponse.ok||!tickersResponse.ok)throw new Error('OKX swap universe HTTP '+instrumentsResponse.status+'/'+tickersResponse.status);
     const [instruments,tickers]=await Promise.all([instrumentsResponse.json(),tickersResponse.json()]);
     if(instruments.code!=='0'||tickers.code!=='0')throw new Error('OKX swap universe error: '+(instruments.msg||tickers.msg||'unknown'));
-    const live=new Set((instruments.data||[]).filter(x=>x.state==='live'&&x.settleCcy==='USDT'&&x.ctType==='linear').map(x=>x.instId));
+    const live=new Set((instruments.data||[]).filter(x=>x.state==='live'&&x.settleCcy==='USDT'&&x.ctType==='linear'&&CRYPTO_REPLAY_BASES.has(String(x.instId||'').split('-')[0])).map(x=>x.instId));
     return (tickers.data||[]).filter(x=>live.has(x.instId)&&Number(x.last)>0&&Number(x.volCcy24h)>0)
       .sort((a,b)=>(Number(b.volCcy24h)*Number(b.last))-(Number(a.volCcy24h)*Number(a.last)))
       .slice(0,universeLimit).map(x=>x.instId);
