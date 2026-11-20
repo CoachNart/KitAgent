@@ -61,8 +61,9 @@ function retryDelay(response,attempt){
   const raw=response?.headers?.get?.('retry-after');
   const seconds=Number(raw);
   const dateDelay=raw&&!Number.isFinite(seconds)?Date.parse(raw)-Date.now():0;
-  const requested=Number.isFinite(seconds)&&seconds>0?seconds*1000:dateDelay>0?dateDelay:750*2**(attempt-1);
-  return Math.min(15000,Math.max(750,requested));
+  const explicit=Number.isFinite(seconds)&&seconds>0?seconds*1000:dateDelay>0?dateDelay:0;
+  if(explicit>0)return Math.max(750,explicit);
+  return Math.min(15000,Math.max(750,750*2**(attempt-1)));
 }
 const replayNow=Date.now();
 let loadedSymbols=0;
