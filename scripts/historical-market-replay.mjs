@@ -1,6 +1,6 @@
 import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES,atr} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
-import {isCandleWithinWindow} from '../server/market-engine/execution-window.js';
+import {isCandleWithinWindow,pendingEntryDeadline} from '../server/market-engine/execution-window.js';
 import {isSupportedCryptoBase} from '../server/market-engine/crypto-universe.js';
 
 const DURATIONS={'30m':30*60_000,'1H':60*60_000,'4H':4*60*60_000};
@@ -106,12 +106,11 @@ function simulate(trade,direction,orderType,future,tf,decisionTime){
   const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
   let active=String(orderType).toUpperCase()==='MARKET';
-  const sweepTime=Number(trade.sweepTime);
-  const pendingExpiresAt=Number.isFinite(sweepTime)&&sweepTime>0?sweepTime+PENDING_ENTRY_WINDOW_MS:decisionTime+PENDING_ENTRY_WINDOW_MS;
+  const pendingExpiresAt=pendingEntryDeadline(decisionTime,PENDING_ENTRY_WINDOW_MS);
   const pendingWindowMs=Math.max(0,pendingExpiresAt-decisionTime);
   for(const c of future){
     if(!active&&!isCandleWithinWindow(c.time,decisionTime,DURATIONS[tf],pendingWindowMs)){
-      if(c.time>=pendingExpiresAt)return{result:'missed',reason:'Limit entry expired 24 hours after the original liquidity sweep'};
+      if(c.time>=pendingExpiresAt)return{result:'missed',reason:'Limit entry expired 24 hours after setup publication'};
       continue;
     }
     if(!active){
