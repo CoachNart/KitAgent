@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
-import {isCandleWithinWindow,pendingEntryDeadline,isCompleteCandleWindow,pendingWindowCoverage} from '../server/market-engine/execution-window.js';
+import {isCandleWithinWindow,executionEntryPrice,pendingEntryDeadline,isCompleteCandleWindow,pendingWindowCoverage} from '../server/market-engine/execution-window.js';
 const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
 const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6','market-engine-v7']);
 const REQUEST_TIMEFRAMES=new Set(['AUTO','30m','1H','2H','4H']);
@@ -140,7 +140,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   const dir=String(signal.direction||'').toUpperCase();
   if(!['LONG','SHORT'].includes(dir))return {...signal,currentPrice:price,status:'watching'};
   const order=String(signal.orderType||'').toUpperCase();
-  const entry=Number(order==='LIMIT'?(signal.limitEntry??signal.entry):(signal.marketEntry??signal.currentPrice??signal.entry)),sl=Number(signal.stopLoss),tp1=Number(signal.takeProfit1);
+  const entry=executionEntryPrice(signal),sl=Number(signal.stopLoss),tp1=Number(signal.takeProfit1);
   if(![entry,sl,tp1].every(Number.isFinite))return {...signal,currentPrice:price};
   const generatedMs=toMs(signal.generatedAt||signal.createdAt);
   if(!Number.isFinite(generatedMs))return {...signal,currentPrice:price};
