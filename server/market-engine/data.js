@@ -1,6 +1,12 @@
+export const MARKET_ANALYSIS_CANDLE_LIMIT=1000;
 const TF_MS={ '30m':1800000,'1H':3600000,'2H':7200000,'4H':14400000,'1D':86400000,'1W':604800000 };
 export const EXECUTION_TIMEFRAMES=['1H'];
 export const CONTEXT_CHAIN=['4H','1H'];
+export function analysisWindow(candles,endExclusive,limit=MARKET_ANALYSIS_CANDLE_LIMIT){
+ const end=Math.max(0,Math.min(Array.isArray(candles)?candles.length:0,Math.floor(Number(endExclusive)||0)));
+ const size=Math.max(1,Math.floor(Number(limit)||MARKET_ANALYSIS_CANDLE_LIMIT));
+ return (Array.isArray(candles)?candles:[]).slice(Math.max(0,end-size),end);
+}
 export function normalizeRows(rows){
  const byTime=new Map();
  for(const r of rows||[]){
