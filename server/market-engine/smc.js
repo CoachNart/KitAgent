@@ -273,6 +273,24 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
     entryZone:{low:fvg.low,high:fvg.high,source:'FVG_RETEST_ZONE'},
     invalidationPrice:sweep.extreme,entryReason:'Retrace into the unmitigated FVG created by the displacement that caused the MSS.',invalidation:'Beyond the liquidity-sweep extreme with volatility buffer.',invalidationSource:'liquidity_sweep_extreme',sweepLevel:sweep.level,sweepExtreme:sweep.extreme,mssLevel:mss.level,displacementIndex:displacement.index,fvg:{low:fvg.low,high:fvg.high,midpoint:fvg.midpoint,index:fvg.index}};
 }
+export function selectBestSMCCandidate(candidates=[]){
+  const gradeRank={'A+':4,'A':3,'B':2,'C':1,'NO-TRADE':0};
+  return candidates.filter(Boolean).slice().sort((a,b)=>{
+    const scoreA=Number.isFinite(Number(a.grade?.score))?Number(a.grade.score):0;
+    const scoreB=Number.isFinite(Number(b.grade?.score))?Number(b.grade.score):0;
+    if(scoreA!==scoreB)return scoreB-scoreA;
+    const rankA=gradeRank[a.grade?.grade]??0,rankB=gradeRank[b.grade?.grade]??0;
+    if(rankA!==rankB)return rankB-rankA;
+    const distanceA=Number.isFinite(a.entryDistanceAtr)?a.entryDistanceAtr:Infinity;
+    const distanceB=Number.isFinite(b.entryDistanceAtr)?b.entryDistanceAtr:Infinity;
+    if(distanceA!==distanceB)return distanceA-distanceB;
+    const ageA=Number.isFinite(a.trade?.setupAgeBars)?a.trade.setupAgeBars:Infinity;
+    const ageB=Number.isFinite(b.trade?.setupAgeBars)?b.trade.setupAgeBars:Infinity;
+    if(ageA!==ageB)return ageA-ageB;
+    return (Number(b.sweep?.index)||0)-(Number(a.sweep?.index)||0);
+  })[0]||null;
+}
+
 export function evaluateSMC({candles,layers,price}){
   const c=candles||[],failures=[];
   if(c.length<40)return{direction:'NEUTRAL',failures:['Insufficient execution candles for SMC.'],evidence:[]};
@@ -292,41 +310,30 @@ export function evaluateSMC({candles,layers,price}){
   const premiumDiscountAudit=[];
   const targetRejectionAudit=[];
   const stageEvidence=()=>({type:'SMC_STAGE_DIAGNOSTICS',...stages,targetRejectionAudit:targetRejectionAudit.slice(-30),executionRejections:{...executionRejections},geometryFailureReasons:{...geometryFailureReasons},pendingLimitAudit:pendingLimitAudit.slice(-100),premiumDiscountAudit:premiumDiscountAudit.slice(-8)});
-  let selected=null;
   if(!Number.isFinite(price)||price<=0){
     failures.push('Live price is unavailable.');
     return{direction,failures,evidence:[]};
   }
-  // Evaluate each qualifying sweep all the way through target and entry
-  // construction. A newer sweep that has no usable objective or executable
-  // FVG retest must not hide an older, otherwise valid setup.
+  // Evaluate every structurally valid sweep/FVG candidate before selecting.
+  // Recency alone must not decide the signal when another valid candidate
+  // has stronger independent evidence.
+  const candidateResults=[];
   for(const sweepCandidate of sweeps.slice().reverse()){
     const mssCandidate=swingBreakAfter(c,sweepCandidate.index,c.length-1,direction);
     if(!mssCandidate||mssCandidate.index-sweepCandidate.index>10)continue;
     stages.mssWithinWindow++;
-    // The impulse that creates the FVG may precede the confirming MSS
-    // close. Requiring displacement, FVG creation, and MSS on one exact
-    // candle discarded valid sweep -> displacement/FVG -> structure-break
-    // sequences. Search backward from the MSS, but never before the sweep;
-    // the displacement candle itself must create the directional FVG.
     const impulseSequence=displacementFvgForMss(c,sweepCandidate.index,mssCandidate.index,direction);
     const displacementCandidate=impulseSequence?.displacement||null;
     const fvgCandidate=impulseSequence?.fvg||null;
     if(!displacementCandidate||!fvgCandidate)continue;
     stages.displacement++;
     stages.fvgCreatedByMss++;
-    // The current closed candle may be the confirming midpoint retest. Earlier
-    // midpoint mitigation still invalidates the FVG; buildTrade below decides
-    // whether this final-candle touch is a valid MARKET confirmation or stale.
     if(!freshFvg(c,fvgCandidate,c.length-1,true))continue;
     const fvgAtr=atr(c.slice(0,fvgCandidate.index+1),14);
     if(!fvgAtr||fvgCandidate.size<fvgAtr*MIN_FVG_SIZE_ATR)continue;
     stages.freshFvgAndSize++;
     const rangeCandidate=preSweepDealingRange(c,sweepCandidate);
     if(!rangeCandidate)continue;
-    // Premium/discount classifies the planned FVG entry, not the sweep wick.
-    // Measuring the wick against a range whose boundary is the swept pool
-    // makes this filter pass almost automatically and adds no entry-location edge.
     const premiumDiscountDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
     const rangeAtr=atr(c.slice(0,sweepCandidate.index),14)||0;
     if(rangeAtr>0){
@@ -338,20 +345,13 @@ export function evaluateSMC({candles,layers,price}){
       mssIndex:mssCandidate.index,mssLevel:mssCandidate.level,fvgIndex:fvgCandidate.index,
       fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
       premiumDiscountReference:'FVG_ENTRY_VS_PRE_SWEEP_CONFIRMED_SWING_RANGE',
-      entryPrice:fvgCandidate.midpoint,
-      atr:rangeAtr,
+      entryPrice:fvgCandidate.midpoint,atr:rangeAtr,
       structuralRangeHigh:rangeCandidate.high,structuralRangeLow:rangeCandidate.low,
       structuralEquilibrium:rangeCandidate.equilibrium,
       sweepDeltaAtr:rangeAtr?premiumDiscountDelta/rangeAtr:null,
       anchoredHighIndex:rangeCandidate.anchorHighIndex,anchoredLowIndex:rangeCandidate.anchorLowIndex
     });
     const inCorrectZone=isEntryInPremiumDiscount(direction,fvgCandidate.midpoint,rangeCandidate.equilibrium);
-    // Premium/discount is a confluence, not a mandatory veto. The current
-    // execution-timeframe range is a local reference and can sit on the wrong
-    // side of an otherwise valid displacement FVG after MSS. Keep the
-    // classification visible and let it modestly influence structural quality;
-    // the sweep, MSS, fresh FVG, real target, executable geometry and 3R
-    // contract remain hard requirements.
     if(inCorrectZone){
       if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     }else{
@@ -359,19 +359,12 @@ export function evaluateSMC({candles,layers,price}){
     }
     stages.premiumDiscount++;
 
-    // Build structural invalidation first so target selection can enforce
-    // both the 3R floor and the live-quote boundary in one pass.
     const stopBuffer=Math.max((atr(c,14)||Math.max(Math.abs(price)*.001,1e-9))*.15,Math.abs(price)*.00035);
     const structuralStop=direction==='BULLISH'?sweepCandidate.extreme-stopBuffer:sweepCandidate.extreme+stopBuffer;
     const structuralRisk=Math.abs(fvgCandidate.midpoint-structuralStop);
     if(!(structuralRisk>0))continue;
-    // Targets must be real confirmed structure beyond the current executable
-    // quote, not merely beyond the planned FVG entry. Otherwise a LIMIT can
-    // be published after its take-profit has already traded.
     const targetAudit={direction,sweepIndex:sweepCandidate.index,mssIndex:mssCandidate.index,fvgIndex:fvgCandidate.index};
-    const targetCandidate=nextLiquidityTarget(
-      c,direction,fvgCandidate.midpoint,price,structuralRisk,c.length-1,ordered,targetAudit
-    );
+    const targetCandidate=nextLiquidityTarget(c,direction,fvgCandidate.midpoint,price,structuralRisk,c.length-1,ordered,targetAudit);
     if(!targetCandidate||!Number.isFinite(targetCandidate.price)){
       if(targetAudit.reason==='NO_QUALIFIED_OPPOSING_STRUCTURE')stages.targetNoQualifiedStructure++;
       else if(targetAudit.reason==='QUALIFIED_TARGETS_OUTSIDE_EXECUTION_REACH')stages.targetOutOfReach++;
@@ -381,16 +374,12 @@ export function evaluateSMC({candles,layers,price}){
     }
     stages.structuralTarget++;
     const structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
-    const structuralRR=structuralReward/structuralRisk;
-    if(structuralRR<3)continue;
+    if(structuralReward/structuralRisk<3)continue;
     stages.rrAtLeast3++;
     const tradeCandidate=buildTrade({
       c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
       displacement:displacementCandidate,fvg:fvgCandidate,target:targetCandidate.price,diagnostics:executionRejections
     });
-    if(executionRejections.pendingLimitAudit?.length){
-      pendingLimitAudit.push(...executionRejections.pendingLimitAudit.splice(0,100-pendingLimitAudit.length));
-    }
     if(!tradeCandidate)continue;
     tradeCandidate.targetSource=targetCandidate.source||'STRUCTURAL_TARGET';
     tradeCandidate.targetSelection={
@@ -407,62 +396,58 @@ export function evaluateSMC({candles,layers,price}){
       continue;
     }
     stages.executableEntry++;
-    selected={
+
+    // Score every executable candidate using the existing transparent model.
+    // The scoring formula and grade thresholds are deliberately unchanged.
+    const setupConfirmedIndex=Math.max(mssCandidate.index,fvgCandidate.index);
+    const setupAgeBars=Math.max(0,c.length-1-setupConfirmedIndex);
+    const contextStructure=ordered[0]?.structure||{};
+    const confirmedContextTrend=hasConfirmedContextTrend(contextStructure,direction);
+    const candidateFvgAtr=atr(c.slice(0,fvgCandidate.index+1),14)||0;
+    const fvgStrength=candidateFvgAtr>0?Math.max(.35,Math.min(1,fvgCandidate.size/(candidateFvgAtr*.75))):0;
+    const executionCandle=c.at(-1);
+    const executionBody=executionCandle?bodyRatio(executionCandle):0;
+    const executionRange=executionCandle?executionCandle.high-executionCandle.low:0;
+    const closePosition=executionRange>0
+      ?direction==='BULLISH'
+        ?(executionCandle.close-executionCandle.low)/executionRange
+        :(executionCandle.high-executionCandle.close)/executionRange
+      :0;
+    const executionQuality=tradeCandidate.orderType==='MARKET'
+      ?Math.max(.45,Math.min(1,executionBody*.65+closePosition*.35))
+      :limitEntryQuality(tradeCandidate.entry,price,atr(c,14)||0);
+    const gradeEntryPrice=tradeCandidate.orderType==='MARKET'?price:tradeCandidate.entry;
+    const currentAtr=atr(c,14)||0;
+    const riskAtr=currentAtr>0?Math.abs(gradeEntryPrice-tradeCandidate.stop)/currentAtr:0;
+    const invalidationQuality=Math.max(.35,Math.min(1,1-Math.abs(riskAtr-1.25)/2.5));
+    const geometryQuality=Math.max(.35,Math.min(1,1-Math.max(0,riskAtr-1)/2));
+    const baseGrade=gradeSetup({
+      strategy:'SMC',
+      context:{aligned:contextStructure.direction===direction,trend:confirmedContextTrend},
+      entry:{anchorQuality:fvgStrength,executionQuality},
+      risk:{invalidationQuality,geometryQuality},
+      target:targetCandidate,
+      confirmation:{quality:Math.min(1,.35+(sweepCandidate.quality?.penetrationATR>=.35?.15:.08)+(sweepCandidate.quality?.reclaimDepthATR>=.2?.12:.05)+(displacementCandidate.atrMultiple>=1.35?.28:.15))*premiumDiscountConfluenceFactor(inCorrectZone)},
+      freshness:{quality:Math.min(1,.35+ageQuality(setupAgeBars,2,8)*.4+Math.min(1,displacementCandidate.atrMultiple/1.5)*.25)}
+    });
+    const candidateGrade=enforceFreshnessGrade(baseGrade,setupAgeBars);
+    tradeCandidate.sweepAgeBars=sweepCandidate.age;
+    tradeCandidate.setupAgeBars=setupAgeBars;
+    tradeCandidate.sweepTime=sweepCandidate.time??c[sweepCandidate.index]?.time??null;
+    const candidateAtr=atr(c,14)||0;
+    candidateResults.push({
       sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,
       fvg:fvgCandidate,range:rangeCandidate,target:targetCandidate,trade:tradeCandidate,
-      inCorrectPremiumDiscountZone:inCorrectZone
-    };
-    break;
+      grade:candidateGrade,inCorrectPremiumDiscountZone:inCorrectZone,
+      entryDistanceAtr:candidateAtr>0?Math.abs(price-tradeCandidate.entry)/candidateAtr:Infinity
+    });
   }
+  const selected=selectBestSMCCandidate(candidateResults);
   if(!selected){
     failures.push('No recent sweep completed the full SMC sequence with a valid structural target and executable FVG entry.');
     return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP_CANDIDATES',count:sweeps.length},stageEvidence()]};
   }
 
-  const {sweep,mss,displacement,fvg,range,target,trade,inCorrectPremiumDiscountZone}=selected;
-  // Publication freshness begins when BOTH parts of the entry sequence
-  // exist: the MSS is confirmed and its displacement FVG has formed. The
-  // older sweep is context, not the age of the actionable setup.
-  const setupConfirmedIndex=Math.max(mss.index,fvg.index);
-  const setupAgeBars=Math.max(0,c.length-1-setupConfirmedIndex);
-  const contextLayer=ordered[0];
-  const contextStructure=contextLayer?.structure||{};
-  // A confirmed HH/HL or LH/LL sequence is a directional trend even when
-  // the latest recorded break is a countertrend CHoCH. Only transitional
-  // direction inferred from a recent break receives the reduced trend score.
-  const confirmedContextTrend=hasConfirmedContextTrend(contextStructure,direction);
-  const fvgAtr=atr(c.slice(0,fvg.index+1),14)||0;
-  const fvgStrength=fvgAtr>0?Math.max(.35,Math.min(1,fvg.size/(fvgAtr*.75))):0;
-  const executionCandle=c.at(-1);
-  const executionBody=executionCandle?bodyRatio(executionCandle):0;
-  const executionRange=executionCandle?executionCandle.high-executionCandle.low:0;
-  const closePosition=executionRange>0
-    ?direction==='BULLISH'
-      ?(executionCandle.close-executionCandle.low)/executionRange
-      :(executionCandle.high-executionCandle.close)/executionRange
-    :0;
-  const executionQuality=trade.orderType==='MARKET'
-    ?Math.max(.45,Math.min(1,executionBody*.65+closePosition*.35))
-    :limitEntryQuality(trade.entry,price,atr(c,14)||0);
-  // Grade market-entry risk at the live decision quote, not the FVG midpoint.
-  // The shared execution layer may move a MARKET fill to bid/ask; it then
-  // validates final geometry again before publication.
-  const gradeEntryPrice=trade.orderType==='MARKET'?price:trade.entry;
-  const riskAtr=(atr(c,14)||0)>0?Math.abs(gradeEntryPrice-trade.stop)/atr(c,14):0;
-  const invalidationQuality=Math.max(.35,Math.min(1,1-Math.abs(riskAtr-1.25)/2.5));
-  const geometryQuality=Math.max(.35,Math.min(1,1-Math.max(0,riskAtr-1)/2));
-  const baseGrade=gradeSetup({
-    strategy:'SMC',
-    context:{aligned:contextStructure.direction===direction,trend:confirmedContextTrend},
-    entry:{anchorQuality:fvgStrength,executionQuality},
-    risk:{invalidationQuality,geometryQuality},
-    target,
-    confirmation:{quality:Math.min(1,.35+(sweep.quality?.penetrationATR>=.35?.15:.08)+(sweep.quality?.reclaimDepthATR>=.2?.12:.05)+(displacement.atrMultiple>=1.35?.28:.15))*premiumDiscountConfluenceFactor(inCorrectPremiumDiscountZone)},
-    freshness:{quality:Math.min(1,.35+ageQuality(setupAgeBars,2,8)*.4+Math.min(1,displacement.atrMultiple/1.5)*.25)}
-  });
-  const grade=enforceFreshnessGrade(baseGrade,setupAgeBars);
-  trade.sweepAgeBars=sweep.age;
-  trade.setupAgeBars=setupAgeBars;
-  trade.sweepTime=sweep.time??c[sweep.index]?.time??null;
-  return{direction,grade,trade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:fvg.midpoint<range.equilibrium?'DISCOUNT':fvg.midpoint>range.equilibrium?'PREMIUM':'EQUILIBRIUM',preferredZone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',entryInPreferredZone:inCorrectPremiumDiscountZone,equilibrium:range.equilibrium,entry:fvg.midpoint,interpretation:'Confluence only; a valid SMC sequence is not rejected solely for local dealing-range location.'},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
+  const {sweep,mss,displacement,fvg,range,target,trade,grade,inCorrectPremiumDiscountZone}=selected;
+  return{direction,grade,trade,failures:[],evidence:[{type:'SMC_CANDIDATE_SELECTION',validCandidates:candidateResults.length,selectedGrade:grade.grade,selectedScore:grade.score,entryDistanceAtr:selected.entryDistanceAtr,selection:'highest structural score; proximity and freshness break ties'},{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:fvg.midpoint<range.equilibrium?'DISCOUNT':fvg.midpoint>range.equilibrium?'PREMIUM':'EQUILIBRIUM',preferredZone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',entryInPreferredZone:inCorrectPremiumDiscountZone,equilibrium:range.equilibrium,entry:fvg.midpoint,interpretation:'Confluence only; a valid SMC sequence is not rejected solely for local dealing-range location.'},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }
