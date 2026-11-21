@@ -1,10 +1,13 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
+import {isCandleWithinWindow,pendingEntryDeadline} from '../server/market-engine/execution-window.js';
 const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
 const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6','market-engine-v7']);
 const REQUEST_TIMEFRAMES=new Set(['AUTO','30m','1H','2H','4H']);
 const ENTRY_TIMEFRAMES=new Set(['30m','1H','2H','4H']);
+const PENDING_ENTRY_WINDOW_MS=24*60*60*1000;
+const MONITOR_CANDLE_DURATION_MS=30*60*1000;
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -115,14 +118,21 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(![entry,sl,tp1].every(Number.isFinite))return {...signal,currentPrice:price};
   const generatedMs=toMs(signal.generatedAt||signal.createdAt);
   if(!Number.isFinite(generatedMs))return {...signal,currentPrice:price};
+  const pendingDeadline=pendingEntryDeadline(generatedMs,PENDING_ENTRY_WINDOW_MS);
   let active=false,activatedAt=toMs(signal.activatedAt);
   if(order==='MARKET'){active=true;activatedAt=Number.isFinite(activatedAt)?activatedAt:generatedMs;}
   else if(order==='LIMIT' && Number.isFinite(activatedAt))active=true;
   else if(order==='LIMIT'){
     for(const candle of candles){
       if(candle.time<generatedMs)continue;
+      // Only fully closed 30m candles inside the publication window may fill
+      // a pending order. A partial candle crossing the 24h deadline is not a
+      // valid historical fill.
+      if(!isCandleWithinWindow(candle.time,generatedMs,MONITOR_CANDLE_DURATION_MS,PENDING_ENTRY_WINDOW_MS))continue;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
+      const targetTouched=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
+      if(targetTouched&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'TARGET_REACHED_BEFORE_ENTRY',candleTime:new Date(candle.time).toISOString(),note:'The structural target traded before the pending limit entry filled.'}};
       if(invalidated&&!entryTouched)return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(candle.time).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'ENTRY_MISSED_INVALIDATION',candleTime:new Date(candle.time).toISOString()}};
       if(entryTouched){
         const targetTouched=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
@@ -136,7 +146,11 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
       }
     }
   } else return {...signal,currentPrice:price,status:'watching'};
-  if(!active)return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
+  if(!active){
+    if(order==='LIMIT'&&Number.isFinite(pendingDeadline)&&nowMs>=pendingDeadline)
+      return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(pendingDeadline).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'LIMIT_WINDOW_EXPIRED',deadline:new Date(pendingDeadline).toISOString(),note:'No valid entry fill occurred within 24 hours of publication.'}};
+    return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
+  }
   let ambiguous=false;
   const activationCandleStart=Math.floor(Number(activatedAt)/1800000)*1800000;
   for(const candle of candles){
