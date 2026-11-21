@@ -11,7 +11,8 @@ assert('Shared execution price uses the actual MARKET quote, not the planned FVG
 assert('Shared execution price uses the LIMIT order price, not the current quote',executionEntryPrice(limitEntryFixture)===99);
 assert('Legacy MARKET records fall back to their recorded current price',executionEntryPrice({orderType:'MARKET',entry:100,currentPrice:101})===101);
 assert('Invalid execution prices are rejected instead of silently becoming zero',executionEntryPrice({orderType:'MARKET',entry:'bad'})===null);
-\nconst originalFetch=globalThis.fetch;
+
+const originalFetch=globalThis.fetch;
 const pendingStart=Date.UTC(2026,0,1);
 const publicationTime=pendingStart;
 const oldSweepTime=publicationTime-18*60*60*1000;
