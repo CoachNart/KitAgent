@@ -1,5 +1,5 @@
 import {resolveStatus} from '../api/signals.js';
-import {isCandleWithinWindow} from '../server/market-engine/execution-window.js';
+import {isCandleWithinWindow,pendingEntryDeadline} from '../server/market-engine/execution-window.js';
 
 const assert=(name,condition)=>{
   if(!condition)throw new Error('FAIL: '+name);
@@ -7,6 +7,11 @@ const assert=(name,condition)=>{
 };
 const originalFetch=globalThis.fetch;
 const pendingStart=Date.UTC(2026,0,1);
+const publicationTime=pendingStart;
+const oldSweepTime=publicationTime-18*60*60*1000;
+const publicationDeadline=pendingEntryDeadline(publicationTime,24*60*60*1000);
+assert('Pending order receives a full 24-hour window from publication, not the earlier sweep',publicationDeadline===publicationTime+24*60*60*1000&&publicationDeadline>oldSweepTime+24*60*60*1000);
+assert('A limit entry remains eligible late in its publication window even when the sweep was 18 hours earlier',isCandleWithinWindow(publicationTime+23*60*60*1000,publicationTime,60*60*1000,publicationDeadline-publicationTime));
 assert('Pending limit entry accepts a 30-minute candle fully inside the 24-hour window',isCandleWithinWindow(pendingStart+23.5*60*60*1000,pendingStart,30*60*1000,24*60*60*1000));
 assert('Pending limit entry rejects a candle that closes after the 24-hour deadline',!isCandleWithinWindow(pendingStart+24*60*60*1000,pendingStart,30*60*1000,24*60*60*1000));
 assert('Historical 1H replay accepts the final fully-contained hour of the live window',isCandleWithinWindow(pendingStart+23*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
