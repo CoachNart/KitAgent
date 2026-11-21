@@ -18,12 +18,13 @@ assert('Historical 1H replay accepts the final fully-contained hour of the live 
 assert('Historical 1H replay rejects an entry candle beginning at the 24-hour deadline',!isCandleWithinWindow(pendingStart+24*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
 const batchFixtures=Array.from({length:25},(_,i)=>({id:'signal-'+i,status:'limit_pending',generatedAt:new Date(Date.UTC(2026,0,1)+i*1000).toISOString()}));
 batchFixtures.push({id:'ambiguous-terminal',status:'activation_ambiguous',generatedAt:new Date(Date.UTC(2026,0,1)).toISOString()});
+batchFixtures.push({id:'open-ambiguous',status:'open',ambiguousOutcome:true,generatedAt:new Date(Date.UTC(2026,0,1)).toISOString()});
 const firstOutcomeBatch=selectOutcomeBatch(batchFixtures,24,0);
 const secondOutcomeBatch=selectOutcomeBatch(batchFixtures,24,1);
 assert('Outcome polling rotates to older unprocessed signals instead of starving them behind the first 24',
   firstOutcomeBatch.length===24&&secondOutcomeBatch.length===1&&secondOutcomeBatch[0]==='signal-24');
 assert('Terminal ambiguous trades do not consume live outcome verification slots',
-  !firstOutcomeBatch.includes('ambiguous-terminal')&&!secondOutcomeBatch.includes('ambiguous-terminal'));
+  !firstOutcomeBatch.includes('ambiguous-terminal')&&!secondOutcomeBatch.includes('ambiguous-terminal')&&!firstOutcomeBatch.includes('open-ambiguous')&&!secondOutcomeBatch.includes('open-ambiguous'));
 const candleStart=Math.floor((Date.now()-2*60*60*1000)/1800000)*1800000;
 const nextCandle=candleStart+30*60000;
 const generatedAt=new Date(candleStart).toISOString();
@@ -104,6 +105,17 @@ try{
   const marketOutcome=await resolveStatus(marketSignal,100.7);
   assert('Market-order P&L is measured from executable market entry, not planned structural level',
     marketOutcome.status==='stop_hit'&&Number(marketOutcome.pnlPercent)<0);
+
+  globalThis.fetch=mockKlines([
+    row(candleStart,100,103,97,100)
+  ]);
+  const activeAmbiguous={...marketSignal,entry:100,marketEntry:100,currentPrice:100,stopLoss:98,takeProfit1:102};
+  const ambiguousActiveOutcome=await resolveStatus(activeAmbiguous,100);
+  assert('An active trade touching TP and SL in one closed candle remains unclassified',
+    ambiguousActiveOutcome.status==='open'&&ambiguousActiveOutcome.ambiguousOutcome===true&&ambiguousActiveOutcome.closedAt==null&&ambiguousActiveOutcome.result==null);
+  const stableAmbiguousActive=await resolveStatus(ambiguousActiveOutcome,100);
+  assert('An intrabar-ambiguous active trade is not repeatedly reprocessed or assigned a guessed result',
+    stableAmbiguousActive.ambiguousOutcome===true&&stableAmbiguousActive.result==null);
 
   const alreadyAmbiguous={...baseSignal,status:'activation_ambiguous',outcomeEvidence:{event:'ENTRY_AND_EXIT_SAME_CANDLE'}};
   const unchanged=await resolveStatus(alreadyAmbiguous,97.5);
