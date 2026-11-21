@@ -158,6 +158,11 @@ function findSweeps(c,direction){
   }
   return out.sort((a,b)=>a.index-b.index);
 }
+export function isEntryInPremiumDiscount(direction,entry,equilibrium){
+  if(!Number.isFinite(entry)||!Number.isFinite(equilibrium))return false;
+  return direction==='BULLISH'?entry<equilibrium:direction==='BEARISH'?entry>equilibrium:false;
+}
+
 function preSweepDealingRange(c,sweep){
   // Anchor the dealing range to the exact liquidity pool that was raided.
   // The opposite boundary is the latest confirmed opposing swing before
