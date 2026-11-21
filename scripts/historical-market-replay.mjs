@@ -1,4 +1,4 @@
-import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES,atr,analysisWindow,MARKET_ANALYSIS_CANDLE_LIMIT} from '../server/market-engine/data.js';
+import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES,atr,analysisWindow,MARKET_ANALYSIS_CANDLE_LIMIT,replayHistoryRequirements} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {isCandleWithinWindow,pendingEntryDeadline} from '../server/market-engine/execution-window.js';
 import {isSupportedCryptoBase} from '../server/market-engine/crypto-universe.js';
@@ -6,11 +6,11 @@ import {isSupportedCryptoBase} from '../server/market-engine/crypto-universe.js'
 const DURATIONS={'30m':30*60_000,'1H':60*60_000,'4H':4*60*60_000};
 const PENDING_ENTRY_WINDOW_MS=24*60*60_000;
 const BYBIT_API_HOSTS=process.env.BYBIT_API_REGION==='eea'
-  ?['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com']
-  :['https://api.bybit.com','https://api.bytick.com'];
+  ?['https://api.bybit.eu','https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl']
+  :['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl'];
 const OKX_API_HOST='https://www.okx.com';
 const args=Object.fromEntries(process.argv.slice(2).map(x=>{const i=x.indexOf('=');return i<0?[x.replace(/^--/,''),'true']:[x.slice(0,i).replace(/^--/,''),x.slice(i+1)];}));
-const exchange=String(args.exchange||process.env.REPLAY_EXCHANGE||'okx').toLowerCase();
+let exchange=String(args.exchange||process.env.REPLAY_EXCHANGE||'bybit').toLowerCase();
 if(!['okx','bybit'].includes(exchange))throw new Error('Unsupported replay exchange: '+exchange+' (use okx or bybit)');
 const requestedSymbols=String(args.symbols||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 const universeLimit=Math.max(1,Math.min(60,Number(args['universe-limit'])||60));
@@ -19,6 +19,11 @@ let symbols=requestedSymbols;
 // Keep the CLI cap aligned with the workflow so the historical sample is not silently truncated.
 const bars=Math.max(5,Math.min(6000,Number(args.bars)||20));
 const forwardBars=Math.max(1,Math.min(1000,Number(args['forward-bars'])||168));
+const historyCeiling=Math.max(100,Math.min(20000,Number(args['history-candles'])||16000));
+const historyLimits=replayHistoryRequirements(bars,forwardBars,MARKET_ANALYSIS_CANDLE_LIMIT);
+for(const tf of Object.keys(historyLimits)){
+  if(historyLimits[tf]>historyCeiling)throw new Error('history-candles cap '+historyCeiling+' is below the '+tf+' replay requirement '+historyLimits[tf]+'; increase --history-candles to preserve full coverage');
+}
 const roundTripCostBps=Math.max(0,Math.min(100,Number(args['round-trip-cost-bps']??10)));
 const requested=String(args.timeframes||EXECUTION_TIMEFRAMES.join(',')).split(',').map(x=>x.trim()).filter(x=>EXECUTION_TIMEFRAMES.includes(x));
 const strategies=['SMC'];
@@ -44,17 +49,32 @@ const premiumDiscountAuditCounts=new Map();
 const premiumDiscountAuditSeen=new Set();
 // Serialize OKX history requests across symbols/timeframes to stay below the
 // public API's per-instrument request ceiling. Retry-After is honored on 429s.
-let okxRequestQueue=Promise.resolve();
-let lastOkxRequestAt=0;
+const okxRequestQueues=new Map();
+const lastOkxRequestAt=new Map();
+let bybitRequestQueue=Promise.resolve();
+let lastBybitRequestAt=0;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function okxFetch(url){
-  const request=okxRequestQueue.then(async()=>{
-    const wait=Math.max(0,125-(Date.now()-lastOkxRequestAt));
+  const instrument=new URL(url).searchParams.get('instId')||'__global__';
+  const previous=okxRequestQueues.get(instrument)||Promise.resolve();
+  const request=previous.then(async()=>{
+    const last=lastOkxRequestAt.get(instrument)||0;
+    const wait=Math.max(0,125-(Date.now()-last));
     if(wait)await sleep(wait);
-    lastOkxRequestAt=Date.now();
+    lastOkxRequestAt.set(instrument,Date.now());
     return fetch(url,{signal:AbortSignal.timeout(30000)});
   });
-  okxRequestQueue=request.then(()=>undefined,()=>undefined);
+  okxRequestQueues.set(instrument,request.then(()=>undefined,()=>undefined));
+  return request;
+}
+async function bybitFetch(url){
+  const request=bybitRequestQueue.then(async()=>{
+    const wait=Math.max(0,125-(Date.now()-lastBybitRequestAt));
+    if(wait)await sleep(wait);
+    lastBybitRequestAt=Date.now();
+    return fetch(url,{signal:AbortSignal.timeout(30000)});
+  });
+  bybitRequestQueue=request.then(()=>undefined,()=>undefined);
   return request;
 }
 function retryDelay(response,attempt){
@@ -169,7 +189,7 @@ async function resolveReplaySymbols(){
   for(const host of BYBIT_API_HOSTS){
     try{
       const url=new URL('/v5/market/tickers',host);url.searchParams.set('category','linear');
-      const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+      const response=await bybitFetch(url);
       if(!response.ok){lastError='Bybit ticker universe HTTP '+response.status+' ('+host+')';continue;}
       const candidate=await response.json();
       if(candidate.retCode!==0){lastError='Bybit ticker universe retCode '+candidate.retCode+': '+(candidate.retMsg||'unknown error');continue;}
@@ -185,8 +205,8 @@ async function resolveReplaySymbols(){
   const intervals={'30m':'30m','1H':'1H','4H':'4H'};
   const interval=intervals[tf];
   if(!interval)throw new Error('Unsupported replay timeframe: '+tf);
-  const historyRequest=Math.max(100,Math.min(10000,Number(args['history-candles'])||3000));
-  const requestedLimit=Math.min(10000,tf==='30m'?historyRequest*2:historyRequest);
+  const requestedLimit=historyLimits[tf];
+  if(!Number.isFinite(requestedLimit)||requestedLimit<80)throw new Error('Invalid replay history requirement for '+tf);
   const rows=[];
   if(exchange==='okx'){
     let after;
@@ -224,7 +244,7 @@ async function resolveReplaySymbols(){
   }else{
     const bybitIntervals={'30m':'30','1H':'60','4H':'240'};
     const intervalCode=bybitIntervals[tf];
-    const requestedBybit=Math.min(10000,tf==='30m'?historyRequest*2:historyRequest);
+    const requestedBybit=requestedLimit;
     let end;
     while(rows.length<requestedBybit){
       const pageLimit=Math.min(1000,requestedBybit-rows.length);
@@ -265,35 +285,72 @@ async function resolveReplaySymbols(){
   return normalized;
 }
 
-symbols=await resolveReplaySymbols();
+async function loadReplayHistory(symbol){
+  const tfs=[...new Set(['4H',...EXECUTION_TIMEFRAMES,'30m'])];
+  const rows=await Promise.all(tfs.map(async tf=>{
+    const candles=closedCandles(await fetchReplayCandles(symbol,tf),tf,replayNow).filter(x=>x.time+DURATIONS[tf]<=replayNow);
+    if(candles.length<historyLimits[tf]){
+      throw new Error(tf+' has '+candles.length+' closed candles; full replay requires '+historyLimits[tf]+' to cover warm-up, all decisions, and forward outcomes');
+    }
+    const interval=DURATIONS[tf];
+    for(let i=1;i<candles.length;i++){
+      if(candles[i].time-candles[i-1].time!==interval){
+        throw new Error(tf+' history has a missing/irregular candle between '+new Date(candles[i-1].time).toISOString()+' and '+new Date(candles[i].time).toISOString()+'; refusing an unreliable replay');
+      }
+    }
+    return [tf,candles];
+  }));
+  return Object.fromEntries(rows);
+}
+const historyBySymbol=new Map();
+async function preloadReplayHistory(){
+  let cursor=0;
+  const workerCount=Math.min(8,symbols.length);
+  await Promise.all(Array.from({length:workerCount},async()=>{
+    while(true){
+      const index=cursor++;
+      if(index>=symbols.length)return;
+      const symbol=symbols[index];
+      try{
+        const history=await loadReplayHistory(symbol);
+        historyBySymbol.set(symbol,history);
+        loadedSymbols++;
+        console.log('DATA OK',symbol,...Object.keys(history).map(tf=>tf+':'+history[tf].length+' candles ('+new Date(history[tf][0].time).toISOString()+' → '+new Date(history[tf].at(-1).time+DURATIONS[tf]).toISOString()+')'));
+      }catch(error){
+        if(/HTTP 403 Forbidden|HTTP 451/i.test(String(error?.message||error)))providerBlockedSymbols++;
+        console.error('DATA ERROR',symbol,error?.message||error);
+      }
+    }
+  }));
+}
+function isRegionBlocked(error){
+  return /HTTP 403|HTTP 451|geo.?block|region.?restrict|access denied/i.test(String(error?.message||error));
+}
+try{
+  symbols=await resolveReplaySymbols();
+}catch(error){
+  if(exchange!=='bybit'||!isRegionBlocked(error))throw error;
+  console.warn('BYBIT REPLAY BLOCKED AT UNIVERSE LOOKUP; falling back to OKX historical data for this runner region:',error?.message||error);
+  exchange='okx';
+  symbols=await resolveReplaySymbols();
+}
+await preloadReplayHistory();
+if(exchange==='bybit'&&loadedSymbols===0&&providerBlockedSymbols===symbols.length&&symbols.length>0){
+  console.warn('BYBIT HISTORICAL CANDLES BLOCKED FOR EVERY SYMBOL; restarting the entire replay on OKX rather than mixing exchanges.');
+  exchange='okx';
+  symbols=await resolveReplaySymbols();
+  loadedSymbols=0;providerBlockedSymbols=0;historyBySymbol.clear();
+  await preloadReplayHistory();
+}
+
 console.log('KITAGENT HISTORICAL MARKET REPLAY');
-console.log('Historical candle source:',exchange.toUpperCase(),'public perpetual candles (replay-only adapter; live execution remains Bybit).');
+console.log('Historical candle source:',exchange.toUpperCase(),'public perpetual candles (Bybit preferred; OKX used only when Bybit is region-blocked; live execution remains Bybit).');
 console.log('Universe:',requestedSymbols.length?'explicit symbol override':'top '+universeLimit+' '+exchange.toUpperCase()+' USDT linear perpetuals by 24h turnover');
-console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | history candles/timeframe:',Math.max(100,Math.min(10000,Number(args['history-candles'])||3000)),'| round-trip cost assumption:',roundTripCostBps,'bps');
+console.log('Symbols:',symbols.join(', '),'| decision snapshots/timeframe:',bars,'| forward outcome horizon:',forwardBars,'bars | required history:',JSON.stringify(historyLimits),'| round-trip cost assumption:',roundTripCostBps,'bps');
 console.log('Method: signals use only closed 4H/1H candles; fills and TP/SL outcomes use later closed 30m candles, matching the live board. Pending LIMIT entries expire after 24 hours. Intrabar TP/SL ambiguity is not guessed.');
 for(const symbol of symbols){
-  let history;
-  try{
-    const tfs=[...new Set(['4H',...EXECUTION_TIMEFRAMES,'30m'])];
-    const rows=await Promise.all(tfs.map(async tf=>{
-      const candles=closedCandles(await fetchReplayCandles(symbol,tf),tf,replayNow).filter(x=>x.time+DURATIONS[tf]<=replayNow);
-      if(candles.length<80)throw new Error(tf+' has only '+candles.length+' closed candles; minimum 80 required');
-      const interval=DURATIONS[tf];
-      for(let i=1;i<candles.length;i++){
-        if(candles[i].time-candles[i-1].time!==interval){
-          throw new Error(tf+' history has a missing/irregular candle between '+new Date(candles[i-1].time).toISOString()+' and '+new Date(candles[i].time).toISOString()+'; refusing an unreliable replay');
-        }
-      }
-      return [tf,candles];
-    }));
-    history=Object.fromEntries(rows);
-    loadedSymbols++;
-    console.log('DATA OK',symbol,...tfs.map(tf=>tf+':'+history[tf].length+' candles ('+new Date(history[tf][0].time).toISOString()+' → '+new Date(history[tf].at(-1).time+DURATIONS[tf]).toISOString()+')'));
-  }catch(error){
-    if(/HTTP 403 Forbidden/i.test(String(error?.message||error)))providerBlockedSymbols++;
-    console.error('DATA ERROR',symbol,error?.message||error);
-    continue;
-  }
+  const history=historyBySymbol.get(symbol);
+  if(!history)continue;
   for(const tf of requested){
     const exec=history[tf]||[];
     // Evaluate a continuous recent window of hourly decisions. Each decision
