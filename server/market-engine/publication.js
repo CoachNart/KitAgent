@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../access.js';
 import { scanTopQuality } from './daily.js';
-import { isCandleWithinWindow, pendingEntryDeadline, isCompleteCandleWindow } from './execution-window.js';
+import { isCandleWithinWindow, pendingEntryDeadline, isCompleteCandleWindow, pendingWindowCoverage } from './execution-window.js';
 
 const BOARD_DOC='daily',BOARD_WINDOW_MS=24*60*60*1000,REFRESH_MS=60*1000,CANDLE_MS=30*60*1000;
 function getAdmin(){
@@ -64,7 +64,7 @@ async function refreshTrade(doc){
   const pendingWindowMs=Math.max(0,pendingExpiresAt-start);
   const candles=await candlesSince(symbol,start);
   if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return{...data,id:doc.id};}
-  let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null,outcomeAmbiguous=false;
+  let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null,outcomeAmbiguous=false,entryActivationAmbiguous=false;
   if(order==='LIMIT'&&status==='PENDING_ENTRY'){
     for(let i=0;i<candles.length;i++){
       const c=candles[i];
@@ -97,12 +97,19 @@ async function refreshTrade(doc){
       if(targetHit){status='TARGET_HIT';exitCandle=c;reason='Take profit reached on Bybit 30-minute OHLC data.';break;}
     }
   }
-  const completePendingWindow=isCompleteCandleWindow(candles,start,pendingExpiresAt,CANDLE_MS);
-  if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt&&completePendingWindow){
-    status='MISSED_ENTRY';
-    reason='The 24-hour window from publication ended; complete Bybit candle history confirms no limit fill.';
+  const pendingCoverage=pendingWindowCoverage(candles,start,pendingExpiresAt,CANDLE_MS);
+  if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt&&pendingCoverage.complete){
+    const boundary=pendingCoverage.boundaryCandle;
+    if(boundary&&touched(boundary,entry)){
+      status='INVALIDATED';
+      entryActivationAmbiguous=true;
+      reason='The candle overlapping the 24-hour expiry touched the limit price; execution before expiry cannot be verified from OHLC.';
+    }else{
+      status='MISSED_ENTRY';
+      reason='The 24-hour window from publication ended; complete Bybit candle history confirms no limit fill.';
+    }
   }
-  const patch={status,statusReason:reason,lastCheckedAt:new Date(now),updatedAt:new Date(now),currentPrice:candles.at(-1).close,outcomeAmbiguous:outcomeAmbiguous||data.outcomeAmbiguous===true};
+  const patch={status,statusReason:reason,lastCheckedAt:new Date(now),updatedAt:new Date(now),currentPrice:candles.at(-1).close,outcomeAmbiguous:outcomeAmbiguous||data.outcomeAmbiguous===true,entryActivationAmbiguous:entryActivationAmbiguous||data.entryActivationAmbiguous===true};
   if(activatedAt)patch.activatedAt=new Date(activatedAt);
   if(['TARGET_HIT','STOP_HIT'].includes(status)&&exitCandle){
     const exitPrice=status==='TARGET_HIT'?target:stop;
