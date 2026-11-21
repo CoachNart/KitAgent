@@ -429,7 +429,7 @@ assert('SMC accepts a correctly sided unmitigated FVG limit within the 1.5 ATR e
 });
 assert('SMC rejects a correctly sided but stale FVG limit beyond 1.5 ATR',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
-  const trade=buildTrade({c,price:110,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:116,diagnostics});
+  const trade=buildTrade({c,price:110,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:125,diagnostics});
   return trade===null&&diagnostics.pendingLimitTooFar===1;
 });
 assert('SMC rejects a bullish pending limit when the structural target is closer than the required pullback',()=>{
