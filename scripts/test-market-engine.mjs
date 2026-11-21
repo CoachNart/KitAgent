@@ -237,8 +237,8 @@ const bullishAheadTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,
 const bullishAlreadyPassedTarget=nextLiquidityTarget(bullishTargetFixture,'BULLISH',100,111,2,49,[]);
 assert('SMC bullish target must remain beyond the live quote and preserve at least 3R',()=>bullishAheadTarget?.price>105&&Math.abs(bullishAheadTarget.price-100)>=6);
 assert('SMC rejects a bullish structural target already passed by live price',()=>bullishAlreadyPassedTarget===null);
-assert('SMC pending-limit execution quality improves as the quote approaches the planned FVG midpoint',()=>limitEntryQuality(100,100,2)>limitEntryQuality(100,102,2));
-assert('SMC pending-limit execution quality is capped when the order is at maximum allowed distance',()=>Math.abs(limitEntryQuality(100,102,2)-.45)<1e-9);
+assert('SMC pending-limit execution quality declines continuously as the quote moves away from the FVG midpoint',()=>limitEntryQuality(100,100,2)>limitEntryQuality(100,101,2)&&limitEntryQuality(100,101,2)>limitEntryQuality(100,102,2));
+assert('SMC pending-limit execution quality reaches zero at the 1.5 ATR maximum distance',()=>limitEntryQuality(100,103,2)===0);
 const obstructedBullishTarget=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
 obstructedBullishTarget[8]=bar(8,100,102.5,99,101); // Close major swing, inside the generic 1.5 ATR noise floor.
 obstructedBullishTarget[15]=bar(15,100,104,99,100.5); // Next opposing swing is also less than 3R.
@@ -431,6 +431,16 @@ assert('SMC rejects a correctly sided but stale FVG limit beyond 1.5 ATR',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
   const trade=buildTrade({c,price:110,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:116,diagnostics});
   return trade===null&&diagnostics.pendingLimitTooFar===1;
+});
+assert('SMC rejects a bullish pending limit when the structural target is closer than the required pullback',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
+  const trade=buildTrade({c,price:102.4,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:103,diagnostics});
+  return trade===null&&diagnostics.pendingTargetCloserThanEntry===1;
+});
+assert('SMC rejects a bearish pending limit when the structural target is closer than the required pullback',()=>{
+  const c=Array.from({length:40},(_,i)=>bar(i,98,99,97,97.8)),diagnostics={};
+  const trade=buildTrade({c,price:97.6,direction:'BEARISH',sweep:{extreme:101.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BEARISH',index:38,low:99.5,high:100.5,midpoint:100},target:97,diagnostics});
+  return trade===null&&diagnostics.pendingTargetCloserThanEntry===1;
 });
 assert('SMC fresh FVG check allows a midpoint touch only on the current confirmation candle',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2));
