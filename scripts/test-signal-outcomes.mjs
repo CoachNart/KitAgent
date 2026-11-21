@@ -105,6 +105,14 @@ try{
   const targetBeforeEntry=await resolveStatus(baseSignal,104.5);
   assert('A pending LIMIT is marked missed when TP trades before its entry fills',
     targetBeforeEntry.status==='missed_entry'&&targetBeforeEntry.result==='missed'&&targetBeforeEntry.outcomeEvidence?.event==='TARGET_REACHED_BEFORE_ENTRY');
+
+  globalThis.fetch=mockKlines([
+    row(candleStart,101,102,100.5,101),
+    row(candleStart+60*60000,101,105,100.5,104.5)
+  ]);
+  const targetAfterDataGap=await resolveStatus(baseSignal,104.5);
+  assert('A target touch after a missing 30m candle cannot falsely invalidate a pending LIMIT',
+    targetAfterDataGap.status==='limit_pending'&&targetAfterDataGap.result==null);
   const stableMiss=await resolveStatus(targetBeforeEntry,104.5);
   assert('A missed LIMIT outcome remains terminal on subsequent verification polls',
     stableMiss.status==='missed_entry'&&stableMiss.outcomeEvidence?.event==='TARGET_REACHED_BEFORE_ENTRY');
@@ -138,6 +146,14 @@ try{
   const ambiguousActiveOutcome=await resolveStatus(activeAmbiguous,100);
   assert('An active trade touching TP and SL in one closed candle remains unclassified',
     ambiguousActiveOutcome.status==='open'&&ambiguousActiveOutcome.ambiguousOutcome===true&&ambiguousActiveOutcome.closedAt==null&&ambiguousActiveOutcome.result==null);
+
+  globalThis.fetch=mockKlines([
+    row(candleStart,100,101,99,100.5),
+    row(candleStart+60*60000,100,103,97,100)
+  ]);
+  const activeAfterDataGap=await resolveStatus(activeAmbiguous,100);
+  assert('A later TP/SL touch cannot be classified across a missing 30m candle',
+    activeAfterDataGap.status==='open'&&activeAfterDataGap.result==null&&activeAfterDataGap.ambiguousOutcome!==true);
   const stableAmbiguousActive=await resolveStatus(ambiguousActiveOutcome,100);
   assert('An intrabar-ambiguous active trade is not repeatedly reprocessed or assigned a guessed result',
     stableAmbiguousActive.ambiguousOutcome===true&&stableAmbiguousActive.result==null);
