@@ -9,7 +9,7 @@ import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade,enforceFreshnessGrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
-import {EXECUTION_TIMEFRAMES,atr,validateCandles,analysisWindow,MARKET_ANALYSIS_CANDLE_LIMIT,MARKET_CANDLE_REQUEST_LIMIT} from '../server/market-engine/data.js';
+import {EXECUTION_TIMEFRAMES,atr,validateCandles,analysisWindow,MARKET_ANALYSIS_CANDLE_LIMIT,MARKET_CANDLE_REQUEST_LIMIT,replayHistoryRequirements} from '../server/market-engine/data.js';
 import {topSymbols,candlesFor,scanSymbol,candidateScore,selectDailySetups} from '../server/market-engine/daily.js';
 import {isSupportedCryptoBase,isSupportedCryptoPerpetualSymbol} from '../server/market-engine/crypto-universe.js';
 
@@ -744,6 +744,10 @@ const liveWindow=analysisWindow(windowRows,1100);
 assert('Live analysis candle limit matches Bybit maximum of 1,000 candles',()=>MARKET_ANALYSIS_CANDLE_LIMIT===999&&MARKET_CANDLE_REQUEST_LIMIT===1000);
 assert('Historical analysis uses the same trailing 999-closed-candle window as live scans',()=>liveWindow.length===999&&liveWindow[0].time===windowRows[101].time&&liveWindow.at(-1).time===windowRows[1099].time);
 assert('Historical analysis window excludes candles after the decision cutoff',()=>analysisWindow(windowRows,750).at(-1).time===windowRows[749].time);
+const replayNeeds=replayHistoryRequirements(6000,168);
+assert('Replay fetches enough 1H history for warm-up, 6,000 decisions, and forward outcomes',()=>replayNeeds['1H']===7167);
+assert('Replay fetches enough 4H history for the same chronological decision window',()=>replayNeeds['4H']===2541);
+assert('Replay fetches enough 30M candles to resolve every decision through the forward horizon',()=>replayNeeds['30m']===12336);
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
 if(failed.length)process.exit(1);
