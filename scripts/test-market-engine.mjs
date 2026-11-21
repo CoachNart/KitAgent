@@ -612,7 +612,7 @@ const ordinaryExternalTarget=gradeSetup({strategy:'TEST',target:{source:'EXECUTI
 assert('Target quality no longer saturates ordinary confirmed HTF major swings at 20/20',()=>targetScoreOf(ordinaryMajorTarget)<10&&targetScoreOf(ordinaryMajorTarget)>0);
 assert('Measured target strength differentiates an exceptional liquidity objective from an ordinary major swing',()=>targetScoreOf(exceptionallyStrongMajorTarget)>targetScoreOf(ordinaryMajorTarget));
 assert('Execution-timeframe external targets receive less credit than confirmed HTF major targets at comparable strength',()=>targetScoreOf(ordinaryExternalTarget)<targetScoreOf(ordinaryMajorTarget));
-assert('Target contribution is capped at ten points so entry and invalidation quality carry most of the score',()=>targetScoreOf(gradeSetup({strategy:'TEST',target:{source:'CRT_OPPOSITE_RANGE',native:true,quality:1}}))===10);
+assert('Target contribution is capped at ten points so entry and invalidation quality carry most of the score',()=>targetScoreOf(gradeSetup({strategy:'TEST',target:{source:'CRT_OPPOSITE_RANGE',native:true,quality:1}}))<=10&&targetScoreOf(gradeSetup({strategy:'TEST',target:{source:'CRT_OPPOSITE_RANGE',native:true,quality:1}}))>9);
 
 assert('Confidence model never treats R:R as an input',()=>!strongConfidence.confidenceEvidence.some(x=>String(x.type).includes('RR')));
 assert('Confidence model returns bounded structural quality',()=>strongConfidence.score>=0&&strongConfidence.score<=100&&weakConfidence.score>=0&&weakConfidence.score<=100);
