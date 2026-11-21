@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../access.js';
 import { scanTopQuality } from './daily.js';
-import { isCandleWithinWindow, pendingEntryDeadline, isCompleteCandleWindow, pendingWindowCoverage } from './execution-window.js';
+import { isCandleWithinWindow, executionEntryPrice, pendingEntryDeadline, isCompleteCandleWindow, pendingWindowCoverage } from './execution-window.js';
 
 const BOARD_DOC='daily',BOARD_WINDOW_MS=24*60*60*1000,REFRESH_MS=60*1000,CANDLE_MS=30*60*1000;
 function getAdmin(){
@@ -49,7 +49,7 @@ async function candlesSince(symbol,startMs){
 }
 function touched(c,price){return c.low<=price&&c.high>=price;}
 function isLong(s){return String(s.bias||'').toUpperCase()==='LONG';}
-function levels(s){return{entry:Number(s.entry),stop:Number(s.stopLoss),target:Number(s.takeProfit)};}
+function levels(s){return{entry:executionEntryPrice(s),stop:Number(s.stopLoss),target:Number(s.takeProfit)};}
 async function refreshTrade(doc){
   const data=doc.data(),now=Date.now(),last=ms(data.lastCheckedAt);
   if(data.outcomeAmbiguous===true)return{...data,id:doc.id};
