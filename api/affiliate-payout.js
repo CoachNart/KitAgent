@@ -74,7 +74,7 @@ export default async function handler(req,res){
     batch.update(doc.ref,{availableBalance:0,paidOut:admin.firestore.FieldValue.increment(available),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
     batch.set(payoutRef,{status:'paid',transactionHash:hash,amount:available,updatedAt:admin.firestore.FieldValue.serverTimestamp(),paidAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     await batch.commit();
-    results.push({affiliateId:doc.id,status:'paid',amount,transactionHash:hash});
+    results.push({affiliateId:doc.id,status:'paid',amount:available,transactionHash:hash});
    }catch(error){
     await payoutRef.set({status:'failed',error:String(error?.message||error).slice(0,500),updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     results.push({affiliateId:doc.id,status:'failed',error:String(error?.message||error).slice(0,200)});
