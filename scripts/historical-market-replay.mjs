@@ -205,7 +205,8 @@ async function resolveReplaySymbols(){
   const intervals={'30m':'30m','1H':'1H','4H':'4H'};
   const interval=intervals[tf];
   if(!interval)throw new Error('Unsupported replay timeframe: '+tf);
-  const requestedLimit=historyLimits[tf];
+  // Fetch one extra latest candle because closedCandles removes the in-progress bar.
+  const requestedLimit=historyLimits[tf]+1;
   if(!Number.isFinite(requestedLimit)||requestedLimit<80)throw new Error('Invalid replay history requirement for '+tf);
   const rows=[];
   if(exchange==='okx'){
