@@ -104,7 +104,7 @@ export async function currentPrice(signal) {
  */
 export function selectOutcomeBatch(signals,limit=24,rotation=0){
   const unresolved=(Array.isArray(signals)?signals:[])
-    .filter(s=>!['target_hit','stop_hit','missed_entry'].includes(String(s?.status||'')));
+    .filter(s=>!['target_hit','stop_hit','missed_entry','activation_ambiguous'].includes(String(s?.status||'')));
   const batchSize=Math.max(1,Math.floor(Number(limit)||24));
   const batchCount=Math.max(1,Math.ceil(unresolved.length/batchSize));
   const rawRotation=Math.floor(Number(rotation)||0);
