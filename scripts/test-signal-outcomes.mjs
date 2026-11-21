@@ -65,6 +65,20 @@ try{
   assert('A clean entry candle followed by a later stop candle resolves as a loss',
     verified.status==='stop_hit'&&verified.result==='loss'&&verified.closedAt!=null&&verified.outcomeEvidence?.event==='STOP_TOUCH');
 
+  const fallbackHosts=[];
+  globalThis.fetch=async input=>{
+    const u=new URL(String(input));
+    fallbackHosts.push(u.host);
+    if(u.host==='api.bybit.com')return{ok:false,status:403};
+    return{ok:true,json:async()=>({retCode:0,result:{list:[
+      row(candleStart,100,101,99,100.5),
+      row(nextCandle,100.5,101,97,97.5)
+    ].reverse()}})};
+  };
+  const fallbackOutcome=await resolveStatus(baseSignal,97.5);
+  assert('Live outcome monitoring falls back to another Bybit API host when the primary host is blocked',
+    fallbackHosts.includes('api.bybit.com')&&fallbackHosts.includes('api.bytick.com')&&fallbackOutcome.status==='stop_hit');
+
   globalThis.fetch=mockKlines([
     row(candleStart,100,101,99,100.5),
     row(nextCandle,100.5,100.8,97.5,98)
