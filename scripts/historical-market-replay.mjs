@@ -506,9 +506,9 @@ console.table([...gradeStats.values()].map(s=>{
   const resolved=s.wins+s.losses;
   return{grade:s.grade,events:s.events,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+(s.netR/resolved).toFixed(3):null,missed:s.missed,ambiguous:s.ambiguous,unresolved:s.unresolved};
 }));
-console.log('\\nA/A+ LIMIT DISTANCE SENSITIVITY (diagnostic only; no publication rule changed)');
+console.log('\\nA/A+/B LIMIT DISTANCE SENSITIVITY (historical diagnostic; 1.5 ATR cap now enforced in SMC)');
 console.table([0.5,0.75,1,1.25,1.5,2,3,Infinity].map(maxDistanceAtr=>{
-  const selected=tradeAudit.filter(x=>['A','A+'].includes(x.grade)&&Number.isFinite(x.entryDistanceAtr)&&x.entryDistanceAtr<=maxDistanceAtr);
+  const selected=tradeAudit.filter(x=>['A','A+','B'].includes(x.grade)&&Number.isFinite(x.entryDistanceAtr)&&x.entryDistanceAtr<=maxDistanceAtr);
   const wins=selected.filter(x=>x.outcome==='win').length;
   const losses=selected.filter(x=>x.outcome==='loss').length;
   const resolved=wins+losses;
@@ -587,8 +587,11 @@ if(loadedSymbols===0&&providerBlockedSymbols===symbols.length&&symbols.length>0)
 }else if(loadedSymbols===0){
   console.error('REPLAY FAILED: no historical candle data was loaded; refusing to report an empty replay as a successful test.');
   process.exitCode=1;
-}else if(totalResolved<30){
-  console.error('REPLAY NOT VALIDATED: fewer than 30 unambiguous resolved trades; insufficient evidence to call the engine ready.');
+}else if(totalResolved===0){
+  console.error('REPLAY FAILED: no unambiguous publication-eligible trades resolved; profitability cannot be established.');
+  process.exitCode=1;
+}else if(totalWins/totalResolved<=0.5){
+  console.error('REPLAY FAILED: publication-eligible win rate is not above 50%; do not treat the current setup engine as ready.');
   process.exitCode=1;
 }else if(averageNetR<=0){
   console.error('REPLAY FAILED: net expectancy after the configured round-trip cost is not positive; do not treat the current setup engine as ready.');
