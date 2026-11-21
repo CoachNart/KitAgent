@@ -104,7 +104,7 @@ export async function currentPrice(signal) {
  */
 export function selectOutcomeBatch(signals,limit=24,rotation=0){
   const unresolved=(Array.isArray(signals)?signals:[])
-    .filter(s=>!['target_hit','stop_hit','missed_entry','activation_ambiguous'].includes(String(s?.status||'')));
+    .filter(s=>!['target_hit','stop_hit','missed_entry','activation_ambiguous'].includes(String(s?.status||''))&&s?.ambiguousOutcome!==true);
   const batchSize=Math.max(1,Math.floor(Number(limit)||24));
   const batchCount=Math.max(1,Math.ceil(unresolved.length/batchSize));
   const rawRotation=Math.floor(Number(rotation)||0);
@@ -113,7 +113,7 @@ export function selectOutcomeBatch(signals,limit=24,rotation=0){
 }
 
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
-  if(['target_hit','stop_hit','missed_entry'].includes(signal.status))return signal;
+  if(['target_hit','stop_hit','missed_entry'].includes(signal.status)||signal.ambiguousOutcome===true)return signal;
   // A limit order whose first entry-touching 30m candle also touches TP or SL
   // cannot be proven filled-before-exit from OHLC alone. Keep it out of the
   // verified trade record instead of guessing the intrabar path.
