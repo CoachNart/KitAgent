@@ -1,4 +1,4 @@
-import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES,atr} from '../server/market-engine/data.js';
+import {normalizeRows,closedCandles,EXECUTION_TIMEFRAMES,atr,analysisWindow,MARKET_ANALYSIS_CANDLE_LIMIT} from '../server/market-engine/data.js';
 import {analyzeOne} from '../server/market-engine/index.js';
 import {isCandleWithinWindow,pendingEntryDeadline} from '../server/market-engine/execution-window.js';
 import {isSupportedCryptoBase} from '../server/market-engine/crypto-universe.js';
@@ -137,14 +137,14 @@ function rMultiple(trade,direction,exit){
   if(!(risk>0))return 0;
   return (direction==='BULLISH'?exit-Number(trade.entry):Number(trade.entry)-exit)/risk;
 }
-function fingerprint(t,direction,smc=null,symbol=''){
+function fingerprint(t,direction,smc=null,symbol='',indexOffset=0){
   // A setup is one symbol-specific sweep -> MSS -> FVG event. Include the
   // sweep index so distinct liquidity raids sharing one later FVG stay distinct.
   const sweepIndex=Number(smc?.sweep?.index);
   const mssIndex=Number(smc?.mss?.index);
   const fvgIndex=Number(smc?.fvg?.index);
   if(Number.isInteger(sweepIndex)&&Number.isInteger(mssIndex)&&Number.isInteger(fvgIndex)){
-    return ['SMC_EVENT',symbol,direction,sweepIndex,mssIndex,fvgIndex].join('|');
+    return ['SMC_EVENT',symbol,direction,sweepIndex+indexOffset,mssIndex+indexOffset,fvgIndex+indexOffset].join('|');
   }
   // Defensive fallback for non-SMC strategies or older result shapes.
   return [symbol,direction,t.orderType,Number(t.entry).toPrecision(10),Number(t.stop).toPrecision(10),Number(t.target).toPrecision(10)].join('|');
@@ -317,7 +317,8 @@ for(const symbol of symbols){
       const all={};
       for(const layerTf of [...new Set(['4H',...EXECUTION_TIMEFRAMES])]){
         const layerRows=history[layerTf]||[];
-        all[layerTf]=layerRows.slice(0,closedPrefixEnd(layerRows,layerTf,cutoff));
+        const prefixEnd=closedPrefixEnd(layerRows,layerTf,cutoff);
+        all[layerTf]=analysisWindow(layerRows,prefixEnd,MARKET_ANALYSIS_CANDLE_LIMIT);
         if(all[layerTf].some(x=>x.time+DURATIONS[layerTf]>cutoff)){
           throw new Error('LOOKAHEAD GUARD: future candle leaked into '+layerTf+' snapshot at '+new Date(cutoff).toISOString());
         }
@@ -385,7 +386,7 @@ for(const symbol of symbols){
         // counting those observations as separate setups inflated executable
         // and grade totals. The first eligible observation is the freshest.
         const trade=result.trade;
-        const eventFingerprint=trade?fingerprint(trade,result.direction,result.smc,symbol):null;
+        const eventFingerprint=trade?fingerprint(trade,result.direction,result.smc,symbol,Math.max(0,(closedPrefixEnd(history[tf]||[],tf,cutoff)-all[tf].length))):null;
         const eventKey=trade?strategy+'|'+eventFingerprint:null;
         if(trade&&seen.has(eventKey)){
           duplicateSetupsSuppressed++;
