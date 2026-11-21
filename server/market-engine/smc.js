@@ -163,7 +163,7 @@ function isEntryInPremiumDiscount(direction,entry,equilibrium){
   return direction==='BULLISH'?entry<equilibrium:direction==='BEARISH'?entry>equilibrium:false;
 }
 export function premiumDiscountConfluenceFactor(inPreferredZone){
-  return inPreferredZone===true?1:.8;
+  return inPreferredZone===true?1:.9;
 }
 
 function preSweepDealingRange(c,sweep){
