@@ -39,10 +39,13 @@ function ageQuality(age,fresh,recent){if(!Number.isFinite(age))return 0;if(age<=
 // midpoint. Sweep age is scored separately as setup freshness, so it must not
 // be counted a second time as entry execution quality.
 export function limitEntryQuality(entry,price,atrValue){
-  if(!Number.isFinite(entry)||!Number.isFinite(price)||!(atrValue>0))return .45;
-  const allowance=Math.max(atrValue,Math.abs(entry)*.003);
+  if(!Number.isFinite(entry)||!Number.isFinite(price)||!(atrValue>0))return 0;
+  // Score the full permitted pending-order distance instead of assigning a
+  // 45% quality floor to stale orders. At the 1.5 ATR publication limit the
+  // execution contribution is zero; only genuinely nearby entries score well.
+  const allowance=Math.max(atrValue*1.5,Math.abs(entry)*.003);
   const proximity=1-Math.min(1,Math.abs(price-entry)/allowance);
-  return .45+.25*proximity;
+  return .7*proximity;
 }
 
 function fvgAt(c,i){
@@ -256,11 +259,15 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   if(near&&!marketCandleQuality)return reject('marketRetestNotConfirmed');
   const correctPendingSide=direction==='BULLISH'?price>entry:price<entry;
   if(!near&&!correctPendingSide)return reject('pendingLimitWrongSide');
-  // Historical outcome diagnostics show a sharp quality drop once an
-  // untouched FVG limit is more than 1.5 execution-timeframe ATR from price.
-  // Keep distant, unfilled FVGs off the publication board instead of relying
-  // on a 24-hour expiry to turn stale, low-proximity ideas into trades.
-  if(!near&&Math.abs(price-entry)>a*1.5)return reject('pendingLimitTooFar');
+  // A pending order is not actionable when the structural target is closer
+  // to the live quote than the pullback required to fill the FVG. In that
+  // geometry, price can complete the target leg before the limit is reached.
+  const pendingPullbackDistance=Math.abs(price-entry);
+  const targetRunway=direction==='BULLISH'?target-price:price-target;
+  if(!near&&targetRunway<pendingPullbackDistance)
+    return reject('pendingTargetCloserThanEntry');
+  // Reject stale FVG orders rather than relying on expiry to discard them.
+  if(!near&&pendingPullbackDistance>a*1.5)return reject('pendingLimitTooFar');
   const orderType=near?'MARKET':'LIMIT';
   return{entry,marketEntry:price,stop,target,rr,orderType,
     entryZone:{low:fvg.low,high:fvg.high,source:'FVG_RETEST_ZONE'},
