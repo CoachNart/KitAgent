@@ -1,5 +1,5 @@
 import {authenticate,requireActiveAccess} from '../access.js';
-import {normalizeRows,closedCandles,validateCandles,EXECUTION_TIMEFRAMES,roundPrice} from './data.js';
+import {normalizeRows,closedCandles,validateCandles,EXECUTION_TIMEFRAMES,roundPrice,MARKET_ANALYSIS_CANDLE_LIMIT} from './data.js';
 import {structure,selectStructuralTarget} from './structure.js';
 import {liquidityMap} from './liquidity.js';
 import {regime} from './regime.js';
@@ -29,7 +29,7 @@ export async function bybitCandles(symbol,tf){
       u.searchParams.set('category','linear');
       u.searchParams.set('symbol',clean);
       u.searchParams.set('interval',BYBIT[tf]);
-      u.searchParams.set('limit','300');
+      u.searchParams.set('limit',String(MARKET_ANALYSIS_CANDLE_LIMIT));
       const r=await fetch(u);
       if(!r.ok){lastError='Bybit candles HTTP '+r.status+' '+r.statusText+' ('+host+')';continue;}
       const b=await r.json();
