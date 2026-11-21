@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents,confirmedSwings} from '../server/market-engine/structure.js';
 import {liquidityMap} from '../server/market-engine/liquidity.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,MAX_SWEEP_AGE_BARS,isSweepFresh,sweepQuality,isEntryInPremiumDiscount,premiumDiscountConfluenceFactor,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,MAX_SWEEP_AGE_BARS,isSweepFresh,sweepQuality,isEntryInPremiumDiscount,premiumDiscountConfluenceFactor,selectBestSMCCandidate,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -730,6 +730,14 @@ assert('Trade Geometry Contract requires structural entry and invalidation metad
     !randomStop.valid&&randomStop.failures.some(x=>x.includes('beyond the actual structural invalidation')) &&
     !badEntry.valid&&badEntry.failures.some(x=>x.includes('outside the strategy-defined execution zone'));
 });
+
+const candidateOlderHigh={grade:{grade:'A',score:86},trade:{setupAgeBars:4},entryDistanceAtr:.8,sweep:{index:100}};
+const candidateNewerLow={grade:{grade:'B',score:78},trade:{setupAgeBars:0},entryDistanceAtr:.2,sweep:{index:104}};
+assert('SMC candidate selection prefers stronger validated structure over recency',()=>selectBestSMCCandidate([candidateNewerLow,candidateOlderHigh])===candidateOlderHigh);
+const candidateTieFar={grade:{grade:'B',score:78},trade:{setupAgeBars:1},entryDistanceAtr:1.1,sweep:{index:102}};
+const candidateTieNear={grade:{grade:'B',score:78},trade:{setupAgeBars:1},entryDistanceAtr:.3,sweep:{index:101}};
+assert('SMC candidate selection uses executable proximity only as a deterministic tie-breaker',()=>selectBestSMCCandidate([candidateTieFar,candidateTieNear])===candidateTieNear);
+assert('SMC candidate selection safely returns null when no executable candidates exist',()=>selectBestSMCCandidate([])===null);
 
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
