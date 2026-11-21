@@ -9,7 +9,7 @@ import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.
 import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade,enforceFreshnessGrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
-import {EXECUTION_TIMEFRAMES,atr,validateCandles} from '../server/market-engine/data.js';
+import {EXECUTION_TIMEFRAMES,atr,validateCandles,analysisWindow,MARKET_ANALYSIS_CANDLE_LIMIT} from '../server/market-engine/data.js';
 import {topSymbols,candlesFor,scanSymbol,candidateScore,selectDailySetups} from '../server/market-engine/daily.js';
 import {isSupportedCryptoBase,isSupportedCryptoPerpetualSymbol} from '../server/market-engine/crypto-universe.js';
 
@@ -739,6 +739,11 @@ const candidateTieNear={grade:{grade:'B',score:78},trade:{setupAgeBars:1},entryD
 assert('SMC candidate selection uses executable proximity only as a deterministic tie-breaker',()=>selectBestSMCCandidate([candidateTieFar,candidateTieNear])===candidateTieNear);
 assert('SMC candidate selection safely returns null when no executable candidates exist',()=>selectBestSMCCandidate([])===null);
 
+const windowRows=Array.from({length:1200},(_,i)=>bar(i,100,101,99,100.2));
+const liveWindow=analysisWindow(windowRows,1100);
+assert('Live analysis candle limit matches Bybit maximum of 1,000 candles',()=>MARKET_ANALYSIS_CANDLE_LIMIT===1000);
+assert('Historical analysis uses the same trailing 1,000-candle window as live scans',()=>liveWindow.length===1000&&liveWindow[0].time===windowRows[100].time&&liveWindow.at(-1).time===windowRows[1099].time);
+assert('Historical analysis window excludes candles after the decision cutoff',()=>analysisWindow(windowRows,750).at(-1).time===windowRows[749].time);
 const failed=tests.filter(x=>!x.ok);
 console.log(JSON.stringify({passed:tests.length-failed.length,total:tests.length,failed},null,2));
 if(failed.length)process.exit(1);
