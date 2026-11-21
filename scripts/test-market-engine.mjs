@@ -1,6 +1,6 @@
 import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluateMSNR,MSNR_LEVEL_TYPES,MSNR_CONFIRMATION_TYPES} from '../server/market-engine/msnr.js';
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
-import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents} from '../server/market-engine/structure.js';
+import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents,confirmedSwings} from '../server/market-engine/structure.js';
 import {liquidityMap} from '../server/market-engine/liquidity.js';
 import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,sweepQuality,isEntryInPremiumDiscount,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
@@ -48,6 +48,33 @@ const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
   open:o,high:h,low:l,close:c,volume:100
 });
+function referenceSweeps(c,direction){
+  const swings=confirmedSwings(c,2),pools=direction==='BULLISH'?swings.lows:swings.highs,out=[];
+  const decisionPrice=Number(c.at(-1)?.close);
+  const decisionAtr=atr(c,14)||Math.max(Math.abs(decisionPrice)*.001,1e-9);
+  const stopBuffer=Math.max(decisionAtr*.15,Math.abs(decisionPrice)*.00035);
+  for(const p of pools){
+    for(let i=p.confirmationIndex;i<c.length;i++){
+      if(i-p.index>40)break;
+      const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price;
+      if(!swept)continue;
+      const reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
+      if(reclaimed){
+        const quality=sweepQuality(c,x,direction,p.price,i);
+        const extreme=direction==='BULLISH'?x.low:x.high;
+        const stopPrice=direction==='BULLISH'?extreme-stopBuffer:extreme+stopBuffer;
+        const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.low>stopPrice:z.high<stopPrice);
+        if(quality&&stillValid)out.push({direction,index:i,level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-i,quality});
+      }
+      break;
+    }
+  }
+  return out.sort((a,b)=>a.index-b.index);
+}
+function sweepResultsMatch(c,direction){
+  const compact=rows=>rows.map(x=>[x.direction,x.index,x.level,x.extreme,x.stopPrice,x.swingIndex,x.age,x.quality?.penetrationATR,x.quality?.reclaimDepthATR,x.quality?.rangeATR]);
+  return JSON.stringify(compact(findSweeps(c,direction)))===JSON.stringify(compact(referenceSweeps(c,direction)));
+}
 const monitorCandles=Array.from({length:80},(_,i)=>bar(i,100,101,99,100.2));
 assert('30m candles are valid for trade outcome monitoring',()=>validateCandles(monitorCandles,'30m').valid);
 assert('30m monitoring does not enter the signal-generation timeframe allowlist',()=>!EXECUTION_TIMEFRAMES.includes('30m'));
@@ -235,6 +262,9 @@ const freshPoolCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
 freshPoolCandles[40]=bar(40,100,101,98,100);
 freshPoolCandles[45]=bar(45,99,101,97,100);
 assert('SMC still accepts a recent first-touch sweep with a decisive reclaim',()=>findSweeps(freshPoolCandles,'BULLISH').some(x=>x.swingIndex===40&&x.index===45));
+assert('Indexed SMC sweep detection matches the original first-breach rules for bullish history',()=>[freshPoolCandles,stalePoolCandles,consumedPoolCandles,stopWickInvalidationCandles].every(x=>sweepResultsMatch(x,'BULLISH')));
+const bearishSweepParityCandles=freshPoolCandles.map((x,i)=>bar(i,200-x.open,200-x.low,200-x.high,200-x.close));
+assert('Indexed SMC sweep detection matches the original first-breach rules for bearish history',()=>sweepResultsMatch(bearishSweepParityCandles,'BEARISH'));
 const stopWickInvalidationCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
 stopWickInvalidationCandles[40]=bar(40,100,101,98,100);
 stopWickInvalidationCandles[45]=bar(45,99,101,97,100); // Valid sell-side sweep and reclaim.
