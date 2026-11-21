@@ -14,6 +14,7 @@
     "test:integrations": "node scripts/integration-smoke.mjs",
     "test:market-engine": "node scripts/test-market-engine.mjs",
     "test:signal-outcomes": "node scripts/test-signal-outcomes.mjs",
+    "test:affiliate-payout": "node scripts/test-affiliate-payout.mjs",
     "test:market-engine-live": "node scripts/live-market-engine-diagnostic.mjs",
     "test:market-engine-replay": "node scripts/historical-market-replay.mjs"
   },

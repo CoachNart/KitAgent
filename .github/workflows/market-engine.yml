@@ -21,6 +21,8 @@ jobs:
         run: npm run test:market-engine
       - name: Signal outcome regression suite
         run: npm run test:signal-outcomes
+      - name: Affiliate payout runtime regression
+        run: npm run test:affiliate-payout
       - name: Historical market replay (OKX test data; live execution remains Bybit)
         # Keep the established 60-market replay scope fixed. Improve the engine,
         # not the sample size, to address the executable/resolved trade bottleneck.

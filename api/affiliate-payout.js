@@ -25,6 +25,7 @@ function authorized(req){
 }
 function validWallet(v){return /^0x[a-fA-F0-9]{40}$/.test(String(v||''))}
 function cents(n){return Math.floor(Number(n||0)*100+1e-8)/100}
+export function successfulPayoutResult(affiliateId,amount,transactionHash){return{affiliateId,status:'paid',amount:Number(amount),transactionHash}}
 
 export default async function handler(req,res){
  if(req.method!=='GET'&&req.method!=='POST')return json(res,405,{error:'Method not allowed.'});
@@ -74,7 +75,7 @@ export default async function handler(req,res){
     batch.update(doc.ref,{availableBalance:0,paidOut:admin.firestore.FieldValue.increment(available),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
     batch.set(payoutRef,{status:'paid',transactionHash:hash,amount:available,updatedAt:admin.firestore.FieldValue.serverTimestamp(),paidAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     await batch.commit();
-    results.push({affiliateId:doc.id,status:'paid',amount:available,transactionHash:hash});
+    results.push(successfulPayoutResult(doc.id,available,hash));
    }catch(error){
     await payoutRef.set({status:'failed',error:String(error?.message||error).slice(0,500),updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     results.push({affiliateId:doc.id,status:'failed',error:String(error?.message||error).slice(0,200)});
