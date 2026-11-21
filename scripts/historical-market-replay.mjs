@@ -514,7 +514,7 @@ console.table([0.5,0.75,1,1.25,1.5,2,3,Infinity].map(maxDistanceAtr=>{
   const resolved=wins+losses;
   return{maxEntryDistanceAtr:Number.isFinite(maxDistanceAtr)?maxDistanceAtr:'ALL',candidates:selected.length,resolved,wins,losses,winRatePct:resolved?+(100*wins/resolved).toFixed(2):null,missed:selected.filter(x=>x.outcome==='missed').length,ambiguous:selected.filter(x=>x.outcome==='ambiguous').length,unresolved:selected.filter(x=>x.outcome==='unresolved').length};
 }));
-console.log('\nSWEEP AGE SENSITIVITY (A/A+/B only; diagnostic, no live rule changed)');
+console.log('\nSWEEP AGE SENSITIVITY (A/A+/B only; historical diagnostic)');
 console.table([2,4,6,8,10,12,16].map(maxSweepAge=>{
   const selected=tradeAudit.filter(x=>['A','A+','B'].includes(x.grade)&&Number.isFinite(x.sweepAge)&&x.sweepAge<=maxSweepAge);
   const wins=selected.filter(x=>x.outcome==='win');
@@ -528,6 +528,26 @@ console.table([2,4,6,8,10,12,16].map(maxSweepAge=>{
     ambiguous:selected.filter(x=>x.outcome==='ambiguous').length,
     unresolved:selected.filter(x=>x.outcome==='unresolved').length};
 }));
+// Chronological split exposes whether the publication grades behave similarly
+// in the earlier and later halves of the replay window. This is diagnostic,
+// not a true untouched holdout because strategy thresholds were inspected.
+const eligibleAudit=tradeAudit.filter(x=>['A+','A','B'].includes(x.grade)&&x.decisionTime);
+const orderedDecisionTimes=[...new Set(eligibleAudit.map(x=>x.decisionTime))].sort();
+const splitTime=orderedDecisionTimes.length?orderedDecisionTimes[Math.floor(orderedDecisionTimes.length/2)]:null;
+const chronologicalPeriods=[
+  {period:'EARLIER_HALF',test:x=>splitTime!==null&&x.decisionTime<splitTime},
+  {period:'LATER_HALF',test:x=>splitTime!==null&&x.decisionTime>=splitTime}
+];
+console.log('\\nCHRONOLOGICAL PERFORMANCE BY PUBLICATION GRADE (diagnostic split; not an untouched holdout)');
+console.table(chronologicalPeriods.flatMap(period=>['A+','A','B'].map(grade=>{
+  const selected=eligibleAudit.filter(x=>x.grade===grade&&period.test(x));
+  const resolved=selected.filter(x=>x.outcome==='win'||x.outcome==='loss');
+  const wins=resolved.filter(x=>x.outcome==='win').length;
+  const net=resolved.reduce((sum,x)=>sum+(Number(x.netR)||0),0);
+  return{period:period.period,grade,events:selected.length,resolved:resolved.length,wins,losses:resolved.length-wins,
+    winRatePct:resolved.length?+(100*wins/resolved.length).toFixed(2):null,
+    avgNetR:resolved.length?+(net/resolved.length).toFixed(3):null};
+})));
 console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events; all executable grades)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; premium/discount is recorded as confluence, not a hard gate)');
