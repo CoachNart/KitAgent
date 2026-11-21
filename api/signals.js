@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
-import {isCandleWithinWindow,pendingEntryDeadline} from '../server/market-engine/execution-window.js';
+import {isCandleWithinWindow,pendingEntryDeadline,isCompleteCandleWindow} from '../server/market-engine/execution-window.js';
 const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
 const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6','market-engine-v7']);
 const REQUEST_TIMEFRAMES=new Set(['AUTO','30m','1H','2H','4H']);
@@ -173,10 +173,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     }
   } else return {...signal,currentPrice:price,status:'watching'};
   if(!active){
-    const completePendingWindow=candles.length>0&&
-      candles[0].time<=generatedMs+MONITOR_CANDLE_DURATION_MS&&
-      candles.at(-1).time+MONITOR_CANDLE_DURATION_MS>=pendingDeadline&&
-      candles.every((c,i)=>i===0||c.time-candles[i-1].time===MONITOR_CANDLE_DURATION_MS);
+    const completePendingWindow=isCompleteCandleWindow(candles,generatedMs,pendingDeadline,MONITOR_CANDLE_DURATION_MS);
     if(order==='LIMIT'&&Number.isFinite(pendingDeadline)&&nowMs>=pendingDeadline&&completePendingWindow)
       return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(pendingDeadline).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'LIMIT_WINDOW_EXPIRED',deadline:new Date(pendingDeadline).toISOString(),note:'Complete 30m market data confirms no valid entry fill occurred within 24 hours of publication.'}};
     return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
