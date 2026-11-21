@@ -54,6 +54,7 @@ export function candidateScore(result){
   if(result.direction==='BEARISH'&&!(result.trade.stop>result.trade.entry&&result.trade.target<result.trade.entry))return -1;
   const grade=String(result.grade.grade||'');
   const score=Number(result.grade.score);
+  if(!Number.isFinite(score))return -1;
   if(['A+','A'].includes(grade)){
     if(score<84)return -1;
   }else if(grade==='B'){
