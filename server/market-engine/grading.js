@@ -6,14 +6,14 @@ const VALID_GRADES=['A+','A','B','C','NO-TRADE'];
 export function enforceFreshnessGrade(grade,sweepAgeBars,{aPlusMaxAge=2,aMaxAge=8}={}){
   if(!grade||!Number.isFinite(sweepAgeBars))return grade;
   let maxGrade=null,maxScore=null,reason=null;
-  if(sweepAgeBars>aMaxAge){maxGrade='B';maxScore=83;reason='Liquidity sweep is older than the A-grade freshness window.';}
-  else if(sweepAgeBars>aPlusMaxAge){maxGrade='A';maxScore=91;reason='Liquidity sweep is older than the A+ freshness window.';}
+  if(sweepAgeBars>aMaxAge){maxGrade='B';maxScore=83;reason='Confirmed MSS/FVG setup is older than the A-grade freshness window.';}
+  else if(sweepAgeBars>aPlusMaxAge){maxGrade='A';maxScore=91;reason='Confirmed MSS/FVG setup is older than the A+ freshness window.';}
   if(!maxGrade)return grade;
   const rank={'A+':4,'A':3,'B':2,'C':1,'NO-TRADE':0};
   if((rank[grade.grade]??0)<=(rank[maxGrade]??0))return grade;
   return {...grade,grade:maxGrade,score:Math.min(Number(grade.score)||0,maxScore),confidenceEvidence:[...(grade.confidenceEvidence||[]),{
     type:'FRESHNESS_PUBLICATION_GATE',sweepAgeBars,maxGrade,reason,
-    interpretation:'Publication grade is capped by the age of the original liquidity sweep.'
+    interpretation:'Publication grade is capped by the age of the confirmed MSS/FVG setup.'
   }]};
 }
 
