@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../access.js';
 import { scanTopQuality } from './daily.js';
-import { isCandleWithinWindow } from './execution-window.js';
+import { isCandleWithinWindow, pendingEntryDeadline } from './execution-window.js';
 
 const BOARD_DOC='daily',BOARD_WINDOW_MS=24*60*60*1000,REFRESH_MS=60*1000,CANDLE_MS=30*60*1000;
 function getAdmin(){
@@ -76,7 +76,7 @@ async function refreshTrade(doc){
         status='ACTIVE';activatedAt=c.time+CANDLE_MS;reason='Limit entry confirmed by a completed Bybit 30-minute candle.';break;
       }
     }
-    if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt){status='MISSED_ENTRY';reason='The 24-hour window from the original liquidity sweep ended without a confirmed limit fill.';}
+    if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt){status='MISSED_ENTRY';reason='The 24-hour window from publication ended without a confirmed limit fill.';}
   }
   if(order==='MARKET'&&!['TARGET_HIT','STOP_HIT'].includes(status)){status='ACTIVE';activatedAt=activatedAt||start;}
   if(status==='ACTIVE'){
@@ -127,7 +127,7 @@ export async function publishDailyBoard(){
           rr:Number(s.rr),regime:s.regime,evidence:s.evidence||[],layers:s.layers||[],targetSource:s.targetSource||null,
           targetSelection:s.targetSelection||null,entryReason:s.entryReason||null,
           sweepAgeBars:s.sweepAgeBars??null,sweepTime:s.sweepTime??null,
-          pendingExpiresAt:orderType==='LIMIT'&&s.sweepTime!=null&&Number.isFinite(Number(s.sweepTime))?new Date(Number(s.sweepTime)+BOARD_WINDOW_MS):new Date(now+BOARD_WINDOW_MS),
+          pendingExpiresAt:new Date(pendingEntryDeadline(now,BOARD_WINDOW_MS)),
           status:orderType==='MARKET'?'ACTIVE':'PENDING_ENTRY',
           statusReason:orderType==='MARKET'?'Market setup activated at publication.':'Waiting for a confirmed limit fill.',
           publishedAt:new Date(now),createdAt:new Date(now),updatedAt:new Date(now),activatedAt:orderType==='MARKET'?new Date(now):null,
