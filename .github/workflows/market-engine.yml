@@ -28,7 +28,7 @@ jobs:
         run: npm run test:signal-outcomes
       - name: Historical market replay (Bybit preferred; OKX fallback only if runner is region-blocked)
         # Widen historical coverage without changing any trading rules: 60 markets,
-        # 6,000 consecutive 1H decisions, 8,000 history candles, and the same 7-day outcome horizon.
+        # 6,000 consecutive 1H decisions, a live-equivalent 999-candle structure window, and complete 7-day 30M outcome coverage.
         run: npm run test:market-engine-replay -- --exchange=bybit --universe-limit=60 --bars=6000 --forward-bars=168 --history-candles=16000 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
