@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../access.js';
 import { scanTopQuality } from './daily.js';
-import { isCandleWithinWindow, pendingEntryDeadline } from './execution-window.js';
+import { isCandleWithinWindow, pendingEntryDeadline, isCompleteCandleWindow } from './execution-window.js';
 
 const BOARD_DOC='daily',BOARD_WINDOW_MS=24*60*60*1000,REFRESH_MS=60*1000,CANDLE_MS=30*60*1000;
 function getAdmin(){
@@ -90,10 +90,7 @@ async function refreshTrade(doc){
       if(targetHit){status='TARGET_HIT';exitCandle=c;reason='Take profit reached on Bybit 30-minute OHLC data.';break;}
     }
   }
-  const completePendingWindow=candles.length>0&&
-    candles[0].time<=start+CANDLE_MS&&
-    candles.at(-1).time+CANDLE_MS>=pendingExpiresAt&&
-    candles.every((c,i)=>i===0||c.time-candles[i-1].time===CANDLE_MS);
+  const completePendingWindow=isCompleteCandleWindow(candles,start,pendingExpiresAt,CANDLE_MS);
   if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt&&completePendingWindow){
     status='MISSED_ENTRY';
     reason='The 24-hour window from publication ended; complete Bybit candle history confirms no limit fill.';
