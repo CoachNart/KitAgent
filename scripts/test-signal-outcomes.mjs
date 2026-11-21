@@ -79,6 +79,9 @@ try{
   const targetBeforeEntry=await resolveStatus(baseSignal,104.5);
   assert('A pending LIMIT is marked missed when TP trades before its entry fills',
     targetBeforeEntry.status==='missed_entry'&&targetBeforeEntry.result==='missed'&&targetBeforeEntry.outcomeEvidence?.event==='TARGET_REACHED_BEFORE_ENTRY');
+  const stableMiss=await resolveStatus(targetBeforeEntry,104.5);
+  assert('A missed LIMIT outcome remains terminal on subsequent verification polls',
+    stableMiss.status==='missed_entry'&&stableMiss.outcomeEvidence?.event==='TARGET_REACHED_BEFORE_ENTRY');
 
   const expiredStart=Math.floor((Date.now()-26*60*60*1000)/1800000)*1800000;
   const expiredSignal={...baseSignal,generatedAt:new Date(expiredStart).toISOString()};
