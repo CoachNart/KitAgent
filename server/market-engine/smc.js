@@ -331,11 +331,17 @@ export function evaluateSMC({candles,layers,price}){
       anchoredHighIndex:rangeCandidate.anchorHighIndex,anchoredLowIndex:rangeCandidate.anchorLowIndex
     });
     const inCorrectZone=isEntryInPremiumDiscount(direction,fvgCandidate.midpoint,rangeCandidate.equilibrium);
-    if(!inCorrectZone){
+    // Premium/discount is a confluence, not a mandatory veto. The current
+    // execution-timeframe range is a local reference and can sit on the wrong
+    // side of an otherwise valid displacement FVG after MSS. Keep the
+    // classification visible and let it modestly influence structural quality;
+    // the sweep, MSS, fresh FVG, real target, executable geometry and 3R
+    // contract remain hard requirements.
+    if(inCorrectZone){
+      if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
+    }else{
       if(direction==='BULLISH')stages.premiumDiscountBullishReject++;else stages.premiumDiscountBearishReject++;
-      continue;
     }
-    if(direction==='BULLISH')stages.premiumDiscountBullishPass++;else stages.premiumDiscountBearishPass++;
     stages.premiumDiscount++;
 
     // Build structural invalidation first so target selection can enforce
@@ -388,7 +394,8 @@ export function evaluateSMC({candles,layers,price}){
     stages.executableEntry++;
     selected={
       sweep:sweepCandidate,mss:mssCandidate,displacement:displacementCandidate,
-      fvg:fvgCandidate,range:rangeCandidate,target:targetCandidate,trade:tradeCandidate
+      fvg:fvgCandidate,range:rangeCandidate,target:targetCandidate,trade:tradeCandidate,
+      inCorrectPremiumDiscountZone:inCorrectZone
     };
     break;
   }
@@ -397,7 +404,7 @@ export function evaluateSMC({candles,layers,price}){
     return{direction,failures,evidence:[{type:'LIQUIDITY_SWEEP_CANDIDATES',count:sweeps.length},stageEvidence()]};
   }
 
-  const {sweep,mss,displacement,fvg,range,target,trade}=selected;
+  const {sweep,mss,displacement,fvg,range,target,trade,inCorrectPremiumDiscountZone}=selected;
   const contextLayer=ordered[0];
   const contextStructure=contextLayer?.structure||{};
   // A confirmed HH/HL or LH/LL sequence is a directional trend even when
@@ -430,11 +437,11 @@ export function evaluateSMC({candles,layers,price}){
     entry:{anchorQuality:fvgStrength,executionQuality},
     risk:{invalidationQuality,geometryQuality},
     target,
-    confirmation:{quality:Math.min(1,.35+(sweep.quality?.penetrationATR>=.35?.15:.08)+(sweep.quality?.reclaimDepthATR>=.2?.12:.05)+(displacement.atrMultiple>=1.35?.28:.15))},
+    confirmation:{quality:Math.min(1,.35+(sweep.quality?.penetrationATR>=.35?.15:.08)+(sweep.quality?.reclaimDepthATR>=.2?.12:.05)+(displacement.atrMultiple>=1.35?.28:.15))*(inCorrectPremiumDiscountZone?1:.8)},
     freshness:{quality:Math.min(1,.35+ageQuality(sweep.age,2,8)*.4+Math.min(1,displacement.atrMultiple/1.5)*.25)}
   });
   const grade=enforceFreshnessGrade(baseGrade,sweep.age);
   trade.sweepAgeBars=sweep.age;
   trade.sweepTime=sweep.time??c[sweep.index]?.time??null;
-  return{direction,grade,trade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',equilibrium:range.equilibrium},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
+  return{direction,grade,trade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',entryInPreferredZone:inCorrectPremiumDiscountZone,equilibrium:range.equilibrium,entry:fvg.midpoint,interpretation:'Confluence only; a valid SMC sequence is not rejected solely for local dealing-range location.'},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }
