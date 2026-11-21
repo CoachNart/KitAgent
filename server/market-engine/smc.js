@@ -408,10 +408,11 @@ export function evaluateSMC({candles,layers,price}){
   }
 
   const {sweep,mss,displacement,fvg,range,target,trade,inCorrectPremiumDiscountZone}=selected;
-  // Publication freshness belongs to the actionable FVG, not the original
-  // sweep. MSS/displacement may legitimately take several bars to confirm;
-  // an untouched FVG is still a fresh pending entry even when the sweep is older.
-  const setupAgeBars=Math.max(0,c.length-1-fvg.index);
+  // Publication freshness begins when BOTH parts of the entry sequence
+  // exist: the MSS is confirmed and its displacement FVG has formed. The
+  // older sweep is context, not the age of the actionable setup.
+  const setupConfirmedIndex=Math.max(mss.index,fvg.index);
+  const setupAgeBars=Math.max(0,c.length-1-setupConfirmedIndex);
   const contextLayer=ordered[0];
   const contextStructure=contextLayer?.structure||{};
   // A confirmed HH/HL or LH/LL sequence is a directional trend even when
