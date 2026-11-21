@@ -140,6 +140,9 @@ try{
   const boundaryOutcome=await resolveStatus(boundarySignal,101,Date.now());
   assert('A limit touch in the candle straddling expiry remains ambiguous, not falsely missed or filled',
     boundaryOutcome.status==='activation_ambiguous'&&boundaryOutcome.outcomeEvidence?.event==='ENTRY_WINDOW_BOUNDARY_AMBIGUOUS');
+  const stableBoundary=await resolveStatus(boundaryOutcome,101);
+  assert('An expiry-boundary ambiguous LIMIT remains terminal on later polls',
+    stableBoundary.status==='activation_ambiguous'&&stableBoundary.outcomeEvidence?.event==='ENTRY_WINDOW_BOUNDARY_AMBIGUOUS');
 
   globalThis.fetch=mockKlines([]);
   const unverifiable=await resolveStatus(expiredSignal,101,Date.now());
