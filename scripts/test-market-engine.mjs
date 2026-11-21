@@ -10,7 +10,7 @@ import {evaluateCRT,CRT_MODEL} from '../server/market-engine/crt.js';
 import {gradeSetup,validateTradeGeometry,validateEntryExecution,executableTrade,enforceFreshnessGrade} from '../server/market-engine/grading.js';
 import {selectMinimumRRStructuralTarget} from '../server/market-engine/index.js';
 import {EXECUTION_TIMEFRAMES,atr,validateCandles} from '../server/market-engine/data.js';
-import {topSymbols,candlesFor,scanSymbol,candidateScore} from '../server/market-engine/daily.js';
+import {topSymbols,candlesFor,scanSymbol,candidateScore,selectDailySetups} from '../server/market-engine/daily.js';
 import {isSupportedCryptoBase,isSupportedCryptoPerpetualSymbol} from '../server/market-engine/crypto-universe.js';
 
 const tests=[];
@@ -37,12 +37,21 @@ assert('Confirmed 4H HH/HL or LH/LL trend keeps full context quality despite a c
 assert('A transitional direction inferred from a recent break is not scored as an established trend',()=>!hasConfirmedContextTrend({direction:'BULLISH',rawDirection:'NEUTRAL',bos:{direction:'BULLISH'}},'BULLISH'));
 const eligibleThreeR={direction:'BULLISH',trade:{entry:100,stop:95,target:115,rr:3},grade:{grade:'A',score:84}};
 const ineligibleTwoR={...eligibleThreeR,trade:{...eligibleThreeR.trade,target:110,rr:2}};
-const weakGrade={...eligibleThreeR,grade:{grade:'B',score:83}};
+const eligibleB={...eligibleThreeR,grade:{grade:'B',score:80}};
+const rejectedC={...eligibleThreeR,grade:{grade:'C',score:74}};
 assert('Daily publication rejects setups below 3R',candidateScore(ineligibleTwoR)<0);
-assert('Daily publication rejects structural scores below A-grade',candidateScore(weakGrade)<0);
+assert('Daily publication accepts B-grade setups at 3R or better',candidateScore(eligibleB)>=0);
+assert('Daily publication rejects C-grade setups',candidateScore(rejectedC)<0);
 assert('Daily publication accepts A-grade setups at 3R or better',candidateScore(eligibleThreeR)>=0);
 const eligibleAplus={...eligibleThreeR,grade:{grade:'A+',score:94},trade:{...eligibleThreeR.trade,target:120,rr:4}};
 assert('Daily publication accepts qualified A+ setups with stronger structural RR',candidateScore(eligibleAplus)>candidateScore(eligibleThreeR));
+const dailyCandidates=[
+  ...Array.from({length:5},(_,i)=>({id:'A'+i,grade:'A',rankScore:9000-i})),
+  ...Array.from({length:3},(_,i)=>({id:'B'+i,grade:'B',rankScore:8000-i}))
+];
+const dailySelection=selectDailySetups(dailyCandidates,5);
+assert('Daily board reserves up to two clearly labelled B-tier slots while retaining A/A+ priority',()=>dailySelection.length===5&&dailySelection.filter(x=>x.grade==='B').length===2&&dailySelection.filter(x=>x.grade==='A').length===3);
+assert('Daily board fills unused B-tier slots with the next ranked eligible setups',()=>selectDailySetups(dailyCandidates.slice(0,2),5).length===2);
 
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
