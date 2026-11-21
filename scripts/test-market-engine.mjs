@@ -166,7 +166,7 @@ const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}},{t
 assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG');
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
-assert('SMC displacement rejects marginal impulses below 1.30 ATR',()=>{const c=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));c[19]=bar(19,100,100.24,99.98,100.22);return meaningfulDisplacement(c,19,'BULLISH')===null;});
+assert('SMC displacement rejects marginal impulses below 1.30 ATR',()=>{const c=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));c[19]=bar(19,100,100.22,99.98,100.21);return meaningfulDisplacement(c,19,'BULLISH')===null;});
 assert('SMC displacement is measured against pre-impulse ATR, not ATR inflated by the candidate candle',()=>{const c=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));c[19]=bar(19,100,100.26,100,100.25);const d=meaningfulDisplacement(c,19,'BULLISH');return d!==null&&d.atrMultiple>=1.3;});
 const preMssImpulse=Array.from({length:46},(_,i)=>bar(i,100,101,99,100));
 preMssImpulse[43]=bar(43,100,103.2,100,103);
