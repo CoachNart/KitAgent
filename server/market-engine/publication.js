@@ -21,7 +21,7 @@ async function candlesSince(symbol,startMs){
   while(end>=startMs&&pages<12){
     let lastError='';
     let rows=null;
-    for(const host of ['https://api.bybit.com','https://api.bytick.com']){
+    for(const host of ['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl']){
       try{
         const u=new URL('/v5/market/kline',host);
         u.searchParams.set('category','linear');u.searchParams.set('symbol',symbol);
@@ -50,6 +50,7 @@ function isLong(s){return String(s.bias||'').toUpperCase()==='LONG';}
 function levels(s){return{entry:Number(s.entry),stop:Number(s.stopLoss),target:Number(s.takeProfit)};}
 async function refreshTrade(doc){
   const data=doc.data(),now=Date.now(),last=ms(data.lastCheckedAt);
+  if(data.outcomeAmbiguous===true)return{...data,id:doc.id};
   if(last&&now-last<REFRESH_MS)return{...data,id:doc.id};
   const symbol=String(data.providerSymbol||'').replace(/[^A-Z0-9]/gi,'');
   const start=ms(data.publishedAt||data.createdAt);
@@ -61,7 +62,7 @@ async function refreshTrade(doc){
   const pendingWindowMs=Math.max(0,pendingExpiresAt-start);
   const candles=await candlesSince(symbol,start);
   if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return{...data,id:doc.id};}
-  let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null;
+  let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null,outcomeAmbiguous=false;
   if(order==='LIMIT'&&status==='PENDING_ENTRY'){
     for(const c of candles){
       if(!isCandleWithinWindow(c.time,start,CANDLE_MS,pendingWindowMs)){
@@ -76,7 +77,7 @@ async function refreshTrade(doc){
         status='ACTIVE';activatedAt=c.time+CANDLE_MS;reason='Limit entry confirmed by a completed Bybit 30-minute candle.';break;
       }
     }
-    if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt){status='MISSED_ENTRY';reason='The 24-hour window from publication ended without a confirmed limit fill.';}
+
   }
   if(order==='MARKET'&&!['TARGET_HIT','STOP_HIT'].includes(status)){status='ACTIVE';activatedAt=activatedAt||start;}
   if(status==='ACTIVE'){
@@ -84,12 +85,20 @@ async function refreshTrade(doc){
       if(c.time<activatedAt)continue;
       if(c.time===Math.floor(activatedAt/CANDLE_MS)*CANDLE_MS&&activatedAt>c.time)continue;
       const stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
-      if(stopHit&&targetHit){reason='Both stop and target were touched in one candle. Outcome is ambiguous and will not be guessed.';break;}
+      if(stopHit&&targetHit){outcomeAmbiguous=true;reason='Both stop and target were touched in one candle. Outcome is ambiguous and will not be guessed.';break;}
       if(stopHit){status='STOP_HIT';exitCandle=c;reason='Stop loss reached on Bybit 30-minute OHLC data.';break;}
       if(targetHit){status='TARGET_HIT';exitCandle=c;reason='Take profit reached on Bybit 30-minute OHLC data.';break;}
     }
   }
-  const patch={status,statusReason:reason,lastCheckedAt:new Date(now),updatedAt:new Date(now),currentPrice:candles.at(-1).close};
+  const completePendingWindow=candles.length>0&&
+    candles[0].time<=start+CANDLE_MS&&
+    candles.at(-1).time+CANDLE_MS>=pendingExpiresAt&&
+    candles.every((c,i)=>i===0||c.time-candles[i-1].time===CANDLE_MS);
+  if(status==='PENDING_ENTRY'&&now>=pendingExpiresAt&&completePendingWindow){
+    status='MISSED_ENTRY';
+    reason='The 24-hour window from publication ended; complete Bybit candle history confirms no limit fill.';
+  }
+  const patch={status,statusReason:reason,lastCheckedAt:new Date(now),updatedAt:new Date(now),currentPrice:candles.at(-1).close,outcomeAmbiguous:outcomeAmbiguous||data.outcomeAmbiguous===true};
   if(activatedAt)patch.activatedAt=new Date(activatedAt);
   if(['TARGET_HIT','STOP_HIT'].includes(status)&&exitCandle){
     const exitPrice=status==='TARGET_HIT'?target:stop;
