@@ -94,43 +94,70 @@ function swingBreakAfter(c,start,end,direction){
   }
   return null;
 }
+function buildSweepRangeIndex(c){
+  let size=1;
+  while(size<c.length)size*=2;
+  const minLow=Array(size*2).fill(Infinity);
+  const maxHigh=Array(size*2).fill(-Infinity);
+  for(let i=0;i<c.length;i++){
+    minLow[size+i]=Number(c[i]?.low);
+    maxHigh[size+i]=Number(c[i]?.high);
+  }
+  for(let i=size-1;i>0;i--){
+    minLow[i]=Math.min(minLow[i*2],minLow[i*2+1]);
+    maxHigh[i]=Math.max(maxHigh[i*2],maxHigh[i*2+1]);
+  }
+  function firstCross(tree,node,left,right,from,to,level,mode){
+    if(right<from||left>to)return -1;
+    if(mode==='BELOW'?tree[node]>=level:tree[node]<=level)return -1;
+    if(left===right)return left<c.length?left:-1;
+    const mid=(left+right)>>1;
+    const first=firstCross(tree,node*2,left,mid,from,to,level,mode);
+    return first>=0?first:firstCross(tree,node*2+1,mid+1,right,from,to,level,mode);
+  }
+  return{
+    firstBelow:(from,to,level)=>from<=to?firstCross(minLow,1,0,size-1,from,to,level,'BELOW'):-1,
+    firstAbove:(from,to,level)=>from<=to?firstCross(maxHigh,1,0,size-1,from,to,level,'ABOVE'):-1
+  };
+}
 function findSweeps(c,direction){
   const s=confirmedSwings(c,2),pools=direction==='BULLISH'?s.lows:s.highs,out=[];
+  const rangeIndex=buildSweepRangeIndex(c);
+  const suffixMinLow=Array(c.length+1).fill(Infinity);
+  const suffixMaxHigh=Array(c.length+1).fill(-Infinity);
+  for(let i=c.length-1;i>=0;i--){
+    suffixMinLow[i]=Math.min(Number(c[i]?.low),suffixMinLow[i+1]);
+    suffixMaxHigh[i]=Math.max(Number(c[i]?.high),suffixMaxHigh[i+1]);
+  }
+  const decisionPrice=Number(c.at(-1)?.close);
+  const decisionAtr=atr(c,14)||Math.max(Math.abs(decisionPrice)*.001,1e-9);
+  const stopBuffer=Math.max(decisionAtr*.15,Math.abs(decisionPrice)*.00035);
   for(const p of pools){
-    // A liquidity pool must still be structurally recent when it is raided.
-    // Once price first trades through a confirmed pool, that pool is consumed:
-    // a later revisit cannot be relabelled as a fresh sweep of the same level.
-    for(let i=p.confirmationIndex;i<c.length;i++){
-      if(i-p.index>MAX_LIQUIDITY_POOL_AGE)break;
-      const x=c[i],swept=direction==='BULLISH'?x.low<p.price:x.high>p.price;
-      if(!swept)continue;
-      const reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
-      if(reclaimed){
-        const quality=sweepQuality(c,x,direction,p.price,i);
-        const extreme=direction==='BULLISH'?x.low:x.high;
-        // The trade is invalidated by a stop-price wick, not only by a candle
-        // close beyond the sweep extreme. Replay and live execution both use
-        // wick-based stop fills, so allowing a later wick through the stop
-        // would publish a setup whose invalidation had already happened.
-        const decisionPrice=Number(c.at(-1)?.close);
-        const decisionAtr=atr(c,14)||Math.max(Math.abs(decisionPrice)*.001,1e-9);
-        const stopBuffer=Math.max(decisionAtr*.15,Math.abs(decisionPrice)*.00035);
-        const stopPrice=direction==='BULLISH'?extreme-stopBuffer:extreme+stopBuffer;
-        const stillValid=c.slice(i+1).every(z=>direction==='BULLISH'?z.low>stopPrice:z.high<stopPrice);
-        if(quality&&stillValid)out.push({direction,index:i,time:Number.isFinite(x.time)?x.time+60*60_000:x.time,level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-i,quality});
-      }
-      // The first wick through the pool consumes it, whether it reclaims or
-      // closes beyond the level. Never accept a later breach as a new sweep.
-      break;
-    }
+    // Query the first breach directly instead of rescanning every later candle
+    // for every swing pool. The segment tree preserves the original first-touch
+    // rule while reducing this stage from quadratic to O(n + pools*log(n)).
+    const from=p.confirmationIndex;
+    const to=Math.min(c.length-1,p.index+MAX_LIQUIDITY_POOL_AGE);
+    const i=direction==='BULLISH'
+      ?rangeIndex.firstBelow(from,to,p.price)
+      :rangeIndex.firstAbove(from,to,p.price);
+    if(i<0)continue;
+    const x=c[i];
+    const reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
+    if(!reclaimed)continue;
+    const quality=sweepQuality(c,x,direction,p.price,i);
+    const extreme=direction==='BULLISH'?x.low:x.high;
+    const stopPrice=direction==='BULLISH'?extreme-stopBuffer:extreme+stopBuffer;
+    const stillValid=direction==='BULLISH'
+      ?suffixMinLow[i+1]>stopPrice
+      :suffixMaxHigh[i+1]<stopPrice;
+    if(quality&&stillValid)out.push({
+      direction,index:i,time:Number.isFinite(x.time)?x.time+60*60_000:x.time,
+      level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-i,quality
+    });
   }
   return out.sort((a,b)=>a.index-b.index);
 }
-export function isEntryInPremiumDiscount(direction,entry,equilibrium){
-  if(!Number.isFinite(entry)||!Number.isFinite(equilibrium))return false;
-  return direction==='BULLISH'?entry<equilibrium:direction==='BEARISH'?entry>equilibrium:false;
-}
-
 function preSweepDealingRange(c,sweep){
   // Anchor the dealing range to the exact liquidity pool that was raided.
   // The opposite boundary is the latest confirmed opposing swing before
