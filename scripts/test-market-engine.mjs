@@ -489,6 +489,14 @@ const fartherStructuralTarget=selectMinimumRRStructuralTarget({
   minimumRR:3
 });
 assert('3R recovery selects a real farther structural objective rather than fabricating a price',()=>!!fartherStructuralTarget&&fartherStructuralTarget.target>100&&fartherStructuralTarget.rr>=3&&typeof fartherStructuralTarget.targetSource==='string');
+const targetObstructionCandles=Array.from({length:70},(_,i)=>bar(i,100,101,99,100));
+targetObstructionCandles[30]=bar(30,108,110,107,108.5); // Earlier unconsumed external high.
+targetObstructionCandles[45]=bar(45,102,104,101,102.5); // Nearest, still-unconsumed objective: only 2R.
+const blockedTargetRecovery=selectMinimumRRStructuralTarget({
+  trade:{entry:100,stop:98,target:102},direction:'BULLISH',
+  candles:targetObstructionCandles,layers:[],minimumRR:3
+});
+assert('3R recovery refuses to skip a nearer unconsumed liquidity objective for a farther target',()=>blockedTargetRecovery===null);
 
 assert('Target hierarchy can prefer repeated/major structure over a single nearby pivot',()=>{
   if(!structuralTarget)return true;
