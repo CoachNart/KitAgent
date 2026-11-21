@@ -49,7 +49,10 @@ function fvgAt(c,i){
   return null;
 }
 function meaningfulDisplacement(c,i,direction){
-  const x=c[i],a=atr(c.slice(0,i+1),14),r=x?.high-x?.low,body=x?Math.abs(x.close-x.open):0;
+  // Measure the impulse against volatility that existed BEFORE the impulse.
+  // Including the candidate candle in its own ATR denominator makes the
+  // displacement threshold self-normalizing and can reject valid impulses.
+  const x=c[i],a=atr(c.slice(0,i),14),r=x?.high-x?.low,body=x?Math.abs(x.close-x.open):0;
   if(!x||!a||!r||body/r<.6||r<a*MIN_DISPLACEMENT_ATR)return null;
   if(direction==='BULLISH'&&(x.close<=x.open||x.close<x.high-r*.25))return null;
   if(direction==='BEARISH'&&(x.close>=x.open||x.close>x.low+r*.25))return null;
