@@ -252,10 +252,11 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
   if(near&&!marketCandleQuality)return reject('marketRetestNotConfirmed');
   const correctPendingSide=direction==='BULLISH'?price>entry:price<entry;
   if(!near&&!correctPendingSide)return reject('pendingLimitWrongSide');
-  // Do not impose an arbitrary ATR-distance ceiling on an untouched FVG.
-  // A correctly sided limit remains valid while the FVG is unmitigated;
-  // the shared 24-hour pending-entry lifecycle expires it if price never
-  // returns. Distance alone does not invalidate the structural setup.
+  // Historical outcome diagnostics show a sharp quality drop once an
+  // untouched FVG limit is more than 1.5 execution-timeframe ATR from price.
+  // Keep distant, unfilled FVGs off the publication board instead of relying
+  // on a 24-hour expiry to turn stale, low-proximity ideas into trades.
+  if(!near&&Math.abs(price-entry)>a*1.5)return reject('pendingLimitTooFar');
   const orderType=near?'MARKET':'LIMIT';
   return{entry,marketEntry:price,stop,target,rr,orderType,
     entryZone:{low:fvg.low,high:fvg.high,source:'FVG_RETEST_ZONE'},
