@@ -72,11 +72,18 @@ try{
   assert('A pending LIMIT is marked missed when TP trades before its entry fills',
     targetBeforeEntry.status==='missed_entry'&&targetBeforeEntry.result==='missed'&&targetBeforeEntry.outcomeEvidence?.event==='TARGET_REACHED_BEFORE_ENTRY');
 
-  const expiredSignal={...baseSignal,generatedAt:new Date(Date.now()-25*60*60*1000).toISOString()};
-  globalThis.fetch=mockKlines([]);
+  const expiredStart=Math.floor((Date.now()-26*60*60*1000)/1800000)*1800000;
+  const expiredSignal={...baseSignal,generatedAt:new Date(expiredStart).toISOString()};
+  const completeNoFillHistory=Array.from({length:51},(_,i)=>row(expiredStart+i*1800000,101,102,100.5,101.5));
+  globalThis.fetch=mockKlines(completeNoFillHistory);
   const expired=await resolveStatus(expiredSignal,101,Date.now());
-  assert('A pending LIMIT expires after 24 hours even when the candle provider returns no candles',
+  assert('A pending LIMIT expires after 24 hours when complete closed-candle history confirms no fill',
     expired.status==='missed_entry'&&expired.result==='missed'&&expired.outcomeEvidence?.event==='LIMIT_WINDOW_EXPIRED');
+
+  globalThis.fetch=mockKlines([]);
+  const unverifiable=await resolveStatus(expiredSignal,101,Date.now());
+  assert('A pending LIMIT is not falsely marked missed when market history is unavailable',
+    unverifiable.status==='limit_pending'&&unverifiable.result==null);
 
   globalThis.fetch=mockKlines([
     row(candleStart,101,101.5,100.4,100.8),
