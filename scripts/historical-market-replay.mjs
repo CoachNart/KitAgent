@@ -514,6 +514,20 @@ console.table([0.5,0.75,1,1.25,1.5,2,3,Infinity].map(maxDistanceAtr=>{
   const resolved=wins+losses;
   return{maxEntryDistanceAtr:Number.isFinite(maxDistanceAtr)?maxDistanceAtr:'ALL',candidates:selected.length,resolved,wins,losses,winRatePct:resolved?+(100*wins/resolved).toFixed(2):null,missed:selected.filter(x=>x.outcome==='missed').length,ambiguous:selected.filter(x=>x.outcome==='ambiguous').length,unresolved:selected.filter(x=>x.outcome==='unresolved').length};
 }));
+console.log('\nSWEEP AGE SENSITIVITY (A/A+/B only; diagnostic, no live rule changed)');
+console.table([2,4,6,8,10,12,16].map(maxSweepAge=>{
+  const selected=tradeAudit.filter(x=>['A','A+','B'].includes(x.grade)&&Number.isFinite(x.sweepAge)&&x.sweepAge<=maxSweepAge);
+  const wins=selected.filter(x=>x.outcome==='win');
+  const losses=selected.filter(x=>x.outcome==='loss');
+  const resolved=wins.length+losses.length;
+  const netR=[...wins,...losses].reduce((sum,x)=>sum+(Number(x.netR)||0),0);
+  return{maxSweepAgeBars:maxSweepAge,candidates:selected.length,resolved,wins:wins.length,losses:losses.length,
+    winRatePct:resolved?+(100*wins.length/resolved).toFixed(2):null,
+    avgNetR:resolved?+(netR/resolved).toFixed(3):null,
+    missed:selected.filter(x=>x.outcome==='missed').length,
+    ambiguous:selected.filter(x=>x.outcome==='ambiguous').length,
+    unresolved:selected.filter(x=>x.outcome==='unresolved').length};
+}));
 console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events; all executable grades)');
 console.table(tradeAudit);
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; premium/discount is recorded as confluence, not a hard gate)');
