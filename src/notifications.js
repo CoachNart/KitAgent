@@ -1,5 +1,5 @@
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 import { db, firebaseConfigured } from './firebase.js';
 
@@ -45,10 +45,10 @@ export async function enableKitSetupsNotifications(user) {
     try {
       localStorage.setItem(TOKEN_KEY, token);
       if (db && user?.uid) {
-        await setDoc(doc(db, 'users', user.uid), {
+        await updateDoc(doc(db, 'users', user.uid), {
           notificationSettings: { enabled:true, browser:true, updatedAt:serverTimestamp() },
           pushTokens: { [token]: { platform:'web', updatedAt:serverTimestamp() } },
-        }, { merge:true });
+        });
       }
     } catch (error) {
       console.warn('KitSetups push token could not be saved:', error);
