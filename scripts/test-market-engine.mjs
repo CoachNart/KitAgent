@@ -488,7 +488,7 @@ const fartherStructuralTarget=selectMinimumRRStructuralTarget({
   layers:hierarchyLayers,
   minimumRR:3
 });
-assert('3R recovery selects a real farther structural objective rather than fabricating a price',()=>!!fartherStructuralTarget&&fartherStructuralTarget.target>100&&fartherStructuralTarget.rr>=3&&typeof fartherStructuralTarget.targetSource==='string');
+assert('3R recovery rejects a setup when the nearest valid structural objective cannot meet the minimum',()=>fartherStructuralTarget===null);
 const targetObstructionCandles=Array.from({length:70},(_,i)=>bar(i,100,101,99,100));
 targetObstructionCandles[30]=bar(30,108,110,107,108.5); // Earlier unconsumed external high.
 targetObstructionCandles[45]=bar(45,102,104,101,102.5); // Nearest, still-unconsumed objective: only 2R.
