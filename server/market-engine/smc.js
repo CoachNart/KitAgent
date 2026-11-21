@@ -162,6 +162,9 @@ function isEntryInPremiumDiscount(direction,entry,equilibrium){
   if(!Number.isFinite(entry)||!Number.isFinite(equilibrium))return false;
   return direction==='BULLISH'?entry<equilibrium:direction==='BEARISH'?entry>equilibrium:false;
 }
+export function premiumDiscountConfluenceFactor(inPreferredZone){
+  return inPreferredZone===true?1:.8;
+}
 
 function preSweepDealingRange(c,sweep){
   // Anchor the dealing range to the exact liquidity pool that was raided.
@@ -437,7 +440,7 @@ export function evaluateSMC({candles,layers,price}){
     entry:{anchorQuality:fvgStrength,executionQuality},
     risk:{invalidationQuality,geometryQuality},
     target,
-    confirmation:{quality:Math.min(1,.35+(sweep.quality?.penetrationATR>=.35?.15:.08)+(sweep.quality?.reclaimDepthATR>=.2?.12:.05)+(displacement.atrMultiple>=1.35?.28:.15))*(inCorrectPremiumDiscountZone?1:.8)},
+    confirmation:{quality:Math.min(1,.35+(sweep.quality?.penetrationATR>=.35?.15:.08)+(sweep.quality?.reclaimDepthATR>=.2?.12:.05)+(displacement.atrMultiple>=1.35?.28:.15))*premiumDiscountConfluenceFactor(inCorrectPremiumDiscountZone)},
     freshness:{quality:Math.min(1,.35+ageQuality(sweep.age,2,8)*.4+Math.min(1,displacement.atrMultiple/1.5)*.25)}
   });
   const grade=enforceFreshnessGrade(baseGrade,sweep.age);
