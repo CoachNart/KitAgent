@@ -401,10 +401,10 @@ for(const symbol of symbols){
           const score=Number.isFinite(Number(result.grade?.score))?Number(result.grade.score):null;
           if(grade==='A')stat.gradeA++;
           else if(grade==='A+')stat.gradeAplus++;
+          else if(grade==='B')stat.gradeB++;
           else{
             stat.gradeRejected++;
-            if(grade==='B')stat.gradeB++;
-            else if(grade==='C')stat.gradeC++;
+            if(grade==='C')stat.gradeC++;
             else stat.gradeOther++;
             rejection(strategy,tf,'EXECUTABLE SETUP BELOW PUBLICATION GRADE: '+grade+(score===null?'':' ('+score+'/100)'));
             if(gradeRejectionAudit.length<120){
@@ -482,8 +482,8 @@ for(const symbol of symbols){
           tradeAudit.push({...auditBase,outcome:outcome.result,exit:outcome.exit,exitTime:new Date(outcome.exitTime??cutoff).toISOString(),grossR:+gross.toFixed(3),netR:+net.toFixed(3),reason:outcome.result==='loss'?'Stop reached':'Target reached'});
         }
 
-        // The live publication contract remains unchanged: A/A+ only.
-        if(!['A','A+'].includes(grade))continue;
+        // B is now a separately labelled publication tier; C/NO-TRADE remain diagnostic only.
+        if(!['A','A+','B'].includes(grade))continue;
         stat.tradeCandidates++;
       }
     }
