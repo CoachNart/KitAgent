@@ -423,7 +423,7 @@ assert('SMC diagnostics distinguish a pending limit on the wrong side of price',
 assert('SMC accepts a correctly sided unmitigated FVG limit within the 1.5 ATR execution-distance cap',()=>{
   const c=Array.from({length:40},(_,i)=>bar(i,102,103,101,102.2)),diagnostics={};
   const trade=buildTrade({c,price:102.4,direction:'BULLISH',sweep:{extreme:98.5},mss:{level:100},displacement:{index:37},fvg:{direction:'BULLISH',index:38,low:99.5,high:100.5,midpoint:100},target:116,diagnostics});
-  return trade?.orderType==='LIMIT'&&trade.entry===100.5&&trade.target===116&&
+  return trade?.orderType==='LIMIT'&&trade.entry===100&&trade.target===116&&
     diagnostics.pendingLimitTooFar===undefined&&diagnostics.pendingLimitWrongSide===undefined;
 });
 assert('SMC rejects a correctly sided but stale FVG limit beyond 1.5 ATR',()=>{
