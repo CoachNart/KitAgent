@@ -17,11 +17,10 @@ assert('Pending limit entry rejects a candle that closes after the 24-hour deadl
 assert('Historical 1H replay accepts the final fully-contained hour of the live window',isCandleWithinWindow(pendingStart+23*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
 assert('Historical 1H replay rejects an entry candle beginning at the 24-hour deadline',!isCandleWithinWindow(pendingStart+24*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
 const batchFixtures=Array.from({length:25},(_,i)=>({id:'signal-'+i,status:'limit_pending',generatedAt:new Date(Date.UTC(2026,0,1)+i*1000).toISOString()}));
-const firstOutcomeBatch=selectOutcomeBatch(batchFixtures,24);
-const checkedBatchFixtures=batchFixtures.map(s=>firstOutcomeBatch.includes(s.id)?{...s,lastOutcomeCheckAt:new Date().toISOString()}:s);
-const secondOutcomeBatch=selectOutcomeBatch(checkedBatchFixtures,24);
+const firstOutcomeBatch=selectOutcomeBatch(batchFixtures,24,0);
+const secondOutcomeBatch=selectOutcomeBatch(batchFixtures,24,1);
 assert('Outcome polling rotates to older unprocessed signals instead of starving them behind the first 24',
-  firstOutcomeBatch.length===24&&secondOutcomeBatch.includes('signal-24')&&!secondOutcomeBatch.includes('signal-0'));
+  firstOutcomeBatch.length===24&&secondOutcomeBatch.length===1&&secondOutcomeBatch[0]==='signal-24');
 const candleStart=Math.floor((Date.now()-2*60*60*1000)/1800000)*1800000;
 const nextCandle=candleStart+30*60000;
 const generatedAt=new Date(candleStart).toISOString();
