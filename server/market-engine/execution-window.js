@@ -25,3 +25,19 @@ export function isCompleteCandleWindow(candles,startTime,endTime,candleDurationM
     candles.every((c,i)=>Number.isFinite(c.time)&&
       (i===0||c.time-candles[i-1].time===candleDurationMs));
 }
+
+ 
+// Return the closed candle that straddles the deadline separately. Its OHLC
+// cannot prove whether an entry touch happened before or after expiry.
+export function pendingWindowCoverage(candles,startTime,endTime,candleDurationMs){
+  if(!Array.isArray(candles)||!candles.length)return{complete:false,boundaryCandle:null};
+  const boundaryIndex=candles.findIndex(c=>Number.isFinite(c?.time)&&
+    c.time<endTime&&c.time+candleDurationMs>endTime);
+  const coverage=boundaryIndex>=0
+    ?candles.slice(0,boundaryIndex+1)
+    :candles.filter(c=>Number.isFinite(c?.time)&&c.time<endTime);
+  return{
+    complete:isCompleteCandleWindow(coverage,startTime,endTime,candleDurationMs),
+    boundaryCandle:boundaryIndex>=0?candles[boundaryIndex]:null
+  };
+}
