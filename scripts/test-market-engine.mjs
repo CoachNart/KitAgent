@@ -238,7 +238,7 @@ stopWickInvalidationCandles[45]=bar(45,99,101,97,100); // Valid sell-side sweep 
 stopWickInvalidationCandles[50]=bar(50,99,100,96.5,99); // Wick crosses the buffered stop, but closes above the sweep extreme.
 assert('SMC invalidates a sweep when a later wick has already hit its buffered stop',()=>!findSweeps(stopWickInvalidationCandles,'BULLISH').some(x=>x.swingIndex===40&&x.index===45));
 const freshSweepAudit=findSweeps(freshPoolCandles,'BULLISH').find(x=>x.swingIndex===40&&x.index===45);
-assert('SMC normalizes historical sweep quality using ATR available at the sweep candle',()=>!!freshSweepAudit&&Math.abs(freshSweepAudit.quality.penetrationATR-1/atr(freshPoolCandles.slice(0,46),14))<1e-9);
+assert('SMC normalizes historical sweep quality using ATR available before the sweep candle',()=>!!freshSweepAudit&&Math.abs(freshSweepAudit.quality.penetrationATR-1/atr(freshPoolCandles.slice(0,45),14))<1e-9);
 const smcConflict=evaluateSMC({candles:smcCandles,layers:[{tf:'4H',structure:{direction:'BULLISH'}},{tf:'2H',structure:{direction:'BEARISH'}},{tf:'LTF',structure:{direction:'BULLISH'}}],price:108.9});
 assert('SMC rejects conflicting higher-timeframe bias',()=>smcConflict.direction==='NEUTRAL'&&smcConflict.failures.some(x=>x.includes('conflicts')));
 
