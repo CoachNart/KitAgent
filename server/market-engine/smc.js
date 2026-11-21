@@ -158,7 +158,7 @@ function findSweeps(c,direction){
   }
   return out.sort((a,b)=>a.index-b.index);
 }
-export function isEntryInPremiumDiscount(direction,entry,equilibrium){
+function isEntryInPremiumDiscount(direction,entry,equilibrium){
   if(!Number.isFinite(entry)||!Number.isFinite(equilibrium))return false;
   return direction==='BULLISH'?entry<equilibrium:direction==='BEARISH'?entry>equilibrium:false;
 }
