@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents,confirmedSwings} from '../server/market-engine/structure.js';
 import {liquidityMap} from '../server/market-engine/liquidity.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,MAX_SWEEP_AGE_BARS,sweepQuality,isEntryInPremiumDiscount,premiumDiscountConfluenceFactor,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,MAX_SWEEP_AGE_BARS,isSweepFresh,sweepQuality,isEntryInPremiumDiscount,premiumDiscountConfluenceFactor,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -200,7 +200,7 @@ smcCandles[44]=bar(44,105.6,108.8,105.4,108.5);
 smcCandles[45]=bar(45,108.5,109.2,108.4,108.9);
 const smcLayers=[{tf:'4H',candles:smcCandles,structure:{direction:'BULLISH'}},{tf:'LTF',candles:smcCandles,structure:{direction:'BULLISH'}}];
 assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQUIDITY_SWEEP_MSS_DISPLACEMENT_FVG');
-assert('SMC refuses to publish a setup after its liquidity sweep ages beyond eight 1H bars',MAX_SWEEP_AGE_BARS===8);
+assert('SMC accepts fresh sweeps through eight 1H bars and rejects older sweeps',()=>MAX_SWEEP_AGE_BARS===8&&isSweepFresh(8)&&!isSweepFresh(9)&&!isSweepFresh(-1));
 assert('SMC bullish premium/discount classification identifies discount entries',()=>isEntryInPremiumDiscount('BULLISH',99,100)&&!isEntryInPremiumDiscount('BULLISH',100,100)&&!isEntryInPremiumDiscount('BULLISH',101,100));
 assert('SMC bearish premium/discount classification identifies premium entries',()=>isEntryInPremiumDiscount('BEARISH',101,100)&&!isEntryInPremiumDiscount('BEARISH',100,100)&&!isEntryInPremiumDiscount('BEARISH',99,100));
 assert('SMC premium/discount classification rejects missing or neutral inputs',()=>!isEntryInPremiumDiscount('BULLISH',null,100)&&!isEntryInPremiumDiscount('NEUTRAL',99,100));
