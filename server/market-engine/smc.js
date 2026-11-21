@@ -277,7 +277,10 @@ export function evaluateSMC({candles,layers,price}){
     stages.freshFvgAndSize++;
     const rangeCandidate=preSweepDealingRange(c,sweepCandidate);
     if(!rangeCandidate)continue;
-    // Premium/discount classifies the planned FVG entry, not the sweep wick.\n    // Measuring the wick against a range whose boundary is the swept pool\n    // makes this filter pass almost automatically and adds no entry-location edge.\n    const premiumDiscountDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
+    // Premium/discount classifies the planned FVG entry, not the sweep wick.
+    // Measuring the wick against a range whose boundary is the swept pool
+    // makes this filter pass almost automatically and adds no entry-location edge.
+    const premiumDiscountDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
     const rangeAtr=atr(c.slice(0,sweepCandidate.index),14)||0;
     if(rangeAtr>0){
       stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;
@@ -287,7 +290,8 @@ export function evaluateSMC({candles,layers,price}){
       direction,sweepIndex:sweepCandidate.index,sweepLevel:sweepCandidate.level,sweepExtreme:sweepCandidate.extreme,
       mssIndex:mssCandidate.index,mssLevel:mssCandidate.level,fvgIndex:fvgCandidate.index,
       fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
-      premiumDiscountReference:'FVG_ENTRY_VS_PRE_SWEEP_CONFIRMED_SWING_RANGE',\n      entryPrice:fvgCandidate.midpoint,
+      premiumDiscountReference:'FVG_ENTRY_VS_PRE_SWEEP_CONFIRMED_SWING_RANGE',
+      entryPrice:fvgCandidate.midpoint,
       atr:rangeAtr,
       structuralRangeHigh:rangeCandidate.high,structuralRangeLow:rangeCandidate.low,
       structuralEquilibrium:rangeCandidate.equilibrium,
