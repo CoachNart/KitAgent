@@ -2,7 +2,7 @@ import {buildMSNRLevels,latestMSNRConfirmations,recentMSNRConfirmations,evaluate
 import {evaluateStrategy,STRATEGIES} from '../server/market-engine/strategies.js';
 import {structure,selectStructuralTarget,rankStructuralTargets,structuralBreakEvents} from '../server/market-engine/structure.js';
 import {liquidityMap} from '../server/market-engine/liquidity.js';
-import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,SMC_MODEL} from '../server/market-engine/smc.js';
+import {evaluateSMC,fvgAt,meaningfulDisplacement,displacementFvgForMss,findSweeps,buildTrade,swingBreakAfter,freshFvg,nextLiquidityTarget,limitEntryQuality,hasConfirmedContextTrend,sweepQuality,SMC_MODEL} from '../server/market-engine/smc.js';
 import {evaluateTopDown,scoreSetup,TOP_DOWN_MODEL,executionOrderType,findValidRetest} from '../server/market-engine/topDown.js';
 import {evaluatePullback,PULLBACK_MODEL} from '../server/market-engine/pullback.js';
 import {evaluateBreakout,BREAKOUT_MODEL} from '../server/market-engine/breakout.js';
@@ -168,6 +168,9 @@ assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const 
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
 assert('SMC displacement rejects marginal impulses below 1.30 ATR',()=>{const c=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));c[19]=bar(19,100,100.22,99.98,100.21);return meaningfulDisplacement(c,19,'BULLISH')===null;});
 assert('SMC displacement is measured against pre-impulse ATR, not ATR inflated by the candidate candle',()=>{const c=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));c[19]=bar(19,100,100.26,100,100.25);const d=meaningfulDisplacement(c,19,'BULLISH');return d!==null&&d.atrMultiple>=1.3;});
+const sweepAtrFixture=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));
+sweepAtrFixture[19]=bar(19,100,100.965,99.965,100.025);
+assert('SMC sweep quality uses pre-sweep ATR rather than ATR inflated by the sweep wick',()=>sweepQuality(sweepAtrFixture,sweepAtrFixture[19],'BULLISH',100,19)!==null);
 const preMssImpulse=Array.from({length:46},(_,i)=>bar(i,100,101,99,100));
 preMssImpulse[43]=bar(43,100,103.2,100,103);
 preMssImpulse[44]=bar(44,103.7,104.2,103.5,104);

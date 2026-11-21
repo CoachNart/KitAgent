@@ -16,12 +16,12 @@ const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
 const MAX_LIQUIDITY_POOL_AGE=40;
 const MIN_FVG_SIZE_ATR=.10;
-// Filter marginal impulse legs: the prior resolved A-grade loss had only 1.2057 ATR displacement.
-// Stronger displacement is required before the MSS/FVG sequence can qualify.
+// Minimum impulse-size filter; its 1.30 ATR value remains under replay validation.
 const MIN_DISPLACEMENT_ATR=1.30;
 
-function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
-  const a=atr(c.slice(0,asOfIndex+1),14);
+export function sweepQuality(c,x,direction,level,asOfIndex=c.length-1){
+  // Compare the sweep to volatility before the raid, not an ATR inflated by its wick.
+  const a=atr(c.slice(0,asOfIndex),14);
   const r=x?.high-x?.low;
   if(!x||!a||!Number.isFinite(r)||r<=0)return null;
   const penetration=direction==='BULLISH'?level-x.low:x.high-level;
