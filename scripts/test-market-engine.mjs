@@ -24,10 +24,10 @@ const assert=(name,okOrFn,detail='')=>{
 };
 const freshAPlus={grade:'A+',score:96,confidenceEvidence:[]};
 const freshA={grade:'A',score:88,confidenceEvidence:[]};
-assert('Fresh sweep retains A+ eligibility',()=>enforceFreshnessGrade(freshAPlus,1).grade==='A+');
-assert('A+ is capped at A when the sweep is older than two 1H bars',()=>enforceFreshnessGrade(freshAPlus,3).grade==='A'&&enforceFreshnessGrade(freshAPlus,3).score<=91);
-assert('A is capped at B when the sweep is older than eight 1H bars',()=>enforceFreshnessGrade(freshA,9).grade==='B'&&enforceFreshnessGrade(freshA,9).score<=83);
-assert('A-grade freshness gate prevents a 15-bar-old sweep from publication',()=>enforceFreshnessGrade(freshA,15).grade==='B');
+assert('Fresh actionable FVG retains A+ eligibility',()=>enforceFreshnessGrade(freshAPlus,1).grade==='A+');
+assert('A+ is capped at A when the actionable FVG is older than two 1H bars',()=>enforceFreshnessGrade(freshAPlus,3).grade==='A'&&enforceFreshnessGrade(freshAPlus,3).score<=91);
+assert('A is capped at B when the actionable FVG is older than eight 1H bars',()=>enforceFreshnessGrade(freshA,9).grade==='B'&&enforceFreshnessGrade(freshA,9).score<=83);
+assert('A-grade freshness gate prevents a 15-bar-old actionable FVG from publication',()=>enforceFreshnessGrade(freshA,15).grade==='B');
 assert('Freshness gate does not upgrade an already lower grade',()=>enforceFreshnessGrade({grade:'C',score:70},15).grade==='C');
 assert('Execution timeframe allowlist contains only the 1H execution timeframe',executionTimeframesAreCorrect);
 assert('Crypto universe includes major USDT perpetual markets',()=>isSupportedCryptoPerpetualSymbol('BTCUSDT')&&isSupportedCryptoPerpetualSymbol('SOLUSDT'));
