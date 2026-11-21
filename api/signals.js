@@ -126,7 +126,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   // A limit order whose first entry-touching 30m candle also touches TP or SL
   // cannot be proven filled-before-exit from OHLC alone. Keep it out of the
   // verified trade record instead of guessing the intrabar path.
-  if(signal.status==='activation_ambiguous'&&signal.outcomeEvidence?.event==='ENTRY_AND_EXIT_SAME_CANDLE')return signal;
+  if(signal.status==='activation_ambiguous')return signal;
   const market=String(signal.market||'').toLowerCase();
   if(market!=='perpetual')return {...signal,currentPrice:price,status:['target_hit','stop_hit','missed_entry'].includes(signal.status)?'watching':signal.status||'watching',result:null,pnlPercent:null,exitPrice:null,closedAt:null,outcomeEvidence:null};
   const candles=await marketKlines(signal);
