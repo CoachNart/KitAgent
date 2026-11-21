@@ -26,7 +26,7 @@ jobs:
         # geo-blocked by Bybit. Use the full supported crypto-only 1H universe and deeper history so the
         # replay measures genuine SMC events across more liquid crypto markets.
         # The 3R and expectancy gates remain intact; no equity/commodity tokens.
-        run: npm run test:market-engine-replay -- --universe-limit=60 --bars=4000 --forward-bars=168 --history-candles=5000 --round-trip-cost-bps=10
+        run: npm run test:market-engine-replay -- --universe-limit=100 --bars=4000 --forward-bars=168 --history-candles=5000 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
         run: |
