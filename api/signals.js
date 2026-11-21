@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { authenticate, requireActiveAccess } from '../server/access.js';
-import {isCandleWithinWindow,pendingEntryDeadline,isCompleteCandleWindow} from '../server/market-engine/execution-window.js';
+import {isCandleWithinWindow,pendingEntryDeadline,isCompleteCandleWindow,pendingWindowCoverage} from '../server/market-engine/execution-window.js';
 const ACTIVE_STRATEGIES=new Set(['TOP_DOWN','PULLBACK','BREAKOUT','SMC','MSNR','CRT']);
 const ENGINE_VERSIONS=new Set(['market-engine-v5','market-engine-v6','market-engine-v7']);
 const REQUEST_TIMEFRAMES=new Set(['AUTO','30m','1H','2H','4H']);
@@ -176,9 +176,17 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     }
   } else return {...signal,currentPrice:price,status:'watching'};
   if(!active){
-    const completePendingWindow=isCompleteCandleWindow(candles,generatedMs,pendingDeadline,MONITOR_CANDLE_DURATION_MS);
-    if(order==='LIMIT'&&Number.isFinite(pendingDeadline)&&nowMs>=pendingDeadline&&completePendingWindow)
+    const pendingCoverage=pendingWindowCoverage(candles,generatedMs,pendingDeadline,MONITOR_CANDLE_DURATION_MS);
+    if(order==='LIMIT'&&Number.isFinite(pendingDeadline)&&nowMs>=pendingDeadline&&pendingCoverage.complete){
+      const boundary=pendingCoverage.boundaryCandle;
+      const boundaryEntryTouched=boundary&&(dir==='LONG'
+        ?boundary.low<=entry&&boundary.high>=entry
+        :boundary.high>=entry&&boundary.low<=entry);
+      if(boundaryEntryTouched)
+        return {...signal,currentPrice:price,status:'activation_ambiguous',result:null,pnlPercent:null,exitPrice:null,closedAt:null,
+          outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'ENTRY_WINDOW_BOUNDARY_AMBIGUOUS',candleTime:new Date(boundary.time).toISOString(),deadline:new Date(pendingDeadline).toISOString(),note:'The only candle overlapping the 24-hour expiry touched the limit price; OHLC cannot prove whether entry occurred before expiry.'}};
       return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(pendingDeadline).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'LIMIT_WINDOW_EXPIRED',deadline:new Date(pendingDeadline).toISOString(),note:'Complete 30m market data confirms no valid entry fill occurred within 24 hours of publication.'}};
+    }
     return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
   }
   let ambiguous=false;
