@@ -149,12 +149,15 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   if(order==='MARKET'){active=true;activatedAt=Number.isFinite(activatedAt)?activatedAt:generatedMs;}
   else if(order==='LIMIT' && Number.isFinite(activatedAt))active=true;
   else if(order==='LIMIT'){
-    for(const candle of candles){
+    for(let i=0;i<candles.length;i++){
+      const candle=candles[i];
       if(candle.time<generatedMs)continue;
       // Only fully closed 30m candles inside the publication window may fill
       // a pending order. A partial candle crossing the 24h deadline is not a
-      // valid historical fill.
+      // valid historical fill. Missing bars also make later OHLC outcomes
+      // unverifiable, so stop at the first gap rather than guessing.
       if(!isCandleWithinWindow(candle.time,generatedMs,MONITOR_CANDLE_DURATION_MS,PENDING_ENTRY_WINDOW_MS))continue;
+      if(!isCompleteCandleWindow(candles.slice(0,i+1),generatedMs,candle.time+MONITOR_CANDLE_DURATION_MS,MONITOR_CANDLE_DURATION_MS))break;
       const entryTouched=dir==='LONG'?candle.low<=entry&&candle.high>=entry:candle.high>=entry&&candle.low<=entry;
       const invalidated=dir==='LONG'?candle.low<=sl:candle.high>=sl;
       const targetTouched=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
@@ -180,12 +183,15 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   }
   let ambiguous=false;
   const activationCandleStart=Math.floor(Number(activatedAt)/1800000)*1800000;
+  const activeHistory=[];
   for(const candle of candles){
     if(candle.time<activatedAt)continue;
     // A MARKET signal may be generated part-way through a 30-minute candle.
     // OHLC cannot tell whether TP/SL was touched before or after generation,
     // so the overlapping candle is excluded unless generation happened exactly at its start.
     if(candle.time===activationCandleStart&&Number(activatedAt)>candle.time)continue;
+    activeHistory.push(candle);
+    if(!isCompleteCandleWindow(activeHistory,activatedAt,candle.time+MONITOR_CANDLE_DURATION_MS,MONITOR_CANDLE_DURATION_MS))break;
     const hitSL=dir==='LONG'?candle.low<=sl:candle.high>=sl;
     const hitTP=dir==='LONG'?candle.high>=tp1:candle.low<=tp1;
     if(hitSL&&hitTP){ambiguous=true;break;}
