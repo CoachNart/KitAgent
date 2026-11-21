@@ -1,4 +1,4 @@
-import { closedCandles, validateCandles } from './data.js';
+import { closedCandles, validateCandles, analysisWindow, MARKET_ANALYSIS_CANDLE_LIMIT } from './data.js';
 import { analyzeOne, fetchPrice, fetchTf } from './index.js';
 import { SMC_MODEL } from './smc.js';
 import { isSupportedCryptoPerpetualSymbol } from './crypto-universe.js';
@@ -42,9 +42,11 @@ export async function candlesFor(symbol){
     fetchTf('perpetual',symbol,'4H'),
     fetchTf('perpetual',symbol,'1H')
   ]);
+  const contextClosed=closedCandles(context,'4H');
+  const executionClosed=closedCandles(execution,'1H');
   return {
-    '4H':closedCandles(context,'4H'),
-    '1H':closedCandles(execution,'1H')
+    '4H':analysisWindow(contextClosed,contextClosed.length,MARKET_ANALYSIS_CANDLE_LIMIT),
+    '1H':analysisWindow(executionClosed,executionClosed.length,MARKET_ANALYSIS_CANDLE_LIMIT)
   };
 }
 
