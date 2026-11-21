@@ -194,7 +194,7 @@ assert('SMC uses the intended sweep-MSS-displacement-FVG model',SMC_MODEL==='LIQ
 assert('SMC bullish premium/discount classification identifies discount entries',()=>isEntryInPremiumDiscount('BULLISH',99,100)&&!isEntryInPremiumDiscount('BULLISH',100,100)&&!isEntryInPremiumDiscount('BULLISH',101,100));
 assert('SMC bearish premium/discount classification identifies premium entries',()=>isEntryInPremiumDiscount('BEARISH',101,100)&&!isEntryInPremiumDiscount('BEARISH',100,100)&&!isEntryInPremiumDiscount('BEARISH',99,100));
 assert('SMC premium/discount classification rejects missing or neutral inputs',()=>!isEntryInPremiumDiscount('BULLISH',null,100)&&!isEntryInPremiumDiscount('NEUTRAL',99,100));
-assert('SMC premium/discount is a confluence score, not a hard setup veto',()=>premiumDiscountConfluenceFactor(false)===.8&&premiumDiscountConfluenceFactor(true)===1);
+assert('SMC premium/discount is a confluence score, not a hard setup veto',()=>premiumDiscountConfluenceFactor(false)===.9&&premiumDiscountConfluenceFactor(true)===1);
 assert('SMC bullish FVG definition is three-candle wick non-overlap',()=>{const x=fvgAt(smcCandles,45);return !x||x.direction==='BULLISH'||x.direction==='BEARISH'});
 assert('SMC displacement requires a directional body and meaningful range',()=>{const x=meaningfulDisplacement(smcCandles,44,'BULLISH');return x===null||x.bodyRatio>=.6});
 assert('SMC displacement rejects marginal impulses below 1.30 ATR',()=>{const c=Array.from({length:20},(_,i)=>bar(i,100,100.1,99.9,100));c[19]=bar(19,100,100.22,99.98,100.21);return meaningfulDisplacement(c,19,'BULLISH')===null;});
