@@ -1,5 +1,10 @@
 name: Market Engine Regression
 
+# A full 60-market replay is expensive; only validate the newest branch commit.
+concurrency:
+  group: market-engine-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main, work/daily-quality-setups-rebuild-20261116]
