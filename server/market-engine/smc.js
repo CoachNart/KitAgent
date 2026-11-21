@@ -15,6 +15,9 @@ const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
 const MAX_LIQUIDITY_POOL_AGE=40;
+// Replay sensitivity showed older raids materially degrade execution quality.
+// A sweep older than eight 1H bars is no longer treated as an actionable setup.
+export const MAX_SWEEP_AGE_BARS=8;
 const MIN_FVG_SIZE_ATR=.10;
 // Minimum impulse-size filter; its 1.30 ATR value remains under replay validation.
 const MIN_DISPLACEMENT_ATR=1.30;
@@ -271,7 +274,7 @@ export function evaluateSMC({candles,layers,price}){
     failures.push('Higher-timeframe structure conflicts with the primary SMC bias.');
     return{direction:'NEUTRAL',failures,evidence:[]};
   }
-  const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=16);
+  const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>x.age<=MAX_SWEEP_AGE_BARS);
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishOutOfZone:0,premiumDiscountBearishOutOfZone:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,targetNoQualifiedStructure:0,targetOutOfReach:0,nearestTargetBelow3R:0,executionRejections:{invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0},geometryFailureReasons:{},pendingLimitAudit:[]}]};}
 
   const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishOutOfZone:0,premiumDiscountBearishOutOfZone:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,targetNoQualifiedStructure:0,targetOutOfReach:0,nearestTargetBelow3R:0};
