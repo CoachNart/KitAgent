@@ -3,6 +3,13 @@ export const MARKET_ANALYSIS_CANDLE_LIMIT=999;
 const TF_MS={ '30m':1800000,'1H':3600000,'2H':7200000,'4H':14400000,'1D':86400000,'1W':604800000 };
 export const EXECUTION_TIMEFRAMES=['1H'];
 export const CONTEXT_CHAIN=['4H','1H'];
+export function replayHistoryRequirements(decisionBars,forwardBars,analysisLimit=MARKET_ANALYSIS_CANDLE_LIMIT){
+ const decisions=Math.max(1,Math.floor(Number(decisionBars)||1));
+ const forward=Math.max(1,Math.floor(Number(forwardBars)||1));
+ const analysis=Math.max(40,Math.floor(Number(analysisLimit)||MARKET_ANALYSIS_CANDLE_LIMIT));
+ const span=decisions+forward;
+ return {'1H':analysis+span,'4H':analysis+Math.ceil(span/4),'30m':span*2};
+}
 export function analysisWindow(candles,endExclusive,limit=MARKET_ANALYSIS_CANDLE_LIMIT){
  const end=Math.max(0,Math.min(Array.isArray(candles)?candles.length:0,Math.floor(Number(endExclusive)||0)));
  const size=Math.max(1,Math.floor(Number(limit)||MARKET_ANALYSIS_CANDLE_LIMIT));
