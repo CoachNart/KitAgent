@@ -408,6 +408,10 @@ export function evaluateSMC({candles,layers,price}){
   }
 
   const {sweep,mss,displacement,fvg,range,target,trade,inCorrectPremiumDiscountZone}=selected;
+  // Publication freshness belongs to the actionable FVG, not the original
+  // sweep. MSS/displacement may legitimately take several bars to confirm;
+  // an untouched FVG is still a fresh pending entry even when the sweep is older.
+  const setupAgeBars=Math.max(0,c.length-1-fvg.index);
   const contextLayer=ordered[0];
   const contextStructure=contextLayer?.structure||{};
   // A confirmed HH/HL or LH/LL sequence is a directional trend even when
@@ -441,10 +445,11 @@ export function evaluateSMC({candles,layers,price}){
     risk:{invalidationQuality,geometryQuality},
     target,
     confirmation:{quality:Math.min(1,.35+(sweep.quality?.penetrationATR>=.35?.15:.08)+(sweep.quality?.reclaimDepthATR>=.2?.12:.05)+(displacement.atrMultiple>=1.35?.28:.15))*premiumDiscountConfluenceFactor(inCorrectPremiumDiscountZone)},
-    freshness:{quality:Math.min(1,.35+ageQuality(sweep.age,2,8)*.4+Math.min(1,displacement.atrMultiple/1.5)*.25)}
+    freshness:{quality:Math.min(1,.35+ageQuality(setupAgeBars,2,8)*.4+Math.min(1,displacement.atrMultiple/1.5)*.25)}
   });
-  const grade=enforceFreshnessGrade(baseGrade,sweep.age);
+  const grade=enforceFreshnessGrade(baseGrade,setupAgeBars);
   trade.sweepAgeBars=sweep.age;
+  trade.setupAgeBars=setupAgeBars;
   trade.sweepTime=sweep.time??c[sweep.index]?.time??null;
   return{direction,grade,trade,failures:[],evidence:[{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',entryInPreferredZone:inCorrectPremiumDiscountZone,equilibrium:range.equilibrium,entry:fvg.midpoint,interpretation:'Confluence only; a valid SMC sequence is not rejected solely for local dealing-range location.'},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }
