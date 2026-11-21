@@ -64,6 +64,8 @@ try{
   const verified=await resolveStatus(baseSignal,97.5);
   assert('A clean entry candle followed by a later stop candle resolves as a loss',
     verified.status==='stop_hit'&&verified.result==='loss'&&verified.closedAt!=null&&verified.outcomeEvidence?.event==='STOP_TOUCH');
+  assert('A LIMIT activation timestamp is the close of the completed 30m entry candle',
+    verified.activatedAt===new Date(nextCandle).toISOString());
 
   const fallbackHosts=[];
   globalThis.fetch=async input=>{
