@@ -80,7 +80,8 @@ export async function marketKlines(signal) {
       pages+=1;
     }
     return [...new Map(all.map(c=>[c.time,c])).values()]
-      .filter(c=>c.time>=startMs&&c.time<=now)
+      // Only fully closed 30m candles are eligible for outcome verification.
+      .filter(c=>c.time>=startMs&&c.time+MONITOR_CANDLE_DURATION_MS<=now)
       .sort((a,b)=>a.time-b.time);
   } catch { return []; }
 }
@@ -112,10 +113,8 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
   const candles=await marketKlines(signal);
   if(!candles.length){
     const orderType=String(signal.orderType||'').toUpperCase();
-    const generatedMs=toMs(signal.generatedAt||signal.createdAt);
-    const deadline=orderType==='LIMIT'&&Number.isFinite(generatedMs)?pendingEntryDeadline(generatedMs,PENDING_ENTRY_WINDOW_MS):null;
-    if(Number.isFinite(deadline)&&nowMs>=deadline)
-      return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(deadline).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'LIMIT_WINDOW_EXPIRED',deadline:new Date(deadline).toISOString(),note:'No valid entry fill occurred within 24 hours of publication.'}};
+    // No market data means no reliable conclusion about whether a limit filled.
+    // Keep the record pending rather than falsely marking it missed.
     return {...signal,currentPrice:price,status:orderType==='MARKET'?'open':orderType==='LIMIT'?'limit_pending':signal.status||'watching'};
   }
   const livePrice=Number.isFinite(Number(price))?price:candles.at(-1)?.close??null;
@@ -155,8 +154,12 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
     }
   } else return {...signal,currentPrice:price,status:'watching'};
   if(!active){
-    if(order==='LIMIT'&&Number.isFinite(pendingDeadline)&&nowMs>=pendingDeadline)
-      return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(pendingDeadline).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'LIMIT_WINDOW_EXPIRED',deadline:new Date(pendingDeadline).toISOString(),note:'No valid entry fill occurred within 24 hours of publication.'}};
+    const completePendingWindow=candles.length>0&&
+      candles[0].time<=generatedMs+MONITOR_CANDLE_DURATION_MS&&
+      candles.at(-1).time+MONITOR_CANDLE_DURATION_MS>=pendingDeadline&&
+      candles.every((c,i)=>i===0||c.time-candles[i-1].time===MONITOR_CANDLE_DURATION_MS);
+    if(order==='LIMIT'&&Number.isFinite(pendingDeadline)&&nowMs>=pendingDeadline&&completePendingWindow)
+      return {...signal,currentPrice:price,status:'missed_entry',result:'missed',missedAt:new Date(pendingDeadline).toISOString(),outcomeEvidence:{source:'bybit_30m_ohlc',engineVersion:'market-engine',event:'LIMIT_WINDOW_EXPIRED',deadline:new Date(pendingDeadline).toISOString(),note:'Complete 30m market data confirms no valid entry fill occurred within 24 hours of publication.'}};
     return {...signal,currentPrice:price,status:order==='LIMIT'?'limit_pending':'watching'};
   }
   let ambiguous=false;
