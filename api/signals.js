@@ -168,7 +168,7 @@ export async function resolveStatus(signal,price,nowMs=Date.now()) {
         }
         // Activate only after an entry-touching candle with no TP/SL touch has
         // completed. Later candles can then be evaluated without guessing.
-        active=true;activatedAt=candle.time+60000;break;
+        active=true;activatedAt=candle.time+MONITOR_CANDLE_DURATION_MS;break;
       }
     }
   } else return {...signal,currentPrice:price,status:'watching'};
