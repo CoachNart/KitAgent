@@ -35,15 +35,24 @@ function ageQuality(age,fresh=2,recent=5){
 }
 function targetQuality(target={}){
   const source=String(target.source||'').toUpperCase();
-  let q=0.55;
-  if(target.native||source.includes('CRT_OPPOSITE')||source.includes('IMPULSE_EXTREME'))q=.95;
-  else if(source.includes('HTF_MAJOR'))q=.95;
-  else if(source.includes('MAJOR_SWING'))q=.88;
-  else if(source.includes('EXTERNAL')||source.includes('MSNR'))q=.78;
-  if(target.pool==='LIQUIDITY_POOL')q=Math.max(q,.96);
-  else if(target.pool==='REPEATED_STRUCTURE')q=Math.max(q,.88);
-  if(Number.isFinite(target.quality))q=Math.max(q,clamp((target.quality-78)/32));
-  return clamp(q);
+  let provenance=0.5;
+  if(target.native||source.includes('CRT_OPPOSITE')||source.includes('IMPULSE_EXTREME'))provenance=.95;
+  else if(source.includes('HTF_MAJOR'))provenance=.9;
+  else if(source.includes('MAJOR_SWING'))provenance=.8;
+  else if(source.includes('EXTERNAL')||source.includes('MSNR'))provenance=.65;
+  if(target.pool==='LIQUIDITY_POOL')provenance=Math.max(provenance,.95);
+  else if(target.pool==='REPEATED_STRUCTURE')provenance=Math.max(provenance,.82);
+
+  // Structural target strength is a ranking score (typically ~78–160), not
+  // a percentage. The old (quality-78)/32 conversion saturated nearly every
+  // confirmed major swing at 100%, making targetScore 20/20 for winners and
+  // losers alike. Normalize over the observed ranking scale, then combine
+  // measured strength with provenance instead of allowing either to dominate.
+  if(!Number.isFinite(target.quality))return clamp(provenance);
+  const measured=target.quality<=1
+    ?clamp(target.quality)
+    :clamp((target.quality-70)/90);
+  return clamp(measured*.65+provenance*.35);
 }
 
 // Quality scores describe the strength of structural evidence, not a
@@ -51,9 +60,9 @@ function targetQuality(target={}){
 // at least 3R plus structurally meaningful, executable entry/stop/target geometry.
 export function gradeSetup({strategy,context={},entry={},risk={},target={},confirmation={},freshness={}}={}){
   const contextScore=15*clamp(context.aligned?1:0)*(context.trend?1:.72);
-  const entryScore=25*(clamp(entry.anchorQuality)*.65+clamp(entry.executionQuality)*.35);
-  const riskScore=20*(clamp(risk.invalidationQuality)*.7+clamp(risk.geometryQuality)*.3);
-  const targetScore=20*targetQuality(target);
+  const entryScore=30*(clamp(entry.anchorQuality)*.65+clamp(entry.executionQuality)*.35);
+  const riskScore=25*(clamp(risk.invalidationQuality)*.7+clamp(risk.geometryQuality)*.3);
+  const targetScore=10*targetQuality(target);
   const confirmationScore=10*clamp(confirmation.quality);
   const freshnessScore=10*clamp(freshness.quality ?? ageQuality(freshness.age,freshness.fresh,freshness.recent));
   let score=contextScore+entryScore+riskScore+targetScore+confirmationScore+freshnessScore;
