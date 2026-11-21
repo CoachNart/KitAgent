@@ -31,8 +31,10 @@ async function candlesSince(symbol,startMs){
         if(!r.ok){lastError='Bybit candles HTTP '+r.status;continue;}
         const b=await r.json();
         if(b?.retCode!==0){lastError='Bybit candles retCode '+b?.retCode;continue;}
-        rows=(b.result?.list||[]).slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
+        if(!Array.isArray(b?.result?.list)||!b.result.list.length){lastError='Bybit returned no candles';continue;}
+        rows=b.result.list.slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
           .filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));
+        if(!rows.length){lastError='Bybit returned invalid candle rows';continue;}
         break;
       }catch(e){lastError=e?.message||String(e);}
     }
