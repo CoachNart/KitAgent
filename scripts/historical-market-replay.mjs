@@ -457,15 +457,15 @@ for(const symbol of symbols){
         const outcome=simulate(trade,result.direction,trade.orderType,future,'30m',cutoff);
         if(outcome.result==='ambiguous'){
           gradeStat.ambiguous++;
-          if(['A','A+'].includes(grade))stat.ambiguous++;
+          if(['A','A+','B'].includes(grade))stat.ambiguous++;
           tradeAudit.push({...auditBase,outcome:'ambiguous',exitTime:'',grossR:'',netR:'',reason:'Intrabar order ambiguous'});
         }else if(outcome.result==='missed'){
           gradeStat.missed++;
-          if(['A','A+'].includes(grade))stat.missed++;
+          if(['A','A+','B'].includes(grade))stat.missed++;
           tradeAudit.push({...auditBase,outcome:'missed',exitTime:'',grossR:'',netR:'',reason:outcome.reason||'Limit entry not activated'});
         }else if(outcome.result==='unresolved'){
           gradeStat.unresolved++;
-          if(['A','A+'].includes(grade))stat.unresolved++;
+          if(['A','A+','B'].includes(grade))stat.unresolved++;
           tradeAudit.push({...auditBase,outcome:'unresolved',exitTime:'',grossR:'',netR:'',reason:'No exit within available history'});
         }else{
           const gross=rMultiple(trade,result.direction,outcome.exit);
@@ -475,7 +475,7 @@ for(const symbol of symbols){
           gradeStat[outcome.result==='win'?'wins':'losses']++;
           gradeStat.grossR+=gross;gradeStat.netR+=net;
           gradeStat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
-          if(['A','A+'].includes(grade)){
+          if(['A','A+','B'].includes(grade)){
             if(outcome.result==='win')stat.wins++;else stat.losses++;
             stat.grossR+=gross;stat.netR+=net;stat.returns.push({net,exitTime:outcome.exitTime??cutoff,symbol});
           }
