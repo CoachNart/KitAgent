@@ -20,6 +20,6 @@ export default function DailyBoardPage(){
    <div className="db-levels"><div><small>{s.orderType==='LIMIT'?'LIMIT ENTRY':'ENTRY'}</small><b>{fmt(s.entry)}</b></div><div><small>STOP LOSS</small><b>{fmt(s.stopLoss)}</b></div><div><small>TAKE PROFIT</small><b>{fmt(s.takeProfit)}</b></div><div><small>R:R</small><b>1:{Number(s.rr||0).toFixed(2)}</b></div></div>
    <p className="db-reason">{s.statusReason||'Waiting for activation.'}</p><footer>Published {date(s.publishedAt)} · {s.orderType} order</footer>
   </article>)}</section>}
-  <p className="db-footnote">Minimum publication requirement: A-grade structural quality and at least 3R to a confirmed structural target. RR is not a win-probability claim.</p>
+  <p className="db-footnote">Minimum publication requirement: B-grade (75+) structural quality or stronger, with at least 3R to a confirmed structural target. B is shown as a separate tier; RR is not a win-probability claim.</p>
  </main>
 }
