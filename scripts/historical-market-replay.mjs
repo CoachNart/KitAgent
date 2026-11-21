@@ -448,7 +448,7 @@ for(const symbol of symbols){
           direction:result.direction,orderType:trade.orderType,entry:trade.entry,stop:trade.stop,target:trade.target,
           entryDistanceAtr:(()=>{const value=atr(all[tf],14);return value>0?+(Math.abs(Number(trade.marketEntry??candle.close)-Number(trade.entry))/value).toFixed(4):null;})(),
           grade,gradeScore:result.grade?.score??null,...gradeParts,
-          htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
+          htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,setupAge:trade.setupAgeBars??null,
           displacementAtr:result.smc?.displacement?.atrMultiple??null,
           fvgSize:result.smc?.fvg?.size??null,
           targetSource:result.smc?.target?.source||trade.targetSource||null,
