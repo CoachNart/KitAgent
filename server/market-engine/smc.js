@@ -226,20 +226,12 @@ export function nextLiquidityTarget(c,direction,entry,price,risk,asOfIndex,layer
 function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnostics=null}){
   const reject=reason=>{if(diagnostics)diagnostics[reason]=(diagnostics[reason]||0)+1;return null;};
   const a=atr(c,14)||Math.max(Math.abs(price)*.001,1e-9),buffer=Math.max(a*.15,Math.abs(price)*.00035);
-  const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer;
-  const midpoint=fvg.midpoint;
-  const tolerance=Math.max(a*.35,Math.abs(midpoint)*.0015);
-  const near=Math.abs(price-midpoint)<=tolerance;
-  // For an untouched pending retest, work the near edge of the FVG rather
-  // than its midpoint: bullish limits use the upper edge, bearish limits the
-  // lower edge. This makes the planned price more reachable without converting
-  // an unconfirmed retest into a market order. The 3R/geometry contract below
-  // is recalculated from this actual entry, so no target or stop is stretched.
-  const entry=near?midpoint:(direction==='BULLISH'?fvg.high:fvg.low);
-  const risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
+  const stop=direction==='BULLISH'?sweep.extreme-buffer:sweep.extreme+buffer,entry=fvg.midpoint,risk=Math.abs(entry-stop),reward=Math.abs(target-entry),rr=risk>0?reward/risk:0;
   if(!Number.isFinite(rr)||rr<=0)return reject('invalidRiskReward');
   if(direction==='BULLISH'&&price<=stop)return reject('sweepInvalidated');
   if(direction==='BEARISH'&&price>=stop)return reject('sweepInvalidated');
+  const tolerance=Math.max(a*.35,Math.abs(entry)*.0015);
+  const near=Math.abs(price-entry)<=tolerance;
   const last=c.at(-1);
   const lastRange=last?.high-last?.low;
   // A market retest must trade through the actual planned midpoint, reject it
