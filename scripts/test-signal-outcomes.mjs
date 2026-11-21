@@ -102,6 +102,13 @@ try{
 
   const alreadyAmbiguous={...baseSignal,status:'activation_ambiguous',outcomeEvidence:{event:'ENTRY_AND_EXIT_SAME_CANDLE'}};
   const unchanged=await resolveStatus(alreadyAmbiguous,97.5);
+  const partialCandleStart=Math.floor(Date.now()/1800000)*1800000;
+  globalThis.fetch=mockKlines([
+    row(partialCandleStart,101,102,99,100.5)
+  ]);
+  const partialCandle=await resolveStatus(baseSignal,100.5,Date.now());
+  assert('An unfinished 30m candle cannot activate or resolve a pending LIMIT',
+    partialCandle.status==='limit_pending'&&partialCandle.activatedAt==null);
   assert('Previously ambiguous limit activation remains excluded from verified outcomes',
     unchanged.status==='activation_ambiguous'&&unchanged.closedAt==null);
 }finally{
