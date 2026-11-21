@@ -113,7 +113,7 @@ export function selectOutcomeBatch(signals,limit=24,rotation=0){
 }
 
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
-  if(['target_hit','stop_hit','missed_entry'].includes(signal.status) && signal.closedAt)return signal;
+  if(['target_hit','stop_hit','missed_entry'].includes(signal.status))return signal;
   // A limit order whose first entry-touching 30m candle also touches TP or SL
   // cannot be proven filled-before-exit from OHLC alone. Keep it out of the
   // verified trade record instead of guessing the intrabar path.
