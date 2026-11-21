@@ -30,7 +30,7 @@ const failures=new Map();
 const tradeAudit=[];
 const gradeRejectionAudit=[];
 let duplicateSetupsSuppressed=0;
-const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','premiumDiscountBullishPass','premiumDiscountBearishPass','premiumDiscountBullishReject','premiumDiscountBearishReject','premiumDiscountDeltaAtrSum','premiumDiscountDeltaSamples','structuralTarget','rrAtLeast3','executableEntry','targetNoQualifiedStructure','targetOutOfReach','nearestTargetBelow3R'];
+const stageKeys=['recentSweeps','mssWithinWindow','displacement','fvgCreatedByMss','freshFvgAndSize','premiumDiscount','premiumDiscountBullishPass','premiumDiscountBearishPass','premiumDiscountBullishOutOfZone','premiumDiscountBearishOutOfZone','premiumDiscountDeltaAtrSum','premiumDiscountDeltaSamples','structuralTarget','rrAtLeast3','executableEntry','targetNoQualifiedStructure','targetOutOfReach','nearestTargetBelow3R'];
 const stageTotals=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const stageSamples=Object.fromEntries(stageKeys.map(key=>[key,0]));
 const executionRejectionTotals=new Map();
@@ -516,7 +516,7 @@ console.table([0.5,0.75,1,1.25,1.5,2,3,Infinity].map(maxDistanceAtr=>{
 }));
 console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events; all executable grades)');
 console.table(tradeAudit);
-console.log('\nSMC STAGE FUNNEL (counts are per sweep path; a later stage increments only after prior conditions pass)');
+console.log('\nSMC STAGE FUNNEL (counts are per sweep path; premium/discount is recorded as confluence, not a hard gate)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
 console.log('\nEXECUTION REJECTION DIAGNOSTICS (per sweep path)');
 console.table([...executionRejectionTotals.entries()].sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})));
