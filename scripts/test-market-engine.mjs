@@ -604,6 +604,16 @@ assert('Protected structure is sourced from external swings',()=>(
 // Confidence audit: score structural quality only after the strategy contract passes.
 const strongConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:true},entry:{anchorQuality:1,executionQuality:1},risk:{invalidationQuality:1,geometryQuality:1},target:{source:'HTF_MAJOR_SWING',quality:1,rr:2.5},confirmation:{quality:1},freshness:{quality:1}});
 const weakConfidence=gradeSetup({strategy:'TEST',context:{aligned:true,trend:false},entry:{anchorQuality:.8,executionQuality:.75},risk:{invalidationQuality:.8,geometryQuality:.8},target:{source:'EXECUTION_EXTERNAL_SWING',quality:.55,rr:1.9},confirmation:{quality:.55},freshness:{quality:.35}});
+
+const targetScoreOf=grade=>grade.confidenceEvidence.find(x=>x.type==='CONFIDENCE_TARGET')?.score??null;
+const ordinaryMajorTarget=gradeSetup({strategy:'TEST',target:{source:'HTF_MAJOR_SWING',quality:110}});
+const exceptionallyStrongMajorTarget=gradeSetup({strategy:'TEST',target:{source:'HTF_MAJOR_SWING',quality:162}});
+const ordinaryExternalTarget=gradeSetup({strategy:'TEST',target:{source:'EXECUTION_EXTERNAL_SWING',quality:88}});
+assert('Target quality no longer saturates ordinary confirmed HTF major swings at 20/20',()=>targetScoreOf(ordinaryMajorTarget)<10&&targetScoreOf(ordinaryMajorTarget)>0);
+assert('Measured target strength differentiates an exceptional liquidity objective from an ordinary major swing',()=>targetScoreOf(exceptionallyStrongMajorTarget)>targetScoreOf(ordinaryMajorTarget));
+assert('Execution-timeframe external targets receive less credit than confirmed HTF major targets at comparable strength',()=>targetScoreOf(ordinaryExternalTarget)<targetScoreOf(ordinaryMajorTarget));
+assert('Target contribution is capped at ten points so entry and invalidation quality carry most of the score',()=>targetScoreOf(gradeSetup({strategy:'TEST',target:{source:'CRT_OPPOSITE_RANGE',native:true,quality:1}}))===10);
+
 assert('Confidence model never treats R:R as an input',()=>!strongConfidence.confidenceEvidence.some(x=>String(x.type).includes('RR')));
 assert('Confidence model returns bounded structural quality',()=>strongConfidence.score>=0&&strongConfidence.score<=100&&weakConfidence.score>=0&&weakConfidence.score<=100);
 assert('Confidence model separates strong and weak structural quality',()=>strongConfidence.score>weakConfidence.score);
