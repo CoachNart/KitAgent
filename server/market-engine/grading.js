@@ -72,9 +72,9 @@ export function gradeSetup({strategy,context={},entry={},risk={},target={},confi
   const grade=score>=92?'A+':score>=84?'A':score>=75?'B':score>=65?'C':'NO-TRADE';
   const evidence=[
     {type:'CONFIDENCE_CONTEXT',score:Math.round(contextScore),max:15},
-    {type:'CONFIDENCE_ENTRY',score:Math.round(entryScore),max:25},
-    {type:'CONFIDENCE_RISK',score:Math.round(riskScore),max:20},
-    {type:'CONFIDENCE_TARGET',score:Math.round(targetScore),max:20},
+    {type:'CONFIDENCE_ENTRY',score:Math.round(entryScore),max:30},
+    {type:'CONFIDENCE_RISK',score:Math.round(riskScore),max:25},
+    {type:'CONFIDENCE_TARGET',score:Math.round(targetScore),max:10},
     {type:'CONFIDENCE_CONFIRMATION',score:Math.round(confirmationScore),max:10},
     {type:'CONFIDENCE_FRESHNESS',score:Math.round(freshnessScore),max:10},
     {type:'CONFIDENCE_MODEL',strategy,score,interpretation:'structural quality, not win probability'}
