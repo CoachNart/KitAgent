@@ -8,6 +8,7 @@ const REQUEST_TIMEFRAMES=new Set(['AUTO','30m','1H','2H','4H']);
 const ENTRY_TIMEFRAMES=new Set(['30m','1H','2H','4H']);
 const PENDING_ENTRY_WINDOW_MS=24*60*60*1000;
 const MONITOR_CANDLE_DURATION_MS=30*60*1000;
+const BYBIT_KLINE_HOSTS=['https://api.bybit.com','https://api.bytick.com','https://api.bybit.nl'];
 
 export function getAdmin() {
   if (admin.apps.length) return admin;
@@ -59,18 +60,26 @@ export async function marketKlines(signal) {
     // Page backwards so outcome verification never silently loses the beginning
     // of a trade's lifecycle.
     while(pageEnd>=startMs&&pages<48){
-      const u=new URL('https://api.bybit.com/v5/market/kline');
-      u.searchParams.set('category','linear');
-      u.searchParams.set('symbol',symbol);
-      u.searchParams.set('interval','30');
-      u.searchParams.set('start',String(startMs));
-      u.searchParams.set('end',String(pageEnd));
-      u.searchParams.set('limit','1000');
-      const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
-      if(!r.ok)break;
-      const body=await r.json();
-      if(body?.retCode!==0||!Array.isArray(body?.result?.list)||!body.result.list.length)break;
-      const rows=body.result.list.slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
+      let payload=null;
+      for(const host of BYBIT_KLINE_HOSTS){
+        try{
+          const u=new URL('/v5/market/kline',host);
+          u.searchParams.set('category','linear');
+          u.searchParams.set('symbol',symbol);
+          u.searchParams.set('interval','30');
+          u.searchParams.set('start',String(startMs));
+          u.searchParams.set('end',String(pageEnd));
+          u.searchParams.set('limit','1000');
+          const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});
+          if(!r.ok)continue;
+          const body=await r.json();
+          if(body?.retCode!==0||!Array.isArray(body?.result?.list)||!body.result.list.length)continue;
+          payload=body.result.list;
+          break;
+        }catch{}
+      }
+      if(!payload)break;
+      const rows=payload.slice().reverse().map(x=>({time:Number(x[0]),open:Number(x[1]),high:Number(x[2]),low:Number(x[3]),close:Number(x[4])}))
         .filter(x=>[x.time,x.open,x.high,x.low,x.close].every(Number.isFinite));
       if(!rows.length)break;
       all.push(...rows);
