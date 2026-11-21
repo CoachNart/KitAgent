@@ -128,7 +128,7 @@ function findSweeps(c,direction){
 }
 export function isEntryInPremiumDiscount(direction,entry,equilibrium){
   if(!Number.isFinite(entry)||!Number.isFinite(equilibrium))return false;
-  return direction==='BULLISH'?entry<=equilibrium:direction==='BEARISH'?entry>=equilibrium:false;
+  return direction==='BULLISH'?entry<equilibrium:direction==='BEARISH'?entry>equilibrium:false;
 }
 
 function preSweepDealingRange(c,sweep){
