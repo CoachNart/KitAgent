@@ -126,6 +126,11 @@ function findSweeps(c,direction){
   }
   return out.sort((a,b)=>a.index-b.index);
 }
+export function isEntryInPremiumDiscount(direction,entry,equilibrium){
+  if(!Number.isFinite(entry)||!Number.isFinite(equilibrium))return false;
+  return direction==='BULLISH'?entry<=equilibrium:direction==='BEARISH'?entry>=equilibrium:false;
+}
+
 function preSweepDealingRange(c,sweep){
   // Anchor the dealing range to the exact liquidity pool that was raided.
   // The opposite boundary is the latest confirmed opposing swing before
@@ -272,7 +277,7 @@ export function evaluateSMC({candles,layers,price}){
     stages.freshFvgAndSize++;
     const rangeCandidate=preSweepDealingRange(c,sweepCandidate);
     if(!rangeCandidate)continue;
-    const premiumDiscountDelta=sweepCandidate.extreme-rangeCandidate.equilibrium;
+    // Premium/discount classifies the planned FVG entry, not the sweep wick.\n    // Measuring the wick against a range whose boundary is the swept pool\n    // makes this filter pass almost automatically and adds no entry-location edge.\n    const premiumDiscountDelta=fvgCandidate.midpoint-rangeCandidate.equilibrium;
     const rangeAtr=atr(c.slice(0,sweepCandidate.index),14)||0;
     if(rangeAtr>0){
       stages.premiumDiscountDeltaAtrSum+=premiumDiscountDelta/rangeAtr;
@@ -282,14 +287,14 @@ export function evaluateSMC({candles,layers,price}){
       direction,sweepIndex:sweepCandidate.index,sweepLevel:sweepCandidate.level,sweepExtreme:sweepCandidate.extreme,
       mssIndex:mssCandidate.index,mssLevel:mssCandidate.level,fvgIndex:fvgCandidate.index,
       fvgLow:fvgCandidate.low,fvgHigh:fvgCandidate.high,fvgMidpoint:fvgCandidate.midpoint,
-      premiumDiscountReference:'PRE_SWEEP_CONFIRMED_SWING_RANGE',
+      premiumDiscountReference:'FVG_ENTRY_VS_PRE_SWEEP_CONFIRMED_SWING_RANGE',\n      entryPrice:fvgCandidate.midpoint,
       atr:rangeAtr,
       structuralRangeHigh:rangeCandidate.high,structuralRangeLow:rangeCandidate.low,
       structuralEquilibrium:rangeCandidate.equilibrium,
       sweepDeltaAtr:rangeAtr?premiumDiscountDelta/rangeAtr:null,
       anchoredHighIndex:rangeCandidate.anchorHighIndex,anchoredLowIndex:rangeCandidate.anchorLowIndex
     });
-    const inCorrectZone=direction==='BULLISH'?premiumDiscountDelta<=0:premiumDiscountDelta>=0;
+    const inCorrectZone=isEntryInPremiumDiscount(direction,fvgCandidate.midpoint,rangeCandidate.equilibrium);
     if(!inCorrectZone){
       if(direction==='BULLISH')stages.premiumDiscountBullishReject++;else stages.premiumDiscountBearishReject++;
       continue;
