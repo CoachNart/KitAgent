@@ -10,7 +10,7 @@ export function hasConfirmedContextTrend(contextStructure,direction){
   return contextStructure?.rawDirection===direction;
 }
 
-export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade, swingBreakAfter, freshFvg};
+export {fvgAt, meaningfulDisplacement, findSweeps, buildTrade, swingBreakAfter, freshFvg, isEntryInPremiumDiscount};
 const MIN_SWEEP_PENETRATION_ATR=.15;
 const MIN_SWEEP_RECLAIM_ATR=.10;
 const MIN_SWEEP_RANGE_ATR=.60;
