@@ -52,10 +52,37 @@ export function candidateScore(result){
   if(!result?.trade||!result?.grade)return -1;
   if(result.direction==='BULLISH'&&!(result.trade.stop<result.trade.entry&&result.trade.target>result.trade.entry))return -1;
   if(result.direction==='BEARISH'&&!(result.trade.stop>result.trade.entry&&result.trade.target<result.trade.entry))return -1;
-  if(!['A+','A'].includes(result.grade.grade)||Number(result.grade.score)<84)return -1;
+  const grade=String(result.grade.grade||'');
+  const score=Number(result.grade.score);
+  if(['A+','A'].includes(grade)){
+    if(score<84)return -1;
+  }else if(grade==='B'){
+    if(score<75||score>=84)return -1;
+  }else return -1;
   const rr=Number(result.trade.rr)||0;
   if(!Number.isFinite(rr)||rr<3)return -1;
-  return Number(result.grade.score)*100+Math.min(rr,8)*2;
+  return score*100+Math.min(rr,8)*2;
+}
+
+export function selectDailySetups(candidates,limit=MAX_PUBLISHED){
+  const ranked=(Array.isArray(candidates)?candidates:[])
+    .filter(x=>x&&Number.isFinite(Number(x.rankScore)))
+    .sort((a,b)=>Number(b.rankScore)-Number(a.rankScore));
+  const aTier=ranked.filter(x=>['A+','A'].includes(String(x.grade||'')));
+  const bTier=ranked.filter(x=>String(x.grade||'')==='B');
+  const cap=Math.max(0,Math.floor(Number(limit)||0));
+  const selected=[
+    ...aTier.slice(0,Math.min(3,cap)),
+    ...bTier.slice(0,Math.min(2,Math.max(0,cap-Math.min(3,aTier.length))))
+  ];
+  if(selected.length<cap){
+    for(const candidate of ranked){
+      if(selected.includes(candidate))continue;
+      selected.push(candidate);
+      if(selected.length>=cap)break;
+    }
+  }
+  return selected.sort((a,b)=>Number(b.rankScore)-Number(a.rankScore));
 }
 
 function toSetup(market,result,price){
@@ -147,7 +174,7 @@ export async function scanTopQuality(){
     const batch=markets.slice(offset,offset+batchSize);
     scanned.push(...await Promise.all(batch.map(market=>scanSymbol(market,diagnostics))));
   }
-  const setups=scanned.flat().sort((a,b)=>b.rankScore-a.rankScore).slice(0,MAX_PUBLISHED);
+  const setups=selectDailySetups(scanned.flat(),MAX_PUBLISHED);
   const topRejections=diagnostics.rejections.slice(0,25);
   return {
     generatedAt:new Date().toISOString(),
