@@ -256,7 +256,7 @@ async function resolveReplaySymbols(){
         if(end!=null)url.searchParams.set('end',String(end));
         for(let attempt=1;attempt<=3;attempt++){
           try{
-            const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+            const response=await bybitFetch(url);
             if(!response.ok){lastError='Bybit historical candles HTTP '+response.status+' '+response.statusText+' ('+host+')';
               if((response.status===429||response.status>=500)&&attempt<3){await new Promise(r=>setTimeout(r,750*attempt));continue;}break;}
             const candidate=await response.json();
