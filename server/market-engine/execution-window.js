@@ -5,6 +5,17 @@ export function isCandleWithinWindow(candleTime,startTime,candleDurationMs,windo
     candleTime+candleDurationMs<=startTime+windowMs;
 }
 
+// Resolve the price at which the published order is actually executable.
+// MARKET orders use their recorded quote; LIMIT orders use their limit price.
+export function executionEntryPrice(signal){
+  const order=String(signal?.orderType||'').toUpperCase();
+  const raw=order==='MARKET'
+    ?signal?.marketEntry??signal?.currentPrice??signal?.entry
+    :signal?.limitEntry??signal?.entry;
+  const value=Number(raw);
+  return Number.isFinite(value)?value:null;
+}
+
 // A pending order gets its full entry window from publication, not from the
 // earlier sweep that helped form the setup.
 export function pendingEntryDeadline(publishedAt,windowMs){
@@ -12,7 +23,6 @@ export function pendingEntryDeadline(publishedAt,windowMs){
   return Number.isFinite(start)&&Number.isFinite(duration)&&duration>0?start+duration:null;
 }
 
- 
 // A time-based expiry is safe only when the returned candle history spans the
 // entire pending window without missing 30m bars.
 export function isCompleteCandleWindow(candles,startTime,endTime,candleDurationMs){
@@ -26,7 +36,6 @@ export function isCompleteCandleWindow(candles,startTime,endTime,candleDurationM
       (i===0||c.time-candles[i-1].time===candleDurationMs));
 }
 
- 
 // Return the closed candle that straddles the deadline separately. Its OHLC
 // cannot prove whether an entry touch happened before or after expiry.
 export function pendingWindowCoverage(candles,startTime,endTime,candleDurationMs){
