@@ -5,9 +5,9 @@ service cloud.firestore {
     function owns(uid) { return signedIn() && request.auth.uid == uid; }
 
     match /users/{uid} {
-      allow create: if owns(uid)
-        && request.resource.data.uid == uid
-        && request.resource.data.email is string;
+      // Account documents are created only by trusted Firebase Admin endpoints.
+      // Allowing client creation here would let a user self-assign Premium fields.
+      allow create: if false;
 
       allow read: if owns(uid);
 
@@ -32,7 +32,6 @@ service cloud.firestore {
           'walletAddress', 'maxRiskPercent', 'maxTradeSize', 'tradingPreferences', 'apiKeyMetadata',
           'notificationSettings', 'pushTokens', 'priceAlerts',
           'securitySettings', 'deviceBindingId', 'lastSeenAt', 'lastSeenIp', 'createdAt', 'updatedAt',
-          'premiumUntil'
         ]);
 
       allow delete: if false;
