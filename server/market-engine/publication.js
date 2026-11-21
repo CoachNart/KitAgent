@@ -66,11 +66,13 @@ async function refreshTrade(doc){
   if(!candles.length){await doc.ref.set({lastCheckedAt:new Date(now)},{merge:true});return{...data,id:doc.id};}
   let status=String(data.status||'PENDING_ENTRY'),activatedAt=ms(data.activatedAt),reason=data.statusReason||null,exitCandle=null,outcomeAmbiguous=false;
   if(order==='LIMIT'&&status==='PENDING_ENTRY'){
-    for(const c of candles){
+    for(let i=0;i<candles.length;i++){
+      const c=candles[i];
       if(!isCandleWithinWindow(c.time,start,CANDLE_MS,pendingWindowMs)){
         if(c.time>=pendingExpiresAt)break;
         continue;
       }
+      if(!isCompleteCandleWindow(candles.slice(0,i+1),start,c.time+CANDLE_MS,CANDLE_MS))break;
       const entryHit=touched(c,entry),stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
       if(!entryHit&&stopHit){status='INVALIDATED';reason='The stop/invalidation level was reached before the limit entry filled.';break;}
       if(!entryHit&&targetHit){status='MISSED_ENTRY';reason='Price reached the target area without filling the planned limit entry.';break;}
@@ -83,9 +85,12 @@ async function refreshTrade(doc){
   }
   if(order==='MARKET'&&!['TARGET_HIT','STOP_HIT'].includes(status)){status='ACTIVE';activatedAt=activatedAt||start;}
   if(status==='ACTIVE'){
+    const activeHistory=[];
     for(const c of candles){
       if(c.time<activatedAt)continue;
       if(c.time===Math.floor(activatedAt/CANDLE_MS)*CANDLE_MS&&activatedAt>c.time)continue;
+      activeHistory.push(c);
+      if(!isCompleteCandleWindow(activeHistory,activatedAt,c.time+CANDLE_MS,CANDLE_MS))break;
       const stopHit=long?c.low<=stop:c.high>=stop,targetHit=long?c.high>=target:c.low<=target;
       if(stopHit&&targetHit){outcomeAmbiguous=true;reason='Both stop and target were touched in one candle. Outcome is ambiguous and will not be guessed.';break;}
       if(stopHit){status='STOP_HIT';exitCandle=c;reason='Stop loss reached on Bybit 30-minute OHLC data.';break;}
