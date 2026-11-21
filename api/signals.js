@@ -102,18 +102,14 @@ export async function currentPrice(signal) {
  * - If one OHLC candle touches both TP and SL, candle data cannot prove which happened first,
  *   so the trade stays OPEN. We never guess.
  */
-export function selectOutcomeBatch(signals,limit=24){
-  return (Array.isArray(signals)?signals:[])
-    .filter(s=>!['target_hit','stop_hit','missed_entry'].includes(String(s?.status||'')))
-    .slice()
-    .sort((a,b)=>{
-      const aChecked=toMs(a.lastOutcomeCheckAt),bChecked=toMs(b.lastOutcomeCheckAt);
-      const aTime=Number.isFinite(aChecked)?aChecked:(toMs(a.generatedAt||a.createdAt)||0);
-      const bTime=Number.isFinite(bChecked)?bChecked:(toMs(b.generatedAt||b.createdAt)||0);
-      return aTime-bTime;
-    })
-    .slice(0,Math.max(0,Math.floor(Number(limit)||0)))
-    .map(s=>s.id);
+export function selectOutcomeBatch(signals,limit=24,rotation=0){
+  const unresolved=(Array.isArray(signals)?signals:[])
+    .filter(s=>!['target_hit','stop_hit','missed_entry'].includes(String(s?.status||'')));
+  const batchSize=Math.max(1,Math.floor(Number(limit)||24));
+  const batchCount=Math.max(1,Math.ceil(unresolved.length/batchSize));
+  const rawRotation=Math.floor(Number(rotation)||0);
+  const batchIndex=((rawRotation%batchCount)+batchCount)%batchCount;
+  return unresolved.slice(batchIndex*batchSize,(batchIndex+1)*batchSize).map(s=>s.id);
 }
 
 export async function resolveStatus(signal,price,nowMs=Date.now()) {
@@ -241,16 +237,14 @@ export default async function handler(req,res){
     const snapshot=await collection.orderBy('generatedAt','desc').limit(100).get(),raw=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})),signals=[];
     const currentRaw=raw.filter(s=>ACTIVE_STRATEGIES.has(String(s.strategy||'').toUpperCase())&&ENGINE_VERSIONS.has(String(s.engineVersion||''))&&REQUEST_TIMEFRAMES.has(String(s.timeframe||''))&&(!s.entryTimeframe||ENTRY_TIMEFRAMES.has(String(s.entryTimeframe))));
     const dedupedRaw=dedupeSignals(currentRaw);
-    // Rotate outcome checks by least-recently-checked signal. Prioritizing
-    // the newest open trades made the first 24 occupy every poll forever,
-    // starving older pending orders and preventing their expiry/outcome updates.
+    // Rotate the 24-signal verification window by minute. A fixed newest-first
+    // slice starved every signal after the first 24 whenever those stayed open.
     const nowMs=Date.now();
-    const resolvable=new Set(selectOutcomeBatch(dedupedRaw,24));
+    const resolvable=new Set(selectOutcomeBatch(dedupedRaw,24,Math.floor(nowMs/60000)));
     for(const original of dedupedRaw){
       const shouldResolve=resolvable.has(original.id);
       const resolved=shouldResolve?await resolveStatus(original,null,nowMs):original;
       const patch={};
-      if(shouldResolve)patch.lastOutcomeCheckAt=new Date(nowMs).toISOString();
       for(const key of ['status','result','pnlPercent','exitPrice','closedAt','activatedAt','missedAt','outcomeEvidence']){
         const a=original[key],b=resolved[key];
         const av=a?.toDate?a.toDate().toISOString():String(a??'');
