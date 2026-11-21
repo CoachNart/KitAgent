@@ -14,7 +14,6 @@
     "test:integrations": "node scripts/integration-smoke.mjs",
     "test:market-engine": "node scripts/test-market-engine.mjs",
     "test:signal-outcomes": "node scripts/test-signal-outcomes.mjs",
-    "test:affiliate-payout": "node scripts/test-affiliate-payout.mjs",
     "test:market-engine-live": "node scripts/live-market-engine-diagnostic.mjs",
     "test:market-engine-replay": "node scripts/historical-market-replay.mjs"
   },
@@ -27,8 +26,7 @@
     "firebase-admin": "^13.0.2",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "viem": "^2.58.4"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@capacitor/android": "^8.0.0",

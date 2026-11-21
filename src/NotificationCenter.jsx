@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { Bell, BellRing, CheckCircle2, Radio, X, Zap } from 'lucide-react';
 import { enableKitSetupsNotifications } from './notifications.js';
@@ -32,7 +32,7 @@ export default function NotificationCenter({user,embedded=false}){
  useEffect(()=>{
    if(!alertsHydrated||!user?.uid||!db)return;
    const priceAlerts=Object.fromEntries(alerts.map(x=>[x.id,x]));
-   updateDoc(doc(db,'users',user.uid),{priceAlerts,notificationSettings:{enabled:permission==='granted',browser:true,updatedAt:serverTimestamp()}}).catch(error=>console.warn('KitSetups price alerts could not be saved:',error));
+   setDoc(doc(db,'users',user.uid),{priceAlerts,notificationSettings:{enabled:permission==='granted',browser:true,updatedAt:serverTimestamp()}},{merge:true}).catch(error=>console.warn('KitSetups price alerts could not be saved:',error));
  },[alerts,alertsHydrated,user?.uid,permission]);
  useEffect(()=>localStorage.setItem(ACTIVITY_KEY,JSON.stringify(activity.slice(0,12))),[activity]);
  useEffect(()=>{
