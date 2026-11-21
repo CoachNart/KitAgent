@@ -111,6 +111,10 @@ export async function currentPrice(signal) {
  * - If one OHLC candle touches both TP and SL, candle data cannot prove which happened first,
  *   so the trade stays OPEN. We never guess.
  */
+export function isSignalFeedStatus(status){
+  return ['limit_pending','open','target_hit','stop_hit','missed_entry'].includes(String(status||''));
+}
+
 export function selectOutcomeBatch(signals,limit=24,rotation=0){
   const unresolved=(Array.isArray(signals)?signals:[])
     .filter(s=>!['target_hit','stop_hit','missed_entry','activation_ambiguous'].includes(String(s?.status||''))&&s?.ambiguousOutcome!==true);
@@ -261,7 +265,7 @@ export default async function handler(req,res){
         if(av!==bv)patch[key]=b??null;
       }
       if(Object.keys(patch).length)await collection.doc(original.id).set(patch,{merge:true});
-      if(['limit_pending','open','target_hit','stop_hit','missed_entry'].includes(String(resolved.status||'')))signals.push(resolved);
+      if(isSignalFeedStatus(resolved.status))signals.push(resolved);
     }
     return json(res,200,{ok:true,signals});
   }catch(error){
