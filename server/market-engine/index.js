@@ -131,12 +131,12 @@ export function selectMinimumRRStructuralTarget({trade,direction,candles=[],laye
   const entry=Number(trade.entry),stop=Number(trade.stop);
   const risk=Math.abs(entry-stop);
   if(![entry,stop].every(Number.isFinite)||!(risk>0))return null;
-  // Look only for a real, confirmed structural objective at or beyond the
-  // minimum reward distance. Never stretch a target numerically: the selected
-  // price must already exist as an eligible execution/HTF swing or liquidity pool.
+  // Recheck the NEAREST still-valid opposing objective from the actual
+  // executable entry. Do not skip a closer unconsumed liquidity level merely
+  // to find a farther target that prints 3R on paper.
   const target=selectStructuralTarget(candles,direction,entry,{
     layers,
-    minDistance:risk*minimumRR,
+    minDistance:0,
     asOf:candles.length-1,
     asOfTime:candles.at(-1)?.time??null
   });
