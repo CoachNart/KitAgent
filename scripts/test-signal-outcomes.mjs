@@ -1,5 +1,5 @@
 import {resolveStatus,selectOutcomeBatch} from '../api/signals.js';
-import {isCandleWithinWindow,pendingEntryDeadline,isCompleteCandleWindow} from '../server/market-engine/execution-window.js';
+import {isCandleWithinWindow,pendingEntryDeadline,isCompleteCandleWindow,pendingWindowCoverage} from '../server/market-engine/execution-window.js';
 
 const assert=(name,condition)=>{
   if(!condition)throw new Error('FAIL: '+name);
@@ -23,6 +23,12 @@ assert('Missing candles prevent a false pending-order expiry',
   !isCompleteCandleWindow(gapPendingWindow,pendingStart,pendingStart+24*60*60*1000,30*60*1000));
 assert('A history window starting too late cannot prove that a pending order never filled',
   !isCompleteCandleWindow(lateStartPendingWindow,pendingStart,pendingStart+24*60*60*1000,30*60*1000));
+const boundaryCoverage=pendingWindowCoverage([{time:0},{time:10},{time:20},{time:30}],0,25,10);
+assert('A candle straddling the pending deadline is identified separately from fully eligible candles',
+  boundaryCoverage.complete&&boundaryCoverage.boundaryCandle?.time===20);
+const exactBoundaryCoverage=pendingWindowCoverage([{time:0},{time:10}],0,20,10);
+assert('A deadline aligned exactly to candle close has no overlapping boundary candle',
+  exactBoundaryCoverage.complete&&exactBoundaryCoverage.boundaryCandle==null);
 assert('Historical 1H replay accepts the final fully-contained hour of the live window',isCandleWithinWindow(pendingStart+23*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
 assert('Historical 1H replay rejects an entry candle beginning at the 24-hour deadline',!isCandleWithinWindow(pendingStart+24*60*60*1000,pendingStart,60*60*1000,24*60*60*1000));
 const batchFixtures=Array.from({length:25},(_,i)=>({id:'signal-'+i,status:'limit_pending',generatedAt:new Date(Date.UTC(2026,0,1)+i*1000).toISOString()}));
@@ -124,6 +130,16 @@ try{
   const expired=await resolveStatus(expiredSignal,101,Date.now());
   assert('A pending LIMIT expires after 24 hours when complete closed-candle history confirms no fill',
     expired.status==='missed_entry'&&expired.result==='missed'&&expired.outcomeEvidence?.event==='LIMIT_WINDOW_EXPIRED');
+
+  const boundarySignal={...baseSignal,generatedAt:new Date(expiredStart+7*60000).toISOString()};
+  const boundaryRows=Array.from({length:48},(_,i)=>{
+    const time=expiredStart+30*60000+i*30*60000;
+    return i===47?row(time,101,102,99,101):row(time,101,102,100.5,101);
+  });
+  globalThis.fetch=mockKlines(boundaryRows);
+  const boundaryOutcome=await resolveStatus(boundarySignal,101,Date.now());
+  assert('A limit touch in the candle straddling expiry remains ambiguous, not falsely missed or filled',
+    boundaryOutcome.status==='activation_ambiguous'&&boundaryOutcome.outcomeEvidence?.event==='ENTRY_WINDOW_BOUNDARY_AMBIGUOUS');
 
   globalThis.fetch=mockKlines([]);
   const unverifiable=await resolveStatus(expiredSignal,101,Date.now());
