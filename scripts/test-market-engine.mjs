@@ -262,7 +262,7 @@ const freshPoolCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
 freshPoolCandles[40]=bar(40,100,101,98,100);
 freshPoolCandles[45]=bar(45,99,101,97,100);
 assert('SMC still accepts a recent first-touch sweep with a decisive reclaim',()=>findSweeps(freshPoolCandles,'BULLISH').some(x=>x.swingIndex===40&&x.index===45));
-assert('Indexed SMC sweep detection matches the original first-breach rules for bullish history',()=>[freshPoolCandles,stalePoolCandles,consumedPoolCandles,stopWickInvalidationCandles].every(x=>sweepResultsMatch(x,'BULLISH')));
+
 const bearishSweepParityCandles=freshPoolCandles.map((x,i)=>bar(i,200-x.open,200-x.low,200-x.high,200-x.close));
 assert('Indexed SMC sweep detection matches the original first-breach rules for bearish history',()=>sweepResultsMatch(bearishSweepParityCandles,'BEARISH'));
 const stopWickInvalidationCandles=Array.from({length:60},(_,i)=>bar(i,100,101,99,100));
@@ -270,6 +270,7 @@ stopWickInvalidationCandles[40]=bar(40,100,101,98,100);
 stopWickInvalidationCandles[45]=bar(45,99,101,97,100); // Valid sell-side sweep and reclaim.
 stopWickInvalidationCandles[50]=bar(50,99,100,96.5,99); // Wick crosses the buffered stop, but closes above the sweep extreme.
 assert('SMC invalidates a sweep when a later wick has already hit its buffered stop',()=>!findSweeps(stopWickInvalidationCandles,'BULLISH').some(x=>x.swingIndex===40&&x.index===45));
+assert('Indexed SMC sweep detection matches the original first-breach rules for bullish history',()=>[freshPoolCandles,stalePoolCandles,consumedPoolCandles,stopWickInvalidationCandles].every(x=>sweepResultsMatch(x,'BULLISH')));
 assert('Liquidity map retains a reclaimed sell-side sweep while its extreme remains protected',()=>liquidityMap(freshPoolCandles).recentSweep.some(x=>x.side==='SELL_SIDE'&&x.index===45));
 assert('Liquidity map removes a sweep after a later candle trades beyond its extreme',()=>!liquidityMap(stopWickInvalidationCandles).recentSweep.some(x=>x.side==='SELL_SIDE'&&x.index===45));
 const freshSweepAudit=findSweeps(freshPoolCandles,'BULLISH').find(x=>x.swingIndex===40&&x.index===45);
