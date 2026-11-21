@@ -416,7 +416,7 @@ for(const symbol of symbols){
                 direction:result.direction,grade,score,gradeParts:parts,
                 orderType:result.trade.orderType,entry:result.trade.entry,
                 stop:result.trade.stop,target:result.trade.target,rr:result.trade.rr,
-                htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,
+                htfBias:result.smc?.htfBias||null,sweepAge:result.smc?.sweep?.age??null,setupAge:trade.setupAgeBars??null,setupAge:result.trade.setupAgeBars??null,
                 displacementAtr:result.smc?.displacement?.atrMultiple??null,
                 fvgSize:result.smc?.fvg?.size??null,
                 targetSource:result.smc?.target?.source||result.trade.targetSource||null,
