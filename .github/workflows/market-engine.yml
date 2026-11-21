@@ -27,9 +27,9 @@ jobs:
       - name: Signal outcome regression suite
         run: npm run test:signal-outcomes
       - name: Historical market replay (OKX test data; live execution remains Bybit)
-        # Keep the established 60-market replay scope fixed. Improve the engine,
-        # not the sample size, to address the executable/resolved trade bottleneck.
-        run: npm run test:market-engine-replay -- --universe-limit=60 --bars=4000 --forward-bars=168 --history-candles=5000 --round-trip-cost-bps=10
+        # Widen historical coverage without changing any trading rules: 60 markets,
+        # 6,000 consecutive 1H decisions, 8,000 history candles, and the same 7-day outcome horizon.
+        run: npm run test:market-engine-replay -- --universe-limit=60 --bars=6000 --forward-bars=168 --history-candles=8000 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
         run: |
