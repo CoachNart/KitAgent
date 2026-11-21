@@ -66,6 +66,19 @@ try{
     legacyOutcome.status==='stop_hit'&&legacyOutcome.result==='loss');
 
   globalThis.fetch=mockKlines([
+    row(candleStart,101,105,100.5,104.5)
+  ]);
+  const targetBeforeEntry=await resolveStatus(baseSignal,104.5);
+  assert('A pending LIMIT is marked missed when TP trades before its entry fills',
+    targetBeforeEntry.status==='missed_entry'&&targetBeforeEntry.result==='missed'&&targetBeforeEntry.outcomeEvidence?.event==='TARGET_REACHED_BEFORE_ENTRY');
+
+  const expiredSignal={...baseSignal,generatedAt:new Date(Date.now()-25*60*60*1000).toISOString()};
+  globalThis.fetch=mockKlines([]);
+  const expired=await resolveStatus(expiredSignal,101,Date.now());
+  assert('A pending LIMIT expires after 24 hours even when the candle provider returns no candles',
+    expired.status==='missed_entry'&&expired.result==='missed'&&expired.outcomeEvidence?.event==='LIMIT_WINDOW_EXPIRED');
+
+  globalThis.fetch=mockKlines([
     row(candleStart,101,101.5,100.4,100.8),
     row(nextCandle,100.8,101,100.6,100.7)
   ]);
