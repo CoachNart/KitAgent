@@ -526,7 +526,12 @@ for(const symbol of symbols){
           fvgSize:result.smc?.fvg?.size??null,
           targetSource:result.smc?.target?.source||trade.targetSource||null,
           targetQuality:result.smc?.target?.quality??trade.targetSelection?.quality??null,
-          targetPool:result.smc?.target?.pool||trade.targetSelection?.pool||null};
+          targetPool:result.smc?.target?.pool||trade.targetSelection?.pool||null,
+          entryInPreferredZone:(result.evidence||[]).find(x=>x?.type==='PREMIUM_DISCOUNT')?.entryInPreferredZone??null,
+          sweepPenetrationAtr:result.smc?.sweep?.quality?.penetrationATR??null,
+          sweepReclaimAtr:result.smc?.sweep?.quality?.reclaimDepthATR??null,
+          riskAtr:(()=>{const value=atr(all[tf],14);return value>0?+(Math.abs(Number(trade.entry)-Number(trade.stop))/value).toFixed(4):null;})(),
+          plannedRR:Number.isFinite(Number(trade.rr))?Number(trade.rr):null};
         // Compare 24h, 48h and 72h pending windows side-by-side. Only the 24h
         // result feeds official stats; longer windows remain diagnostic until
         // they improve both fill rate and net outcomes.
@@ -655,6 +660,27 @@ console.table(chronologicalPeriods.flatMap(period=>['A+','A','B'].map(grade=>{
 })));
 console.log('\nTRADE-LEVEL AUDIT (unique MSS/FVG events; all executable grades)');
 console.table(tradeAudit);
+
+// Test whether the preferred SMC dealing-range location actually separates
+// outcomes. This is diagnostic only: no live publication rule is changed.
+console.log('\nPREFERRED PREMIUM/DISCOUNT ZONE OUTCOME AUDIT (A/A+/B only; diagnostic, not a live filter)');
+const zoneGroups=new Map();
+for(const item of tradeAudit.filter(x=>['A+','A','B'].includes(x.grade))){
+  const zone=item.entryInPreferredZone===true?'PREFERRED_ZONE':item.entryInPreferredZone===false?'WRONG_SIDE':'UNKNOWN';
+  const key=item.grade+'|'+zone;
+  if(!zoneGroups.has(key))zoneGroups.set(key,{grade:item.grade,zone,events:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,netR:0});
+  const group=zoneGroups.get(key);group.events++;
+  if(item.outcome==='win'||item.outcome==='loss'){
+    group[item.outcome==='win'?'wins':'losses']++;
+    group.netR+=Number(item.netR)||0;
+  }else if(item.outcome==='missed')group.missed++;
+  else if(item.outcome==='ambiguous')group.ambiguous++;
+  else group.unresolved++;
+}
+console.table([...zoneGroups.values()].map(x=>{
+  const resolved=x.wins+x.losses;
+  return{...x,resolved,winRatePct:resolved?+(100*x.wins/resolved).toFixed(2):null,avgNetR:resolved?+(x.netR/resolved).toFixed(3):null,netR:+x.netR.toFixed(3)};
+}));
 console.log('\nSMC STAGE FUNNEL (counts are per sweep path; premium/discount is recorded as confluence, not a hard gate)');
 console.table(stageKeys.map(stage=>({stage,passed:stageTotals[stage],diagnosticSamples:stageSamples[stage]})));
 console.log('\nEXECUTION REJECTION DIAGNOSTICS (per sweep path)');
