@@ -139,10 +139,10 @@ function simulate(trade,direction,orderType,future,tf,decisionTime,pendingWindow
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
   let active=String(orderType).toUpperCase()==='MARKET';
   const pendingExpiresAt=pendingEntryDeadline(decisionTime,pendingWindowMs);
-  const pendingWindowMs=Math.max(0,pendingExpiresAt-decisionTime);
+  const effectiveWindowMs=Math.max(0,pendingExpiresAt-decisionTime);
   for(const c of future){
-    if(!active&&!isCandleWithinWindow(c.time,decisionTime,DURATIONS[tf],pendingWindowMs)){
-      if(c.time>=pendingExpiresAt)return{result:'missed',reason:'Limit entry expired 24 hours after setup publication'};
+    if(!active&&!isCandleWithinWindow(c.time,decisionTime,DURATIONS[tf],effectiveWindowMs)){
+      if(c.time>=pendingExpiresAt)return{result:'missed',reason:'Limit entry expired after configured pending window'};
       continue;
     }
     if(!active){
