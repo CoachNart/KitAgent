@@ -35,6 +35,8 @@ const gradeStats=new Map();
 const pendingWindowStats=new Map();
 // Compare alternative limit locations inside the same confirmed FVG without changing live execution.
 const entryPlacementStats=new Map([.25,.5,.75].map(fraction=>[fraction,{fraction,events:0,eligible:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,netR:0}]));
+// Paired sensitivity uses only the same base events for which all three placements pass identical execution checks.
+const pairedEntryPlacementStats=new Map([.25,.5,.75].map(fraction=>[fraction,{fraction,events:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,netR:0}]));
 const failures=new Map();
 const tradeAudit=[];
 const gradeRejectionAudit=[];
@@ -541,10 +543,16 @@ for(const symbol of symbols){
         if(String(trade.orderType).toUpperCase()==='LIMIT'&&Number.isFinite(Number(fvgZone?.low))&&Number.isFinite(Number(fvgZone?.high))&&Number(fvgZone.high)>Number(fvgZone.low)){
           const liveQuote=Number(trade.marketEntry??candle.close);
           const entryAtr=atr(all[tf],14)||0;
+          const pairedVariants=[];
           for(const fraction of [.25,.5,.75]){
             const placement=entryPlacementStats.get(fraction);
             placement.events++;
-            const variantEntry=Number(fvgZone.low)+(Number(fvgZone.high)-Number(fvgZone.low))*fraction;
+            // Measure penetration from the FVG edge first reached by a retracement:
+            // bullish gaps are approached from above; bearish gaps from below.
+            const zoneLow=Number(fvgZone.low),zoneHigh=Number(fvgZone.high),zoneRange=zoneHigh-zoneLow;
+            const variantEntry=result.direction==='BULLISH'
+              ?zoneHigh-zoneRange*fraction
+              :zoneLow+zoneRange*fraction;
             const risk=Math.abs(variantEntry-Number(trade.stop));
             const reward=Math.abs(Number(trade.target)-variantEntry);
             const rr=risk>0?reward/risk:0;
@@ -557,6 +565,7 @@ for(const symbol of symbols){
             placement.eligible++;
             const variantTrade={...trade,entry:variantEntry,rr,orderType:'LIMIT'};
             const variantOutcome=simulate(variantTrade,result.direction,'LIMIT',future,'30m',cutoff);
+            pairedVariants.push({fraction,variantTrade,variantOutcome,risk,variantEntry});
             if(variantOutcome.result==='win'||variantOutcome.result==='loss'){
               placement[variantOutcome.result==='win'?'wins':'losses']++;
               const gross=rMultiple(variantTrade,result.direction,variantOutcome.exit);
@@ -566,6 +575,24 @@ for(const symbol of symbols){
             }else if(variantOutcome.result==='missed')placement.missed++;
             else if(variantOutcome.result==='ambiguous')placement.ambiguous++;
             else placement.unresolved++;
+          }
+          // Report a genuinely paired cohort separately so differing eligibility
+          // cannot masquerade as an entry-price improvement.
+          if(pairedVariants.length===3){
+            for(const item of pairedVariants){
+              const paired=pairedEntryPlacementStats.get(item.fraction);
+              paired.events++;
+              const {variantTrade,variantOutcome,risk,variantEntry}=item;
+              if(variantOutcome.result==='win'||variantOutcome.result==='loss'){
+                paired[variantOutcome.result==='win'?'wins':'losses']++;
+                const gross=rMultiple(variantTrade,result.direction,variantOutcome.exit);
+                const riskPct=risk/Math.abs(variantEntry);
+                const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
+                paired.netR+=gross-costR;
+              }else if(variantOutcome.result==='missed')paired.missed++;
+              else if(variantOutcome.result==='ambiguous')paired.ambiguous++;
+              else paired.unresolved++;
+            }
           }
         }
 
@@ -647,6 +674,14 @@ console.log('\\nFVG ENTRY PLACEMENT SENSITIVITY (diagnostic only; live midpoint 
 console.table([...entryPlacementStats.values()].map(x=>{
   const resolved=x.wins+x.losses;
   return{entryPercentOfFvg:x.fraction*100,events:x.events,eligible:x.eligible,resolved,wins:x.wins,losses:x.losses,
+    winRatePct:resolved?+(100*x.wins/resolved).toFixed(2):null,
+    avgNetR:resolved?+(x.netR/resolved).toFixed(3):null,
+    missed:x.missed,ambiguous:x.ambiguous,unresolved:x.unresolved};
+}));
+console.log('\\nFVG ENTRY PLACEMENT SENSITIVITY (PAIRED COHORT; same base events eligible at all three levels)');
+console.table([...pairedEntryPlacementStats.values()].map(x=>{
+  const resolved=x.wins+x.losses;
+  return{entryPercentOfFvg:x.fraction*100,pairedEvents:x.events,resolved,wins:x.wins,losses:x.losses,
     winRatePct:resolved?+(100*x.wins/resolved).toFixed(2):null,
     avgNetR:resolved?+(x.netR/resolved).toFixed(3):null,
     missed:x.missed,ambiguous:x.ambiguous,unresolved:x.unresolved};
