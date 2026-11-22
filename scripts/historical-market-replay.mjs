@@ -31,6 +31,8 @@ const stats=new Map();
 // Outcome-simulate every unique executable event, including rejected grades.
 // This is diagnostic calibration data; only A/A+ remains eligible for publication.
 const gradeStats=new Map();
+// Compare pending-order expiry windows without changing live execution rules.
+const pendingWindowStats=new Map();
 const failures=new Map();
 const tradeAudit=[];
 const gradeRejectionAudit=[];
@@ -132,11 +134,11 @@ function firstCandleAtOrAfter(rows,time){
   }
   return lo;
 }
-function simulate(trade,direction,orderType,future,tf,decisionTime){
+function simulate(trade,direction,orderType,future,tf,decisionTime,pendingWindowMs=PENDING_ENTRY_WINDOW_MS){
   const entry=Number(trade.entry),stop=Number(trade.stop),target=Number(trade.target);
   if(![entry,stop,target].every(Number.isFinite))return{result:'unresolved'};
   let active=String(orderType).toUpperCase()==='MARKET';
-  const pendingExpiresAt=pendingEntryDeadline(decisionTime,PENDING_ENTRY_WINDOW_MS);
+  const pendingExpiresAt=pendingEntryDeadline(decisionTime,pendingWindowMs);
   const pendingWindowMs=Math.max(0,pendingExpiresAt-decisionTime);
   for(const c of future){
     if(!active&&!isCandleWithinWindow(c.time,decisionTime,DURATIONS[tf],pendingWindowMs)){
@@ -523,6 +525,28 @@ for(const symbol of symbols){
           targetSource:result.smc?.target?.source||trade.targetSource||null,
           targetQuality:result.smc?.target?.quality??trade.targetSelection?.quality??null,
           targetPool:result.smc?.target?.pool||trade.targetSelection?.pool||null};
+        // Compare 24h, 48h and 72h pending windows side-by-side. Only the 24h
+        // result feeds official stats; longer windows remain diagnostic until
+        // they improve both fill rate and net outcomes.
+        for(const hours of [24,48,72]){
+          const key=hours+'|'+grade;
+          if(!pendingWindowStats.has(key))pendingWindowStats.set(key,{
+            hours,grade,events:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,netR:0,durationsHours:[]
+          });
+          const windowStat=pendingWindowStats.get(key);
+          windowStat.events++;
+          const windowOutcome=simulate(trade,result.direction,trade.orderType,future,'30m',cutoff,hours*60*60_000);
+          if(windowOutcome.result==='win'||windowOutcome.result==='loss'){
+            windowStat[windowOutcome.result==='win'?'wins':'losses']++;
+            const gross=rMultiple(trade,result.direction,windowOutcome.exit);
+            const riskPct=Math.abs(Number(trade.entry)-Number(trade.stop))/Math.abs(Number(trade.entry));
+            const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
+            windowStat.netR+=gross-costR;
+            windowStat.durationsHours.push(Math.max(0,(windowOutcome.exitTime-cutoff)/3600000));
+          }else if(windowOutcome.result==='missed')windowStat.missed++;
+          else if(windowOutcome.result==='ambiguous')windowStat.ambiguous++;
+          else windowStat.unresolved++;
+        }
         const outcome=simulate(trade,result.direction,trade.orderType,future,'30m',cutoff);
         if(outcome.result==='ambiguous'){
           gradeStat.ambiguous++;
@@ -574,6 +598,16 @@ console.log('\nOUTCOME BY STRUCTURAL GRADE (all unique executable events; diagno
 console.table([...gradeStats.values()].map(s=>{
   const resolved=s.wins+s.losses;
   return{grade:s.grade,events:s.events,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+(s.netR/resolved).toFixed(3):null,missed:s.missed,ambiguous:s.ambiguous,unresolved:s.unresolved};
+}));
+console.log('\\nPENDING ENTRY WINDOW SENSITIVITY (diagnostic only; live rule remains 24h)');
+console.table([...pendingWindowStats.values()].filter(x=>['A+','A','B'].includes(x.grade)).map(x=>{
+  const resolved=x.wins+x.losses;
+  const durations=x.durationsHours.slice().sort((a,b)=>a-b);
+  return{hours:x.hours,grade:x.grade,events:x.events,resolved,wins:x.wins,losses:x.losses,
+    winRatePct:resolved?+(100*x.wins/resolved).toFixed(2):null,
+    avgNetR:resolved?+(x.netR/resolved).toFixed(3):null,
+    medianExitHours:durations.length?+durations[Math.floor(durations.length/2)].toFixed(1):null,
+    missed:x.missed,ambiguous:x.ambiguous,unresolved:x.unresolved};
 }));
 console.log('\\nA/A+/B LIMIT DISTANCE SENSITIVITY (historical diagnostic; 1.5 ATR cap now enforced in SMC)');
 console.table([0.5,0.75,1,1.25,1.5,2,3,Infinity].map(maxDistanceAtr=>{
