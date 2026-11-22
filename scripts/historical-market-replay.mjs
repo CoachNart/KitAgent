@@ -15,7 +15,7 @@ if(!['okx','bybit'].includes(exchange))throw new Error('Unsupported replay excha
 const requestedSymbols=String(args.symbols||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
 const universeLimit=Math.max(1,Math.min(60,Number(args['universe-limit'])||60));
 let symbols=requestedSymbols;
-// The wider replay workflow requests 6,000 consecutive 1H decisions.
+// The wider replay workflow requests 9,000 consecutive 1H decisions.
 // Keep the CLI cap aligned with the workflow so the historical sample is not silently truncated.
 const bars=Math.max(5,Math.min(9000,Number(args.bars)||20));
 const forwardBars=Math.max(1,Math.min(1000,Number(args['forward-bars'])||168));
@@ -217,8 +217,10 @@ async function resolveReplaySymbols(){
   const intervals={'30m':'30m','1H':'1H','4H':'4H'};
   const interval=intervals[tf];
   if(!interval)throw new Error('Unsupported replay timeframe: '+tf);
-  // Fetch one extra latest candle because closedCandles removes the in-progress bar.
-  const requestedLimit=historyLimits[tf]+1;
+  // Fetch a safety buffer: historical providers can return fewer rows than requested
+  // at pagination boundaries, and closedCandles removes the in-progress bar.
+  // Three extra rows ensure the replay still has its exact required closed history.
+  const requestedLimit=historyLimits[tf]+3;
   if(!Number.isFinite(requestedLimit)||requestedLimit<80)throw new Error('Invalid replay history requirement for '+tf);
   const rows=[];
   if(exchange==='okx'){
