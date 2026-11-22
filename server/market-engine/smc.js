@@ -132,7 +132,7 @@ function buildSweepRangeIndex(c){
     firstAbove:(from,to,level)=>from<=to?firstCross(maxHigh,1,0,size-1,from,to,level,'ABOVE'):-1
   };
 }
-function findSweeps(c,direction){
+function findSweeps(c,direction,maxReclaimBars=0){
   const s=confirmedSwings(c,2),pools=direction==='BULLISH'?s.lows:s.highs,out=[];
   const rangeIndex=buildSweepRangeIndex(c);
   const suffixMinLow=Array(c.length+1).fill(Infinity);
@@ -154,18 +154,34 @@ function findSweeps(c,direction){
       ?rangeIndex.firstBelow(from,to,p.price)
       :rangeIndex.firstAbove(from,to,p.price);
     if(i<0)continue;
-    const x=c[i];
-    const reclaimed=direction==='BULLISH'?x.close>p.price:x.close<p.price;
-    if(!reclaimed)continue;
-    const quality=sweepQuality(c,x,direction,p.price,i);
-    const extreme=direction==='BULLISH'?x.low:x.high;
+    const breachIndex=i;
+    // A valid liquidity raid can reclaim on the breach candle or on either
+    // of the next two closed candles. Keep the first breach as the event start,
+    // but confirm the sweep only when price closes back through the pool.
+    const maxBars=Math.max(0,Math.min(2,Math.floor(Number(maxReclaimBars)||0)));
+    let reclaimIndex=-1;
+    for(let j=breachIndex;j<=Math.min(c.length-1,breachIndex+maxBars);j++){
+      const close=Number(c[j]?.close);
+      const reclaimed=direction==='BULLISH'?close>p.price:close<p.price;
+      if(reclaimed){reclaimIndex=j;break;}
+    }
+    if(reclaimIndex<0)continue;
+    const raid=c.slice(breachIndex,reclaimIndex+1);
+    const raidCandle={
+      high:Math.max(...raid.map(z=>Number(z.high))),
+      low:Math.min(...raid.map(z=>Number(z.low))),
+      close:Number(c[reclaimIndex].close)
+    };
+    const quality=sweepQuality(c,raidCandle,direction,p.price,breachIndex);
+    const extreme=direction==='BULLISH'?raidCandle.low:raidCandle.high;
     const stopPrice=direction==='BULLISH'?extreme-stopBuffer:extreme+stopBuffer;
     const stillValid=direction==='BULLISH'
-      ?suffixMinLow[i+1]>stopPrice
-      :suffixMaxHigh[i+1]<stopPrice;
+      ?suffixMinLow[reclaimIndex+1]>stopPrice
+      :suffixMaxHigh[reclaimIndex+1]<stopPrice;
     if(quality&&stillValid)out.push({
-      direction,index:i,time:Number.isFinite(x.time)?x.time+60*60_000:x.time,
-      level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-i,quality
+      direction,index:reclaimIndex,time:Number.isFinite(c[reclaimIndex].time)?c[reclaimIndex].time+60*60_000:c[reclaimIndex].time,
+      level:p.price,extreme,stopPrice,swingIndex:p.index,age:c.length-1-reclaimIndex,quality,
+      breachIndex,reclaimBars:reclaimIndex-breachIndex
     });
   }
   return out.sort((a,b)=>a.index-b.index);
@@ -314,7 +330,9 @@ export function evaluateSMC({candles,layers,price}){
     failures.push('Higher-timeframe structure conflicts with the primary SMC bias.');
     return{direction:'NEUTRAL',failures,evidence:[]};
   }
-  const direction=htfDirection,sweeps=findSweeps(c,direction).filter(x=>isSweepFresh(x.age));
+  const configuredReclaimBars=Number(process.env.KITAGENT_SMC_SWEEP_RECLAIM_BARS??0);
+  const reclaimBars=Number.isFinite(configuredReclaimBars)?Math.max(0,Math.min(2,Math.floor(configuredReclaimBars))):0;
+  const direction=htfDirection,sweeps=findSweeps(c,direction,reclaimBars).filter(x=>isSweepFresh(x.age));
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishOutOfZone:0,premiumDiscountBearishOutOfZone:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,targetNoQualifiedStructure:0,targetOutOfReach:0,nearestTargetBelow3R:0,executionRejections:{invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0},geometryFailureReasons:{},pendingLimitAudit:[]}]};}
 
   const stages={recentSweeps:sweeps.length,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishOutOfZone:0,premiumDiscountBearishOutOfZone:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,targetNoQualifiedStructure:0,targetOutOfReach:0,nearestTargetBelow3R:0};
