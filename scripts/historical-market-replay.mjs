@@ -17,9 +17,9 @@ const universeLimit=Math.max(1,Math.min(60,Number(args['universe-limit'])||60));
 let symbols=requestedSymbols;
 // The wider replay workflow requests 6,000 consecutive 1H decisions.
 // Keep the CLI cap aligned with the workflow so the historical sample is not silently truncated.
-const bars=Math.max(5,Math.min(6000,Number(args.bars)||20));
+const bars=Math.max(5,Math.min(9000,Number(args.bars)||20));
 const forwardBars=Math.max(1,Math.min(1000,Number(args['forward-bars'])||168));
-const historyCeiling=Math.max(100,Math.min(20000,Number(args['history-candles'])||16000));
+const historyCeiling=Math.max(100,Math.min(20000,Number(args['history-candles'])||20000));
 const historyLimits=replayHistoryRequirements(bars,forwardBars,MARKET_ANALYSIS_CANDLE_LIMIT);
 for(const tf of Object.keys(historyLimits)){
   if(historyLimits[tf]>historyCeiling)throw new Error('history-candles cap '+historyCeiling+' is below the '+tf+' replay requirement '+historyLimits[tf]+'; increase --history-candles to preserve full coverage');
