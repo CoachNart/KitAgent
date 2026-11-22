@@ -33,6 +33,8 @@ const stats=new Map();
 const gradeStats=new Map();
 // Compare pending-order expiry windows without changing live execution rules.
 const pendingWindowStats=new Map();
+// Compare alternative limit locations inside the same confirmed FVG without changing live execution.
+const entryPlacementStats=new Map([.25,.5,.75].map(fraction=>[fraction,{fraction,events:0,eligible:0,wins:0,losses:0,missed:0,ambiguous:0,unresolved:0,netR:0}]));
 const failures=new Map();
 const tradeAudit=[];
 const gradeRejectionAudit=[];
@@ -532,6 +534,41 @@ for(const symbol of symbols){
           sweepReclaimAtr:result.smc?.sweep?.quality?.reclaimDepthATR??null,
           riskAtr:(()=>{const value=atr(all[tf],14);return value>0?+(Math.abs(Number(trade.entry)-Number(trade.stop))/value).toFixed(4):null;})(),
           plannedRR:Number.isFinite(Number(trade.rr))?Number(trade.rr):null};
+        // Diagnostic only: compare 25%, 50% (current midpoint), and 75% FVG limit prices.
+        // Each alternative must independently preserve direction, executable-side, <=1.5 ATR distance,
+        // target runway, and the hard 3R floor; no live trade levels are modified.
+        const fvgZone=result.smc?.fvg;
+        if(String(trade.orderType).toUpperCase()==='LIMIT'&&Number.isFinite(Number(fvgZone?.low))&&Number.isFinite(Number(fvgZone?.high))&&Number(fvgZone.high)>Number(fvgZone.low)){
+          const liveQuote=Number(trade.marketEntry??candle.close);
+          const entryAtr=atr(all[tf],14)||0;
+          for(const fraction of [.25,.5,.75]){
+            const placement=entryPlacementStats.get(fraction);
+            placement.events++;
+            const variantEntry=Number(fvgZone.low)+(Number(fvgZone.high)-Number(fvgZone.low))*fraction;
+            const risk=Math.abs(variantEntry-Number(trade.stop));
+            const reward=Math.abs(Number(trade.target)-variantEntry);
+            const rr=risk>0?reward/risk:0;
+            const correctSide=result.direction==='BULLISH'?liveQuote>variantEntry:liveQuote<variantEntry;
+            const pullback=Math.abs(liveQuote-variantEntry);
+            const runway=result.direction==='BULLISH'?Number(trade.target)-liveQuote:liveQuote-Number(trade.target);
+            const variantValid=correctSide&&risk>0&&reward>0&&rr>=3&&rr<=10&&
+              (entryAtr<=0||pullback<=Math.max(entryAtr*1.5,Math.abs(variantEntry)*.003))&&runway>=pullback;
+            if(!variantValid)continue;
+            placement.eligible++;
+            const variantTrade={...trade,entry:variantEntry,rr,orderType:'LIMIT'};
+            const variantOutcome=simulate(variantTrade,result.direction,'LIMIT',future,'30m',cutoff);
+            if(variantOutcome.result==='win'||variantOutcome.result==='loss'){
+              placement[variantOutcome.result==='win'?'wins':'losses']++;
+              const gross=rMultiple(variantTrade,result.direction,variantOutcome.exit);
+              const riskPct=risk/Math.abs(variantEntry);
+              const costR=riskPct>0?(roundTripCostBps/10000)/riskPct:0;
+              placement.netR+=gross-costR;
+            }else if(variantOutcome.result==='missed')placement.missed++;
+            else if(variantOutcome.result==='ambiguous')placement.ambiguous++;
+            else placement.unresolved++;
+          }
+        }
+
         // Compare 24h, 48h and 72h pending windows side-by-side. Only the 24h
         // result feeds official stats; longer windows remain diagnostic until
         // they improve both fill rate and net outcomes.
@@ -605,6 +642,14 @@ console.log('\nOUTCOME BY STRUCTURAL GRADE (all unique executable events; diagno
 console.table([...gradeStats.values()].map(s=>{
   const resolved=s.wins+s.losses;
   return{grade:s.grade,events:s.events,resolved,wins:s.wins,losses:s.losses,winRatePct:resolved?+(100*s.wins/resolved).toFixed(2):null,avgGrossR:resolved?+(s.grossR/resolved).toFixed(3):null,avgNetR:resolved?+(s.netR/resolved).toFixed(3):null,missed:s.missed,ambiguous:s.ambiguous,unresolved:s.unresolved};
+}));
+console.log('\\nFVG ENTRY PLACEMENT SENSITIVITY (diagnostic only; live midpoint unchanged)');
+console.table([...entryPlacementStats.values()].map(x=>{
+  const resolved=x.wins+x.losses;
+  return{entryPercentOfFvg:x.fraction*100,events:x.events,eligible:x.eligible,resolved,wins:x.wins,losses:x.losses,
+    winRatePct:resolved?+(100*x.wins/resolved).toFixed(2):null,
+    avgNetR:resolved?+(x.netR/resolved).toFixed(3):null,
+    missed:x.missed,ambiguous:x.ambiguous,unresolved:x.unresolved};
 }));
 console.log('\\nPENDING ENTRY WINDOW SENSITIVITY (diagnostic only; live rule remains 24h)');
 console.table([...pendingWindowStats.values()].filter(x=>['A+','A','B'].includes(x.grade)).map(x=>{
