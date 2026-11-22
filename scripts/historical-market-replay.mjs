@@ -47,24 +47,34 @@ const targetRejectionAudit=[];
 const targetRejectionAuditSeen=new Set();
 const premiumDiscountAuditCounts=new Map();
 const premiumDiscountAuditSeen=new Set();
-// Serialize OKX history requests across symbols/timeframes to stay below the
-// public API's per-instrument request ceiling. Retry-After is honored on 429s.
-const okxRequestQueues=new Map();
-const lastOkxRequestAt=new Map();
+// OKX public history endpoints are rate-limited across the runner's public
+// IP, not independently per instrument. A per-symbol queue allowed the eight
+// preload workers to burst dozens of requests together and trigger HTTP 429s.
+// Use one global queue, a conservative request interval, and a shared cooldown
+// so a 429 slows every worker instead of creating a retry storm.
+let okxRequestQueue=Promise.resolve();
+let lastOkxRequestAt=0;
+let okxCooldownUntil=0;
 let bybitRequestQueue=Promise.resolve();
 let lastBybitRequestAt=0;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function okxFetch(url){
-  const instrument=new URL(url).searchParams.get('instId')||'__global__';
-  const previous=okxRequestQueues.get(instrument)||Promise.resolve();
-  const request=previous.then(async()=>{
-    const last=lastOkxRequestAt.get(instrument)||0;
-    const wait=Math.max(0,125-(Date.now()-last));
+  const request=okxRequestQueue.then(async()=>{
+    const wait=Math.max(0,200-(Date.now()-lastOkxRequestAt),okxCooldownUntil-Date.now());
     if(wait)await sleep(wait);
-    lastOkxRequestAt.set(instrument,Date.now());
-    return fetch(url,{signal:AbortSignal.timeout(30000)});
+    lastOkxRequestAt=Date.now();
+    const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+    if(response.status===429){
+      const raw=response.headers?.get?.('retry-after');
+      const seconds=Number(raw);
+      const dateDelay=raw&&!Number.isFinite(seconds)?Date.parse(raw)-Date.now():0;
+      const explicit=Number.isFinite(seconds)&&seconds>0?seconds*1000:dateDelay>0?dateDelay:0;
+      // If the server omits Retry-After, apply a shared three-second pause.
+      okxCooldownUntil=Math.max(okxCooldownUntil,Date.now()+Math.max(3000,explicit));
+    }
+    return response;
   });
-  okxRequestQueues.set(instrument,request.then(()=>undefined,()=>undefined));
+  okxRequestQueue=request.then(()=>undefined,()=>undefined);
   return request;
 }
 async function bybitFetch(url){
