@@ -734,6 +734,12 @@ assert('Trade Geometry Contract requires structural entry and invalidation metad
 const candidateOlderHigh={grade:{grade:'A',score:86},trade:{setupAgeBars:4},entryDistanceAtr:.8,sweep:{index:100}};
 const candidateNewerLow={grade:{grade:'B',score:78},trade:{setupAgeBars:0},entryDistanceAtr:.2,sweep:{index:104}};
 assert('SMC candidate selection prefers stronger validated structure over recency',()=>selectBestSMCCandidate([candidateNewerLow,candidateOlderHigh])===candidateOlderHigh);
+const candidatePreferred={grade:{grade:'B',score:78},inCorrectPremiumDiscountZone:true,trade:{setupAgeBars:2},entryDistanceAtr:.9,sweep:{index:98}};
+const candidateWrongSideHigherScore={grade:{grade:'B',score:82},inCorrectPremiumDiscountZone:false,trade:{setupAgeBars:0},entryDistanceAtr:.2,sweep:{index:104}};
+assert('SMC same-grade candidate ranking prefers the correct premium/discount zone before raw score',()=>selectBestSMCCandidate([candidateWrongSideHigherScore,candidatePreferred])===candidatePreferred);
+const candidatePreferredLowerGrade={grade:{grade:'B',score:78},inCorrectPremiumDiscountZone:true,trade:{setupAgeBars:0},entryDistanceAtr:.2,sweep:{index:105}};
+const candidateWrongSideHigherGrade={grade:{grade:'A',score:84},inCorrectPremiumDiscountZone:false,trade:{setupAgeBars:3},entryDistanceAtr:1,sweep:{index:100}};
+assert('SMC candidate ranking never lets zone alignment demote a higher publication grade',()=>selectBestSMCCandidate([candidatePreferredLowerGrade,candidateWrongSideHigherGrade])===candidateWrongSideHigherGrade);
 const candidateTieFar={grade:{grade:'B',score:78},trade:{setupAgeBars:1},entryDistanceAtr:1.1,sweep:{index:102}};
 const candidateTieNear={grade:{grade:'B',score:78},trade:{setupAgeBars:1},entryDistanceAtr:.3,sweep:{index:101}};
 assert('SMC candidate selection uses executable proximity only as a deterministic tie-breaker',()=>selectBestSMCCandidate([candidateTieFar,candidateTieNear])===candidateTieNear);
