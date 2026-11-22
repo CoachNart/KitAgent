@@ -26,9 +26,11 @@ jobs:
         run: npm run test:market-engine
       - name: Signal outcome regression suite
         run: npm run test:signal-outcomes
-      - name: Historical market replay (Bybit preferred; OKX fallback only if runner is region-blocked)
-        # Widen historical coverage without changing any trading rules: 60 markets,
-        # 9,000 consecutive 1H decisions, a live-equivalent 999-candle structure window, and complete 7-day 30M outcome coverage.
+      - name: Historical market replay (two-candle sweep-reclaim diagnostic; live default unchanged)
+        # Experimental replay only: permit reclaim on the breach candle or either of the next two closed 1H candles.
+        # Live engine and regression suite retain the strict same-candle default unless separately validated.
+        env:
+          KITAGENT_SMC_SWEEP_RECLAIM_BARS: 2
         run: npm run test:market-engine-replay -- --exchange=bybit --universe-limit=60 --bars=9000 --forward-bars=168 --history-candles=20000 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
