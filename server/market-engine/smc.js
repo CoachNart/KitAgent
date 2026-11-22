@@ -20,6 +20,11 @@ const MAX_LIQUIDITY_POOL_AGE=40;
 export const MAX_SWEEP_AGE_BARS=8;
 export function isSweepFresh(age){return Number.isFinite(age)&&age>=0&&age<=MAX_SWEEP_AGE_BARS;}
 const MIN_FVG_SIZE_ATR=.10;
+// Experimental SMC target-distance ceiling: the latest 9,000-bar replay showed
+// the only resolved A/B winners clustered near 3.2R, while most losses had
+// substantially more distant planned targets. Keep the 3R floor unchanged;
+// this ceiling must pass a fresh replay before it is treated as validated.
+export const MAX_SMC_PLANNED_RR=3.5;
 // Minimum impulse-size filter; its 1.30 ATR value remains under replay validation.
 const MIN_DISPLACEMENT_ATR=1.30;
 
@@ -374,7 +379,12 @@ export function evaluateSMC({candles,layers,price}){
     }
     stages.structuralTarget++;
     const structuralReward=Math.abs(targetCandidate.price-fvgCandidate.midpoint);
-    if(structuralReward/structuralRisk<3)continue;
+    const plannedRR=structuralReward/structuralRisk;
+    if(plannedRR<3)continue;
+    // Avoid advertising exceptionally distant liquidity objectives as if they
+    // were realistic near-term 1H targets. This experimental ceiling is kept
+    // local to SMC and does not relax or alter the shared 3R minimum.
+    if(plannedRR>MAX_SMC_PLANNED_RR)continue;
     stages.rrAtLeast3++;
     const tradeCandidate=buildTrade({
       c,price,direction,sweep:sweepCandidate,mss:mssCandidate,
