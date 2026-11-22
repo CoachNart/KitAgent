@@ -281,11 +281,20 @@ function buildTrade({c,price,direction,sweep,mss,displacement,fvg,target,diagnos
 export function selectBestSMCCandidate(candidates=[]){
   const gradeRank={'A+':4,'A':3,'B':2,'C':1,'NO-TRADE':0};
   return candidates.filter(Boolean).slice().sort((a,b)=>{
+    // Publication tier is the first decision: a higher-grade setup must not
+    // lose to a lower-grade candidate merely because its raw score is a point
+    // higher inside a different threshold band.
+    const rankA=gradeRank[a.grade?.grade]??0,rankB=gradeRank[b.grade?.grade]??0;
+    if(rankA!==rankB)return rankB-rankA;
+    // Experimental tie-breaker: when candidates share a publication grade,
+    // prefer the directionally correct premium/discount location before
+    // comparing structural scores. This is a ranking test, not a hard filter.
+    const zoneA=a.inCorrectPremiumDiscountZone===true?1:0;
+    const zoneB=b.inCorrectPremiumDiscountZone===true?1:0;
+    if(zoneA!==zoneB)return zoneB-zoneA;
     const scoreA=Number.isFinite(Number(a.grade?.score))?Number(a.grade.score):0;
     const scoreB=Number.isFinite(Number(b.grade?.score))?Number(b.grade.score):0;
     if(scoreA!==scoreB)return scoreB-scoreA;
-    const rankA=gradeRank[a.grade?.grade]??0,rankB=gradeRank[b.grade?.grade]??0;
-    if(rankA!==rankB)return rankB-rankA;
     const distanceA=Number.isFinite(a.entryDistanceAtr)?a.entryDistanceAtr:Infinity;
     const distanceB=Number.isFinite(b.entryDistanceAtr)?b.entryDistanceAtr:Infinity;
     if(distanceA!==distanceB)return distanceA-distanceB;
@@ -459,5 +468,5 @@ export function evaluateSMC({candles,layers,price}){
   }
 
   const {sweep,mss,displacement,fvg,range,target,trade,grade,inCorrectPremiumDiscountZone}=selected;
-  return{direction,grade,trade,failures:[],evidence:[{type:'SMC_CANDIDATE_SELECTION',validCandidates:candidateResults.length,selectedGrade:grade.grade,selectedScore:grade.score,entryDistanceAtr:selected.entryDistanceAtr,selection:'highest structural score; proximity and freshness break ties'},{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:fvg.midpoint<range.equilibrium?'DISCOUNT':fvg.midpoint>range.equilibrium?'PREMIUM':'EQUILIBRIUM',preferredZone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',entryInPreferredZone:inCorrectPremiumDiscountZone,equilibrium:range.equilibrium,entry:fvg.midpoint,interpretation:'Confluence only; a valid SMC sequence is not rejected solely for local dealing-range location.'},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
+  return{direction,grade,trade,failures:[],evidence:[{type:'SMC_CANDIDATE_SELECTION',validCandidates:candidateResults.length,selectedGrade:grade.grade,selectedScore:grade.score,entryDistanceAtr:selected.entryDistanceAtr,selection:'highest publication grade; preferred premium/discount location breaks same-grade ties before structural score, proximity and freshness'},{type:'HTF_BIAS',direction,timeframe:ordered[0]?.tf||null},{type:'LIQUIDITY_SWEEP',...sweep},{type:'MSS',...mss},{type:'DISPLACEMENT',...displacement},{type:'FVG',...fvg},{type:'PREMIUM_DISCOUNT',zone:fvg.midpoint<range.equilibrium?'DISCOUNT':fvg.midpoint>range.equilibrium?'PREMIUM':'EQUILIBRIUM',preferredZone:direction==='BULLISH'?'DISCOUNT':'PREMIUM',entryInPreferredZone:inCorrectPremiumDiscountZone,equilibrium:range.equilibrium,entry:fvg.midpoint,interpretation:'Confluence only; a valid SMC sequence is not rejected solely for local dealing-range location.'},stageEvidence()],smc:{model:SMC_MODEL,htfBias:direction,sweep,mss,displacement,fvg,dealingRange:range,target}};
 }
