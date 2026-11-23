@@ -26,11 +26,9 @@ jobs:
         run: npm run test:market-engine
       - name: Signal outcome regression suite
         run: npm run test:signal-outcomes
-      - name: Historical market replay (two-candle sweep-reclaim diagnostic; live default unchanged)
-        # Experimental replay only: permit reclaim on the breach candle or either of the next two closed 1H candles.
-        # Live engine and regression suite retain the strict same-candle default unless separately validated.
-        env:
-          KITAGENT_SMC_SWEEP_RECLAIM_BARS: 2
+      - name: Historical market replay (production-default same-candle sweep reclaim)
+        # Keep replay conditions identical to the live engine. Delayed reclaim is
+        # experimental and is not enabled unless a separate controlled comparison validates it.
         run: npm run test:market-engine-replay -- --exchange=bybit --universe-limit=60 --bars=9000 --forward-bars=168 --history-candles=20000 --round-trip-cost-bps=10
       - name: Live strategy rejection matrix
         if: always()
