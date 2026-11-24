@@ -330,7 +330,10 @@ export function evaluateSMC({candles,layers,price}){
     failures.push('Higher-timeframe structure conflicts with the primary SMC bias.');
     return{direction:'NEUTRAL',failures,evidence:[]};
   }
-  const configuredReclaimBars=Number(process.env.KITAGENT_SMC_SWEEP_RECLAIM_BARS??0);
+  // Two closed 1H candles are allowed for a sweep reclaim by default. The same-candle-only rule
+  // suppressed otherwise valid sweep -> MSS -> displacement -> FVG sequences and starved the board.
+  // Set KITAGENT_SMC_SWEEP_RECLAIM_BARS=0 only for an explicit strict-mode override.
+  const configuredReclaimBars=Number(process.env.KITAGENT_SMC_SWEEP_RECLAIM_BARS??2);
   const reclaimBars=Number.isFinite(configuredReclaimBars)?Math.max(0,Math.min(2,Math.floor(configuredReclaimBars))):0;
   const direction=htfDirection,sweeps=findSweeps(c,direction,reclaimBars).filter(x=>isSweepFresh(x.age));
   if(!sweeps.length){failures.push(direction==='BULLISH'?'No valid sell-side liquidity sweep.':'No valid buy-side liquidity sweep.');return{direction,failures,evidence:[{type:'SMC_STAGE_DIAGNOSTICS',recentSweeps:0,mssWithinWindow:0,displacement:0,fvgCreatedByMss:0,freshFvgAndSize:0,premiumDiscount:0,premiumDiscountBullishPass:0,premiumDiscountBearishPass:0,premiumDiscountBullishOutOfZone:0,premiumDiscountBearishOutOfZone:0,premiumDiscountDeltaAtrSum:0,premiumDiscountDeltaSamples:0,structuralTarget:0,rrAtLeast3:0,executableEntry:0,targetNoQualifiedStructure:0,targetOutOfReach:0,nearestTargetBelow3R:0,executionRejections:{invalidRiskReward:0,sweepInvalidated:0,marketRetestNotConfirmed:0,pendingLimitWrongSide:0,pendingLimitTooFar:0,geometryRejected:0,geometryRejectedBelow3R:0,geometryRejectedOther:0},geometryFailureReasons:{},pendingLimitAudit:[]}]};}
