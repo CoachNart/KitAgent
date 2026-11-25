@@ -40,7 +40,7 @@ const ineligibleTwoR={...eligibleThreeR,trade:{...eligibleThreeR.trade,target:11
 const eligibleB={...eligibleThreeR,grade:{grade:'B',score:80}};
 const rejectedC={...eligibleThreeR,grade:{grade:'C',score:74}};
 assert('Daily publication rejects setups below 3R',candidateScore(ineligibleTwoR)<0);
-assert('Daily publication accepts B-grade setups at 3R or better',candidateScore(eligibleB)>=0);
+assert('Daily publication rejects B-grade setups even when they meet 3R',candidateScore(eligibleB)<0);
 assert('Daily publication rejects C-grade setups',candidateScore(rejectedC)<0);
 assert('Daily publication accepts A-grade setups at 3R or better',candidateScore(eligibleThreeR)>=0);
 const eligibleAplus={...eligibleThreeR,grade:{grade:'A+',score:94},trade:{...eligibleThreeR.trade,target:120,rr:4}};
@@ -50,8 +50,9 @@ const dailyCandidates=[
   ...Array.from({length:3},(_,i)=>({id:'B'+i,grade:'B',rankScore:8000-i}))
 ];
 const dailySelection=selectDailySetups(dailyCandidates,5);
-assert('Daily board reserves up to two clearly labelled B-tier slots while retaining A/A+ priority',()=>dailySelection.length===5&&dailySelection.filter(x=>x.grade==='B').length===2&&dailySelection.filter(x=>x.grade==='A').length===3);
-assert('Daily board fills unused B-tier slots with the next ranked eligible setups',()=>selectDailySetups(dailyCandidates.slice(0,2),5).length===2);
+assert('Daily board publishes only A/A+ and never fills the five-setup quota with B-grade trades',()=>dailySelection.length===5&&dailySelection.every(x=>['A','A+'].includes(x.grade)));
+assert('Daily board returns fewer than five when fewer than five A/A+ setups qualify',()=>selectDailySetups(dailyCandidates.slice(0,2),5).length===2);
+assert('Daily board returns zero rather than promoting B-grade setups when no A/A+ setup qualifies',()=>selectDailySetups(dailyCandidates.filter(x=>x.grade==='B'),5).length===0);
 
 const bar=(i,o,h,l,c)=>({
   time:Date.UTC(2026,0,1)+i*1800000,
